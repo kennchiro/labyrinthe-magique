@@ -1,0 +1,171 @@
+class_name SpellSystem
+extends RefCounted
+
+## Le sort d'orbe : charges, visée, temps de vol, ennemis mis hors-jeu.
+##
+## Comme TeleportSystem, cette classe opère sur des CASES et des index, jamais
+## sur des Node : elle tourne donc en headless, et tests/test_spell.gd comme
+## tests/test_balance.gd exécutent exactement la règle du jeu au lieu d'en
+## réimplémenter une approximation qui finirait par diverger.
+##
+## Règle, telle que spécifiée :
+##   une potion  -> POTION_CHARGES tirs
+##   un tir      -> l'ennemi le plus proche disparaît DEFEAT_DURATION secondes,
+##                  puis réapparaît ailleurs. Le cycle recommence.
+##
+## L'orbe VISE, il ne rate pas. Un projectile qu'on peut manquer dans un
+## couloir d'une case de large ne serait pas une question d'adresse mais de
+## chance, et chaque échec coûterait une charge sur dix. Le choix du joueur
+## porte sur QUAND lancer, pas sur la précision du geste.
+
+signal orb_launched(index: int, path: Array[Vector2i], duration: float)
+signal enemy_defeated(index: int)
+signal enemy_revived(index: int)
+
+## Charges données par une potion, et plafond du sac. Les deux sont égaux :
+## ramasser une seconde potion à 10 charges ne gaspille donc rien tant qu'on a
+## tiré au moins une fois.
+const POTION_CHARGES := 10
+const MAX_CHARGES := 10
+## Portée en distance de CHEMIN. Un ennemi séparé par une haie mais à deux pas
+## à vol d'oiseau reste hors de portée — l'orbe suit les couloirs.
+const RANGE := 14
+## Délai entre deux tirs : empêche de vider les dix charges en une seconde sur
+## le même ennemi, ce qui reviendrait à supprimer la poursuite.
+const COOLDOWN := 0.45
+## Durée pendant laquelle un ennemi touché reste hors-jeu.
+const DEFEAT_DURATION := 10.0
+## Vitesse de l'orbe, en cases par seconde. Trois fois le joueur : le tir se
+## voit partir et arriver, sans jamais laisser le temps de fuir.
+const ORB_SPEED := 16.0
+
+var grid: MazeGrid
+var charges := 0
+
+var _cooldown := 0.0
+## Tirs en vol : [{index, time_left}]. Un ennemi déjà visé n'est pas reciblé,
+## sinon deux charges partiraient sur la même cible avant le premier impact.
+var _in_flight: Array[Dictionary] = []
+var _defeat_timers := {}   # index d'ennemi -> secondes restantes
+
+
+func _init(p_grid: MazeGrid) -> void:
+	grid = p_grid
+
+
+func add_potion() -> int:
+	var before := charges
+	charges = mini(MAX_CHARGES, charges + POTION_CHARGES)
+	return charges - before
+
+
+func can_cast() -> bool:
+	return charges > 0 and _cooldown <= 0.0
+
+
+func cooldown_left() -> float:
+	return maxf(0.0, _cooldown)
+
+
+func is_defeated(index: int) -> bool:
+	return _defeat_timers.has(index)
+
+
+func defeat_left(index: int) -> float:
+	return float(_defeat_timers.get(index, 0.0))
+
+
+func is_targeted(index: int) -> bool:
+	for shot in _in_flight:
+		if int(shot["index"]) == index:
+			return true
+	return false
+
+
+## Un ennemi est-il neutralisé ou sur le point de l'être ? C'est cette question
+## que se posent la capture et l'IA — pas « est-il déjà tombé ».
+func is_neutralised(index: int) -> bool:
+	return is_defeated(index) or is_targeted(index)
+
+
+func update(delta: float) -> void:
+	_cooldown = maxf(0.0, _cooldown - delta)
+
+	# Impacts. Parcours à l'envers : on retire des éléments en cours de route.
+	for i in range(_in_flight.size() - 1, -1, -1):
+		_in_flight[i]["time_left"] = float(_in_flight[i]["time_left"]) - delta
+		if float(_in_flight[i]["time_left"]) <= 0.0:
+			var index := int(_in_flight[i]["index"])
+			_in_flight.remove_at(i)
+			_defeat_timers[index] = DEFEAT_DURATION
+			enemy_defeated.emit(index)
+
+	for index in _defeat_timers.keys():
+		var remaining: float = _defeat_timers[index] - delta
+		if remaining <= 0.0:
+			_defeat_timers.erase(index)
+			enemy_revived.emit(index)
+		else:
+			_defeat_timers[index] = remaining
+
+
+## Index de l'ennemi qui serait visé maintenant, -1 s'il n'y en a aucun à portée.
+## Sert aussi à l'interface : elle grise le bouton plutôt que de laisser le
+## joueur gaspiller une charge dans le vide.
+func find_target(player_field: PackedInt32Array, enemy_cells: Array[Vector2i]) -> int:
+	var best := -1
+	var best_distance := RANGE + 1
+	for i in enemy_cells.size():
+		if is_neutralised(i):
+			continue
+		var distance := Pathfinder.value_at(grid, player_field, enemy_cells[i])
+		if distance < 0 or distance > RANGE:
+			continue
+		if distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+## Lance le sort. Retourne l'index de l'ennemi visé, ou -1 si rien n'est parti —
+## et dans ce cas AUCUNE charge n'est consommée : rater faute de cible n'est pas
+## une faute du joueur, c'est une information que l'interface aurait dû donner.
+func try_cast(player_cell: Vector2i, enemy_cells: Array[Vector2i],
+		player_field: PackedInt32Array) -> int:
+	if not can_cast():
+		return -1
+	var target := find_target(player_field, enemy_cells)
+	if target < 0:
+		return -1
+
+	var path := trajectory(player_cell, enemy_cells[target])
+	if path.size() < 2:
+		return -1
+
+	charges -= 1
+	_cooldown = COOLDOWN
+	var duration := float(path.size() - 1) / ORB_SPEED
+	_in_flight.append({"index": target, "time_left": duration})
+	orb_launched.emit(target, path, duration)
+	return target
+
+
+## Chemin case par case de l'orbe, du joueur à la cible. Un BFS depuis la CIBLE
+## puis une descente du gradient : le même mécanisme que la poursuite des
+## ennemis, réutilisé tel quel.
+func trajectory(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var path: Array[Vector2i] = [from]
+	if from == to:
+		return path
+	var field := Pathfinder.distance_field(grid, [to] as Array[Vector2i])
+	var current := from
+	# Borne dure : un gradient corrompu ferait tourner la boucle sans fin.
+	for _step in grid.cols * grid.rows:
+		var direction := Pathfinder.step_toward(grid, field, current)
+		if direction == Vector2i.ZERO:
+			break
+		current += direction
+		path.append(current)
+		if current == to:
+			break
+	return path

@@ -1,0 +1,22 @@
+{
+  "cell": [
+    170,
+    112
+  ],
+  "feet_y": 108.6,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "attack"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "mage_invocateur.jpeg"
+}

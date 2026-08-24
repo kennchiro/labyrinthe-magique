@@ -1,0 +1,11 @@
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+builds/
+*.translation
+.DS_Store
+tools/.venv/
+
+# Sorties d'export (projet Xcode iOS, APK…)
+/build/

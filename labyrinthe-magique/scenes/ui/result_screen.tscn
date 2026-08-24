@@ -1,0 +1,70 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/result_screen.gd" id="1_result"]
+
+[node name="ResultScreen" type="Control"]
+process_mode = 3
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_result")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.02, 0.07, 0.78)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="VBoxContainer" parent="Center"]
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="Center/Panel"]
+text = "VICTOIRE"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 64
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 8
+
+[node name="Subtitle" type="Label" parent="Center/Panel"]
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.78, 0.82, 0.95, 1)
+
+[node name="Stats" type="Label" parent="Center/Panel"]
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.58, 0.66, 0.86, 1)
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Panel"]
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="ResumeButton" type="Button" parent="Center/Panel/Buttons"]
+custom_minimum_size = Vector2(190, 58)
+text = "Reprendre"
+
+[node name="RestartButton" type="Button" parent="Center/Panel/Buttons"]
+custom_minimum_size = Vector2(190, 58)
+text = "Recommencer  [R]"
+
+[node name="NextButton" type="Button" parent="Center/Panel/Buttons"]
+custom_minimum_size = Vector2(190, 58)
+text = "Niveau suivant"
+
+[node name="MenuButton" type="Button" parent="Center/Panel/Buttons"]
+custom_minimum_size = Vector2(150, 58)
+text = "Menu"
+
+[node name="ControlsButton" type="Button" parent="Center/Panel"]
+visible = false
+custom_minimum_size = Vector2(0, 52)
+text = "Déplacement : Manche analogique"

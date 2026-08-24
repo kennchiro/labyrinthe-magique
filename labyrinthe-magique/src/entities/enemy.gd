@@ -1,0 +1,358 @@
+class_name Enemy
+extends Actor
+
+## Poursuivant. Ne contient aucune logique de décision : il branche un EnemyAI
+## sur le GridMover hérité d'Actor. Le mage et l'ennemi partagent donc exactement
+## le même code de déplacement et de collision — ce qui a déjà été prouvé correct
+## par tests/test_grid_mover.gd.
+##
+## Il porte en revanche ses POINTS DE VIE et sa barre. Le calcul des dégâts, lui,
+## reste dans CombatSystem : l'ennemi ne fait qu'encaisser et le montrer.
+##
+## Les deux ennemis ont leur planche d'animation dessinée, au MÊME format que les
+## mages — des bandes de six poses IDLE / WALK 1-4 / ATTACK décrites par un
+## frames.json — et `Enemy` les joue exactement comme `Player` joue les siennes.
+##
+## Une différence tout de même : le gobelin est dessiné dans les quatre
+## orientations, le spectre dans une seule. C'est cohérent avec ce qu'il est —
+## il LÉVITE, face au joueur, il n'a ni dos ni profil. Sa planche ne déclare donc
+## que « down », et la même bande sert aux quatre directions.
+
+const ENEMIES_PATH := "res://assets/enemies/"
+
+## Le rythme d'animation vient du BESTIAIRE : onze créatures ne peuvent pas
+## partager une cadence. Le gobelin MARCHE — 8 poses/s, le pas colle au sol ; le
+## spectre LÉVITE — à la même cadence il ne flotte pas, il grelotte, et son coup,
+## une orbe chargée à bout de bras, demande le temps qu'on le voie venir.
+## `repos` est le temps mort APRÈS un coup : sans lui, un ennemi collé au mage
+## relance son geste à la frame près et l'animation devient un battement continu.
+
+## L'état de l'IA se lit à la teinte : en poursuite l'ennemi s'éclaire et vire
+## au rouge, en patrouille il s'éteint. Le joueur doit pouvoir dire d'un coup
+## d'œil s'il a été repéré — sans cette information, la fuite devient du hasard.
+const TINT_PATROL := Color(0.70, 0.74, 0.86)
+const TINT_SEARCH := Color(1.0, 0.96, 0.92)
+const TINT_CHASE := Color(1.35, 0.88, 0.84)
+## Éclair blanc au moment du coup. Court : au-delà de 0,15 s il devient un
+## clignotement permanent quand les coups s'enchaînent.
+const HIT_FLASH := Color(2.4, 2.2, 2.2)
+const HIT_FLASH_DURATION := 0.14
+
+## Teintes des statuts élémentaires. Un statut doit se LIRE sur la créature :
+## un ennemi trempé qui ralentit sans virer au bleu semblerait bugué, pas gêné.
+const TINT_SOAK := Color(0.55, 0.75, 1.45)
+const TINT_STAGGER := Color(1.5, 1.4, 1.0)
+const TINT_BURN := Color(1.6, 0.85, 0.55)
+## Ralentissement d'un ennemi trempé — la MÊME valeur que CombatSystem.SOAK_FACTOR.
+const SOAK_FACTOR := 0.62
+## Coup porté au joueur : l'ennemi se jette en avant. Sans ce mouvement, un
+## poursuivant arrêté à portée pendant le répit d'invulnérabilité a l'air figé —
+## on croit à un bug alors qu'il frappe dans le vide. L'élan reste COURT : l'IA
+## s'arrête à une case, un élan plus long lui ferait retraverser le mage et
+## annulerait tout le bénéfice de cet arrêt.
+const STRIKE_LUNGE := 0.18
+const TINT_STRIKE := Color(1.9, 0.72, 0.62)
+## Part de la teinte réellement appliquée. Ces couleurs ont été calibrées sur les
+## anciennes poses uniques, sombres et désaturées. À pleine force sur les planches
+## dessinées — gobelin vert vif, spectre violet — elles les repeignent : le
+## gobelin en poursuite virait au rouge franc, on ne lisait plus un gobelin mais
+## un démon. À 0,45 l'état reste parfaitement visible et le dessin survit.
+const TINT_STRENGTH := 0.45
+
+## Barre de vie, en fraction de case.
+const BAR_WIDTH := 1.05
+const BAR_HEIGHT := 0.13
+const BAR_HEIGHT_ABOVE := 1.15
+
+var ai: EnemyAI = null
+## Renseigné par le Level à chaque recalcul d'IA (toutes les 300 ms).
+var player_field := PackedInt32Array()
+## Case du mage, elle renseignée à CHAQUE frame. Le champ de distances, vieux de
+## 300 ms au pire, suffit pour choisir un chemin ; il ne suffit pas pour décider
+## de s'arrêter net devant quelqu'un qui bouge.
+var player_cell := Vector2i(-1, -1)
+var health: Health = null
+## Espèce, telle que la nomme le bestiaire.
+var species := Bestiary.FALLBACK
+## Tué : hors-jeu jusqu'à ce que la vague suivante le ramène. Le Level tient le
+## chronomètre ; l'ennemi ne fait qu'obéir.
+var dead := false
+
+var _flash := 0.0
+var _strike := 0.0
+var _strike_rest := 0.0
+## Cadences de la planche jouée (voir SHEET_TUNING).
+var _tuning: Dictionary = Bestiary.of(Bestiary.FALLBACK)
+
+var _textures := {}
+var _cell := Vector2(149.0, 112.0)
+var _feet_y := 110.0
+var _poses: Array = ["idle", "walk_1", "walk_2", "walk_3", "walk_4", "attack"]
+## Dernière direction non nulle : l'ennemi garde sa pose quand il s'arrête.
+var _facing: Vector2i = Vector2i.DOWN
+var _walk_phase := 0.0
+var _base_speed := 0.0
+var _soak_left := 0.0
+var _stagger_left := 0.0
+var _burn_left := 0.0
+
+
+func setup_enemy(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size: int,
+		detection_radius: int, p_species: String, max_health: int, rng_seed: int = 0) -> void:
+	species = p_species if Bestiary.has(p_species) else Bestiary.FALLBACK
+	_tuning = Bestiary.of(species)
+	_load_sheet(species)
+	# La stature vient de l'espèce : un golem doit dominer un serpent, sinon le
+	# bestiaire ne se lit qu'aux couleurs. Les valeurs restent proches de celle
+	# du mage (53 px) — une créature deux fois plus haute masquerait le couloir
+	# devant elle, et le joueur ne verrait plus où il court.
+	target_height = float(_tuning["height"])
+	# Les planches sont calées sur les pieds — sur l'anneau de lumière pour le
+	# spectre, qui lévite : l'ombre de contact se pose donc à l'origine du nœud.
+	shadow_offset = 0.02
+	shadow_radius = 0.26
+	setup(grid, start_cell, speed, p_tile_size)
+	_base_speed = speed
+	ai = EnemyAI.new(detection_radius, rng_seed)
+	health = Health.new(max_health)
+
+
+## Retour visuel d'un coup encaissé. Les points de vie ont déjà été retirés par
+## le CombatSystem — ici on ne fait que le montrer.
+func flash_hit() -> void:
+	_flash = HIT_FLASH_DURATION
+	queue_redraw()
+
+
+## Frappe le joueur. Ne retire AUCUN point de vie : c'est le Level qui constate
+## le contact et le GameManager qui décide ce que ça coûte. Ici, on le montre.
+func strike() -> void:
+	if _strike <= 0.0 and _strike_rest <= 0.0:
+		_strike = float(_tuning["strike"])
+		_strike_rest = _strike + float(_tuning["repos"])
+	queue_redraw()
+
+
+## Statuts élémentaires, appliqués par le Level sur signal du CombatSystem.
+func soak(duration: float) -> void:
+	_soak_left = maxf(_soak_left, duration)
+
+
+func stagger(duration: float) -> void:
+	_stagger_left = maxf(_stagger_left, duration)
+	# L'arrêt est IMMÉDIAT, pas au prochain choix de case : un ébranlement qui
+	# laisse finir le pas en cours arrive une demi-case trop tard.
+	mover.desired_direction = Vector2i.ZERO
+
+
+func burn_glow(duration: float) -> void:
+	_burn_left = maxf(_burn_left, duration)
+
+
+func _update_desired(delta: float) -> void:
+	if ai == null:
+		return
+	_strike = maxf(0.0, _strike - delta)
+	_strike_rest = maxf(0.0, _strike_rest - delta)
+	_soak_left = maxf(0.0, _soak_left - delta)
+	_stagger_left = maxf(0.0, _stagger_left - delta)
+	_burn_left = maxf(0.0, _burn_left - delta)
+	mover.speed = _base_speed * (SOAK_FACTOR if _soak_left > 0.0 else 1.0)
+	if _stagger_left > 0.0:
+		mover.desired_direction = Vector2i.ZERO
+		_show_state(TINT_STAGGER)
+		return
+	var step := ai.decide(
+		mover.grid, mover.decision_cell(), mover.direction, player_field, delta)
+	# Le DERNIER pas est refusé : celui qui ferait monter l'ennemi sur la case du
+	# mage. Deux sprites superposés, on ne voit plus ni qui frappe ni où l'on est
+	# — alors qu'un poursuivant arrêté à une case, arme levée, raconte la même
+	# menace en lisible. Le refus se fait ici et non dans EnemyAI parce qu'il
+	# demande la position du mage À LA FRAME PRÈS : avec le champ de distances,
+	# vieux de 300 ms, l'ennemi restait plané un tiers de seconde après le départ
+	# du mage — et ce tiers de seconde suffit à ne plus jamais le rattraper.
+	if step != Vector2i.ZERO and mover.decision_cell() + step == player_cell:
+		step = Vector2i.ZERO
+	mover.desired_direction = step
+
+	_flash = maxf(0.0, _flash - delta)
+	if _flash > 0.0:
+		_show_state(HIT_FLASH)
+		return
+	if _strike > 0.0:
+		_show_state(TINT_STRIKE)
+		return
+	# Brûlure et trempe passent AVANT les teintes d'état : un statut est une
+	# information de combat, l'état de l'IA n'est qu'une ambiance.
+	if _burn_left > 0.0:
+		var flicker := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.02)
+		_show_state(TINT_BURN.lerp(HIT_FLASH, 0.25 * flicker))
+		return
+	if _soak_left > 0.0:
+		_show_state(TINT_SOAK)
+		return
+	match ai.state:
+		EnemyAI.State.CHASE:
+			_show_state(TINT_CHASE)
+		EnemyAI.State.SEARCH:
+			_show_state(TINT_SEARCH)
+		_:
+			_show_state(TINT_PATROL)
+
+
+## Teinte d'état, atténuée (voir TINT_STRENGTH).
+func _show_state(color: Color) -> void:
+	set_tint(Color.WHITE.lerp(color, TINT_STRENGTH))
+
+
+## Tué. On ne LIBÈRE pas le nœud : la vague suivante le réutilise tel quel, ce
+## qui évite de recréer un ennemi et de reconnecter son IA toutes les dix
+## secondes — et garde l'index stable, sur lequel repose tout le ciblage.
+func set_dead(value: bool) -> void:
+	dead = value
+	visible = not value
+	set_process(not value)
+	if value:
+		# La direction demandée est effacée : sans ça, l'ennemi repartirait à sa
+		# réapparition dans le sens où il courait au moment de sa mort.
+		mover.desired_direction = Vector2i.ZERO
+
+
+## Réapparition, ailleurs sur la carte, PV pleins. L'IA repart en patrouille :
+## elle vient de perdre le joueur de vue, elle ne peut pas savoir où il est passé.
+func revive_at(cell: Vector2i) -> void:
+	mover.teleport_to(cell)
+	snap_to_mover()
+	if ai != null:
+		ai.state = EnemyAI.State.PATROL
+	if health != null:
+		health.current = health.maximum
+		health.shield = 0
+	_flash = 0.0
+	_strike = 0.0
+	_strike_rest = 0.0
+	_soak_left = 0.0
+	_stagger_left = 0.0
+	_burn_left = 0.0
+	if _base_speed > 0.0:
+		mover.speed = _base_speed
+	set_dead(false)
+
+
+func _load_sheet(sheet_id: String) -> void:
+	var folder := ENEMIES_PATH + sheet_id + "/"
+	var text := FileAccess.get_file_as_string(folder + "frames.json")
+	var parsed: Variant = JSON.parse_string(text)
+	if parsed == null:
+		push_error("Descripteur d'animation introuvable pour « %s »" % sheet_id)
+		return
+	var data: Dictionary = parsed
+	var cell: Array = data["cell"]
+	_cell = Vector2(float(cell[0]), float(cell[1]))
+	_feet_y = float(data["feet_y"])
+	_poses = data["poses"]
+
+	_textures.clear()
+	for direction in data["directions"]:
+		var texture_2d: Texture2D = load(folder + str(direction) + ".png")
+		if texture_2d != null:
+			_textures[str(direction)] = texture_2d
+
+
+## Redéfinit la mise en place d'Actor : une seule image découpée en poses
+## (hframes), pas de pieds séparés — ils sont dessinés dans la planche.
+func _apply_visual() -> void:
+	if sprite == null or _textures.is_empty():
+		return
+	foot_left.visible = false
+	foot_right.visible = false
+	var factor := target_height / _cell.y
+	sprite.scale = Vector2(factor, factor)
+	sprite.region_enabled = false
+	sprite.vframes = 1
+	sprite.hframes = maxi(1, _poses.size())
+	# Aucun miroir : les planches qui ont un profil dessinent les DEUX côtés,
+	# celles qui n'en ont pas se voient pareil de partout.
+	sprite.flip_h = false
+	# Les pieds tombent sur l'origine du nœud, là où le Level pose l'ennemi et
+	# où Actor dessine son ombre de contact.
+	sprite.offset = Vector2(0.0, _cell.y * 0.5 - _feet_y)
+	_apply_frame()
+
+
+func _direction_key() -> String:
+	if _facing == Vector2i.UP:
+		return "up"
+	if _facing == Vector2i.LEFT:
+		return "left"
+	if _facing == Vector2i.RIGHT:
+		return "right"
+	return "down"
+
+
+func _apply_frame() -> void:
+	# Repli sur « down » : une planche à orientation unique ne déclare que
+	# celle-là, et c'est elle qui sert aux quatre directions.
+	var wanted: Texture2D = _textures.get(_direction_key(), _textures.get("down"))
+	if wanted == null:
+		return
+	if sprite.texture != wanted:
+		sprite.texture = wanted
+	# La pose de coup prime sur la marche, et dure ce que dure `_strike` : le
+	# même chronomètre porte déjà l'élan en avant et la teinte, tout reste en
+	# phase sans second compteur à tenir.
+	var index := _poses.find("attack") if _strike > 0.0 else -1
+	if index < 0:
+		if mover != null and mover.is_moving():
+			index = 1 + (int(_walk_phase) % maxi(1, _poses.size() - 2))
+		else:
+			index = 0
+	sprite.frame = clampi(index, 0, _poses.size() - 1)
+
+
+## Redéfinit l'animation procédurale d'Actor.
+func _animate(delta: float) -> void:
+	if sprite == null:
+		return
+	if mover.direction != Vector2i.ZERO:
+		_facing = mover.direction
+		_walk_phase += delta * float(_tuning["walk_fps"])
+	else:
+		# À l'arrêt, retour à la pose de repos plutôt qu'un pas figé en l'air.
+		_walk_phase = 0.0
+	_apply_frame()
+
+
+func _process(delta: float) -> void:
+	super(delta)
+	if sprite == null or mover == null:
+		return
+	# Élan du coup : un aller-retour rapide dans la direction du déplacement.
+	if _strike > 0.0:
+		var phase := 1.0 - _strike / maxf(0.01, float(_tuning["strike"]))
+		var lunge := sin(phase * PI) * tile_size * STRIKE_LUNGE
+		position += Vector2(mover.direction) * lunge
+
+
+func _draw() -> void:
+	super()
+	if health == null or dead:
+		return
+	# La barre ne s'affiche qu'une fois le premier coup porté : au complet, elle
+	# n'apprend rien et met un bandeau rouge au-dessus de chaque ennemi de la
+	# carte, ce qui noie l'information au moment où elle compte.
+	var ratio := health.ratio()
+	if ratio >= 1.0:
+		return
+
+	var width := tile_size * BAR_WIDTH
+	var height := tile_size * BAR_HEIGHT
+	var origin := Vector2(-width * 0.5, -tile_size * BAR_HEIGHT_ABOVE)
+	draw_rect(Rect2(origin - Vector2(1.0, 1.0), Vector2(width + 2.0, height + 2.0)),
+		Color(0.02, 0.03, 0.06, 0.85))
+	draw_rect(Rect2(origin, Vector2(width, height)), Color(0.28, 0.06, 0.08, 0.95))
+	# Du rouge au jaune quand il ne reste presque rien : le joueur doit savoir
+	# qu'un dernier coup suffit, c'est ce qui décide s'il reste ou s'il fuit.
+	var fill := Color("#e0463a").lerp(Color("#ffd15a"), clampf(1.0 - ratio * 2.0, 0.0, 1.0))
+	draw_rect(Rect2(origin, Vector2(width * ratio, height)), fill)
+	draw_rect(Rect2(origin, Vector2(width, height)), Color(0.85, 0.9, 1.0, 0.35), false, 1.0)

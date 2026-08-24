@@ -1,0 +1,13 @@
+{
+  "cell": [
+    125,
+    112
+  ],
+  "feet_y": 109.0,
+  "animations": {
+    "mage_walk_right": 11,
+    "mage_walk_up": 11,
+    "mage_walk_down": 11,
+    "mage_cast": 7
+  }
+}

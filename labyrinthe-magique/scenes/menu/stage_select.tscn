@@ -1,0 +1,72 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/ui/stage_select.gd" id="1_stages"]
+[ext_resource type="Script" path="res://src/ui/menu_backdrop.gd" id="2_backdrop"]
+
+[node name="StageSelect" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_stages")
+
+[node name="Backdrop" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+show_behind_parent = true
+script = ExtResource("2_backdrop")
+
+[node name="Heading" type="Label" parent="."]
+offset_right = 400.0
+offset_bottom = 32.0
+mouse_filter = 2
+horizontal_alignment = 1
+text = "CHOISIS TON ÉTAPE"
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 0.85, 0.47, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.03, 0.09, 1)
+theme_override_constants/outline_size = 8
+
+[node name="Hint" type="Label" parent="."]
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -128.0
+offset_right = -16.0
+offset_bottom = -100.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.86, 0.72, 0.72, 1)
+
+[node name="Buttons" type="HBoxContainer" parent="."]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -66.0
+offset_right = 280.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 1
+theme_override_constants/separation = 14
+
+[node name="BackButton" type="Button" parent="Buttons"]
+custom_minimum_size = Vector2(150, 52)
+text = "RETOUR"
+
+[node name="Episode1Button" type="Button" parent="Buttons"]
+custom_minimum_size = Vector2(190, 52)
+text = "ÉPISODE 1"
+
+[node name="Episode2Button" type="Button" parent="Buttons"]
+custom_minimum_size = Vector2(190, 52)
+text = "ÉPISODE 2"

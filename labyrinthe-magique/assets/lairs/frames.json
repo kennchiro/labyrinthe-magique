@@ -1,0 +1,20 @@
+{
+  "cell": [
+    105,
+    132
+  ],
+  "colors": [
+    "rouge",
+    "violet",
+    "vert",
+    "cyan"
+  ],
+  "poses": [
+    "ferme",
+    "lueur",
+    "portail",
+    "ouvert",
+    "plein",
+    "eruption"
+  ]
+}

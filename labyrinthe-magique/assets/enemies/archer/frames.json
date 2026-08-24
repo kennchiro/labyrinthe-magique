@@ -1,0 +1,33 @@
+{
+  "cell": [
+    240,
+    112
+  ],
+  "feet_y": 109.7,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "attack"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "enemi_6.png",
+  "grid": {
+    "dx": 176,
+    "dy": 178,
+    "ox": 27,
+    "oy": 24,
+    "rows": {
+      "down": 0,
+      "up": 1,
+      "left": 2
+    }
+  }
+}

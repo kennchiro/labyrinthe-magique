@@ -1,0 +1,102 @@
+{
+  "imp": {
+    "frames": [
+      {
+        "file": "imp.png",
+        "size": [
+          125,
+          119
+        ]
+      }
+    ],
+    "anchor": "feet"
+  },
+  "gargouille": {
+    "frames": [
+      {
+        "file": "gargouille.png",
+        "size": [
+          130,
+          101
+        ]
+      }
+    ],
+    "anchor": "feet"
+  },
+  "dragon_down": {
+    "frames": [
+      {
+        "file": "dragon_down_0.png",
+        "size": [
+          119,
+          85
+        ]
+      },
+      {
+        "file": "dragon_down_1.png",
+        "size": [
+          152,
+          94
+        ]
+      }
+    ],
+    "anchor": "centre"
+  },
+  "dragon_up": {
+    "frames": [
+      {
+        "file": "dragon_up_0.png",
+        "size": [
+          119,
+          101
+        ]
+      },
+      {
+        "file": "dragon_up_1.png",
+        "size": [
+          270,
+          143
+        ]
+      }
+    ],
+    "anchor": "centre"
+  },
+  "dragon_left": {
+    "frames": [
+      {
+        "file": "dragon_left_0.png",
+        "size": [
+          144,
+          105
+        ]
+      },
+      {
+        "file": "dragon_left_1.png",
+        "size": [
+          243,
+          148
+        ]
+      }
+    ],
+    "anchor": "centre"
+  },
+  "dragon_right": {
+    "frames": [
+      {
+        "file": "dragon_right_0.png",
+        "size": [
+          186,
+          186
+        ]
+      },
+      {
+        "file": "dragon_right_1.png",
+        "size": [
+          243,
+          148
+        ]
+      }
+    ],
+    "anchor": "centre"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "cell": [
+    192,
+    112
+  ],
+  "feet_y": 110.2,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "attack"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "enemi_2.png"
+}

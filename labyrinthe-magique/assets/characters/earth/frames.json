@@ -1,0 +1,30 @@
+{
+  "cell": [
+    192,
+    112
+  ],
+  "feet_y": 109.6,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "attack"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "mage_earth.png",
+  "grid": {
+    "dx": 149,
+    "dy": 161,
+    "ox": 6,
+    "oy": 25,
+    "col0": 0,
+    "row0": 0
+  }
+}

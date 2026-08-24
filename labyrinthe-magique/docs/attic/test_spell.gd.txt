@@ -1,0 +1,220 @@
+extends SceneTree
+
+## Règles du sort d'orbe, vérifiées sans ouvrir le jeu :
+##   godot --headless --path . --script res://tests/test_spell.gd
+##
+## SpellSystem n'a aucune dépendance au moteur de scène : on peut donc lui faire
+## jouer des milliers de tirs en une seconde. Ce que le test protège, c'est la
+## promesse faite au joueur — une potion = dix tirs, un tir = dix secondes de
+## répit, et jamais une charge perdue pour rien.
+
+const DT := 1.0 / 60.0
+
+var _failures: Array[String] = []
+
+
+func _init() -> void:
+	_test_charges()
+	_test_no_target_costs_nothing()
+	_test_trajectory()
+	_test_defeat_cycle()
+	_test_range()
+	_test_no_double_target()
+	_test_respawn_is_far()
+
+	print("")
+	if _failures.is_empty():
+		print("✅  TOUS LES TESTS PASSENT")
+	else:
+		print("❌  %d ÉCHEC(S) :" % _failures.size())
+		for f in _failures:
+			print("   - ", f)
+	quit(0 if _failures.is_empty() else 1)
+
+
+func _fail(msg: String) -> void:
+	_failures.append(msg)
+
+
+func _grid() -> MazeGrid:
+	return MazeGenerator.generate(LevelConfig.stage_2(), 31337)
+
+
+## Cellule praticable à `steps` cases du joueur, en distance de chemin.
+func _cell_at_distance(grid: MazeGrid, field: PackedInt32Array, steps: int) -> Vector2i:
+	for cell in grid.all_floor_cells():
+		if Pathfinder.value_at(grid, field, cell) == steps:
+			return cell
+	return Vector2i(-1, -1)
+
+
+func _test_charges() -> void:
+	var spells := SpellSystem.new(_grid())
+	if spells.charges != 0:
+		_fail("le sac démarre avec %d charges au lieu de 0" % spells.charges)
+	var gained := spells.add_potion()
+	if gained != SpellSystem.POTION_CHARGES or spells.charges != SpellSystem.POTION_CHARGES:
+		_fail("une potion donne %d charges au lieu de %d" % [gained, SpellSystem.POTION_CHARGES])
+	# Deuxième potion sur un sac plein : elle ne doit rien ajouter, et surtout
+	# pas faire déborder le compteur.
+	spells.add_potion()
+	if spells.charges != SpellSystem.MAX_CHARGES:
+		_fail("le sac dépasse son plafond : %d charges" % spells.charges)
+	print("charges : une potion = %d tirs, plafond respecté" % SpellSystem.POTION_CHARGES)
+
+
+func _test_no_target_costs_nothing() -> void:
+	var grid := _grid()
+	var spells := SpellSystem.new(grid)
+	spells.add_potion()
+	var player := grid.player_spawn
+	var field := Pathfinder.distance_field(grid, [player] as Array[Vector2i])
+
+	# Aucun ennemi du tout.
+	if spells.try_cast(player, [] as Array[Vector2i], field) >= 0:
+		_fail("un tir est parti sans le moindre ennemi")
+	if spells.charges != SpellSystem.POTION_CHARGES:
+		_fail("un tir sans cible a coûté une charge")
+
+	# Un ennemi hors de portée.
+	var far := _cell_at_distance(grid, field, SpellSystem.RANGE + 6)
+	if far.x >= 0:
+		if spells.try_cast(player, [far] as Array[Vector2i], field) >= 0:
+			_fail("un ennemi hors de portée a été ciblé")
+		if spells.charges != SpellSystem.POTION_CHARGES:
+			_fail("un tir hors de portée a coûté une charge")
+	print("cible absente ou hors de portée : aucune charge consommée")
+
+
+func _test_trajectory() -> void:
+	var grid := _grid()
+	var spells := SpellSystem.new(grid)
+	var player := grid.player_spawn
+	var field := Pathfinder.distance_field(grid, [player] as Array[Vector2i])
+	var target := _cell_at_distance(grid, field, 9)
+	if target.x < 0:
+		_fail("aucune case à 9 pas pour tester la trajectoire")
+		return
+
+	var path := spells.trajectory(player, target)
+	if path.is_empty() or path[0] != player or path[-1] != target:
+		_fail("la trajectoire ne relie pas le joueur à sa cible")
+		return
+	for i in range(1, path.size()):
+		if not grid.is_floor_v(path[i]):
+			_fail("la trajectoire traverse un mur en %s" % path[i])
+			return
+		var step: Vector2i = path[i] - path[i - 1]
+		if absi(step.x) + absi(step.y) != 1:
+			_fail("la trajectoire saute une case entre %s et %s" % [path[i - 1], path[i]])
+			return
+	print("trajectoire : %d cases, contiguë, sans traverser un mur" % path.size())
+
+
+func _test_defeat_cycle() -> void:
+	var grid := _grid()
+	var spells := SpellSystem.new(grid)
+	spells.add_potion()
+	var player := grid.player_spawn
+	var field := Pathfinder.distance_field(grid, [player] as Array[Vector2i])
+	var target := _cell_at_distance(grid, field, 8)
+	var enemies: Array[Vector2i] = [target]
+
+	# Compteurs dans un Dictionary : une lambda GDScript capture les variables
+	# locales par VALEUR, un entier incrémenté dedans resterait à zéro ici.
+	var events := {"defeated": 0, "revived": 0}
+	spells.enemy_defeated.connect(func(_i: int) -> void: events["defeated"] += 1)
+	spells.enemy_revived.connect(func(_i: int) -> void: events["revived"] += 1)
+
+	if spells.try_cast(player, enemies, field) != 0:
+		_fail("le tir n'a pas visé le seul ennemi présent")
+		return
+	if spells.charges != SpellSystem.POTION_CHARGES - 1:
+		_fail("un tir a consommé %d charges" % (SpellSystem.POTION_CHARGES - spells.charges))
+	if spells.is_defeated(0):
+		_fail("l'ennemi tombe AVANT l'arrivée de l'orbe")
+
+	# Vol de l'orbe : la cible ne doit tomber qu'à l'impact.
+	var elapsed := 0.0
+	while not spells.is_defeated(0) and elapsed < 5.0:
+		spells.update(DT)
+		elapsed += DT
+	if not spells.is_defeated(0):
+		_fail("l'orbe n'a jamais touché sa cible")
+		return
+	var expected_flight := 8.0 / SpellSystem.ORB_SPEED
+	if absf(elapsed - expected_flight) > 0.1:
+		_fail("temps de vol %.2f s au lieu de %.2f s" % [elapsed, expected_flight])
+
+	# Puis exactement DEFEAT_DURATION secondes hors-jeu.
+	var down := 0.0
+	while spells.is_defeated(0) and down < SpellSystem.DEFEAT_DURATION * 2.0:
+		spells.update(DT)
+		down += DT
+	if absf(down - SpellSystem.DEFEAT_DURATION) > 0.1:
+		_fail("l'ennemi reste %.1f s hors-jeu au lieu de %.1f s" % [down, SpellSystem.DEFEAT_DURATION])
+	if events["defeated"] != 1 or events["revived"] != 1:
+		_fail("cycle mal signalé : %d chute(s), %d retour(s)" % [events["defeated"], events["revived"]])
+	print("cycle : vol %.2f s, %0.1f s hors-jeu, puis retour" % [expected_flight, down])
+
+
+func _test_range() -> void:
+	var grid := _grid()
+	var spells := SpellSystem.new(grid)
+	var player := grid.player_spawn
+	var field := Pathfinder.distance_field(grid, [player] as Array[Vector2i])
+	var inside := _cell_at_distance(grid, field, SpellSystem.RANGE)
+	var outside := _cell_at_distance(grid, field, SpellSystem.RANGE + 1)
+	if inside.x < 0 or outside.x < 0:
+		return
+	# L'ennemi le plus proche est toujours choisi, jamais le plus commode.
+	var chosen := spells.find_target(field, [outside, inside] as Array[Vector2i])
+	if chosen != 1:
+		_fail("la visée n'a pas choisi l'ennemi le plus proche (index %d)" % chosen)
+	if spells.find_target(field, [outside] as Array[Vector2i]) >= 0:
+		_fail("un ennemi à %d cases est visé alors que la portée est %d" % [
+			SpellSystem.RANGE + 1, SpellSystem.RANGE])
+	print("portée : %d cases exactement, cible la plus proche d'abord" % SpellSystem.RANGE)
+
+
+func _test_no_double_target() -> void:
+	var grid := _grid()
+	var spells := SpellSystem.new(grid)
+	spells.add_potion()
+	var player := grid.player_spawn
+	var field := Pathfinder.distance_field(grid, [player] as Array[Vector2i])
+	var only := _cell_at_distance(grid, field, 10)
+	var enemies: Array[Vector2i] = [only]
+
+	if spells.try_cast(player, enemies, field) != 0:
+		_fail("premier tir refusé")
+		return
+	# Le cooldown passé, l'ennemi déjà visé ne doit pas l'être une seconde fois :
+	# deux charges pour dix secondes de répit serait une arnaque.
+	for i in int(SpellSystem.COOLDOWN / DT) + 2:
+		spells.update(DT)
+	if spells.is_defeated(0):
+		return  # l'orbe est déjà arrivé, le test ne prouve rien : on n'échoue pas
+	if spells.try_cast(player, enemies, field) >= 0:
+		_fail("une deuxième charge est partie sur une cible déjà visée")
+	print("visée : jamais deux orbes sur le même ennemi")
+
+
+func _test_respawn_is_far() -> void:
+	var grid := _grid()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	var config := LevelConfig.stage_2()
+	var field := Pathfinder.distance_field(grid, [grid.player_spawn] as Array[Vector2i])
+	var min_gap := config.enemy_detection_radius * 2
+
+	for i in 200:
+		var cell := MazeGenerator.pick_enemy_respawn(grid, rng, field, min_gap, grid.enemy_spawns[0])
+		if not grid.is_floor_v(cell):
+			_fail("réapparition dans un mur en %s" % cell)
+			return
+		if Pathfinder.value_at(grid, field, cell) < min_gap:
+			_fail("réapparition à %d cases du joueur (minimum %d)" % [
+				Pathfinder.value_at(grid, field, cell), min_gap])
+			return
+	print("réapparition : toujours praticable et à plus de %d cases du joueur" % min_gap)

@@ -1,0 +1,35 @@
+{
+  "maison": [
+    {
+      "file": "maison_0.png",
+      "w": 251,
+      "h": 275
+    }
+  ],
+  "lisiere": [
+    {
+      "file": "lisiere_0.png",
+      "w": 105,
+      "h": 162
+    }
+  ],
+  "lueur": [
+    {
+      "file": "lueur_0.png",
+      "w": 52,
+      "h": 115
+    }
+  ],
+  "semis": [
+    {
+      "file": "semis_0.png",
+      "w": 106,
+      "h": 72
+    },
+    {
+      "file": "semis_1.png",
+      "w": 75,
+      "h": 60
+    }
+  ]
+}

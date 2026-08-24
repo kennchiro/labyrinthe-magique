@@ -1,0 +1,30 @@
+{
+  "cell": [
+    192,
+    112
+  ],
+  "feet_y": 109.8,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "attack"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "mage_wind.png",
+  "grid": {
+    "dx": 166,
+    "dy": 176,
+    "ox": 26,
+    "oy": 15,
+    "col0": 0,
+    "row0": 0
+  }
+}

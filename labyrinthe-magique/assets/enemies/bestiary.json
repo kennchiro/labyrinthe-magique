@@ -1,0 +1,38 @@
+{
+  "serpent": {
+    "name": "Serpent d'Émeraude",
+    "source": "enemi_0.png"
+  },
+  "ombre": {
+    "name": "Ombre Encapuchonnée",
+    "source": "enemi_3.png"
+  },
+  "dragonnet": {
+    "name": "Dragonnet de Feu",
+    "source": "enemi_4.png"
+  },
+  "golem": {
+    "name": "Golem de Lave",
+    "source": "enemi_5.png"
+  },
+  "archer": {
+    "name": "Archer d'Os",
+    "source": "enemi_6.png"
+  },
+  "cristal": {
+    "name": "Démon de Cristal",
+    "source": "enemi_7.png"
+  },
+  "minotaure": {
+    "name": "Minotaure",
+    "source": "enemi_8.png"
+  },
+  "chevalier": {
+    "name": "Chevalier Noir",
+    "source": "enemi_9.png"
+  },
+  "givre": {
+    "name": "Golem de Givre",
+    "source": "enemi_10.png"
+  }
+}

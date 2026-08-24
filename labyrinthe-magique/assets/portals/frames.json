@@ -1,0 +1,24 @@
+{
+  "cell": [
+    140,
+    96
+  ],
+  "colors": [
+    "bleu",
+    "violet",
+    "vert",
+    "orange",
+    "rouge",
+    "cyan",
+    "rose",
+    "jaune"
+  ],
+  "poses": [
+    "idle",
+    "ouverture",
+    "ouvert",
+    "actif",
+    "teleportation",
+    "fermeture"
+  ]
+}
