@@ -74,7 +74,19 @@ SHEETS = {
     "mage_circle.png": {"id": "water", "col0": 0, "row0": 0},
     "mage_earth.png": {"id": "earth", "col0": 0, "row0": 0},
     "mage_dark.png": {"id": "shadow", "col0": 0, "row0": 0},
-    "mage_element.png": {"id": "supreme", "col0": 0, "row0": 0},
+    # Planche REFAITE le 2026-08-24 : l'ancienne (mage_element.png) dessinait une
+    # silhouette fine noyée dans une aura, illisible à 38 px de haut dans un
+    # couloir. La nouvelle a un corps compact et une grille propre — mais elle
+    # dessine DEUX profils droite et aucun gauche, d'où le miroir. Grille
+    # imposée : son pas de 238 px sort de la fenêtre de détection (70-220), et
+    # ses orbes élémentaires flottent détachées du corps, ce qui interdit aussi
+    # la découpe par formes connexes (7, 6, 8 et 12 formes au lieu de 6).
+    "mage_supreme.png": {
+        "id": "supreme", "grid": (238, 235, 20, 23),
+        "rows": {"down": 0, "up": 1, "right": 2},
+        "directions": ["down", "up", "right"],
+        "mirror": {"left": "right"},
+    },
     "mage_thunder.png": {"id": "thunder", "col0": 0, "row0": 0},
     "mage_wind.png": {"id": "air", "col0": 0, "row0": 0},
     "enemi_2.png": {"id": "goblin", "mode": "formes", "out": OUT_ENEMIES},
@@ -202,15 +214,33 @@ def anchor(mask: np.ndarray) -> tuple:
 
 
 def _cells_by_grid(image: Image.Image, alpha: np.ndarray, config: dict) -> tuple:
-    """Boîtes des 4 x 6 poses, posées sur la grille régulière de la planche."""
-    dx, dy, ox, oy = detect_grid(alpha)
+    """Boîtes des poses, posées sur la grille régulière de la planche.
+
+    Deux réglages facultatifs, tous deux nés d'une planche réelle :
+
+    `grid` — la grille IMPOSÉE, quand l'autodétection se trompe. Elle cale sa
+    phase sur ce qu'elle trouve de plus régulier, et une grande illustration ou
+    un pas de plus de 220 px la font mentir sans rien signaler.
+
+    `rows` — quelle RANGÉE porte quelle direction, quand la planche ne les
+    dessine pas dans l'ordre attendu, ou qu'il en manque une. La planche du
+    Suprême dessine deux profils DROITE et aucun gauche : on lui prend sa
+    rangée droite et `mirror` fabrique la gauche.
+    """
+    imposed = config.get("grid")
+    dx, dy, ox, oy = tuple(imposed) if imposed else detect_grid(alpha)
+    rows = config.get("rows")
+    placement = list(rows.items()) if rows else list(enumerate(DIRECTIONS))
+    if not rows:
+        placement = [(direction, index) for index, direction in placement]
     boxes = {}
-    for row_index, direction in enumerate(DIRECTIONS):
+    for direction, row_index in placement:
         for pose_index, pose in enumerate(POSES):
             boxes[(direction, pose)] = cell_box(
-                dx, dy, ox, oy, config["col0"] + pose_index, config["row0"] + row_index)
+                dx, dy, ox, oy, config.get("col0", 0) + pose_index,
+                config.get("row0", 0) + row_index)
     return boxes, {"dx": dx, "dy": dy, "ox": ox, "oy": oy,
-                   "col0": config["col0"], "row0": config["row0"]}
+                   "col0": config.get("col0", 0), "row0": config.get("row0", 0)}
 
 
 def _cells_by_rows(image: Image.Image, alpha: np.ndarray, config: dict) -> tuple:

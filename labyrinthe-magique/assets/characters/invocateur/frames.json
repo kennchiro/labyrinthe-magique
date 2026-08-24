@@ -1,9 +1,9 @@
 {
   "cell": [
-    170,
+    144,
     112
   ],
-  "feet_y": 108.6,
+  "feet_y": 107.6,
   "poses": [
     "idle",
     "walk_1",
@@ -18,5 +18,5 @@
     "left",
     "right"
   ],
-  "source": "mage_invocateur.jpeg"
+  "source": "mage_invocateur.png"
 }

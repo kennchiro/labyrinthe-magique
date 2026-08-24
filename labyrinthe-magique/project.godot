@@ -16,10 +16,10 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Labyrinthe des Éléments"
 config/description="Jeu 2D top-down : traverser un labyrinthe enchanté, éviter les ennemis, risquer les portails."
-run/main_scene="res://scenes/app.tscn"
 config/version="1.0.0"
-config/icon="res://assets/icon.png"
+run/main_scene="res://scenes/app.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://assets/icon.png"
 
 [display]
 
@@ -27,12 +27,6 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-; PAYSAGE, dans les deux sens (4 = sensor_landscape).
-;
-; En portrait, la croix directionnelle et les cinq boutons de combat se
-; disputaient le même bas d'écran : les pouces se gênaient. En paysage chaque
-; pouce a son côté, avec le labyrinthe entre les deux. La caméra cadre de toute
-; façon 11 cases sur le PETIT côté, le jeu reste donc lisible dans les deux sens.
 window/handheld/orientation=4
 
 [input]
@@ -120,10 +114,7 @@ pointing/emulate_touch_from_mouse=true
 
 [rendering]
 
-; Obligatoire pour exporter vers iOS et Android : sans elle, l'export échoue en
-; silence (Godot invalide le préréglage sans écrire de message d'erreur).
-textures/vram_compression/import_etc2_astc=true
-environment/defaults/default_clear_color=Color(0.043, 0.055, 0.078, 1)
-textures/canvas_textures/default_texture_filter=1
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.043, 0.055, 0.078, 1)

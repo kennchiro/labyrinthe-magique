@@ -4,32 +4,53 @@ extends Node2D
 ## Le corps visible d'une invocation. Toute la CHASSE — cible, chemin, coups —
 ## vit dans le CombatSystem ; ce nœud ne fait qu'afficher ce qu'on lui dit.
 ##
-## Deux familles, deux rendus :
-##   marcheurs (imp, gargouille) — une seule pose dessinée. L'animation est
-##     procédurale : balancement de vol stationnaire + miroir selon la
-##     direction. C'est le procédé qui servait aux ennemis d'avant leurs
-##     planches ; il retrouve ici un usage.
-##   dragon — deux poses par direction, vol et souffle, lues depuis
-##     assets/allies. Le souffle s'affiche pendant le coup.
+## Il lit `assets/allies/allies.json`, écrit par `tools/build_invocateur.py`, et
+## ne code AUCUN nombre de poses ni nom de fichier en dur — même règle que
+## `Player` et `Enemy` avec leur `frames.json`.
+##
+## Une BANDE par créature et par direction (`hframes`), poses d'inaction
+## d'abord, poses de coup ensuite. Le descripteur dit combien de chaque :
+##
+##   imp        4 poses d'inaction (un battement d'ailes) + 1 de morsure
+##   gargouille 2 + 1 (le souffle)
+##   dragon     1 + 1, mais dans les QUATRE directions
+##
+## Deux créatures sur trois n'ont qu'une vue de face : leur profil gauche est un
+## miroir (`mirror_left`), et le haut comme la droite retombent dessus. Le
+## dragon, lui, a ses quatre vues dessinées — on ne le retourne jamais.
+##
+## Le balancement de vol stationnaire reste procédural par-dessus : il tient le
+## rôle qu'il tenait quand ces créatures n'avaient qu'une pose, et il DÉCALE les
+## invocations entre elles pour que deux imps posés ensemble ne flottent pas à
+## l'unisson.
 
 const ALLIES_PATH := "res://assets/allies/"
-## Hauteur à l'écran, en pixels : sous le mage (53) pour les marcheurs, au
-## dessus pour le dragon — c'est l'ultime, il doit impressionner.
-const HEIGHTS := {"imp": 40.0, "gargouille": 46.0, "dragon": 72.0}
+const CATALOGUE_PATH := ALLIES_PATH + "allies.json"
+## Hauteur de CASE à l'écran, en pixels. C'est la case et non le dessin qui est
+## mise à l'échelle : les poses d'une même créature n'ont pas toutes la même
+## taille (l'aile ouverte, le souffle, le dragon qui pique ailes rabattues) et
+## c'est justement ce rapport-là qu'il faut garder.
+const HEIGHTS := {"imp": 44.0, "gargouille": 52.0, "dragon": 88.0}
+## Cadence du battement d'ailes, en images par seconde.
+const IDLE_FPS := 7.0
 ## Vitesse du balancement de vol stationnaire.
 const BOB_SPEED := 6.0
 const BOB_HEIGHT := 2.4
-## Durée d'affichage du souffle après un coup.
+## Durée d'affichage de la pose de coup.
 const STRIKE_FLASH := 0.45
 
 var kind_id := "imp"
 var tile_size := 32
 
 var _sprite: Sprite2D = null
-var _textures := {}
+## direction -> {"texture", "idle", "strike"} — la bande et ses deux comptes.
+var _bands := {}
+var _cell := Vector2(1, 1)
+var _mirror_left := false
 var _facing: Vector2i = Vector2i.DOWN
 var _strike_left := 0.0
 var _bob := 0.0
+var _time := 0.0
 
 
 func setup(p_kind: String, p_tile_size: int) -> void:
@@ -37,20 +58,38 @@ func setup(p_kind: String, p_tile_size: int) -> void:
 	tile_size = p_tile_size
 	_sprite = Sprite2D.new()
 	add_child(_sprite)
-	_load_textures()
+	_load_bands()
 	_apply_frame()
 	# Décalage aléatoire du balancement : deux imps invoqués ensemble ne doivent
 	# pas flotter à l'unisson comme des copies.
 	_bob = randf() * TAU
+	_time = randf() * 10.0
 
 
-func _load_textures() -> void:
-	if kind_id == "dragon":
-		for direction in ["down", "up", "left", "right"]:
-			_textures[direction] = load(ALLIES_PATH + "dragon_%s_0.png" % direction)
-			_textures[direction + "_fire"] = load(ALLIES_PATH + "dragon_%s_1.png" % direction)
-	else:
-		_textures["down"] = load(ALLIES_PATH + kind_id + ".png")
+func _load_bands() -> void:
+	var text := FileAccess.get_file_as_string(CATALOGUE_PATH)
+	var parsed: Variant = JSON.parse_string(text)
+	if parsed == null:
+		push_error("Descripteur des invocations introuvable (%s)" % CATALOGUE_PATH)
+		return
+	var catalogue: Dictionary = parsed
+	if not catalogue.has(kind_id):
+		push_error("Invocation inconnue dans allies.json : « %s »" % kind_id)
+		return
+	var entry: Dictionary = catalogue[kind_id]
+	_mirror_left = bool(entry.get("mirror_left", false))
+	var cell: Array = entry["cell"]
+	_cell = Vector2(float(cell[0]), float(cell[1]))
+	for direction in (entry["directions"] as Dictionary):
+		var band: Dictionary = entry["directions"][direction]
+		var texture: Texture2D = load(ALLIES_PATH + str(band["file"]))
+		if texture == null:
+			continue
+		_bands[str(direction)] = {
+			"texture": texture,
+			"idle": maxi(1, int(band.get("idle", 1))),
+			"strike": maxi(0, int(band.get("strike", 0))),
+		}
 
 
 func set_facing(facing: Vector2i) -> void:
@@ -65,6 +104,7 @@ func flash_strike() -> void:
 
 
 func _process(delta: float) -> void:
+	_time += delta
 	_strike_left = maxf(0.0, _strike_left - delta)
 	_bob += delta * BOB_SPEED
 	if _sprite == null:
@@ -84,27 +124,37 @@ func _direction_key() -> String:
 
 
 func _apply_frame() -> void:
-	if _sprite == null:
+	if _sprite == null or _bands.is_empty():
 		return
-	var key := _direction_key()
-	if kind_id == "dragon":
-		var wanted: Texture2D = _textures.get(
-			key + "_fire" if _strike_left > 0.0 else key)
-		if wanted != null and _sprite.texture != wanted:
-			_sprite.texture = wanted
-		_sprite.flip_h = false
+	var wanted := _direction_key()
+	# Direction non dessinée : on retombe sur la vue de face, retournée pour la
+	# gauche quand la créature s'y prête. Le dragon a ses quatre vues, il ne
+	# passe jamais par ici.
+	var key := wanted if _bands.has(wanted) else "down"
+	var band: Dictionary = _bands[key]
+	var texture: Texture2D = band["texture"]
+	var idle: int = band["idle"]
+	var strike: int = band["strike"]
+	var total := idle + strike
+	if _sprite.texture != texture:
+		_sprite.texture = texture
+	_sprite.hframes = maxi(1, total)
+	_sprite.vframes = 1
+	if _strike_left > 0.0 and strike > 0:
+		# La pose de coup s'égrène elle aussi quand il y en a plusieurs, mais
+		# sans boucler : on la joue une fois et on tient la dernière.
+		var step := int((STRIKE_FLASH - _strike_left) * IDLE_FPS)
+		_sprite.frame = idle + mini(strike - 1, step)
 	else:
-		_sprite.texture = _textures.get("down")
-		# Une seule pose : le profil est un miroir, et le coup un sursaut de
-		# teinte — pas de planche, pas de mensonge, juste des indices lisibles.
-		_sprite.flip_h = _facing == Vector2i.LEFT
-		_sprite.modulate = Color(1.5, 1.2, 1.2) if _strike_left > 0.0 else Color.WHITE
-	if _sprite.texture != null:
-		var factor: float = HEIGHTS.get(kind_id, 44.0) / float(_sprite.texture.get_height())
-		_sprite.scale = Vector2(factor, factor)
-		# Ancré au-dessus de l'origine : l'origine est l'ombre au sol, la
-		# créature FLOTTE au-dessus — toutes volent ou lévitent.
-		_sprite.offset = Vector2(0.0, -_sprite.texture.get_height() * 0.5 + 2.0)
+		_sprite.frame = int(_time * IDLE_FPS) % idle
+	_sprite.flip_h = _mirror_left and wanted == "left" and not _bands.has("left")
+
+	var factor: float = HEIGHTS.get(kind_id, 44.0) / _cell.y
+	_sprite.scale = Vector2(factor, factor)
+	# L'origine du nœud est l'OMBRE AU SOL, et c'est le BAS DE LA CASE qui s'y
+	# pose. Les marcheurs y ont leurs pieds — la case les y cale au découpage ;
+	# le dragon, centré dans la sienne, plane au-dessus grâce à la marge basse.
+	_sprite.offset = Vector2(0.0, -_cell.y * 0.5)
 
 
 func _draw() -> void:

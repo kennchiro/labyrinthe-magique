@@ -34,7 +34,15 @@ var _time := 0.0
 var _base_scale := 1.0
 
 
-func setup(character_id: String, tile_size: int) -> void:
+## `arriving` : à l'arrivée les braises CONVERGENT au lieu d'éclater.
+##
+## C'est ce qui raconte le sort — « le mage se disperse en braises et se reforme
+## plus loin ». Deux colonnes identiques aux deux bouts disaient « il était là,
+## il est ici » ; l'éclatement et la convergence disent « il s'est défait, il
+## s'est refait ». Le même effet, joué à l'envers.
+func setup(character_id: String, tile_size: int, tint: Color = Color(1, 1, 1),
+		arriving: bool = false) -> void:
+	_embers(tile_size, tint, arriving)
 	var texture: Texture2D = load(CHARACTERS_PATH + character_id + "/warp.png")
 	if texture == null:
 		queue_free()
@@ -48,6 +56,38 @@ func setup(character_id: String, tile_size: int) -> void:
 	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	sprite.material = material
 	_apply(0.0)
+
+
+## Les braises du départ et de l'arrivée.
+##
+## À l'ARRIVÉE, elles sont aspirées vers le centre par une accélération radiale
+## NÉGATIVE : les particules naissent en cercle et tombent vers le point où le
+## mage se reforme. C'est le seul moyen d'obtenir une convergence avec un
+## émetteur qui, par nature, projette vers l'extérieur.
+func _embers(tile_size: int, tint: Color, arriving: bool) -> void:
+	var reach := float(tile_size) * 1.5
+	var embers := FxTextures.flame_emitter(30, 0.55, float(tile_size) * 0.5,
+		Color(minf(1.0, tint.r + 0.35), minf(1.0, tint.g + 0.25),
+			minf(1.0, tint.b + 0.15), 0.9),
+		Color(tint.r * 0.7, tint.g * 0.35, tint.b * 0.2, 0.0),
+		-40.0 if arriving else 60.0, 180.0)
+	add_child(embers)
+	embers.one_shot = true
+	embers.explosiveness = 0.9
+	embers.local_coords = false
+	if arriving:
+		embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		embers.emission_sphere_radius = reach
+		embers.initial_velocity_min = 0.0
+		embers.initial_velocity_max = reach * 0.2
+		embers.radial_accel_min = -reach * 7.0
+		embers.radial_accel_max = -reach * 4.0
+	else:
+		embers.initial_velocity_min = reach * 0.5
+		embers.initial_velocity_max = reach * 2.0
+		embers.damping_min = 40.0
+		embers.damping_max = 90.0
+	embers.emitting = true
 
 
 func _apply(progress: float) -> void:

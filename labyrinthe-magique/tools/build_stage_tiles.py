@@ -112,10 +112,12 @@ def tinted(image: Image.Image, colour: tuple) -> Image.Image:
 ## Résisées en 96x96 — elles sont dessinées pour se répéter, contrairement aux
 ## découpes d'aperçu qui donnaient de la bouillie sur les autres stages.
 DRAWN_TILES = {
-    # Le mur vient de l'INTÉRIEUR de « Bord de Falaises » : les blocs de
-    # muraille du haut de la planche sont des pièces d'autotile avec du damier
-    # autour — découpés tels quels, le labyrinthe se remplissait de gris.
-    9: ("assets/stages/stage_9.jpeg", (22, 572, 172, 748), (392, 572, 540, 748)),
+    # Planche remplacée le 2026-08-24 par une vraie planche d'ambiance. Les deux
+    # boîtes sont prises à l'INTÉRIEUR des panneaux étiquetés en bas de la
+    # planche — « Sol de Stase » pour le sol, « Sel Rocheux » pour le mur — et
+    # non sur les blocs de muraille du haut : ceux-là portent leur face 3D et
+    # leurs arêtes, qui se répètent en rayures dès qu'on en fait une tuile.
+    9: ("assets/stages/stage_9.png", (45, 630, 195, 760), (270, 630, 420, 760)),
 }
 
 

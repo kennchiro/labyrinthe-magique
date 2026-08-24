@@ -14,8 +14,7 @@ cadre huit planches sur neuf ; les deux exceptions sont notées ci-dessous.
 
     tools/.venv/bin/python tools/build_stage_art.py    # DEPUIS LA RACINE
 
-⚠️ `stage_9.png` n'existe pas sur le disque. Sa vignette est un carton neutre,
-à remplacer quand la planche arrivera.
+Le carton neutre ne sert plus qu'à une planche absente : les dix sont là.
 """
 
 from pathlib import Path
@@ -31,11 +30,10 @@ THUMB = (512, 166)
 
 # Fractions (x0, y0, x1, y1) de l'illustration dans la planche.
 BOX = (0.457, 0.678, 0.843, 0.866)
-## La planche 9 est arrivée APRÈS les autres, dans un autre format : un JPEG
-## de tuiles sur damier, avec un panneau paysage — la vista aux aurores — en
-## bas au centre. C'est elle qui fait la vignette.
+## La planche 9, remplacée le 2026-08-24, a sa vista aux aurores plus à droite
+## et plus bas que la boîte commune : elle garde donc son override.
 OVERRIDES = {
-    9: (0.5008, 0.6157, 0.7326, 0.7319),
+    9: (0.5938, 0.6523, 0.8385, 0.7715),
     2: (0.573, 0.712, 0.838, 0.845),   # panneau décalé à droite et plus haut
     3: (0.457, 0.700, 0.843, 0.888),   # panneau descendu : la boîte commune
 }                                       # ramassait la rangée d'icônes

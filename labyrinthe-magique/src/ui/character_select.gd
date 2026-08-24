@@ -59,6 +59,12 @@ func _on_portrait_input(event: InputEvent, id: String) -> void:
 		select(id)
 
 
+## Hauteur disponible dans la fiche, mesurée au dernier calcul de mise en page.
+## La fiche s'enrichit quand il y a la place et se resserre sinon — même règle
+## que pour le reste de cet écran.
+var card_room := 0.0
+
+
 func select(id: String) -> void:
 	character_id = id
 	var stats := CharacterCatalog.by_id(id)
@@ -77,16 +83,38 @@ func select(id: String) -> void:
 	stats_label.text = "Vie %d   ·   Vitesse %.1f   ·   Extra Power à %d kills" % [
 		stats.base_health, stats.move_speed, stats.ultimate_required_kills]
 
+	# La fiche COMPLÈTE : le trait, les six emplacements de la barre d'action,
+	# et le seuil de l'ultime. Il manquait la FUITE — pourtant l'un des six
+	# boutons — et le nombre de kills, qui varie d'un personnage à l'autre
+	# depuis qu'il suit la constitution.
 	var lines: Array[String] = []
-	# Le trait d'abord : c'est LE critère qui distingue les sept mages, les
-	# chiffres des sorts ne viennent qu'ensuite.
+	var owners: Array = [null]        # le TRAIT n'a pas de compétence associée
 	lines.append("TRAIT     %s — %s" % [Element.trait_name(stats.element),
 		Element.trait_hint(stats.element)])
 	lines.append("ATTAQUE   %s — %s" % [stats.attack.display_name, stats.attack.summary()])
+	owners.append(stats.attack)
 	for i in stats.abilities.size():
 		var ability: Ability = stats.abilities[i]
 		lines.append("SKILL %d   %s — %s" % [i + 1, ability.display_name, ability.summary()])
-	lines.append("EXTRA     %s — %s" % [stats.ultimate.display_name, stats.ultimate.summary()])
+		owners.append(ability)
+	if stats.escape != null:
+		lines.append("FUITE     %s — %s" % [stats.escape.display_name, stats.escape.summary()])
+		owners.append(stats.escape)
+	lines.append("EXTRA     %s — %s  (à %d kills)" % [stats.ultimate.display_name,
+		stats.ultimate.summary(), stats.ultimate_required_kills])
+	owners.append(stats.ultimate)
+
+	# Les DESCRIPTIONS sous chaque sort, quand la fiche est assez haute. Sur un
+	# téléphone en paysage il n'y a pas la place ; ailleurs, c'est ce qui dit à
+	# quoi SERT un sort, là où les chiffres ne disent que ce qu'il vaut.
+	if card_room > 300.0:
+		var detailed: Array[String] = []
+		for i in lines.size():
+			detailed.append(lines[i])
+			var owner: Ability = owners[i] if i < owners.size() else null
+			if owner != null and not owner.description.is_empty():
+				detailed.append("          %s" % owner.description)
+		lines = detailed
 	abilities_label.text = "\n".join(lines)
 
 
@@ -124,6 +152,7 @@ func _layout() -> void:
 	card.position = Vector2(margin, roster.position.y + roster_height + margin * 0.6)
 	card.size = Vector2(size.x - margin * 2.0,
 		maxf(120.0, size.y - card.position.y - button_height - margin * 2.0))
+	card_room = card.size.y
 	_layout_card(card)
 
 	buttons.size = Vector2(minf(560.0, size.x - margin * 2.0), button_height)

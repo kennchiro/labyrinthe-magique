@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/meteor.gd" id="1_meteor"]
+
+[node name="Meteor" type="Node2D"]
+z_index = 15
+script = ExtResource("1_meteor")
+
+[node name="Rock" type="Sprite2D" parent="."]

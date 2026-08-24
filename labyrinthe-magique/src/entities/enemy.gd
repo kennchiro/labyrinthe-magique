@@ -93,6 +93,7 @@ var _facing: Vector2i = Vector2i.DOWN
 var _walk_phase := 0.0
 var _base_speed := 0.0
 var _soak_left := 0.0
+var _soak_factor := SOAK_FACTOR
 var _stagger_left := 0.0
 var _burn_left := 0.0
 
@@ -134,7 +135,12 @@ func strike() -> void:
 
 
 ## Statuts élémentaires, appliqués par le Level sur signal du CombatSystem.
-func soak(duration: float) -> void:
+## Le ralentissement le plus FORT gagne : un ennemi déjà trempé qui entre dans
+## un cercle glacé doit ralentir davantage, pas voir son givre écrasé par la
+## trempe qui traînait.
+func soak(duration: float, factor: float = SOAK_FACTOR) -> void:
+	if duration >= _soak_left or factor < _soak_factor:
+		_soak_factor = minf(_soak_factor, factor) if _soak_left > 0.0 else factor
 	_soak_left = maxf(_soak_left, duration)
 
 
@@ -157,7 +163,9 @@ func _update_desired(delta: float) -> void:
 	_soak_left = maxf(0.0, _soak_left - delta)
 	_stagger_left = maxf(0.0, _stagger_left - delta)
 	_burn_left = maxf(0.0, _burn_left - delta)
-	mover.speed = _base_speed * (SOAK_FACTOR if _soak_left > 0.0 else 1.0)
+	mover.speed = _base_speed * (_soak_factor if _soak_left > 0.0 else 1.0)
+	if _soak_left <= 0.0:
+		_soak_factor = SOAK_FACTOR
 	if _stagger_left > 0.0:
 		mover.desired_direction = Vector2i.ZERO
 		_show_state(TINT_STAGGER)

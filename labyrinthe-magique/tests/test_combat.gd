@@ -33,7 +33,21 @@ func _init() -> void:
 	_test_stage_unlocks()
 	_test_elemental_traits()
 	_test_summons()
+	_test_rosters()
 	_test_flat_index()
+	_test_demo_free_use()
+	_test_zone_snare()
+	_test_charges()
+	_test_volcanic_ultimate()
+	_test_ultimate_thresholds()
+	_test_ability_summaries()
+	_test_water_promises()
+	_test_empowerment()
+	_test_shield_expiry()
+	_test_lightning_chain()
+	_test_thunder_field()
+	_test_storm()
+	_test_sky_judgement()
 
 	print("")
 	if _failures.is_empty():
@@ -627,6 +641,43 @@ func _test_summons() -> void:
 		% CombatSystem.MAX_SUMMONS)
 
 
+## Chaque chapitre POSE RÉELLEMENT sa nouveauté, et chaque espèce du bestiaire
+## entre en jeu quelque part.
+##
+## L'effectif d'un stage plafonne alors que le roster grandit : au stage 10, huit
+## poursuivants pour onze espèces. Piocher dans l'ordre d'apparition faisait donc
+## tomber les dernières — le Chevalier Noir et le Golem de Givre n'entraient
+## JAMAIS en jeu, ni à l'épisode 1 ni au 2, alors qu'ils avaient leurs planches,
+## leurs points de vie et leur ligne dans la fiche du bestiaire. Un défaut qu'on
+## ne voit pas en jouant : il faut compter.
+func _test_rosters() -> void:
+	var seen := {}
+	for stage in range(1, LevelConfig.STAGE_COUNT + 1):
+		var newcomers: Array = Bestiary.NEWCOMERS[stage - 1]
+		for episode in [1, 2]:
+			var config := LevelConfig.for_stage(stage, episode)
+			var used := {}
+			for i in config.enemy_count:
+				var id := config.species_at(i)
+				used[id] = true
+				seen[id] = true
+			for id in newcomers:
+				if not used.has(str(id)):
+					_fail("stage %d épisode %d ne pose pas sa nouveauté (%s)" % [
+						stage, episode, Bestiary.display_name(str(id))])
+			for id in used:
+				if not config.species.has(id):
+					_fail("stage %d pose %s, qui n'est pas dans son roster" % [
+						stage, Bestiary.display_name(str(id))])
+
+	for group in Bestiary.NEWCOMERS:
+		for id in group:
+			if not seen.has(str(id)):
+				_fail("%s n'entre jamais en jeu" % Bestiary.display_name(str(id)))
+	print("rosters : les %d espèces entrent en jeu, chaque chapitre pose sa nouveauté : OK"
+		% seen.size())
+
+
 func _test_flat_index() -> void:
 	var levels := LevelConfig.all_levels()
 	if levels.size() != LevelConfig.STAGE_COUNT * LevelConfig.EPISODES_PER_STAGE:
@@ -672,7 +723,7 @@ func _test_elemental_traits() -> void:
 	grid = parts[0]; combat = parts[1]; context = parts[2]
 	_add_enemy(context, _cell_at(grid, context.player_field, 1), 400)
 	var seen := {"soak": 0, "stagger": 0}
-	combat.enemy_soaked.connect(func(_i: int, _d: float) -> void: seen["soak"] += 1)
+	combat.enemy_soaked.connect(func(_i: int, _d: float, _f: float) -> void: seen["soak"] += 1)
 	combat.enemy_staggered.connect(func(_i: int, _d: float) -> void: seen["stagger"] += 1)
 	combat.use(_trait_blast(Element.Kind.WATER), context)
 	combat.use(_trait_blast(Element.Kind.EARTH), context)
@@ -751,3 +802,832 @@ func _test_elemental_traits() -> void:
 	combat.use(_trait_blast(Element.Kind.AIR), context)
 	if moves["count"] != 0:
 		_fail("une bourrasque a déplacé une maison")
+
+
+## Le mode DÉMO n'a pas de recharge — et la campagne, elle, la garde. Ce test
+## protège les deux moitiés de la promesse : un drapeau qui débraye les
+## recharges partout viderait le jeu de sa gestion des sorts sans qu'aucune
+## partie ne plante pour le signaler.
+func _test_demo_free_use() -> void:
+	var stats := CharacterCatalog.fire()
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 5), 4000)
+	var skill: Ability = stats.abilities[0]
+
+	# Campagne : le second lancer est refusé, la recharge court.
+	if not combat.use(skill, context):
+		_fail("démo : le premier lancer est refusé alors que la cible est là")
+	if combat.use(skill, context):
+		_fail("campagne : le sort repart sans recharge")
+
+	# Démo : autant de lancers qu'on veut, et la recharge affichée reste pleine.
+	combat.free_use = true
+	for i in 5:
+		if not combat.use(skill, context):
+			_fail("démo : le sort est refusé au lancer %d" % (i + 1))
+			break
+	if combat.cooldown_ratio(skill) < 1.0:
+		_fail("démo : la barre de recharge n'est pas pleine")
+
+	# Le terrain d'essai porte bien le drapeau, la campagne non.
+	if not LevelConfig.demo().is_demo:
+		_fail("le terrain d'essai n'est pas marqué comme démo")
+	if LevelConfig.for_stage(1).is_demo:
+		_fail("un stage de campagne est marqué comme démo")
+
+
+## Le BRASIER PIÈGE de l'Aura ardente. Ce que ce test protège tient en une
+## phrase : une créature prise doit ÊTRE LIBÉRÉE. Le piège tique deux fois par
+## seconde pendant trente secondes ; sans verrou par créature, chaque tick la
+## reprendrait et elle ne repartirait jamais — un sort qui retire un ennemi du
+## jeu pour toujours, sans que rien ne plante pour le signaler.
+func _test_zone_snare() -> void:
+	var stats := CharacterCatalog.fire()
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 4000)
+
+	var aura: Ability = null
+	for ability in stats.abilities:
+		if ability.snare > 0.0:
+			aura = ability
+	if aura == null:
+		_fail("aucune zone-piège dans le catalogue du Mage du Feu")
+		return
+	if aura.duration < 30.0:
+		_fail("le brasier dure %.0f s au lieu de 30" % aura.duration)
+
+	var holds := {"count": 0, "seconds": 0.0}
+	var burns := {"count": 0, "seconds": 0.0}
+	combat.enemy_staggered.connect(func(_i: int, d: float) -> void:
+		holds["count"] += 1
+		holds["seconds"] = d)
+	combat.enemy_burning.connect(func(_i: int, d: float) -> void:
+		burns["count"] += 1
+		burns["seconds"] = d)
+
+	combat.use(aura, context)
+	# Six secondes sur place : le piège a tiqué douze fois.
+	for i in 360:
+		combat.update(DT, context)
+	if holds["count"] != 1:
+		_fail("le piège se réarme : %d immobilisations en 6 s (prison à vie)" % holds["count"])
+	if absf(holds["seconds"] - 5.0) > 0.01:
+		_fail("l'immobilisation dure %.1f s au lieu de 5" % holds["seconds"])
+	if burns["count"] != 1 or absf(burns["seconds"] - 3.0) > 0.01:
+		_fail("la brûlure de sortie : %d fois, %.1f s (attendu 1 fois, 3 s)"
+			% [burns["count"], burns["seconds"]])
+
+	# Passé le verrou (5 + 3 + 1 s de grâce), la créature peut être reprise :
+	# le piège tient le terrain, il ne se vide pas après un seul passage.
+	for i in 240:
+		combat.update(DT, context)
+	if holds["count"] < 2:
+		_fail("le piège ne reprend plus personne après le premier passage")
+
+	# « Sol embrasé » n'est PAS un piège : deux zones de feu qui retiendraient
+	# toutes les deux ne se distingueraient plus l'une de l'autre.
+	var plain: Ability = stats.abilities[1]
+	if plain.snare > 0.0:
+		_fail("%s retient aussi : les deux zones de feu font la même chose"
+			% plain.display_name)
+
+
+## Les CHARGES : cinq brasiers d'affilée, puis la recharge, puis les cinq
+## reviennent d'un coup. Trois promesses distinctes, et chacune peut casser
+## seule — d'où trois vérifications.
+func _test_charges() -> void:
+	var stats := CharacterCatalog.fire()
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 4000)
+
+	var aura: Ability = null
+	for ability in stats.abilities:
+		if ability.charges > 1:
+			aura = ability
+	if aura == null:
+		_fail("aucun sort à charges dans le catalogue du Mage du Feu")
+		return
+	if aura.charges != 5:
+		_fail("le brasier a %d charges au lieu de 5" % aura.charges)
+
+	# 1. Cinq lancers passent, le sixième non.
+	var fired := 0
+	for i in 8:
+		if combat.use(aura, context):
+			fired += 1
+		# Le petit délai entre charges s'écoule entre deux tentatives.
+		for tick in 30:
+			combat.update(DT, context)
+	if fired != aura.charges:
+		_fail("%d lancers d'affilée au lieu de %d" % [fired, aura.charges])
+	if combat.charges_left(aura) != 0:
+		_fail("il reste %d charge(s) après les avoir toutes dépensées"
+			% combat.charges_left(aura))
+
+	# 2. Tant qu'il restait une charge, le sort devait être PRÊT — c'est ce qui
+	#    distingue un sort à charges d'un sort à recharge courte.
+	if not combat.can_use(stats.attack):
+		_fail("l'attaque de base est bloquée par la recharge du brasier")
+
+	# 3. La recharge rend TOUTES les charges, pas une.
+	for i in int(aura.cooldown / DT) + 30:
+		combat.update(DT, context)
+	if combat.charges_left(aura) != aura.charges:
+		_fail("la recharge rend %d charge(s) au lieu de %d"
+			% [combat.charges_left(aura), aura.charges])
+	if not combat.can_use(aura):
+		_fail("le brasier reste bloqué après sa recharge")
+
+	# Un sort SANS charges garde son comportement d'origine : une charge, une
+	# recharge. Le nouveau système ne doit rien changer aux six autres mages.
+	var plain: Ability = stats.abilities[1]
+	if combat.charges_left(plain) != -1:
+		_fail("%s expose des charges alors qu'il n'en a pas" % plain.display_name)
+	if not combat.use(plain, context):
+		_fail("le sort ordinaire est refusé")
+	if combat.use(plain, context):
+		_fail("le sort ordinaire repart sans recharge")
+
+
+## L'ULTIME VOLCANIQUE. Trois promesses, dont deux sont des EXCEPTIONS aux
+## règles du jeu — c'est justement pour ça qu'elles ont besoin d'un test : une
+## exception qui déborde sur les sorts ordinaires ne planterait rien, elle
+## rendrait juste toutes les haies inutiles sans que personne ne le remarque.
+func _test_volcanic_ultimate() -> void:
+	var stats := CharacterCatalog.fire()
+	var ultimate := stats.ultimate
+	if not ultimate.pierces_walls:
+		_fail("l'ultime du Feu ne traverse plus les murs")
+	if ultimate.rain_count <= 0:
+		_fail("l'ultime du Feu ne fait plus pleuvoir de météores")
+
+	# 1. AUCUN autre sort du jeu ne perce les murs. C'est la promesse inverse,
+	#    et c'est elle qui donne son prix à l'ultime.
+	for character in CharacterCatalog.all():
+		for ability in character.action_bar():
+			if ability == null or ability.is_ultimate:
+				continue
+			if ability.pierces_walls:
+				_fail("%s (%s) traverse les murs sans être un ultime"
+					% [ability.display_name, character.display_name])
+			if ability.rain_count > 0:
+				_fail("%s fait pleuvoir sans être un ultime" % ability.display_name)
+
+	# 2. Le souffle touche DERRIÈRE une haie — la seule chose du jeu qui le
+	#    fasse. On place une cible hors d'atteinte par les couloirs mais proche
+	#    à vol d'oiseau, et on vérifie qu'elle encaisse quand même.
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var walled := _cell_behind_hedge(grid, context.player_cell, ultimate.radius)
+	if walled.x < 0:
+		print("ultime volcanique : aucune case murée trouvée pour ce test")
+	else:
+		_add_enemy(context, walled, 4000)
+		combat.use(ultimate, context)
+		if context.enemy_health[0].current >= 4000:
+			_fail("le souffle de l'ultime ne passe pas la haie")
+
+	# 3. La pluie tombe ÉTALÉE dans le temps, pas d'un bloc : douze météores
+	#    simultanées seraient un seul gros dégât, pas une pluie.
+	var parts2 := _context(stats)
+	var combat2: CombatSystem = parts2[1]
+	var context2: CombatContext = parts2[2]
+	var landings := {"count": 0, "first": -1.0, "last": -1.0}
+	var clock := {"t": 0.0}
+	combat2.meteor_landed.connect(func(_c: Vector2i, _a: Ability) -> void:
+		landings["count"] += 1
+		if landings["first"] < 0.0:
+			landings["first"] = clock["t"]
+		landings["last"] = clock["t"])
+	combat2.use(ultimate, context2)
+	for i in 400:
+		clock["t"] = float(i) * DT
+		combat2.update(DT, context2)
+	if landings["count"] != ultimate.rain_count:
+		_fail("%d météores tombées au lieu de %d"
+			% [landings["count"], ultimate.rain_count])
+	var window: float = landings["last"] - landings["first"]
+	if window < ultimate.rain_duration * 0.4:
+		_fail("les météores tombent en %.1f s : c'est un bloc, pas une pluie" % window)
+
+
+## Case à portée À VOL D'OISEAU mais inatteignable par les couloirs dans ce
+## rayon : exactement ce qu'un ultime doit pouvoir frapper et rien d'autre.
+func _cell_behind_hedge(grid: MazeGrid, from: Vector2i, radius: float) -> Vector2i:
+	var field := Pathfinder.distance_field(grid, [from] as Array[Vector2i])
+	for cell in grid.all_floor_cells():
+		if Vector2(cell - from).length() > radius:
+			continue
+		var walk := Pathfinder.value_at(grid, field, cell)
+		if walk > radius + 3.0:
+			return cell
+	return Vector2i(-1, -1)
+
+
+## LE SEUIL D'ULTIME SUIT LA CONSTITUTION : un mage fragile l'atteint plus tôt,
+## un mage robuste le paie plus cher. Sans cette règle, les huit personnages
+## exigeaient presque tous cinq kills et le compteur ne disait rien de celui
+## qu'on jouait. Deux exceptions, chacune argumentée dans le catalogue.
+func _test_ultimate_thresholds() -> void:
+	# Trois exceptions, chacune argumentée dans le catalogue : l'ultime du
+	# Suprême efface un stage, celui de l'Invocateur vient de ses créatures, et
+	# celui de l'Eau est un ÉTAT de 30 s qui doit revenir souvent pour exister.
+	var exceptions := {"supreme": 8, "invocateur": 6, "water": 2}
+	for character in CharacterCatalog.all():
+		var expected: int = exceptions.get(character.id, character.base_health + 1)
+		if character.ultimate_required_kills != expected:
+			_fail("%s : ultime à %d kills, attendu %d (constitution %d)"
+				% [character.display_name, character.ultimate_required_kills,
+					expected, character.base_health])
+
+	# Le Mage du Feu a été réglé à la main sur demande : la règle doit lui
+	# donner exactement ce chiffre, sinon elle a été écrite pour l'occasion.
+	if CharacterCatalog.fire().ultimate_required_kills != 4:
+		_fail("le Mage du Feu n'est plus à 4 kills")
+
+	# Et les seuils doivent VARIER : une règle qui rendrait tout le monde égal
+	# nous ramènerait au point de départ sans qu'aucun test ne s'en aperçoive.
+	var seen := {}
+	for character in CharacterCatalog.all():
+		seen[character.ultimate_required_kills] = true
+	if seen.size() < 3:
+		_fail("les seuils d'ultime ne prennent que %d valeurs distinctes" % seen.size())
+
+
+## La fiche de personnage doit MENTIONNER les particularités d'un sort : deux
+## sorts aux mêmes chiffres ne se jouent pas pareil si l'un cloue sur place et
+## l'autre traverse les murs. Un résumé muet là-dessus laisse le joueur choisir
+## à l'aveugle.
+func _test_ability_summaries() -> void:
+	var fire := CharacterCatalog.fire()
+	var brazier: Ability = fire.abilities[2]
+	var text := brazier.summary()
+	if not ("charges" in text and "cloue" in text):
+		_fail("le résumé du brasier ne dit ni ses charges ni son piège : %s" % text)
+	var ultimate := fire.ultimate.summary()
+	if not ("MURS" in ultimate and "météores" in ultimate):
+		_fail("le résumé de l'ultime ne dit ni les murs ni la pluie : %s" % ultimate)
+
+
+## LE MAGE DE L'EAU TIENT SES PROMESSES.
+##
+## Trois de ses sorts annonçaient dans leur description un effet que le code ne
+## produisait pas : le Cercle glacé « engluait » sans ralentir, le Geyser
+## « régénérait » sans soigner, et la Vague « balayait le couloir devant » en
+## explosant tout autour. Une description qui ment est pire qu'une description
+## absente : le joueur construit sa tactique dessus.
+func _test_water_promises() -> void:
+	var stats := CharacterCatalog.water()
+
+	# 1. LE GIVRE ralentit vraiment, et plus fort que la trempe de l'élément.
+	var circle: Ability = null
+	for ability in stats.abilities:
+		if ability.slow_duration > 0.0:
+			circle = ability
+	if circle == null:
+		_fail("le Cercle glacé ne ralentit toujours rien")
+	else:
+		if circle.slow_factor >= CombatSystem.SOAK_FACTOR:
+			_fail("le givre (%.2f) ne ralentit pas plus que la trempe (%.2f)"
+				% [circle.slow_factor, CombatSystem.SOAK_FACTOR])
+		var parts := _context(stats)
+		var grid: MazeGrid = parts[0]
+		var combat: CombatSystem = parts[1]
+		var context: CombatContext = parts[2]
+		_add_enemy(context, _cell_at(grid, context.player_field, 1), 4000)
+		var chills := {"count": 0, "factor": 1.0}
+		combat.enemy_soaked.connect(func(_i: int, _d: float, f: float) -> void:
+			chills["count"] += 1
+			chills["factor"] = f)
+		combat.use(circle, context)
+		# Fenêtre PLUS COURTE que le verrou (durée du givre + 0,5 s), sinon une
+		# seconde prise est légitime et le test se trompe de coupable.
+		for i in 200:
+			combat.update(DT, context)
+		if chills["count"] != 1:
+			_fail("le givre s'applique %d fois avant la fin du verrou" % chills["count"])
+		# Et passé le verrou, la zone doit reprendre : elle tient le terrain dix
+		# secondes, elle ne se vide pas après un seul passage.
+		for i in 200:
+			combat.update(DT, context)
+		if chills["count"] < 2:
+			_fail("le givre ne reprend plus personne après le premier passage")
+		if absf(float(chills["factor"]) - circle.slow_factor) > 0.01:
+			_fail("le givre annonce %.2f mais applique %.2f"
+				% [circle.slow_factor, chills["factor"]])
+
+	# 2. LE GEYSER soigne. On blesse le mage d'abord, sinon rien ne se voit.
+	var parts2 := _context(stats)
+	var combat2: CombatSystem = parts2[1]
+	var context2: CombatContext = parts2[2]
+	var caster: Health = parts2[3]
+	if stats.ultimate.heal_self <= 0:
+		_fail("le Geyser ne soigne toujours pas, malgré sa description")
+	caster.take(Damage.new(2, Element.Kind.WATER, "test"))
+	var before := caster.current
+	combat2.use(stats.ultimate, context2)
+	if caster.current <= before:
+		_fail("le Geyser laisse le mage à %d PV" % caster.current)
+
+	# 3. LA VAGUE DÉFERLE : elle avance devant le mage et frappe ce qu'elle
+	#    traverse, elle n'explose pas autour de lui. Trois promesses distinctes,
+	#    et la plus importante est la troisième — une vague qui frapperait tout
+	#    d'un coup ne serait qu'un souffle sous un autre nom.
+	var parts3 := _context(stats)
+	var grid3: MazeGrid = parts3[0]
+	var combat3: CombatSystem = parts3[1]
+	var context3: CombatContext = parts3[2]
+	var wave: Ability = stats.abilities[0]
+	if wave.kind != Ability.Kind.WAVE:
+		_fail("la Vague n'est pas un front qui déferle")
+		return
+
+	context3.player_facing = Vector2i.RIGHT
+	var ahead := context3.player_cell + Vector2i.RIGHT
+	var behind := context3.player_cell + Vector2i.LEFT
+	if not grid3.is_floor_v(ahead) or not grid3.is_floor_v(behind):
+		print("vague : pas de couloir droit pour ce test")
+		return
+	_add_enemy(context3, ahead, 4000)
+	_add_enemy(context3, behind, 4000)
+
+	# a) Rien n'est touché à l'instant du lancement : le front doit VOYAGER.
+	combat3.use(wave, context3)
+	if context3.enemy_health[0].current < 4000:
+		_fail("la vague frappe avant d'avoir avancé : c'est une explosion")
+
+	# b) Ce qui est DEVANT est emporté quand le front y arrive.
+	for i in 90:
+		combat3.update(DT, context3)
+	if context3.enemy_health[0].current >= 4000:
+		_fail("la vague n'emporte pas ce qui est sur son chemin")
+
+	# c) EN FUYANT : le mage tourne le dos à son poursuivant, et la vague doit
+	#    quand même partir vers LUI. C'est le défaut de la première version —
+	#    elle suivait le regard, donc elle partait du mauvais côté au moment
+	#    précis où l'on en avait besoin.
+	var parts4 := _context(stats)
+	var grid4: MazeGrid = parts4[0]
+	var combat4: CombatSystem = parts4[1]
+	var context4: CombatContext = parts4[2]
+	var chaser := context4.player_cell + Vector2i.LEFT
+	if grid4.is_floor_v(chaser) and grid4.is_floor_v(context4.player_cell + Vector2i.RIGHT):
+		# Le mage FUIT vers la droite ; le poursuivant est à gauche.
+		context4.player_facing = Vector2i.RIGHT
+		_add_enemy(context4, chaser, 4000)
+		combat4.use(wave, context4)
+		for i in 90:
+			combat4.update(DT, context4)
+		if context4.enemy_health[0].current >= 4000:
+			_fail("en fuyant, la vague part devant au lieu d'aller vers le poursuivant")
+
+	# d) Et chaque ennemi n'encaisse QU'UNE FOIS. Sans mémoire des touchés, un
+	#    ennemi resté dans le couloir prendrait un coup par case traversée.
+	var taken: int = 4000 - context3.enemy_health[0].current
+	if taken > wave.damage:
+		_fail("la vague frappe %d fois le même ennemi (%d dégâts)"
+			% [int(round(float(taken) / float(wave.damage))), taken])
+
+
+## L'EXALTATION du Geyser : +10 sur chaque coup pendant 30 s.
+##
+## Le piège de ce genre de bonus est qu'il se MULTIPLIE sans qu'on s'en
+## aperçoive : appliqué aux dégâts dérivés, il ajouterait +10 à chaque tic de
+## brûlure, à chaque arc et à chaque écho. Rien ne planterait — les chiffres
+## seraient juste faux, et l'équilibrage avec.
+func _test_empowerment() -> void:
+	var stats := CharacterCatalog.water()
+	var ultimate := stats.ultimate
+	if ultimate.empower_bonus <= 0:
+		_fail("le Geyser n'exalte pas")
+		return
+	if absf(ultimate.empower_duration - 30.0) > 0.01:
+		_fail("l'exaltation dure %.0f s au lieu de 30" % ultimate.empower_duration)
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 9000)
+
+	# 1. AVANT : le coup vaut ses dégâts nominaux.
+	var probe := Ability.make({"id": "sonde", "kind": Ability.Kind.BLAST,
+		"element": Element.Kind.WATER, "damage": 20, "radius": 1.2, "cooldown": 0.0})
+	var before: int = context.enemy_health[0].current
+	combat.use(probe, context)
+	var plain: int = before - context.enemy_health[0].current
+	if plain != 20:
+		_fail("le coup de référence fait %d dégâts au lieu de 20" % plain)
+
+	# 2. PENDANT : il vaut ses dégâts PLUS le bonus, une seule fois.
+	combat.use(ultimate, context)
+	if combat.empower_bonus() != ultimate.empower_bonus:
+		_fail("l'exaltation annonce %d au lieu de %d"
+			% [combat.empower_bonus(), ultimate.empower_bonus])
+	before = context.enemy_health[0].current
+	combat.use(probe, context)
+	var boosted: int = before - context.enemy_health[0].current
+	if boosted != 20 + ultimate.empower_bonus:
+		_fail("le coup exalté fait %d dégâts au lieu de %d"
+			% [boosted, 20 + ultimate.empower_bonus])
+
+	# 3. APRÈS : elle retombe, et le coup redevient normal.
+	for i in int(ultimate.empower_duration / DT) + 20:
+		combat.update(DT, context)
+	if combat.empower_bonus() != 0:
+		_fail("l'exaltation ne retombe jamais")
+	before = context.enemy_health[0].current
+	combat.use(probe, context)
+	if before - context.enemy_health[0].current != 20:
+		_fail("le coup reste exalté après l'échéance")
+
+	# 4. LE PIÈGE : le bonus ne touche PAS les dégâts dérivés. On le vérifie sur
+	#    la brûlure du Feu, qui est le dérivé le plus facile à isoler.
+	var fire := CharacterCatalog.fire()
+	var burn_parts := _context(fire)
+	var burn_grid: MazeGrid = burn_parts[0]
+	var burn_combat: CombatSystem = burn_parts[1]
+	var burn_context: CombatContext = burn_parts[2]
+	_add_enemy(burn_context, _cell_at(burn_grid, burn_context.player_field, 1), 9000)
+	var exalt := Ability.make({"id": "exalte", "kind": Ability.Kind.BLAST,
+		"element": Element.Kind.WATER, "damage": 0, "radius": 0.1, "cooldown": 0.0,
+		"empower_bonus": 10, "empower_duration": 30.0})
+	burn_combat.use(exalt, burn_context)
+	var hit := Ability.make({"id": "sonde_feu", "kind": Ability.Kind.BLAST,
+		"element": Element.Kind.FIRE, "damage": 20, "radius": 1.2, "cooldown": 0.0})
+	var start: int = burn_context.enemy_health[0].current
+	burn_combat.use(hit, burn_context)
+	for i in 200:
+		burn_combat.update(DT, burn_context)
+	# 30 de coup (20 + 10) puis la brûlure = 30 % des 30 dégâts infligés, en
+	# trois tics. Le bonus ne doit s'ajouter à AUCUN de ces tics.
+	var total: int = start - burn_context.enemy_health[0].current
+	if total > 30 + 15:
+		_fail("l'exaltation se multiplie sur la brûlure : %d dégâts au total" % total)
+
+
+## LE BOUCLIER D'EAU EXPIRE. Signalé par l'utilisateur : « il ne fait rien ».
+##
+## Il faisait quelque chose — il absorbait — mais TROIS choses manquaient : sa
+## durée était ignorée (posé, il tenait jusqu'à consommation, éventuellement une
+## partie entière), rien ne l'affichait à l'écran, et rien ne le signalait au
+## joueur. Ce test protège la première, la seule qui soit du domaine des règles.
+func _test_shield_expiry() -> void:
+	var stats := CharacterCatalog.water()
+	var shield: Ability = null
+	for ability in stats.abilities:
+		if ability.kind == Ability.Kind.SHIELD:
+			shield = ability
+	if shield == null:
+		_fail("le Mage de l'Eau n'a plus de bouclier")
+		return
+	if shield.duration <= 0.0:
+		_fail("le bouclier n'a pas de durée")
+
+	var parts := _context(stats)
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var caster: Health = parts[3]
+
+	var fades := {"count": 0}
+	combat.player_shield_faded.connect(func() -> void: fades["count"] += 1)
+	combat.use(shield, context)
+	if caster.shield != shield.damage:
+		_fail("le bouclier absorbe %d au lieu de %d" % [caster.shield, shield.damage])
+
+	# 1. Il tient pendant sa durée.
+	for i in int((shield.duration - 0.5) / DT):
+		combat.update(DT, context)
+	if caster.shield <= 0:
+		_fail("le bouclier tombe avant son échéance")
+
+	# 2. Et il TOMBE à l'échéance — c'était le bug : il ne tombait jamais.
+	for i in 80:
+		combat.update(DT, context)
+	if caster.shield != 0:
+		_fail("le bouclier survit à son échéance : %d restants" % caster.shield)
+	if fades["count"] != 1:
+		_fail("la chute du bouclier n'est signalée qu'%d fois" % fades["count"])
+
+	# 3. Vidé par les coups, il tombe AUSSI — sans quoi une coque à zéro
+	#    resterait affichée et mentirait autant qu'une coque éternelle.
+	var parts2 := _context(stats)
+	var combat2: CombatSystem = parts2[1]
+	var context2: CombatContext = parts2[2]
+	var caster2: Health = parts2[3]
+	var drained := {"count": 0}
+	combat2.player_shield_faded.connect(func() -> void: drained["count"] += 1)
+	combat2.use(shield, context2)
+	caster2.take(Damage.new(shield.damage, Element.Kind.SHADOW, "test"))
+	combat2.update(DT, context2)
+	if drained["count"] != 1:
+		_fail("un bouclier vidé par les coups ne se signale pas")
+	# Et le mage n'a rien perdu : c'est tout l'intérêt de la coque.
+	if caster2.current != caster2.maximum:
+		_fail("le bouclier n'a pas absorbé : le mage est à %d PV" % caster2.current)
+
+
+## LA CHAÎNE D'ÉCLAIRS CHAÎNE VRAIMENT.
+##
+## Elle s'appelait « Chaîne d'éclairs », promettait de sauter d'un ennemi à
+## l'autre, et était une explosion circulaire. Trois promesses à tenir, et deux
+## pièges silencieux à éviter : l'aller-retour entre deux voisins, et la chaîne
+## qui ne s'épuise pas.
+func _test_lightning_chain() -> void:
+	var stats := CharacterCatalog.thunder()
+	var chain: Ability = stats.abilities[0]
+	if chain.kind != Ability.Kind.CHAIN:
+		_fail("la Chaîne d'éclairs n'est toujours pas une chaîne")
+		return
+	if chain.chain_jumps <= 0:
+		_fail("la chaîne ne fait aucun relais")
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+
+	# Une grappe d'ennemis proches les uns des autres : c'est le terrain de jeu
+	# de ce sort, et le seul où ses relais peuvent s'enchaîner.
+	var first := _cell_at(grid, context.player_field, 2)
+	_add_enemy(context, first, 4000)
+	var around := Pathfinder.distance_field(grid, [first] as Array[Vector2i])
+	var placed := 1
+	for cell in grid.all_floor_cells():
+		if placed >= 4:
+			break
+		var step := Pathfinder.value_at(grid, around, cell)
+		if step >= 1 and step <= 3 and cell != first:
+			_add_enemy(context, cell, 4000)
+			placed += 1
+	if placed < 3:
+		print("chaîne : pas assez de cases groupées pour ce test")
+		return
+
+	var arcs := {"count": 0}
+	combat.chain_arced.connect(func(_f: int, _t: int) -> void: arcs["count"] += 1)
+	combat.use(chain, context)
+	for i in 60:
+		combat.update(DT, context)
+
+	# 1. Plusieurs créatures ont été touchées — c'est toute la promesse.
+	var hurt := 0
+	for health in context.enemy_health:
+		if health.current < 4000:
+			hurt += 1
+	if hurt < 2:
+		_fail("la chaîne n'a touché que %d créature(s)" % hurt)
+
+	# 2. Elle s'ÉPUISE : le second maillon encaisse moins que le premier. Sans
+	#    décroissance, grouper cinq ennemis les tuerait tous pour le prix d'un.
+	var damages: Array[int] = []
+	for health in context.enemy_health:
+		if health.current < 4000:
+			damages.append(4000 - health.current)
+	damages.sort()
+	if damages.size() >= 2 and damages[0] >= damages[damages.size() - 1]:
+		_fail("la chaîne ne s'épuise pas : tous les maillons encaissent pareil")
+
+	# 3. Le nombre d'arcs ne dépasse JAMAIS les relais annoncés. C'est le
+	#    garde-fou contre l'aller-retour : sans mémoire des touchés, la chaîne
+	#    rebondirait indéfiniment entre deux voisins.
+	if arcs["count"] > chain.chain_jumps + 1:
+		_fail("%d arcs pour %d relais annoncés : la chaîne fait des allers-retours"
+			% [arcs["count"], chain.chain_jumps])
+
+	# 4. Et chaque créature n'est touchée qu'une fois : ses dégâts ne peuvent
+	#    pas dépasser ceux du premier maillon.
+	for taken in damages:
+		if taken > chain.damage:
+			_fail("une créature encaisse %d dégâts pour un sort à %d : elle est touchée deux fois"
+				% [taken, chain.damage])
+			break
+
+
+## LE CHAMP DE FOUDRE paralyse et électrocute — et n'est plus une seconde
+## téléportation.
+##
+## Le Mage de la Foudre avait DEUX blinks : « Fulgurance » (5 cases) et sa fuite
+## « Éclair fuyant » (7 cases). L'un était strictement inférieur à l'autre : il
+## n'avait aucune raison d'exister. Ce test protège d'un retour en arrière, et
+## vérifie que le champ se distingue du brasier du Feu.
+func _test_thunder_field() -> void:
+	var stats := CharacterCatalog.thunder()
+
+	# 1. Un seul déplacement instantané dans le kit. Deux, c'est un sort perdu.
+	var blinks := 0
+	for ability in stats.action_bar():
+		if ability != null and ability.kind == Ability.Kind.BLINK:
+			blinks += 1
+	if blinks > 1:
+		_fail("le Mage de la Foudre a %d téléportations : l'une fait doublon" % blinks)
+
+	var field: Ability = null
+	for ability in stats.abilities:
+		if ability.kind == Ability.Kind.ZONE and ability.snare > 0.0:
+			field = ability
+	if field == null:
+		_fail("le Mage de la Foudre n'a pas de champ qui paralyse")
+		return
+	if absf(field.snare - 5.0) > 0.01:
+		_fail("la paralysie dure %.1f s au lieu de 5" % field.snare)
+
+	# 2. Il paralyse ET électrocute. Le brasier du Feu retient puis BRÛLE APRÈS ;
+	#    le champ fait mal PENDANT — c'est ce qui les sépare.
+	if field.damage <= 0:
+		_fail("le champ paralyse sans faire de dégâts")
+	if field.snare_burn > 0.0:
+		_fail("le champ brûle après coup : c'est le brasier du Feu, pas lui")
+
+	var brazier := CharacterCatalog.fire().abilities[2]
+	if field.duration >= brazier.duration:
+		_fail("le champ (%.0f s) dure autant que le brasier (%.0f s) : les deux zones se confondent"
+			% [field.duration, brazier.duration])
+	if field.damage <= brazier.damage:
+		_fail("le champ (%d/s) ne frappe pas plus fort que le brasier (%d/s)"
+			% [field.damage, brazier.damage])
+
+	# 3. Il paralyse VRAIMENT, une fois par passage, comme toutes les zones-pièges.
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 4000)
+	var holds := {"count": 0, "seconds": 0.0}
+	combat.enemy_staggered.connect(func(_i: int, d: float) -> void:
+		holds["count"] += 1
+		holds["seconds"] = d)
+	combat.use(field, context)
+	for i in 200:
+		combat.update(DT, context)
+	if holds["count"] != 1:
+		_fail("le champ paralyse %d fois avant la fin du verrou" % holds["count"])
+	if absf(holds["seconds"] - field.snare) > 0.01:
+		_fail("le champ annonce %.0f s de paralysie et en applique %.1f"
+			% [field.snare, holds["seconds"]])
+	if context.enemy_health[0].current >= 4000:
+		_fail("le champ ne fait aucun dégât")
+
+	# 4. La chaîne est à 1,8 s : le rythme du personnage.
+	if absf(stats.abilities[0].cooldown - 1.8) > 0.01:
+		_fail("la Chaîne d'éclairs recharge en %.1f s au lieu de 1,8"
+			% stats.abilities[0].cooldown)
+
+
+## L'ORAGE SUIT LE MAGE et frappe tout seul.
+##
+## C'est la première chose du jeu qui accompagne le joueur au lieu de l'attendre
+## quelque part. Deux promesses fragiles : qu'il SUIVE (une zone posée serait un
+## doublon du Champ de foudre), et qu'un second lancer ne double pas la cadence.
+func _test_storm() -> void:
+	var stats := CharacterCatalog.thunder()
+	var storm: Ability = stats.abilities[2]
+	if storm.kind != Ability.Kind.STORM:
+		_fail("l'Orage n'est pas un nuage qui suit")
+		return
+
+	# Le Mage de la Foudre ne doit pas avoir DEUX zones posées : le Champ tient
+	# le sol, l'Orage accompagne. C'est ce qui les sépare.
+	var grounded := 0
+	for ability in stats.abilities:
+		if ability.kind == Ability.Kind.ZONE:
+			grounded += 1
+	if grounded > 1:
+		_fail("le Mage de la Foudre a %d zones posées : elles font doublon" % grounded)
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 9000)
+
+	var strikes := {"count": 0}
+	combat.storm_struck.connect(func(_i: int, _a: Ability) -> void: strikes["count"] += 1)
+	combat.use(storm, context)
+
+	# 1. La première décharge tombe TOUT DE SUITE : un sort qui ne fait rien
+	#    pendant sa première seconde se lit comme un sort raté.
+	combat.update(DT, context)
+	if strikes["count"] != 1:
+		_fail("l'orage ne frappe pas dès son invocation")
+
+	# 2. Il frappe à CADENCE régulière, pas en rafale.
+	for i in int(3.0 / DT):
+		combat.update(DT, context)
+	var expected := int(3.0 / storm.storm_interval)
+	if absi(strikes["count"] - (expected + 1)) > 1:
+		_fail("%d décharges en 3 s, attendu environ %d"
+			% [strikes["count"], expected + 1])
+
+	# 3. Il S'ARRÊTE à l'échéance.
+	var dispersed := {"done": false}
+	combat.storm_dispersed.connect(func() -> void: dispersed["done"] = true)
+	for i in int(storm.duration / DT) + 20:
+		combat.update(DT, context)
+	if not dispersed["done"]:
+		_fail("l'orage ne se disperse jamais")
+	var settled: int = strikes["count"]
+	for i in 120:
+		combat.update(DT, context)
+	if strikes["count"] != settled:
+		_fail("l'orage frappe encore après s'être dispersé")
+
+	# 4. Relancé, il REPART À NEUF sans doubler la cadence : deux nuages
+	#    superposés frapperaient deux fois plus vite sans que rien ne le montre.
+	var parts2 := _context(stats)
+	var grid2: MazeGrid = parts2[0]
+	var combat2: CombatSystem = parts2[1]
+	var context2: CombatContext = parts2[2]
+	_add_enemy(context2, _cell_at(grid2, context2.player_field, 2), 9000)
+	var doubled := {"count": 0}
+	combat2.storm_struck.connect(func(_i: int, _a: Ability) -> void: doubled["count"] += 1)
+	combat2.use(storm, context2)
+	combat2.use(storm, context2)
+	for i in int(3.0 / DT):
+		combat2.update(DT, context2)
+	if doubled["count"] > expected + 3:
+		_fail("deux invocations doublent la cadence : %d décharges en 3 s"
+			% doubled["count"])
+
+
+## LE JUGEMENT CÉLESTE lève un CIEL, il ne fait pas une explosion.
+##
+## La différence avec l'Embrasement du Feu est le cœur du sort : une météore
+## tombe UNE fois et disparaît, un nuage s'installe et frappe tant qu'il est là.
+## Si les nuages ne duraient pas, les deux ultimes seraient le même sort en deux
+## couleurs.
+func _test_sky_judgement() -> void:
+	var stats := CharacterCatalog.thunder()
+	var ultimate := stats.ultimate
+	if ultimate.sky_clouds <= 0:
+		_fail("le Jugement céleste ne lève aucun nuage")
+		return
+	if ultimate.sky_duration <= 0.0:
+		_fail("les nuages du Jugement ne durent pas : c'est une averse, pas un ciel")
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	for step in [2, 3, 4]:
+		var cell := _cell_at(grid, context.player_field, step)
+		if cell.x >= 0:
+			_add_enemy(context, cell, 90000)
+
+	var formed := {"count": 0}
+	var faded := {"count": 0}
+	var bolts := {"count": 0, "late": 0}
+	var elapsed := {"t": 0.0}
+	combat.sky_cloud_formed.connect(func(_c: Vector2i, _d: float, _a: Ability) -> void:
+		formed["count"] += 1)
+	combat.sky_cloud_faded.connect(func(_c: Vector2i) -> void: faded["count"] += 1)
+	combat.sky_bolt.connect(func(_c: Vector2i, _i: int, _a: Ability) -> void:
+		bolts["count"] += 1
+		# Une frappe DEUX secondes après le lancement prouve que le nuage a
+		# duré : une averse aurait déjà tout lâché.
+		if elapsed["t"] > 2.0:
+			bolts["late"] += 1)
+
+	combat.use(ultimate, context)
+	if formed["count"] != ultimate.sky_clouds:
+		_fail("%d nuages formés au lieu de %d" % [formed["count"], ultimate.sky_clouds])
+
+	for i in int((ultimate.sky_duration + 1.0) / DT):
+		elapsed["t"] = float(i) * DT
+		combat.update(DT, context)
+
+	# 1. Les nuages FRAPPENT, et pas seulement à l'instant du lancement.
+	if bolts["count"] <= 0:
+		_fail("les nuages du Jugement ne foudroient personne")
+	if bolts["late"] <= 0:
+		_fail("aucune frappe après 2 s : les nuages ne durent pas")
+
+	# 2. Ils se dissipent TOUS. Un nuage oublié frapperait jusqu'à la fin du
+	#    niveau sans que rien ne le rappelle au joueur.
+	if faded["count"] != ultimate.sky_clouds:
+		_fail("%d nuages dissipés sur %d : il en reste au ciel"
+			% [faded["count"], ultimate.sky_clouds])
+	var settled: int = bolts["count"]
+	for i in 200:
+		combat.update(DT, context)
+	if bolts["count"] != settled:
+		_fail("le ciel foudroie encore après s'être dissipé")
+
+	# 3. Il ne fait pas doublon avec l'Embrasement : celui du Feu fait tomber
+	#    des météores UNE fois, celui-ci installe des nuages qui restent.
+	var nova := CharacterCatalog.fire().ultimate
+	if nova.sky_clouds > 0:
+		_fail("l'ultime du Feu lève aussi des nuages : les deux se confondent")
+	if ultimate.rain_count > 0:
+		_fail("l'ultime de la Foudre fait aussi pleuvoir : c'est celui du Feu")

@@ -24,6 +24,8 @@ const FLASH_DURATION := 1.4
 @onready var pause_button: Button = $PauseButton
 @onready var result_screen: ResultScreen = $ResultScreen
 @onready var debug_label: Label = $DebugLabel
+## Barre de visite des décors, en démo seulement (voir `show_demo_bar`).
+@onready var demo_bar: Control = $DemoBar
 
 var touch_mode := false
 
@@ -71,10 +73,27 @@ func set_level(config: LevelConfig, number: int) -> void:
 	hud.set_level(config, number)
 	_flash_timer = 0.0
 	prompt_label.text = ""
+	if demo_bar.visible:
+		demo_bar.get_node("Label").text = "%d / %d — %s" % [
+			config.stage, LevelConfig.STAGE_COUNT, config.level_name]
+
+
+## Affiche la barre de visite des décors. Elle n'existe qu'en démo : en partie,
+## deux flèches qui changent de stage seraient une triche, pas un outil.
+func show_demo_bar(on_step: Callable) -> void:
+	demo_bar.visible = true
+	MenuStyle.apply(demo_bar.get_node("Prev"), Color("#9fe8b4"), 22)
+	MenuStyle.apply(demo_bar.get_node("Next"), Color("#9fe8b4"), 22)
+	demo_bar.get_node("Prev").pressed.connect(func() -> void: on_step.call(-1))
+	demo_bar.get_node("Next").pressed.connect(func() -> void: on_step.call(1))
 
 
 func set_health(current: int, maximum: int) -> void:
 	hud.set_health(current, maximum)
+
+
+func set_shield(amount: int, posed: int = 0) -> void:
+	hud.set_shield(amount, posed)
 
 
 func set_counters(portals: int, unlocked_skills: int) -> void:

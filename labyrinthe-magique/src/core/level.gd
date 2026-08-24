@@ -17,6 +17,17 @@ const ZONE_EFFECT_SCENE := preload("res://scenes/entities/zone_effect.tscn")
 const IMPACT_EFFECT_SCENE := preload("res://scenes/entities/impact_effect.tscn")
 const LAIR_SCENE := preload("res://scenes/entities/enemy_lair.tscn")
 const WARP_SCENE := preload("res://scenes/fx/warp_effect.tscn")
+const SHOCKWAVE_SCENE := preload("res://scenes/fx/shockwave.tscn")
+const WARP_TRAIL_SCENE := preload("res://scenes/fx/warp_trail.tscn")
+const METEOR_SCENE := preload("res://scenes/fx/meteor.tscn")
+const COLUMN_SCENE := preload("res://scenes/fx/pressure_column.tscn")
+const AURA_SCENE := preload("res://scenes/fx/empower_aura.tscn")
+const BUBBLE_SCENE := preload("res://scenes/fx/shield_bubble.tscn")
+const WAVE_SCENE := preload("res://scenes/fx/wave_front.tscn")
+const ARC_SCENE := preload("res://scenes/fx/lightning_arc.tscn")
+const CLOUD_SCENE := preload("res://scenes/fx/storm_cloud.tscn")
+const SKY_SCENE := preload("res://scenes/fx/sky_cloud.tscn")
+const CREST_SCENE := preload("res://scenes/fx/spell_crest.tscn")
 const DAMAGE_NUMBER_SCENE := preload("res://scenes/entities/damage_number.tscn")
 const TILE_SIZE := MazeRenderer.TILE_SIZE
 ## Nombre de cases visibles sur le PLUS PETIT côté de l'écran, en poursuite.
@@ -78,6 +89,9 @@ signal enemy_damaged(dealt: int)
 signal enemy_killed
 signal enemy_respawned
 signal lair_destroyed(remaining: int)
+signal player_empowered(bonus: int, duration: float)
+signal player_shielded(amount: int)
+signal player_calmed
 ## Le joueur vient d'utiliser une compétence — de quoi l'annoncer et l'illustrer.
 signal ability_used(ability: Ability)
 signal ability_refused(reason: String)
@@ -102,6 +116,11 @@ var _orb_texture: Texture2D = null
 var _orb_frames := 1
 var _impact_texture: Texture2D = null
 var _zone_texture: Texture2D = null
+## Nuage dessiné de la planche, quand le personnage en a un.
+var _cloud_texture: Texture2D = null
+var _cloud_lit_texture: Texture2D = null
+## Le blason du mage, quand sa planche en fournit un.
+var _crest_texture: Texture2D = null
 var gems: Array[Gem] = []
 var potions: Array[Potion] = []
 var teleport_system: TeleportSystem = null
@@ -187,11 +206,15 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 
 	# Les points de vie viennent du PERSONNAGE, le stage n'ajoute que sa marge.
 	player_health = Health.new(character.base_health + config.player_health_bonus)
-	combat = CombatSystem.new(grid, character, player_health)
+	# La graine du niveau alimente le tirage des météores : rejouer une graine
+	# redonne la même pluie, comme elle redonne le même labyrinthe.
+	combat = CombatSystem.new(grid, character, player_health, rng_seed * 31 + 7)
+	combat.free_use = config.is_demo
 	combat_context = CombatContext.new(grid)
 	combat.projectile_launched.connect(_on_projectile_launched)
 	combat.projectile_hit.connect(_on_projectile_hit)
 	combat.blast_fired.connect(_on_blast_fired)
+	combat.wave_launched.connect(_on_wave_launched)
 	combat.zone_created.connect(_on_zone_created)
 	combat.zone_expired.connect(_on_zone_expired)
 	combat.wall_raised.connect(_on_wall_changed)
@@ -203,11 +226,23 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.summon_expired.connect(_on_summon_expired)
 	combat.enemy_damaged.connect(_on_enemy_damaged)
 	combat.enemy_killed.connect(_on_enemy_killed)
-	combat.enemy_soaked.connect(_on_enemy_status.bind("soak"))
+	combat.enemy_soaked.connect(_on_enemy_soaked)
 	combat.enemy_staggered.connect(_on_enemy_status.bind("stagger"))
 	combat.enemy_burning.connect(_on_enemy_status.bind("burn"))
 	combat.enemy_pushed.connect(_on_enemy_pushed)
 	combat.chain_arced.connect(_on_chain_arced)
+	combat.storm_gathered.connect(_on_storm_gathered)
+	combat.storm_dispersed.connect(_on_storm_dispersed)
+	combat.storm_struck.connect(_on_storm_struck)
+	combat.sky_cloud_formed.connect(_on_sky_cloud_formed)
+	combat.sky_cloud_faded.connect(_on_sky_cloud_faded)
+	combat.sky_bolt.connect(_on_sky_bolt)
+	combat.meteor_incoming.connect(_on_meteor_incoming)
+	combat.meteor_landed.connect(_on_meteor_landed)
+	combat.player_empowered.connect(_on_player_empowered)
+	combat.player_calmed.connect(_on_player_calmed)
+	combat.player_shielded.connect(_on_player_shielded)
+	combat.player_shield_faded.connect(_on_shield_faded)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -288,6 +323,8 @@ func _process(delta: float) -> void:
 	if combat != null:
 		_refresh_context()
 		combat.update(delta, combat_context)
+		if _bubble != null and is_instance_valid(_bubble):
+			_bubble.set_amount(float(combat.shield_left()) / float(_shield_max))
 	_update_respawns(delta)
 	_update_ai(delta)
 	_update_enemy_target()
@@ -467,6 +504,14 @@ func use_ability(slot: int) -> bool:
 	if not combat.use(ability, combat_context):
 		return false
 	player.play_cast()
+	# LE BLASON DE L'EXTRA. Il ne paraît que pour l'ultime, et seulement si la
+	# planche du mage en fournit un : déposer un `crest.png` suffit à en donner
+	# un au mage suivant, sans toucher au code.
+	if ability.is_ultimate and _crest_texture != null:
+		var crest: SpellCrest = CREST_SCENE.instantiate()
+		entities.add_child(crest)
+		crest.position = player.position
+		crest.setup(TILE_SIZE, _crest_texture)
 	ability_used.emit(ability)
 	return true
 
@@ -610,6 +655,9 @@ func _load_character_fx() -> void:
 	_orb_texture = _texture_or_null(folder + "orb.png")
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	_zone_texture = _texture_or_null(folder + "zone.png")
+	_cloud_texture = _texture_or_null(folder + "cloud_dark.png")
+	_cloud_lit_texture = _texture_or_null(folder + "cloud.png")
+	_crest_texture = _texture_or_null(folder + "crest.png")
 	_orb_frames = 1
 	var meta := FileAccess.get_file_as_string(folder + "orb.json")
 	var parsed: Variant = JSON.parse_string(meta)
@@ -625,10 +673,26 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
+	# UN ÉCLAIR NE VOYAGE PAS, IL RELIE.
+	#
+	# L'attaque de base de la Foudre empruntait l'orbe commune aux sept mages :
+	# une bille lumineuse qui traverse le couloir. Pour cet élément, c'est
+	# incohérent — et ça la rendait indistincte de l'attaque du Feu. Elle est
+	# maintenant tracée en TRAITS BRISÉS le long du couloir, comme les relais de
+	# la Chaîne et la fuite : les quatre gestes de foudre se lisent enfin comme
+	# une même famille.
+	if ability.bolt:
+		var tint := Element.color(ability.element)
+		for i in points.size() - 1:
+			var arc: LightningArc = ARC_SCENE.instantiate()
+			entities.add_child(arc)
+			arc.setup(points[i], points[i + 1], tint, float(TILE_SIZE) * 0.11)
+		return
 	var orb: MagicOrb = ORB_SCENE.instantiate()
 	entities.add_child(orb)
 	orb.setup(points, duration, TILE_SIZE, Element.color(ability.element),
-		_orb_texture, _orb_frames)
+		_orb_texture, _orb_frames, ability.projectile_scale, ability.trail_density,
+		ability.flames)
 	_orbs[index] = orb
 
 
@@ -638,14 +702,102 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 		if is_instance_valid(orb):
 			orb.burst()
 		_orbs.erase(index)
+	# Une explosion à flammes dure DEUX FOIS plus longtemps qu'un éclat sec :
+	# le flash tient un dixième de seconde, mais la fumée qui monte derrière est
+	# ce qui fait qu'on y croit. À 0,55 s, tout était fini avant d'être vu.
+	var impact_time := ImpactEffect.DURATION * (2.0 if ability.flames > 0.0 else 1.0)
 	_spawn_impact(cell, ability.element, maxf(0.9, ability.radius),
-		ImpactEffect.DURATION, _impact_texture)
+		impact_time, _impact_texture, ability.flames)
+	if ability.shockwave:
+		_spawn_shockwave(cell, ability)
+
+
+## L'aura d'exaltation, ATTACHÉE au mage : elle le suit dans le labyrinthe.
+## Relancer l'ultime la remet à neuf plutôt que d'en empiler une seconde.
+var _aura: EmpowerAura = null
+
+
+func _on_player_empowered(bonus: int, duration: float) -> void:
+	if player == null:
+		return
+	if _aura != null and is_instance_valid(_aura):
+		_aura.refresh(duration)
+	else:
+		_aura = AURA_SCENE.instantiate()
+		player.add_child(_aura)
+		_aura.setup(TILE_SIZE, Element.color(character.element), duration)
+	player_empowered.emit(bonus, duration)
+
+
+## La coque du bouclier, attachée au mage. Elle FOND avec l'absorption qui
+## reste, pas avec le temps : un bouclier vidé en deux coups doit disparaître
+## tout de suite, même s'il lui restait six secondes au compteur.
+var _bubble: ShieldBubble = null
+var _shield_max := 1
+
+
+func _on_player_shielded(amount: int, duration: float) -> void:
+	if player == null:
+		return
+	_shield_max = maxi(1, amount)
+	if _bubble != null and is_instance_valid(_bubble):
+		_bubble.refresh(duration)
+	else:
+		_bubble = BUBBLE_SCENE.instantiate()
+		player.add_child(_bubble)
+		_bubble.setup(TILE_SIZE, Element.color(character.element), duration)
+	player_shielded.emit(amount)
+
+
+func _on_shield_faded() -> void:
+	if _bubble != null and is_instance_valid(_bubble):
+		_bubble.queue_free()
+	_bubble = null
+	player_shielded.emit(0)
+
+
+func _on_player_calmed() -> void:
+	if _aura != null and is_instance_valid(_aura):
+		_aura.stop()
+	player_calmed.emit()
+
+
+## La crête part du mage et suit le chemin que le CombatSystem a tracé — les
+## deux partagent la même durée, donc les dégâts tombent pile où on la voit.
+func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
+	if player == null:
+		return
+	var points := PackedVector2Array()
+	points.append(maze_renderer.cell_to_world(player.mover.nearest_cell()))
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var front: WaveFront = WAVE_SCENE.instantiate()
+	entities.add_child(front)
+	front.setup(points, duration, TILE_SIZE, Element.color(ability.element),
+		ability.radius)
 
 
 func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	# L'éclat prend le RAYON RÉEL du sort : le joueur doit voir jusqu'où il a
 	# porté, sinon il ne peut pas apprendre à s'en servir.
-	_spawn_impact(cell, ability.element, ability.radius, 0.75, _impact_texture)
+	#
+	# QUAND LE MAGE A UN BLASON, LUI SEUL ANNONCE L'EXTRA. Le dessin d'impact
+	# est fait pour marquer une frappe d'une case ou deux ; étiré sur les six
+	# cases de rayon d'un ultime, il devient une tache — et il doublait le
+	# blason au même instant. On garde l'éclat tracé, qui dit la portée, et on
+	# retire le sprite.
+	var eclat := _impact_texture
+	if ability.is_ultimate and _crest_texture != null:
+		eclat = null
+	_spawn_impact(cell, ability.element, ability.radius, 0.75, eclat,
+		ability.flames)
+	if ability.column_burst:
+		var column: PressureColumn = COLUMN_SCENE.instantiate()
+		entities.add_child(column)
+		column.position = maze_renderer.cell_to_world(cell)
+		column.setup(TILE_SIZE, ability.radius, Element.color(ability.element))
+	if ability.shockwave:
+		_spawn_shockwave(cell, ability)
 
 
 func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
@@ -653,7 +805,8 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 	entities.add_child(zone)
 	zone.position = maze_renderer.cell_to_world(cell)
 	zone.setup(TILE_SIZE, Element.color(ability.element), ability.radius,
-		ability.duration, _zone_texture)
+		ability.duration, _zone_texture, ability.flames,
+		ability.zone_style, ability.snare > 0.0)
 	_zone_nodes[zone_id] = zone
 
 
@@ -712,22 +865,53 @@ func _on_summon_expired(id: int) -> void:
 	_summon_nodes.erase(id)
 
 
-func _on_blink(_from: Vector2i, to: Vector2i) -> void:
+func _on_blink(from: Vector2i, to: Vector2i) -> void:
 	if player == null:
 		return
-	_spawn_warp(player.mover.nearest_cell())
+	# La teinte vient de l'ÉLÉMENT du mage : les braises du Feu sont orange, le
+	# Pas de l'ombre laisse une traînée violette, la Rafale une traînée blanche.
+	# Un seul effet, sept lectures.
+	var tint := Element.color(character.element)
+	_spawn_warp(player.mover.nearest_cell(), tint, false)
+	_spawn_warp_trail(from, to, tint)
 	player.mover.teleport_to(to)
 	player.snap_to_mover()
-	_spawn_warp(to)
+	_spawn_warp(to, tint, true)
 	player.play_warp()
 	_refresh_ai()
 
 
-func _spawn_warp(cell: Vector2i) -> void:
+func _spawn_warp(cell: Vector2i, tint: Color, arriving: bool) -> void:
 	var effect: WarpEffect = WARP_SCENE.instantiate()
 	entities.add_child(effect)
 	effect.position = maze_renderer.cell_to_world(cell)
-	effect.setup(player.character_id, TILE_SIZE)
+	effect.setup(player.character_id, TILE_SIZE, tint, arriving)
+
+
+## La traînée qui RELIE les deux bouts. Sans elle, le joueur voit deux
+## événements sans rapport et perd son propre personnage sur un écran chargé.
+func _spawn_warp_trail(from: Vector2i, to: Vector2i, tint: Color) -> void:
+	var path := combat.trajectory(from, to)
+	if path.size() < 2:
+		return
+	var points := PackedVector2Array()
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var trail: WarpTrail = WARP_TRAIL_SCENE.instantiate()
+	entities.add_child(trail)
+	trail.setup(points, TILE_SIZE, tint)
+	# LE MAGE DE FOUDRE NE SE TÉLÉPORTE PAS : IL DEVIENT L'ÉCLAIR.
+	#
+	# Sa description le dit depuis toujours — « il devient foudre le temps d'un
+	# battement de cils » — mais il empruntait la même traînée douce que les six
+	# autres. On pose un arc électrique sur chaque tronçon du couloir : la
+	# décharge suit les virages au lieu de couper à travers les murs.
+	if character.element != Element.Kind.THUNDER:
+		return
+	for i in points.size() - 1:
+		var arc: LightningArc = ARC_SCENE.instantiate()
+		entities.add_child(arc)
+		arc.setup(points[i], points[i + 1], tint, float(TILE_SIZE) * 0.13)
 
 
 func _on_enemy_damaged(index: int, dealt: int, ability: Ability) -> void:
@@ -773,6 +957,14 @@ func _on_enemy_status(index: int, duration: float, status: String) -> void:
 		"burn": enemy.burn_glow(duration)
 
 
+## La trempe porte désormais SON facteur : celui de l'élément Eau ralentit de
+## 38 %, le givre du Cercle glacé bien davantage. Un seul canal, deux forces.
+func _on_enemy_soaked(index: int, duration: float, factor: float) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	enemies[index].soak(duration, factor)
+
+
 func _on_enemy_pushed(index: int, cell: Vector2i) -> void:
 	if _structure_at(index) != null or index >= enemies.size():
 		return
@@ -782,10 +974,122 @@ func _on_enemy_pushed(index: int, cell: Vector2i) -> void:
 	_spawn_impact(cell, Element.Kind.AIR, 0.9, 0.5)
 
 
-func _on_chain_arced(_from_index: int, to_index: int) -> void:
+## Une météore part : on montre sa chute et on marque le sol. Le nœud vit
+## exactement le temps que le CombatSystem a fixé — les deux ne se parlent plus
+## ensuite, ils partagent seulement le même délai.
+func _on_meteor_incoming(cell: Vector2i, delay: float, ability: Ability) -> void:
+	var meteor: Meteor = METEOR_SCENE.instantiate()
+	entities.add_child(meteor)
+	meteor.position = maze_renderer.cell_to_world(cell)
+	meteor.setup(TILE_SIZE, delay, _orb_texture, Element.color(ability.element))
+
+
+func _on_meteor_landed(cell: Vector2i, ability: Ability) -> void:
+	_spawn_impact(cell, ability.element, ability.rain_radius,
+		ImpactEffect.DURATION * 1.6, _impact_texture, ability.flames)
+	_spawn_shockwave(cell, Ability.make({
+		"element": ability.element, "radius": ability.rain_radius * 1.1}))
+
+
+## Les nuages du Jugement, posés sur la carte. Indexés par CASE : c'est la clé
+## que le CombatSystem emploie, et deux nuages ne partagent jamais une case.
+var _sky_clouds := {}
+
+
+func _on_sky_cloud_formed(cell: Vector2i, duration: float, _ability: Ability) -> void:
+	var cloud: SkyCloud = SKY_SCENE.instantiate()
+	entities.add_child(cloud)
+	cloud.position = maze_renderer.cell_to_world(cell)
+	# Déphasage par case : sans lui, tous les nuages du ciel se balancent à
+	# l'unisson et l'orage se lit comme une seule image répétée.
+	cloud.setup(TILE_SIZE, duration, _cloud_texture, _cloud_lit_texture,
+		float(cell.x * 7 + cell.y * 13) * 0.37)
+	_sky_clouds[cell] = cloud
+	# Pas d'impact sous le nuage qui se forme : douze dessins de frappe surgis
+	# d'un coup aux quatre coins de la carte, c'était du bruit, et ça annonçait
+	# une frappe qui n'avait pas encore eu lieu. Le nuage qui se forme est
+	# l'événement ; la frappe viendra.
+
+
+func _on_sky_cloud_faded(cell: Vector2i) -> void:
+	if not _sky_clouds.has(cell):
+		return
+	var cloud: SkyCloud = _sky_clouds[cell]
+	if is_instance_valid(cloud):
+		cloud.fade()
+	_sky_clouds.erase(cell)
+
+
+## La foudre tombe d'un nuage du ciel sur sa proie.
+func _on_sky_bolt(cell: Vector2i, index: int, ability: Ability) -> void:
+	if index >= enemies.size() or _structure_at(index) != null:
+		return
+	if _sky_clouds.has(cell):
+		var cloud: SkyCloud = _sky_clouds[cell]
+		if is_instance_valid(cloud):
+			cloud.discharge()
+	var from := maze_renderer.cell_to_world(cell) \
+		+ Vector2(0.0, -TILE_SIZE * SkyCloud.HEIGHT_TILES)
+	var arc: LightningArc = ARC_SCENE.instantiate()
+	entities.add_child(arc)
+	arc.setup(from, enemies[index].position, Element.color(ability.element),
+		float(TILE_SIZE) * 0.16)
+	_spawn_impact(enemies[index].current_cell(), ability.element, 1.1, 0.45,
+		_impact_texture)
+
+
+## Le nuage d'orage, ATTACHÉ au mage : il n'a rien à poursuivre, il est sur lui.
+var _cloud: StormCloud = null
+
+
+func _on_storm_gathered(ability: Ability, duration: float) -> void:
+	if player == null:
+		return
+	if _cloud != null and is_instance_valid(_cloud):
+		_cloud.refresh(duration)
+		return
+	_cloud = CLOUD_SCENE.instantiate()
+	player.add_child(_cloud)
+	_cloud.setup(TILE_SIZE, Element.color(ability.element), duration)
+
+
+func _on_storm_dispersed() -> void:
+	if _cloud != null and is_instance_valid(_cloud):
+		_cloud.stop()
+	_cloud = null
+
+
+## Une décharge tombe. Le trait part du NUAGE et non du mage : c'est ce qui
+## rend l'orage lisible comme une chose à part, et non comme une attaque de plus.
+func _on_storm_struck(index: int, ability: Ability) -> void:
+	if index >= enemies.size() or _structure_at(index) != null:
+		return
+	if _cloud != null and is_instance_valid(_cloud):
+		_cloud.discharge()
+	var from := player.position + Vector2(0.0, -TILE_SIZE * StormCloud.HEIGHT)
+	var arc: LightningArc = ARC_SCENE.instantiate()
+	entities.add_child(arc)
+	arc.setup(from, enemies[index].position, Element.color(ability.element),
+		float(TILE_SIZE) * 0.13)
+	_spawn_impact(enemies[index].current_cell(), ability.element, 0.9, 0.4)
+
+
+## Le trait qui relie deux maillons de la chaîne. `from_index` vaut -1 quand
+## l'arc part du mage lui-même — le premier relais.
+func _on_chain_arced(from_index: int, to_index: int) -> void:
 	if _structure_at(to_index) != null or to_index >= enemies.size():
 		return
-	_spawn_impact(enemies[to_index].current_cell(), Element.Kind.THUNDER, 0.8, 0.5)
+	var target := enemies[to_index]
+	var start := player.position if from_index < 0 else Vector2.ZERO
+	if from_index >= 0:
+		if from_index >= enemies.size():
+			return
+		start = enemies[from_index].position
+	var arc: LightningArc = ARC_SCENE.instantiate()
+	entities.add_child(arc)
+	arc.setup(start, target.position, Element.color(Element.Kind.THUNDER),
+		float(TILE_SIZE) * 0.15)
+	_spawn_impact(target.current_cell(), Element.Kind.THUNDER, 0.8, 0.4)
 
 
 func _on_enemy_killed(index: int) -> void:
@@ -965,12 +1269,27 @@ func _on_teleported(mover: GridMover, from_cell: Vector2i, to_cell: Vector2i, ad
 ## Éclat élémentaire : c'est lui qui distingue une boule de feu d'un jet d'eau.
 ## La graine dérive de la case touchée, donc deux impacts au même endroit se
 ## ressemblent — indispensable pour comparer deux captures d'écran.
+## L'onde de choc d'un sort lourd. Elle dit la PUISSANCE là où les particules
+## disent la matière — c'est elle qui distingue « ça a explosé » de « ça a
+## touché ». Réservée aux sorts qui la demandent : généralisée, elle ne
+## signalerait plus rien.
+func _spawn_shockwave(cell: Vector2i, ability: Ability) -> void:
+	var wave: Shockwave = SHOCKWAVE_SCENE.instantiate()
+	entities.add_child(wave)
+	wave.position = maze_renderer.cell_to_world(cell)
+	var tint := Element.color(ability.element)
+	wave.setup(TILE_SIZE, maxf(1.2, ability.radius), Color(1.0, 0.96, 0.82), tint,
+		0.40 + 0.05 * ability.radius)
+
+
 func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
-		duration: float = ImpactEffect.DURATION, drawn: Texture2D = null) -> void:
+		duration: float = ImpactEffect.DURATION, drawn: Texture2D = null,
+		flames: float = 0.0) -> void:
 	var impact: ImpactEffect = IMPACT_EFFECT_SCENE.instantiate()
 	entities.add_child(impact)
 	impact.position = maze_renderer.cell_to_world(cell)
-	impact.setup(TILE_SIZE, element, radius, duration, cell.x * 733 + cell.y * 199 + 1, drawn)
+	impact.setup(TILE_SIZE, element, radius, duration,
+		cell.x * 733 + cell.y * 199 + 1, drawn, flames)
 
 
 func _spawn_effect(cell: Vector2i, tint: Color, size_tiles: float = 1.7) -> void:

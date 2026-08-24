@@ -44,6 +44,11 @@ const GEM_STEP := 16.0
 
 var health := 1
 var max_health := 1
+## Absorption restante et absorption posée à l'origine. Le bouclier se dessine
+## PAR-DESSUS la barre de vie et non à côté : c'est de la vie en sursis, pas une
+## seconde jauge, et le joueur doit lire les deux d'un seul regard.
+var shield := 0
+var shield_max := 1
 var teleport_ratio := 1.0
 var teleport_ready := false
 ## Couleurs des gemmes encore à trouver, et nombre total dans le niveau.
@@ -79,6 +84,13 @@ func set_character(stats: CharacterStats) -> void:
 
 func set_level(config: LevelConfig, number: int) -> void:
 	level_label.text = _fitting_title(config)
+	queue_redraw()
+
+
+func set_shield(amount: int, posed: int = 0) -> void:
+	shield = maxi(0, amount)
+	if posed > 0:
+		shield_max = posed
 	queue_redraw()
 
 
@@ -158,6 +170,16 @@ func _draw_health(rect: Rect2) -> void:
 	for i in range(1, max_health):
 		var x := rect.position.x + rect.size.x * float(i) / float(max_health)
 		draw_line(Vector2(x, rect.position.y), Vector2(x, rect.end.y), PANEL_BG, 2.0)
+	# Le BOUCLIER, en surcouche claire depuis la droite : il se remplit vers
+	# l'intérieur à mesure qu'on le pose, et se retire vers la droite à mesure
+	# qu'il encaisse. On voit donc son épuisement AVANT de perdre un point de vie.
+	if shield > 0:
+		var part := clampf(float(shield) / float(maxi(1, shield_max)), 0.0, 1.0)
+		var width := rect.size.x * 0.34 * part
+		var band := Rect2(Vector2(rect.end.x - width, rect.position.y),
+			Vector2(width, rect.size.y))
+		draw_rect(band, Color(0.55, 0.88, 1.0, 0.75))
+		draw_rect(band, Color(0.85, 0.97, 1.0, 0.9), false, 1.0)
 	draw_rect(rect, PANEL_EDGE, false, 1.0)
 
 
@@ -216,7 +238,9 @@ func _draw_kills(rect: Rect2) -> void:
 ## c'est lui que le joueur lit ; le numéro, il vient de le choisir au menu.
 func _fitting_title(config: LevelConfig) -> String:
 	if config.is_demo:
-		return "DÉMO — Terrain d'essai"
+		# Le décor visité prime : en démo on regarde un stage, on ne joue pas un
+		# terrain anonyme. Le mot DÉMO reste, il dit pourquoi on ne meurt pas.
+		return "DÉMO — %s" % config.level_name
 	var candidates := [
 		"ST.%d · ÉP.%d — %s" % [config.stage, config.episode, config.level_name],
 		"%d·%d — %s" % [config.stage, config.episode, config.level_name],

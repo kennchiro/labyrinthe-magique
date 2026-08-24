@@ -89,6 +89,8 @@ extends Resource
 ## Espèces présentes, dans l'ordre où les ennemis les prennent. Composé par
 ## `Bestiary.roster(stage)` : cumulatif, chaque stage garde ceux d'avant.
 @export var species: Array[String] = ["hunter"]
+## Ordre dans lequel les espèces sont réellement posées (voir `_build_lineup`).
+var lineup: Array[String] = []
 ## Vitesse de l'ennemi relative au joueur. > 1.0 rend le jeu impossible :
 ## en poursuite frontale, le joueur ne peut jamais reprendre d'avance.
 @export var enemy_speed_ratio: float = 0.85
@@ -187,12 +189,42 @@ func enemy_speed(id: String) -> float:
 	return enemy_speed_ratio * float(Bestiary.of(id)["swiftness"])
 
 
-## Espèce du n-ième ennemi. On tourne dans le roster : chaque stage montre donc
-## toutes ses espèces, la nouvelle comprise, avant d'en répéter une.
+## Espèce du n-ième ennemi. On tourne dans l'ORDRE DE PLACEMENT (`lineup`), pas
+## dans le roster : voir `_build_lineup`.
 func species_at(index: int) -> String:
-	if species.is_empty():
+	var order := lineup if not lineup.is_empty() else species
+	if order.is_empty():
 		return Bestiary.FALLBACK
-	return species[index % species.size()]
+	return order[index % order.size()]
+
+
+## Ordre de placement des espèces, distinct du roster.
+##
+## Le roster est cumulatif et grandit à chaque chapitre ; l'effectif d'un stage,
+## lui, PLAFONNE — huit poursuivants au stage 10 pour onze espèces. Piocher dans
+## l'ordre d'apparition faisait donc tomber les DERNIÈRES, c'est-à-dire la
+## nouveauté même du chapitre. Mesuré avant correction : le Démon de Cristal
+## n'entrait pas au stage 8, le Minotaure pas au 9, et le Chevalier Noir comme le
+## Golem de Givre n'entraient JAMAIS — ni à l'épisode 1, ni au 2.
+##
+## La nouveauté passe donc devant, les anciennes suivent. Et elles sont décalées
+## d'un cran à l'épisode 2 : les deux épisodes d'un même chapitre ne montrent
+## alors pas tout à fait la même troupe, ce qui fait voir plus d'espèces sans
+## ajouter un seul poursuivant.
+static func _build_lineup(c: LevelConfig, index: int) -> void:
+	var newcomers: Array[String] = []
+	for id in Bestiary.NEWCOMERS[clampi(index, 1, Bestiary.NEWCOMERS.size()) - 1]:
+		newcomers.append(str(id))
+	var older: Array[String] = []
+	for id in c.species:
+		if not newcomers.has(id):
+			older.append(id)
+	c.lineup = newcomers.duplicate()
+	if older.is_empty():
+		return
+	var offset := (c.episode - 1) % older.size()
+	for i in older.size():
+		c.lineup.append(older[(i + offset) % older.size()])
 
 
 ## Les dix chapitres, nommés d'après les planches d'`assets/stages/` — c'est la
@@ -343,9 +375,20 @@ static func _stage_curve(index: int) -> LevelConfig:
 ## spectre, un gobelin, un golem — LENTES et myopes : elles n'attaquent que si
 ## on les cherche, mais encaissent assez pour qu'une brûlure ou un arc se voie.
 ## Elles reviennent vite : un terrain d'essai vide est un terrain mort.
-static func demo() -> LevelConfig:
+## Le terrain d'essai, HABILLÉ du décor d'un stage.
+##
+## Un seul terrain suffisait tant que la démo servait à essayer les sorts. Elle
+## sert aussi à REGARDER les stages — leurs tuiles, leurs props, leur monument —
+## et un décor de forêt sur les dix stages ne montrait rien. Le terrain garde
+## donc ses réglages cléments (on ne meurt pas, les sorts n'ont pas de recharge)
+## et ne change que de peau : c'est `stage` que lisent le rendu du labyrinthe,
+## le semis de décor et la maison.
+static func demo(stage: int = 1) -> LevelConfig:
+	stage = clampi(stage, 1, STAGE_COUNT)
 	var c := LevelConfig.new()
-	c.level_name = "Terrain d'essai"
+	c.stage = stage
+	c.level_name = STAGE_NAMES[stage - 1]
+	c.species = Bestiary.roster(stage)
 	c.is_demo = true
 	c.is_tutorial = true
 	c.room_count = 9
@@ -354,7 +397,6 @@ static func demo() -> LevelConfig:
 	c.portal_min_spacing = 4
 	c.gem_count = 1
 	c.enemy_count = 3
-	c.species = ["hunter", "goblin", "golem"] as Array[String]
 	c.enemy_speed_ratio = 0.55
 	c.enemy_detection_radius = 3
 	c.player_health_bonus = 97
@@ -377,6 +419,8 @@ static func for_stage(index: int, episode_index: int = 1) -> LevelConfig:
 	c.species = Bestiary.roster(index)
 	c.level_name = STAGE_NAMES[index - 1]
 	_apply_episode(c)
+	# APRÈS l'épisode : c'est lui qui décale les anciennes espèces.
+	_build_lineup(c, index)
 	return c
 
 

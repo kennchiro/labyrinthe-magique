@@ -102,6 +102,17 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 		draw_rect(rect.grow(-2.0),
 			Color(color.r * 0.26, color.g * 0.26, color.b * 0.26, 0.90 if ready else 0.45))
 
+	# L'icône occupe la GAUCHE de la case, le texte se décale à sa droite. Une
+	# icône posée derrière le texte rendrait les deux illisibles.
+	var icon: Texture2D = entry.get("icon", null)
+	var text_left := 6.0
+	if icon != null:
+		var span := rect.size.y - 8.0
+		draw_texture_rect(icon,
+			Rect2(rect.position + Vector2(3.0, 4.0), Vector2(span, span)), false,
+			Color(1, 1, 1, 0.95) if ready else Color(0.55, 0.58, 0.66, 0.65))
+		text_left = span + 6.0
+
 	var edge := color if ready else Color(0.38, 0.44, 0.58)
 	draw_rect(rect, edge, false, 2.0 if ready else 1.0)
 	if ready and bool(entry.get("highlight", false)):
@@ -117,8 +128,18 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 		key = _keys[0]
 	var tint := Color(1, 1, 1) if ready else Color(0.62, 0.68, 0.80)
 	if not key.is_empty():
-		draw_string(font, rect.position + Vector2(6.0, 17.0), key,
-			HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 10.0, 14, tint)
+		draw_string(font, rect.position + Vector2(text_left, 17.0), key,
+			HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - text_left - 4.0, 14, tint)
+	# Les charges se lisent en haut à droite de la case : « 3/5 ». C'est
+	# l'information qui décide du prochain geste — poser un brasier de plus, ou
+	# garder la dernière charge pour la sortie du repaire.
+	var charges := int(entry.get("charges", -1))
+	if charges >= 0:
+		var stock := "%d/%d" % [charges, int(entry.get("charges_max", 1))]
+		var stock_color := color if charges > 0 else Color(0.62, 0.66, 0.78)
+		draw_string(font, rect.position + Vector2(rect.size.x - 34.0, 17.0), stock,
+			HORIZONTAL_ALIGNMENT_RIGHT, 28.0, 12, stock_color)
+
 	var label := str(entry.get("name", ""))
 	if int(entry.get("slot", index)) == SLOT_PORTAL:
 		label = "Portail"
@@ -127,10 +148,21 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 		tint = Color(0.55, 0.60, 0.72)
 	# Le nom rétrécit jusqu'à tenir. Godot COUPE au lieu de réduire, et un sort
 	# affiché « Explosion d' » n'apprend rien — mieux vaut deux points de moins.
-	var room := rect.size.x - 12.0
+	var room := rect.size.x - text_left - 6.0
 	var font_size := 12
 	while font_size > 8 and font.get_string_size(
 			label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x > room:
 		font_size -= 1
-	draw_string(font, rect.position + Vector2(6.0, rect.size.y - 8.0), label,
+	# Et si même la plus petite taille ne suffit pas, on coupe SUR UN MOT.
+	#
+	# Les vignettes de sorts ont pris la place du texte : « Chaîne d'éclairs »
+	# s'affichait « Chaîne d'écl », coupé en plein mot par Godot. Un nom amputé
+	# d'un mot entier avec ses points de suite — « Chaîne… » — se lit ; un mot
+	# tranché au milieu ressemble à un bug.
+	var mots := label.split(" ", false)
+	while mots.size() > 1 and font.get_string_size(
+			label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x > room:
+		mots.remove_at(mots.size() - 1)
+		label = " ".join(mots) + "…"
+	draw_string(font, rect.position + Vector2(text_left, rect.size.y - 8.0), label,
 		HORIZONTAL_ALIGNMENT_LEFT, room, font_size, tint)

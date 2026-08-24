@@ -147,7 +147,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	var grid := MazeGenerator.generate(config, rng_seed)
 	var player := GridMover.new(grid, grid.player_spawn, character.move_speed)
 	var player_health := Health.new(character.base_health + config.player_health_bonus)
-	var combat := CombatSystem.new(grid, character, player_health)
+	var combat := CombatSystem.new(grid, character, player_health, rng_seed * 31 + 7)
 	var context := CombatContext.new(grid)
 	var kills := KillSystem.new(character.ultimate_required_kills)
 	# Progression FICTIVE : le bot commence sans sort et les débloque en
@@ -174,9 +174,13 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	# applique comme le Level, sinon la trempe, l'ébranlement et la bourrasque
 	# n'existeraient que pour le joueur humain et l'équilibrage mentirait.
 	var soaked := {}
+	var soak_factors := {}
 	var staggered := {}
-	combat.enemy_soaked.connect(func(index: int, duration: float) -> void:
-		soaked[index] = duration)
+	# Le facteur est mémorisé avec la durée : la simulation ralentit exactement
+	# comme le jeu, y compris pour le givre du Cercle glacé.
+	combat.enemy_soaked.connect(func(index: int, duration: float, factor: float) -> void:
+		soaked[index] = duration
+		soak_factors[index] = factor)
 	combat.enemy_staggered.connect(func(index: int, duration: float) -> void:
 		staggered[index] = duration)
 	combat.enemy_pushed.connect(func(index: int, cell: Vector2i) -> void:
@@ -343,7 +347,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				if float(soaked[i]) <= 0.0:
 					soaked.erase(i)
 				else:
-					mover.speed = base_speeds[i] * CombatSystem.SOAK_FACTOR
+					mover.speed = base_speeds[i] * float(
+						soak_factors.get(i, CombatSystem.SOAK_FACTOR))
 			mover.desired_direction = brains[i].decide(grid, mover.decision_cell(), mover.direction, player_field, DT)
 			mover.update(DT)
 			if mover.grid_position().distance_to(position) >= CATCH_DISTANCE or sheltered:

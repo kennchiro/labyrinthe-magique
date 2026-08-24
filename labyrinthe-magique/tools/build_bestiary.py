@@ -19,6 +19,19 @@ C'est la SEULE convention qu'on leur suppose. Les rangées sont écrites à la
 main dans la table ci-dessous : se tromper de rangée donnerait un monstre qui
 marche de dos en avançant vers le joueur, un défaut qu'on ne voit qu'en jouant.
 
+⚠️ Ce que la convention ne dit PAS, et qui a été supposé à tort pendant des
+semaines : de quel CÔTÉ regarde la rangée de profil. Elle était lue comme la
+gauche sur les neuf planches. Vérifiée dessin par dessin le 2026-08-24, elle
+regarde vers la DROITE sur SEPT d'entre elles — seuls l'Ombre et le Démon de
+Cristal regardent vers la gauche. Les sept autres avaient donc leurs deux
+profils intervertis : le monstre marchait à reculons, et rien ne le signalait
+(les fichiers existent, les tests passent, la case est bonne).
+
+Les indices qui tranchent, dans l'ordre de fiabilité : l'œil ou la gueule ; la
+traînée du coup (l'arc rouge du Minotaure, le croissant bleu du Givre) qui part
+DEVANT ; la poussière et la cape, qui restent DERRIÈRE. C'est le sens que
+déclare `profile` ci-dessous, et rien d'autre.
+
 La case finale est commune AU BESTIAIRE, pas commune avec les mages : ces
 créatures n'ont pas la même stature (un serpent, un minotaure), et les forcer
 dans la case d'un mage les aurait toutes rétrécies au gabarit du plus large.
@@ -34,19 +47,30 @@ import numpy as np
 from build_characters import (CELL_PADDING, FRAME_HEIGHT, OUT_ENEMIES, POSES,
                               SOURCE, measure, write)
 
-# Orientations dessinées ; la droite est le profil retourné.
-ROWS = {"down": 0, "up": 1, "left": 2}
-SIDES = {"right": "left"}
+# Rangées des deux orientations toujours dessinées. Le profil, lui, n'a pas de
+# côté fixe : il est déclaré planche par planche (`profile`), et l'autre côté
+# est son miroir.
+ROWS = {"down": 0, "up": 1}
+PROFILE_ROW = 2
+## Côté vers lequel regarde la rangée de profil quand la planche ne dit rien.
+## C'est le cas de SEPT planches sur neuf — le défaut suit la majorité pour que
+## l'exception soit ce qui s'écrit, jamais la règle.
+DEFAULT_PROFILE = "right"
 
 # id, nom affiché, et ce qu'on suppose de sa façon de se battre. La colonne
 # d'attaque est prise dans la rangée 3, à la pose la plus lisible.
+# `profile` : le côté vers lequel la rangée 2 est DESSINÉE. Ne l'écrire que
+# lorsqu'il diffère du défaut, et seulement après avoir regardé le dessin.
 BESTIARY = {
     "enemi_0.png": {"id": "serpent", "name": "Serpent d'Émeraude",
                     "attack": {"row": 2, "col": 4}},
     # Grilles imposées : la détection mesurait ici un pas de DEUX rangées et
     # rendait un dos coupé en deux moitiés empilées.
+    # Profil à GAUCHE : l'ouverture de la capuche et son œil sont à gauche, les
+    # volutes de sa traîne restent à droite.
     "enemi_3.png": {"id": "ombre", "name": "Ombre Encapuchonnée",
-                    "attack": {"row": 3, "col": 0}, "grid": (175, 171, 61, 12)},
+                    "attack": {"row": 3, "col": 0}, "grid": (175, 171, 61, 12),
+                    "profile": "left"},
     # Grille imposée aussi : l'auto-détection cale ici la phase sur la GRANDE
     # illustration de droite (un dragon crachant du feu sur deux cases) et place
     # la première cellule à cheval sur deux poses — la marche sautait la
@@ -58,8 +82,10 @@ BESTIARY = {
                     "attack": {"row": 3, "col": 0}},
     "enemi_6.png": {"id": "archer", "name": "Archer d'Os",
                     "attack": {"row": 3, "col": 0}},
+    # Profil à GAUCHE, la seconde exception : sa petite tête cristalline et la
+    # lueur rose de son cœur sont à gauche, ses éclats d'épaule fuient à droite.
     "enemi_7.png": {"id": "cristal", "name": "Démon de Cristal",
-                    "attack": {"row": 3, "col": 0}},
+                    "attack": {"row": 3, "col": 0}, "profile": "left"},
     # Grille imposée : même piège que le dragonnet — la phase auto se cale sur
     # la grande illustration de droite, saute la PREMIÈRE pose de chaque rangée
     # et tranche la pose de charge en case d'attaque. Centres mesurés :
@@ -74,13 +100,21 @@ BESTIARY = {
 
 
 def config_for(name: str) -> dict:
+    """La configuration d'une planche, profil compris.
+
+    Le côté DESSINÉ prend la rangée 2 ; l'autre est écrit comme son miroir. Rien
+    d'autre ne change entre les deux cas — c'est le même découpage, seul le nom
+    du fichier de sortie bascule."""
     entry = dict(BESTIARY[name])
+    drawn = entry.pop("profile", DEFAULT_PROFILE)
+    mirrored = "left" if drawn == "right" else "right"
+    rows = dict(ROWS, **{drawn: PROFILE_ROW})
     entry.update({
         "mode": "rangees",
         "out": OUT_ENEMIES,
-        "rows": ROWS,
-        "directions": list(ROWS),
-        "mirror": SIDES,
+        "rows": rows,
+        "directions": list(rows),
+        "mirror": {mirrored: drawn},
     })
     return entry
 

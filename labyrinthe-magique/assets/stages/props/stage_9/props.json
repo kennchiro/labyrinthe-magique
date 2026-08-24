@@ -2,34 +2,34 @@
   "maison": [
     {
       "file": "maison_0.png",
-      "w": 251,
-      "h": 275
+      "w": 279,
+      "h": 452
     }
   ],
   "lisiere": [
     {
       "file": "lisiere_0.png",
-      "w": 105,
-      "h": 162
+      "w": 134,
+      "h": 170
     }
   ],
   "lueur": [
     {
       "file": "lueur_0.png",
-      "w": 52,
-      "h": 115
+      "w": 42,
+      "h": 112
     }
   ],
   "semis": [
     {
       "file": "semis_0.png",
-      "w": 106,
-      "h": 72
+      "w": 74,
+      "h": 60
     },
     {
       "file": "semis_1.png",
-      "w": 75,
-      "h": 60
+      "w": 44,
+      "h": 69
     }
   ]
 }

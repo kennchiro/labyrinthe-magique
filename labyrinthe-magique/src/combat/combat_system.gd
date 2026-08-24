@@ -16,6 +16,9 @@ extends RefCounted
 signal projectile_launched(ability: Ability, target: int, path: Array, duration: float)
 signal projectile_hit(ability: Ability, target: int, cell: Vector2i)
 signal blast_fired(ability: Ability, cell: Vector2i)
+## Un front DÉFERLE : le chemin qu'il va parcourir et le temps qu'il y mettra.
+## Émis au lancement pour que le jeu puisse l'animer d'un bout à l'autre.
+signal wave_launched(ability: Ability, path: Array, duration: float)
 signal zone_created(zone_id: int, ability: Ability, cell: Vector2i)
 signal zone_expired(zone_id: int)
 signal wall_raised(cell: Vector2i)
@@ -28,18 +31,50 @@ signal summon_expired(id: int)
 signal enemy_damaged(index: int, dealt: int, ability: Ability)
 signal enemy_killed(index: int)
 signal player_healed(amount: int)
-signal player_shielded(amount: int)
+## Le bouclier est posé, avec sa durée. Il en avait une dans sa fiche (8 s) et
+## le code l'IGNORAIT : une fois posé, il tenait jusqu'à ce qu'on le consomme,
+## éventuellement une partie entière.
+signal player_shielded(amount: int, duration: float)
+## Il est tombé — épuisé par les coups, ou arrivé à échéance.
+signal player_shield_faded
 ## Émis quand le geste est refusé, avec la raison : l'interface le dit au joueur
 ## au lieu de laisser croire à un bug.
 signal use_refused(reason: String)
 ## Traits élémentaires — voir le bloc TRAITS plus bas. Les quatre premiers
 ## informent le Level (visuels) ET la simulation (physique) ; les deux derniers
 ## ne servent qu'aux visuels, la physique étant déjà appliquée ici même.
-signal enemy_soaked(index: int, duration: float)
+## Le facteur accompagne la durée : la trempe de l'élément Eau et le givre du
+## Cercle glacé ralentissent tous deux, mais pas d'autant. Un signal qui ne
+## porterait que la durée obligerait chaque récepteur à deviner de quel
+## ralentissement il s'agit.
+signal enemy_soaked(index: int, duration: float, factor: float)
 signal enemy_staggered(index: int, duration: float)
 signal enemy_pushed(index: int, cell: Vector2i)
 signal enemy_burning(index: int, duration: float)
+## Un arc SAUTE d'une créature à l'autre. `from_index` vaut -1 pour le premier
+## trait, qui part du mage lui-même.
 signal chain_arced(from_index: int, to_index: int)
+## L'orage se lève au-dessus du mage, et il le suit.
+signal storm_gathered(ability: Ability, duration: float)
+signal storm_dispersed
+## Une décharge tombe du nuage sur une créature.
+signal storm_struck(index: int, ability: Ability)
+## Un nuage du JUGEMENT se forme quelque part sur la carte, puis se dissipe.
+signal sky_cloud_formed(cell: Vector2i, duration: float, ability: Ability)
+signal sky_cloud_faded(cell: Vector2i)
+## Il foudroie une créature sous lui.
+signal sky_bolt(cell: Vector2i, index: int, ability: Ability)
+## Une météore est en route : la case visée et le temps qu'elle met à tomber.
+## Émis À L'AVANCE pour que le jeu puisse montrer la chute et marquer le sol —
+## un rocher qui apparaît au sol sans prévenir n'est pas un événement, c'est un
+## dégât inexpliqué.
+signal meteor_incoming(cell: Vector2i, delay: float, ability: Ability)
+signal meteor_landed(cell: Vector2i, ability: Ability)
+## Le mage est EXALTÉ : ses coups portent plus fort pendant `duration`.
+## L'interface doit le montrer — un bonus invisible n'est pas un pouvoir, c'est
+## une bizarrerie de chiffres.
+signal player_empowered(bonus: int, duration: float)
+signal player_calmed
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -50,6 +85,13 @@ const PROJECTILE_SPEED := 16.0
 const STRUCTURE_PENALTY := 100
 ## Fréquence des dégâts d'une zone persistante.
 const ZONE_TICK := 0.5
+## Délai minimal entre deux charges d'un même sort.
+##
+## Court, mais pas nul : sur téléphone, une pression un peu longue est lue comme
+## deux appuis, et sans ce garde-fou le joueur viderait deux charges sur la même
+## case sans l'avoir voulu. Il ne se sent pas en jeu — on ne peut pas taper plus
+## vite que ça utilement — mais il protège les charges des fausses manœuvres.
+const CHARGE_GAP := 0.35
 
 ## --- INVOCATIONS ------------------------------------------------------------
 ##
@@ -114,8 +156,15 @@ const ECHO_DELAY := 0.6
 var grid: MazeGrid
 var stats: CharacterStats
 var health: Health
+## SORTS ILLIMITÉS — le mode démo. Aucune recharge : on vient y regarder les
+## sorts sous toutes les coutures, pas les rationner. La campagne, elle, garde
+## ses recharges ; ce drapeau n'est posé que par un LevelConfig en `is_demo`.
+var free_use := false
 
 var _cooldowns := {}        # id de compétence -> secondes restantes
+var _charges := {}          # id -> charges restantes (sorts à charges)
+var _refills := {}          # id -> charges à rendre quand la recharge finit
+var _recover := {}          # id -> délai avant la charge suivante
 var _in_flight: Array[Dictionary] = []
 var _zones: Array[Dictionary] = []
 var _walls: Array[Dictionary] = []
@@ -128,19 +177,52 @@ var _summon_field_timer := 0.0
 var _burning := {}                     # index -> {ticks, timer, damage}
 var _echoes: Array[Dictionary] = []
 var _stagger_locks := {}               # index -> secondes avant le prochain ébranlement
+## index -> secondes avant qu'un piège de zone puisse le reprendre. Sans ce
+## verrou, une créature immobilisée dans les flammes serait re-piégée à chaque
+## tick et ne repartirait JAMAIS.
+var _snare_locks := {}
+var _meteors: Array[Dictionary] = []
+var _rng := RandomNumberGenerator.new()
+var _empower_bonus := 0
+var _empower_left := 0.0
+var _shield_left := 0.0
+var _waves: Array[Dictionary] = []
+var _chains: Array[Dictionary] = []
+var _storm := {}
+var _sky: Array[Dictionary] = []
 
 
-func _init(p_grid: MazeGrid, p_stats: CharacterStats, p_health: Health) -> void:
+## `p_seed` : la pluie de météores tire au sort ses cases. Le tirage doit être
+## REPRODUCTIBLE — sinon la simulation d'équilibrage mesure un ultime différent
+## à chaque partie, et deux captures du même sort ne se comparent plus.
+func _init(p_grid: MazeGrid, p_stats: CharacterStats, p_health: Health,
+		p_seed: int = 0) -> void:
 	grid = p_grid
 	stats = p_stats
 	health = p_health
+	_rng.seed = p_seed if p_seed != 0 else 60611
 
 
 # --- Ressources ------------------------------------------------------------------
 
+## Charges restantes, ou -1 si le sort n'en a pas. L'interface s'en sert pour
+## afficher « 3/5 » : sans ce compte à l'écran, le joueur ne peut pas savoir
+## combien de brasiers il lui reste, et il découvre la recharge par surprise.
+func charges_left(ability: Ability) -> int:
+	if ability == null or ability.charges <= 1:
+		return -1
+	if free_use:
+		return ability.charges
+	return int(_charges.get(ability.id, ability.charges))
+
+
 func cooldown_left(ability: Ability) -> float:
-	if ability == null:
+	if ability == null or free_use:
 		return 0.0
+	# Tant qu'il reste une charge, le sort est PRÊT : la recharge d'un sort à
+	# charges ne court qu'une fois la dernière dépensée.
+	if ability.charges > 1 and charges_left(ability) > 0:
+		return float(_recover.get(ability.id, 0.0))
 	return float(_cooldowns.get(ability.id, 0.0))
 
 
@@ -169,8 +251,17 @@ func update(delta: float, context: CombatContext) -> void:
 		var left: float = _cooldowns[id] - delta
 		if left <= 0.0:
 			_cooldowns.erase(id)
+			# La recharge d'un sort à charges les rend TOUTES.
+			if _refills.has(id):
+				_charges[id] = int(_refills[id])
 		else:
 			_cooldowns[id] = left
+	for id in _recover.keys():
+		var gap: float = _recover[id] - delta
+		if gap <= 0.0:
+			_recover.erase(id)
+		else:
+			_recover[id] = gap
 
 	_update_projectiles(delta, context)
 	_update_summons(delta, context)
@@ -178,12 +269,37 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_walls(delta)
 	_update_burns(delta, context)
 	_update_echoes(delta, context)
+	_update_meteors(delta, context)
+	_update_waves(delta, context)
+	_update_chains(delta, context)
+	_update_storm(delta, context)
+	_update_sky(delta, context)
+	if _empower_left > 0.0:
+		_empower_left = maxf(0.0, _empower_left - delta)
+		if _empower_left <= 0.0:
+			_empower_bonus = 0
+			player_calmed.emit()
+	if _shield_left > 0.0:
+		_shield_left = maxf(0.0, _shield_left - delta)
+		# Il tombe de DEUX façons : l'échéance, ou les coups qui l'ont vidé.
+		# Les deux comptent — un bouclier à zéro qui resterait affiché mentirait
+		# autant qu'un bouclier éternel.
+		if _shield_left <= 0.0 or health.shield <= 0:
+			_shield_left = 0.0
+			health.shield = 0
+			player_shield_faded.emit()
 	for index in _stagger_locks.keys():
 		var lock: float = _stagger_locks[index] - delta
 		if lock <= 0.0:
 			_stagger_locks.erase(index)
 		else:
 			_stagger_locks[index] = lock
+	for index in _snare_locks.keys():
+		var snare_lock: float = _snare_locks[index] - delta
+		if snare_lock <= 0.0:
+			_snare_locks.erase(index)
+		else:
+			_snare_locks[index] = snare_lock
 
 
 func _update_projectiles(delta: float, context: CombatContext) -> void:
@@ -223,9 +339,49 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 				"damage": int(round(ability.damage * ZONE_TICK)), "radius": ability.radius,
 			})
 			_apply_area(slice, zone["cell"], context, ability)
+			if ability.snare > 0.0:
+				_apply_snare(ability, zone["cell"], context)
+			if ability.slow_duration > 0.0:
+				_apply_chill(ability, zone["cell"], context)
 		if float(zone["time_left"]) <= 0.0:
 			_zones.remove_at(i)
 			zone_expired.emit(int(zone["id"]))
+
+
+## Le piège du brasier : ce qui entre est RETENU, puis repart en brûlant.
+##
+## Le verrou couvre l'immobilisation ET la brûlure qui suit, plus une seconde de
+## grâce : sans elle, une créature libérée au bord des flammes serait reprise
+## dans la foulée et le piège deviendrait une prison à vie.
+func _apply_snare(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var field := Pathfinder.distance_field(grid, [centre] as Array[Vector2i])
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i) or _snare_locks.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		_snare_locks[i] = ability.snare + ability.snare_burn + 1.0
+		enemy_staggered.emit(i, ability.snare)
+		if ability.snare_burn > 0.0:
+			# La brûlure part APRÈS la libération : on la programme, elle ne
+			# commence pas pendant que la créature est encore prise.
+			_echoes.append({"index": i, "time_left": ability.snare,
+				"damage": 0, "ability": ability, "burn": ability.snare_burn})
+
+
+## Le givre d'une zone : elle ne retient pas, elle ENGLUE. Même verrou que le
+## piège — une fois par créature et par passage.
+func _apply_chill(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var field := Pathfinder.distance_field(grid, [centre] as Array[Vector2i])
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i) or _snare_locks.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		_snare_locks[i] = ability.slow_duration + 0.5
+		enemy_soaked.emit(i, ability.slow_duration, ability.slow_factor)
 
 
 func _update_walls(delta: float) -> void:
@@ -240,6 +396,22 @@ func _update_walls(delta: float) -> void:
 
 
 # --- Utilisation d'une compétence ------------------------------------------------
+
+## Bonus de dégâts en cours, 0 quand le mage n'est pas exalté. L'interface s'en
+## sert pour afficher les chiffres RÉELS de la barre d'action.
+func empower_bonus() -> int:
+	return _empower_bonus
+
+
+func empower_left() -> float:
+	return _empower_left
+
+
+## Absorption restante, pour l'interface. Le joueur doit voir FONDRE sa coque :
+## un bouclier qu'on ne voit pas s'user ne se gère pas.
+func shield_left() -> int:
+	return health.shield if health != null else 0
+
 
 ## Retourne true si la compétence est réellement partie. Sinon AUCUNE ressource
 ## n'est consommée — rater faute de cible n'est pas une faute du joueur.
@@ -259,7 +431,8 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_zone(ability, context)
 		Ability.Kind.SHIELD:
 			health.add_shield(ability.damage)
-			player_shielded.emit(ability.damage)
+			_shield_left = ability.duration
+			player_shielded.emit(ability.damage, ability.duration)
 			fired = true
 		Ability.Kind.HEAL:
 			player_healed.emit(health.heal(ability.damage))
@@ -268,13 +441,35 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_wall(ability, context)
 		Ability.Kind.BLINK:
 			fired = _cast_blink(ability, context)
+		Ability.Kind.WAVE:
+			fired = _cast_wave(ability, context)
+		Ability.Kind.CHAIN:
+			fired = _cast_chain(ability, context)
+		Ability.Kind.STORM:
+			fired = _cast_storm(ability, context)
 		Ability.Kind.SUMMON:
 			fired = _cast_summon(ability, context)
 
 	if not fired:
 		return false
-	_cooldowns[ability.id] = ability.cooldown
+	if not free_use:
+		_spend(ability)
 	return true
+
+
+## Ce que coûte un lancer. Un sort ordinaire part en recharge ; un sort à
+## charges en consomme une, et n'entre en recharge qu'à la DERNIÈRE.
+func _spend(ability: Ability) -> void:
+	if ability.charges <= 1:
+		_cooldowns[ability.id] = ability.cooldown
+		return
+	var left := charges_left(ability) - 1
+	_charges[ability.id] = left
+	_refills[ability.id] = ability.charges
+	if left > 0:
+		_recover[ability.id] = CHARGE_GAP
+	else:
+		_cooldowns[ability.id] = ability.cooldown
 
 
 ## Index de l'ennemi qui serait visé, -1 s'il n'y en a aucun à portée.
@@ -300,7 +495,16 @@ func find_target(ability: Ability, context: CombatContext) -> int:
 	return best
 
 
+## Une cible déjà visée par un projectile en vol n'est pas re-visée : sans cette
+## règle, deux orbes partiraient sur un ennemi qui n'en demandait qu'un, pendant
+## que son voisin avance tranquillement.
+##
+## Elle SAUTE en démo. La règle protège d'un tir gaspillé pendant la recharge ;
+## sans recharge il n'y a rien à gaspiller, et la refuser rendait le bouton mort
+## dès qu'une orbe était en l'air — le joueur appuyait, rien ne partait.
 func _already_targeted(index: int) -> bool:
+	if free_use:
+		return false
 	for shot in _in_flight:
 		if int(shot["target"]) == index:
 			return true
@@ -315,7 +519,11 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	var path := trajectory(context.player_cell, context.enemy_cells[target])
 	if path.size() < 2:
 		return false
-	var duration := float(path.size() - 1) / PROJECTILE_SPEED
+	# La vitesse vient de la COMPÉTENCE : une boule de feu lourde met deux fois
+	# plus de temps à arriver qu'une flèche, et ce délai est jouable — l'ennemi
+	# a le temps de tourner le coin. La simulation le voit comme le joueur.
+	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
+	var duration := float(path.size() - 1) / speed
 	_in_flight.append({"ability": ability, "target": target, "time_left": duration})
 	projectile_launched.emit(ability, target, path, duration)
 	return true
@@ -324,7 +532,57 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 	blast_fired.emit(ability, context.player_cell)
 	_apply_area(ability, context.player_cell, context)
+	if ability.rain_count > 0:
+		_summon_rain(ability)
+	if ability.sky_clouds > 0:
+		_gather_sky(ability)
+	if ability.heal_self > 0:
+		var gained := health.heal(ability.heal_self)
+		if gained > 0:
+			player_healed.emit(gained)
+	if ability.empower_bonus > 0 and ability.empower_duration > 0.0:
+		# Relancer l'exaltation la REMET à neuf plutôt que de l'additionner :
+		# deux ultimes coup sur coup ne doivent pas donner +20.
+		_empower_bonus = ability.empower_bonus
+		_empower_left = ability.empower_duration
+		player_empowered.emit(_empower_bonus, _empower_left)
 	return true
+
+
+## La pluie de météores. Les cases sont tirées au sort parmi les praticables, et
+## les délais étalés sur toute la durée : tombées ensemble, douze météores
+## feraient un seul gros dégât et pas une pluie.
+func _summon_rain(ability: Ability) -> void:
+	var cells := grid.all_floor_cells()
+	if cells.is_empty():
+		return
+	for i in ability.rain_count:
+		var cell: Vector2i = cells[_rng.randi_range(0, cells.size() - 1)]
+		var when := _rng.randf_range(0.0, ability.rain_duration)
+		_meteors.append({"cell": cell, "time_left": when + ability.rain_fall,
+			"ability": ability})
+		meteor_incoming.emit(cell, when + ability.rain_fall, ability)
+
+
+func _update_meteors(delta: float, context: CombatContext) -> void:
+	for i in range(_meteors.size() - 1, -1, -1):
+		_meteors[i]["time_left"] = float(_meteors[i]["time_left"]) - delta
+		if float(_meteors[i]["time_left"]) > 0.0:
+			continue
+		var meteor: Dictionary = _meteors[i]
+		_meteors.remove_at(i)
+		var source: Ability = meteor["ability"]
+		var cell: Vector2i = meteor["cell"]
+		# Chaque météore est une petite explosion à part entière : mêmes règles
+		# de rayon que n'importe quel sort de zone, avec ses propres chiffres.
+		var strike := Ability.make({
+			"id": source.id + "_meteore", "display_name": "Météore",
+			"kind": Ability.Kind.BLAST, "element": source.element,
+			"damage": source.rain_damage, "radius": source.rain_radius,
+			"is_ultimate": true,
+		})
+		meteor_landed.emit(cell, source)
+		_apply_area(strike, cell, context)
 
 
 func _cast_zone(ability: Ability, context: CombatContext) -> bool:
@@ -349,6 +607,299 @@ func _cast_wall(ability: Ability, context: CombatContext) -> bool:
 	_walls.append({"cell": cell, "time_left": ability.duration})
 	wall_raised.emit(cell)
 	return true
+
+
+## LE JUGEMENT CÉLESTE : des nuages se forment un peu partout et restent.
+##
+## Ils sont posés AU HASARD sur les cases praticables, comme la pluie du Feu —
+## mais là où une météore tombe une fois et disparaît, un nuage s'installe et
+## frappe tant qu'il est là. C'est la différence entre une averse et un ciel
+## d'orage.
+##
+## Leurs instants de première décharge sont ÉTALÉS : formés en même temps, ils
+## frapperaient tous à l'unisson et le ciel entier clignoterait au même rythme.
+func _gather_sky(ability: Ability) -> void:
+	var cells := grid.all_floor_cells()
+	if cells.is_empty():
+		return
+	for i in ability.sky_clouds:
+		var cell: Vector2i = cells[_rng.randi_range(0, cells.size() - 1)]
+		_sky.append({
+			"cell": cell, "ability": ability,
+			"time_left": ability.sky_duration,
+			"timer": _rng.randf_range(0.0, ability.sky_interval),
+		})
+		sky_cloud_formed.emit(cell, ability.sky_duration, ability)
+
+
+func _update_sky(delta: float, context: CombatContext) -> void:
+	for i in range(_sky.size() - 1, -1, -1):
+		var cloud: Dictionary = _sky[i]
+		cloud["time_left"] = float(cloud["time_left"]) - delta
+		if float(cloud["time_left"]) <= 0.0:
+			var gone: Vector2i = cloud["cell"]
+			_sky.remove_at(i)
+			sky_cloud_faded.emit(gone)
+			continue
+		cloud["timer"] = float(cloud["timer"]) - delta
+		if float(cloud["timer"]) > 0.0:
+			continue
+		var ability: Ability = cloud["ability"]
+		cloud["timer"] = ability.sky_interval
+
+		# Chaque nuage ne voit que SOUS lui : c'est ce qui fait du Jugement un
+		# ciel et non une frappe téléguidée. Un ennemi qui reste à découvert est
+		# puni, un ennemi qui bouge peut passer entre les nuages.
+		var centre: Vector2i = cloud["cell"]
+		var field := Pathfinder.distance_field(grid, [centre] as Array[Vector2i])
+		var best := -1
+		var best_distance := ability.sky_reach + 1
+		for j in context.enemy_cells.size():
+			if not context.enemy_alive(j) or context.is_structure(j):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[j])
+			if distance >= 0 and distance < best_distance:
+				best_distance = distance
+				best = j
+		if best < 0:
+			continue
+		sky_bolt.emit(centre, best, ability)
+		var strike := Ability.make({
+			"id": ability.id + "_foudre", "display_name": ability.display_name,
+			"kind": Ability.Kind.PROJECTILE, "element": ability.element,
+			"damage": maxi(1, int(round(float(ability.damage) * 0.18))),
+			"is_ultimate": true,
+		})
+		# Coup d'origine : chaque frappe du ciel peut donc rebondir sur un
+		# voisin, comme tout ce que lance ce mage.
+		_apply_damage(best, strike, context)
+
+
+## L'ORAGE : un nuage qui suit le mage et foudroie tout seul.
+##
+## Relancer l'orage le REMET à neuf plutôt que d'en ouvrir un second : deux
+## nuages superposés doubleraient la cadence sans que rien ne le montre à
+## l'écran, et le joueur ne comprendrait pas pourquoi sa deuxième invocation
+## semble plus forte que la première.
+func _cast_storm(ability: Ability, context: CombatContext) -> bool:
+	_storm = {
+		"ability": ability, "time_left": ability.duration,
+		# La première décharge tombe TOUT DE SUITE : un sort qui ne fait rien
+		# pendant sa première seconde se lit comme un sort raté.
+		"timer": 0.0,
+	}
+	storm_gathered.emit(ability, ability.duration)
+	return true
+
+
+func _update_storm(delta: float, context: CombatContext) -> void:
+	if _storm.is_empty():
+		return
+	var ability: Ability = _storm["ability"]
+	_storm["time_left"] = float(_storm["time_left"]) - delta
+	if float(_storm["time_left"]) <= 0.0:
+		_storm.clear()
+		storm_dispersed.emit()
+		return
+
+	_storm["timer"] = float(_storm["timer"]) - delta
+	if float(_storm["timer"]) > 0.0:
+		return
+	_storm["timer"] = ability.storm_interval
+
+	# La cible est la plus proche DU MAGE : le nuage est au-dessus de lui et
+	# frappe ce qui l'entoure. Un orage qui bombarderait la carte entière ne
+	# récompenserait plus le fait de rester mobile — il jouerait tout seul.
+	var best := -1
+	var best_distance := ability.storm_range + 1
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance >= 0 and distance < best_distance:
+			best_distance = distance
+			best = i
+	if best < 0:
+		return
+	storm_struck.emit(best, ability)
+	# La décharge est un coup À PART ENTIÈRE : elle déclenche donc le trait de
+	# l'élément, et chaque éclair peut rebondir sur un voisin. C'est ce qui rend
+	# l'orage redoutable au milieu d'un groupe, et anodin sur un isolé.
+	_apply_damage(best, ability, context)
+
+
+## LA CHAÎNE D'ÉCLAIRS : elle saute d'une créature à l'autre, de proche en
+## proche, en s'épuisant à chaque relais.
+##
+## Le parcours est calculé D'UN COUP au lancement, puis joué relais par relais.
+## Le recalculer à chaque saut aurait laissé les ennemis bouger entre-temps : la
+## chaîne aurait pu revenir en arrière ou changer d'avis en vol, ce qu'un éclair
+## ne fait pas. Ici le trajet est décidé à l'instant du tir, et il s'accomplit.
+##
+## Chaque créature n'est touchée QU'UNE FOIS : sans cette mémoire, la chaîne
+## ferait des allers-retours entre deux ennemis voisins jusqu'à épuisement du
+## compteur de sauts.
+func _cast_chain(ability: Ability, context: CombatContext) -> bool:
+	var first := find_target(ability, context)
+	if first < 0:
+		use_refused.emit("cible")
+		return false
+
+	var hops: Array[int] = [first]
+	var visited := {first: true}
+	var current := first
+	for jump in ability.chain_jumps:
+		var next := _nearest_unvisited(current, visited, ability.chain_range, context)
+		if next < 0:
+			break
+		visited[next] = true
+		hops.append(next)
+		current = next
+
+	_chains.append({
+		"ability": ability, "hops": hops, "index": 0, "timer": 0.0,
+	})
+	return true
+
+
+## Créature vivante la plus proche de `origin` qui n'a pas encore été touchée.
+## La distance se mesure en CHEMIN : la foudre suit les couloirs comme tout le
+## reste du jeu — un arc qui traverserait une haie serait le privilège d'un
+## ultime, pas d'un sort de rang 1.
+func _nearest_unvisited(origin: int, visited: Dictionary, reach: int,
+		context: CombatContext) -> int:
+	var field := Pathfinder.distance_field(grid,
+		[context.enemy_cells[origin]] as Array[Vector2i])
+	var best := -1
+	var best_distance := reach + 1
+	for i in context.enemy_cells.size():
+		if visited.has(i) or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+func _update_chains(delta: float, context: CombatContext) -> void:
+	for i in range(_chains.size() - 1, -1, -1):
+		var chain: Dictionary = _chains[i]
+		chain["timer"] = float(chain["timer"]) - delta
+		if float(chain["timer"]) > 0.0:
+			continue
+		var ability: Ability = chain["ability"]
+		var hops: Array = chain["hops"]
+		var index := int(chain["index"])
+		if index >= hops.size():
+			_chains.remove_at(i)
+			continue
+		chain["index"] = index + 1
+		chain["timer"] = ability.chain_delay
+
+		var target := int(hops[index])
+		# Le trait part du mage pour le premier relais, de la victime
+		# précédente pour les suivants.
+		chain_arced.emit(int(hops[index - 1]) if index > 0 else -1, target)
+		if not context.enemy_alive(target):
+			continue
+		# La chaîne s'ÉPUISE : sans cette décroissance, grouper cinq ennemis
+		# reviendrait à les tuer tous pour le prix d'un.
+		var power := int(round(float(ability.damage) * pow(ability.chain_falloff, index)))
+		var relay := Ability.make({
+			"id": "%s_relais_%d" % [ability.id, index],
+			"display_name": ability.display_name,
+			"kind": Ability.Kind.PROJECTILE, "element": ability.element,
+			"damage": maxi(1, power),
+		})
+		# JAMAIS le trait : ce sort EST la chaîne de l'élément Foudre. Le laisser
+		# déclencher en plus l'arc du trait ferait partir un arc de trop et
+		# frapperait un maillon deux fois — mesuré : 5 arcs pour 3 relais.
+		# L'exaltation, elle, s'applique au premier maillon comme à tout coup
+		# d'origine.
+		_apply_damage(target, relay, context, false, index == 0)
+
+
+## LA VAGUE : un front qui part droit devant et balaie tout son chemin.
+##
+## Elle ne vise pas — elle prend le couloir. C'est ce qui la sépare du
+## projectile, qui cherche une cible, et du souffle, qui frappe tout d'un coup
+## autour du lanceur. Ici l'ennemi VOIT venir, et peut encore s'écarter dans une
+## intersection : la vague récompense le joueur qui l'aligne sur un couloir
+## droit, pas celui qui appuie au hasard.
+func _cast_wave(ability: Ability, context: CombatContext) -> bool:
+	# LA VAGUE VA CHERCHER L'ENNEMI, elle ne part pas droit devant.
+	#
+	# Première version : elle suivait le regard du mage. Défaut de conception —
+	# en FUYANT, on tourne le dos à ses poursuivants, et le sort partait donc
+	# systématiquement du mauvais côté. Il fallait s'arrêter et se retourner
+	# pour s'en servir : exactement ce qu'un sort de fuite doit éviter.
+	#
+	# Elle remonte désormais le COULOIR jusqu'à l'ennemi le plus proche, comme
+	# un projectile — mais en frappant tout ce qu'elle croise en chemin. À
+	# défaut de cible, elle part devant : un sort qui refuserait de sortir
+	# faute d'ennemi visible serait un bouton mort.
+	var path: Array[Vector2i] = []
+	var target := find_target(ability, context)
+	if target >= 0:
+		var route := trajectory(context.player_cell, context.enemy_cells[target])
+		for i in range(1, route.size()):
+			if path.size() >= ability.range:
+				break
+			path.append(route[i])
+	if path.is_empty():
+		var cell := context.player_cell
+		for step in ability.range:
+			var next: Vector2i = cell + context.player_facing
+			if not grid.is_floor_v(next):
+				break
+			cell = next
+			path.append(cell)
+	if path.is_empty():
+		use_refused.emit("mur")
+		return false
+	var duration := float(path.size()) / maxf(1.0, ability.wave_speed)
+	_waves.append({
+		"ability": ability, "path": path, "index": 0,
+		"step": duration / float(path.size()), "timer": 0.0,
+		# Chaque ennemi n'est frappé QU'UNE FOIS par vague : sans cette mémoire,
+		# un ennemi qui recule devant le front encaisserait à chaque case.
+		"hit": {},
+	})
+	wave_launched.emit(ability, path, duration)
+	return true
+
+
+func _update_waves(delta: float, context: CombatContext) -> void:
+	for i in range(_waves.size() - 1, -1, -1):
+		var wave: Dictionary = _waves[i]
+		wave["timer"] = float(wave["timer"]) - delta
+		if float(wave["timer"]) > 0.0:
+			continue
+		wave["timer"] = float(wave["step"])
+		var path: Array = wave["path"]
+		var index := int(wave["index"])
+		if index >= path.size():
+			_waves.remove_at(i)
+			continue
+		wave["index"] = index + 1
+		_break_on_wave(wave, path[index], context)
+
+
+## Le front est arrivé sur une case : il frappe ce qui s'y trouve, et ce qui est
+## à portée de sa largeur.
+func _break_on_wave(wave: Dictionary, cell: Vector2i, context: CombatContext) -> void:
+	var ability: Ability = wave["ability"]
+	var already: Dictionary = wave["hit"]
+	var field := Pathfinder.distance_field(grid, [cell] as Array[Vector2i])
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or already.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		already[i] = true
+		_apply_damage(i, ability, context)
 
 
 func _cast_blink(ability: Ability, context: CombatContext) -> bool:
@@ -508,16 +1059,30 @@ func summon_count() -> int:
 
 # --- Dégâts ----------------------------------------------------------------------
 
-## `with_trait` est faux pour les dégâts DÉRIVÉS d'un trait — tick de brûlure,
-## arc, écho. Sans ce frein, la brûlure rallumerait une brûlure et l'arc
-## rebondirait d'ennemi en ennemi jusqu'au dernier : les traits ne se composent
-## qu'avec le coup d'origine, jamais entre eux.
+## Deux freins, et il a fallu les SÉPARER.
+##
+## `with_trait` est faux pour les dégâts DÉRIVÉS — tick de brûlure, arc, écho.
+## Sans lui, la brûlure rallumerait une brûlure et l'arc rebondirait d'ennemi en
+## ennemi jusqu'au dernier : les traits ne se composent qu'avec le coup
+## d'origine, jamais entre eux.
+##
+## `empowered` est faux pour les mêmes dégâts dérivés, mais PAS toujours en même
+## temps que `with_trait`. Le cas qui a forcé la séparation : la Chaîne
+## d'éclairs. C'est un sort qui chaîne DÉJÀ, donc son premier maillon ne doit
+## pas déclencher en plus le trait de l'élément Foudre — sinon un arc
+## supplémentaire part et une créature encaisse deux fois. Mais ce premier
+## maillon, lui, doit bien profiter de l'exaltation du joueur. Un seul drapeau
+## ne pouvait pas dire les deux.
 func _apply_damage(index: int, ability: Ability, context: CombatContext,
-		with_trait: bool = true) -> void:
+		with_trait: bool = true, empowered: bool = true) -> void:
 	if not context.enemy_alive(index):
 		return
+	# L'exaltation ne s'applique qu'au coup D'ORIGINE (`with_trait`), jamais aux
+	# dégâts dérivés : sinon +10 s'ajouterait à chaque tic de brûlure, à chaque
+	# arc et à chaque écho, et le bonus se multiplierait au lieu de s'ajouter.
+	var power := ability.damage + (_empower_bonus if empowered else 0)
 	var dealt := context.enemy_health[index].take(
-		Damage.new(ability.damage, ability.element, "player"))
+		Damage.new(power, ability.element, "player"))
 	enemy_damaged.emit(index, dealt, ability)
 	if with_trait and dealt > 0 and ability.kind != Ability.Kind.ZONE \
 			and not context.is_structure(index):
@@ -535,7 +1100,7 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 				enemy_burning.emit(index, BURN_TICKS * BURN_TICK)
 		Element.Kind.WATER:
 			if context.enemy_alive(index):
-				enemy_soaked.emit(index, SOAK_DURATION)
+				enemy_soaked.emit(index, SOAK_DURATION, SOAK_FACTOR)
 		Element.Kind.EARTH:
 			if context.enemy_alive(index) and not _stagger_locks.has(index):
 				_stagger_locks[index] = STAGGER_LOCK
@@ -578,7 +1143,8 @@ func _chain_to_neighbour(index: int, dealt: int, ability: Ability,
 	var arc := Ability.make({"id": ability.id + "_arc", "display_name": "Arc",
 		"kind": ability.kind, "element": ability.element,
 		"damage": maxi(1, int(round(dealt * CHAIN_RATIO)))})
-	_apply_damage(best, arc, context, false)
+	# Ni trait ni exaltation : c'est un dégât DÉRIVÉ du trait Foudre.
+	_apply_damage(best, arc, context, false, false)
 
 
 ## La bourrasque : l'ennemi recule en SUIVANT le gradient de distance au mage —
@@ -619,7 +1185,8 @@ func _update_burns(delta: float, context: CombatContext) -> void:
 		var tick := Ability.make({"id": "burn", "display_name": "Brûlure",
 			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.FIRE,
 			"damage": int(burn["damage"])})
-		_apply_damage(index, tick, context, false)
+		# Ni trait ni exaltation : un tic de brûlure n'est pas un coup porté.
+		_apply_damage(index, tick, context, false, false)
 		if int(burn["ticks"]) <= 0:
 			_burning.erase(index)
 
@@ -632,10 +1199,22 @@ func _update_echoes(delta: float, context: CombatContext) -> void:
 		var echo: Dictionary = _echoes[i]
 		_echoes.remove_at(i)
 		var source: Ability = echo["ability"]
+		var index := int(echo["index"])
+		# Une entrée « burn » n'est pas un écho : c'est la brûlure différée d'un
+		# piège de zone, qui s'allume au moment où la créature est libérée.
+		var burn_time := float(echo.get("burn", 0.0))
+		if burn_time > 0.0:
+			if context.enemy_alive(index):
+				var ticks := maxi(1, int(round(burn_time / BURN_TICK)))
+				var per_tick := maxi(1, int(round(source.damage * BURN_RATIO)))
+				_burning[index] = {"ticks": ticks, "timer": BURN_TICK, "damage": per_tick}
+				enemy_burning.emit(index, burn_time)
+			continue
 		var repeat := Ability.make({"id": source.id + "_echo", "display_name": "Écho",
 			"kind": source.kind, "element": Element.Kind.SUPREME,
 			"damage": int(echo["damage"])})
-		_apply_damage(int(echo["index"]), repeat, context, false)
+		# Ni trait ni exaltation : l'écho répète un coup, il n'en est pas un.
+		_apply_damage(index, repeat, context, false, false)
 
 
 ## Explosions et zones : le rayon se mesure en DISTANCE DE CHEMIN, pas à vol
@@ -643,6 +1222,20 @@ func _update_echoes(delta: float, context: CombatContext) -> void:
 ## serait incompréhensible dans un labyrinthe.
 func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
 		reported: Ability = null) -> void:
+	# UN ULTIME PASSE LES MURS. Ailleurs le rayon se mesure en distance de
+	# chemin — une explosion ne doit pas traverser une haie. Ici on mesure à vol
+	# d'oiseau : le souffle balaye le labyrinthe sans se soucier des couloirs.
+	if ability.pierces_walls:
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i):
+				continue
+			if Vector2(context.enemy_cells[i] - centre).length() > ability.radius:
+				continue
+			_apply_damage(i, ability, context)
+			if reported != null and context.enemy_alive(i):
+				enemy_damaged.emit(i, 0, reported)
+		return
+
 	var field := Pathfinder.distance_field(grid, [centre] as Array[Vector2i])
 	for i in context.enemy_cells.size():
 		if not context.enemy_alive(i):
@@ -650,11 +1243,29 @@ func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
 		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
 		if distance < 0 or float(distance) > ability.radius:
 			continue
+		if not _within_arc(ability, centre, context.enemy_cells[i], context):
+			continue
 		_apply_damage(i, ability, context)
 		if reported != null and context.enemy_alive(i):
 			# La zone rapporte la compétence D'ORIGINE et non sa tranche : c'est
 			# elle que l'interface et les effets doivent nommer.
 			enemy_damaged.emit(i, 0, reported)
+
+
+## La cible est-elle dans l'OUVERTURE du souffle ?
+##
+## Mesuré à vol d'oiseau depuis le lanceur, et non le long du couloir : une
+## vague balaie ce qui est DEVANT, et le joueur juge « devant » à ce qu'il voit,
+## pas à la topologie du labyrinthe.
+func _within_arc(ability: Ability, centre: Vector2i, target: Vector2i,
+		context: CombatContext) -> bool:
+	if ability.arc <= 0.0 or ability.arc >= 360.0:
+		return true
+	var facing := Vector2(context.player_facing)
+	if facing.length() < 0.01 or target == centre:
+		return true
+	var to_target := Vector2(target - centre)
+	return absf(rad_to_deg(facing.angle_to(to_target))) <= ability.arc * 0.5
 
 
 ## Chemin case par case d'un projectile, du joueur à la cible : un BFS depuis la

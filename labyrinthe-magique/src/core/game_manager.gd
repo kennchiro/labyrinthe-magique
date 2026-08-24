@@ -66,7 +66,12 @@ func _ready() -> void:
 		# Progression FICTIVE, tout ouvert — et incapable d'écrire sur le
 		# disque : un essai ne doit jamais toucher la partie du joueur.
 		progress = Progress.everything(3)
-		levels = [LevelConfig.demo()]
+		# Les dix stages, en terrain d'essai : la démo sert autant à essayer un
+		# mage qu'à REGARDER un décor. On les prépare tous, le joueur passe de
+		# l'un à l'autre sans repasser par le menu.
+		levels = []
+		for stage in range(1, LevelConfig.STAGE_COUNT + 1):
+			levels.append(LevelConfig.demo(stage))
 	else:
 		progress = Progress.load_saved()
 		levels = LevelConfig.all_levels()
@@ -79,6 +84,15 @@ func _ready() -> void:
 	level.enemy_killed.connect(_on_enemy_killed)
 	level.ability_refused.connect(_on_ability_refused)
 	level.lair_destroyed.connect(_on_lair_destroyed)
+	level.player_shielded.connect(func(amount: int) -> void:
+		ui.set_shield(amount, amount)
+		if amount > 0:
+			ui.flash("Bouclier d'eau — %d absorbés" % amount, Color("#9ef0ff")))
+	level.player_empowered.connect(func(bonus: int, duration: float) -> void:
+		ui.flash("EXALTÉ — +%d dégâts pendant %.0f s" % [bonus, duration],
+			Color("#9ef0ff")))
+	level.player_calmed.connect(func() -> void:
+		ui.flash("L'exaltation retombe", Color("#7b8bb0")))
 
 	ui.resume_requested.connect(resume)
 	ui.restart_requested.connect(restart)
@@ -87,6 +101,10 @@ func _ready() -> void:
 	ui.action_requested.connect(use_slot)
 	ui.menu_requested.connect(func() -> void: menu_requested.emit())
 
+	if demo:
+		# La barre de visite est branchée AVANT le premier niveau : `set_level`
+		# y écrit le nom du décor, elle doit donc déjà exister.
+		ui.show_demo_bar(demo_stage)
 	start_level(start_index)
 	# Appelé explicitement : les _ready() des enfants s'exécutent AVANT celui du
 	# parent, DevTools ne peut donc pas s'initialiser tout seul.
@@ -115,6 +133,7 @@ func start_level(index: int) -> void:
 	ui.set_character(character)
 	ui.set_level(config, level_index + 1)
 	ui.set_health(level.player_health.current, level.player_health.maximum)
+	ui.set_shield(0)
 	ui.set_gems(level.missing_gem_colors(), level.gems_total)
 	ui.set_counters(0, progress.unlocked_skills)
 	ui.set_kills(0, character.ultimate_required_kills, false)
@@ -124,7 +143,7 @@ func start_level(index: int) -> void:
 		for i in character.ultimate_required_kills:
 			kills.register_kill()
 		ui.set_kills(kills.kills, character.ultimate_required_kills, kills.available())
-		ui.flash("MODE DÉMO — tous les sorts sont débloqués", Color("#9fe8b4"))
+		ui.flash("MODE DÉMO — sorts illimités, sans recharge", Color("#9fe8b4"))
 	level_started.emit(config, level_index)
 
 
@@ -191,6 +210,10 @@ func on_player_caught() -> void:
 		return
 	level.player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
 	ui.set_health(level.player_health.current, level.player_health.maximum)
+	# Le coup a pu être encaissé par la coque : on remet l'absorption à jour
+	# tout de suite, sinon la barre montrerait un bouclier déjà consommé.
+	if level.combat != null:
+		ui.set_shield(level.combat.shield_left())
 	if level.player_health.is_alive():
 		level.grant_player_invulnerability(HIT_INVULNERABILITY)
 		ui.flash("Touché !", Color("#e05c4a"))
@@ -250,6 +273,14 @@ func _action_state() -> Dictionary:
 			# Le nom sert à la barre du clavier : c'est lui qui apprend au joueur
 			# ce que fait la touche. Le pad tactile l'ignore, faute de place.
 			"name": ability.display_name,
+			# -1 quand le sort n'a pas de charges : l'interface n'affiche
+			# alors rien plutôt qu'un « 1/1 » qui n'apprend rien.
+			# L'icône est cherchée par l'IDENTIFIANT du sort : un mage sans
+			# planche d'icônes garde les pastilles colorées d'avant, sans que
+			# rien n'ait à le savoir.
+			"icon": UiIcons.for_ability(character.id, ability.id),
+			"charges": level.combat.charges_left(ability) if level.combat != null else -1,
+			"charges_max": ability.charges,
 			"locked": locked or (is_ultimate and not kills.available()),
 			"highlight": is_ultimate,
 		})
@@ -272,6 +303,15 @@ func _teleport_ratio() -> float:
 	return clampf(1.0 - left / TeleportSystem.COOLDOWN, 0.0, 1.0)
 
 
+## Stage suivant ou précédent, en démo seulement. Le tour est CYCLIQUE : arrivé
+## au dixième on revient au premier, ce qui évite un bouton qui ne répond plus.
+func demo_stage(step: int) -> void:
+	if not demo or levels.size() < 2:
+		return
+	get_tree().paused = false
+	start_level(posmod(level_index + step, levels.size()))
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	# Mode « toucher le chemin » : un tap sur le labyrinthe est un ordre de
 	# marche. Le pad de combat et le bouton de pause lisent leurs touches sans
@@ -281,6 +321,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			and not ui.touch_reserved(event.position):
 		level.order_player_walk(event.position)
 		return
+	# Page précédente / suivante : le tour des décors au clavier. Elles ne
+	# servent à rien hors démo, `demo_stage` s'en assure.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_PAGEDOWN or event.keycode == KEY_BRACKETRIGHT:
+			demo_stage(1)
+			return
+		if event.keycode == KEY_PAGEUP or event.keycode == KEY_BRACKETLEFT:
+			demo_stage(-1)
+			return
 	if event.is_action_pressed("pause"):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
@@ -314,9 +363,11 @@ func use_slot(slot: int) -> void:
 			return
 		# L'ultime n'est dépensé QUE s'il est réellement parti : un ultime perdu
 		# parce qu'aucun ennemi n'était à portée serait une punition absurde.
+		# En DÉMO il ne se dépense pas du tout — il est là pour être regardé.
 		if level.use_ability(slot):
-			kills.spend()
-			ui.set_kills(kills.kills, kills.needed, false)
+			if not demo:
+				kills.spend()
+			ui.set_kills(kills.kills, kills.needed, demo)
 			ui.flash("%s !" % level.ability_at(slot).display_name, Color("#ffd15a"))
 		return
 	level.use_ability(slot)

@@ -145,12 +145,25 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 		Color(color.r * 0.30, color.g * 0.30, color.b * 0.30, 0.92 if ready else 0.55))
 	# Le secteur de recharge tourne comme une aiguille : on voit d'un coup d'œil
 	# combien il reste, sans lire de chiffre.
+	# Sans icône, le disque coloré d'origine ; avec icône, seulement la
+	# recharge — un disque plein par-dessus le dessin le masquerait.
+	var has_icon: bool = entry.get("icon", null) != null
 	if ratio < 1.0:
 		draw_arc(centre, radius * 0.82, -PI * 0.5, -PI * 0.5 + TAU * ratio, 32,
 			Color(color.r, color.g, color.b, 0.55), radius * 0.30)
-	else:
+	elif not has_icon:
 		draw_circle(centre, radius * 0.66,
 			Color(color.r, color.g, color.b, 0.55 if ready else 0.18))
+
+	# L'ICÔNE au centre, à la place du disque coloré. Elle est grisée et
+	# assombrie quand le sort n'est pas prêt : c'est la même information que la
+	# couleur donnait avant, mais on sait enfin DE QUEL SORT il s'agit.
+	var icon: Texture2D = entry.get("icon", null)
+	if icon != null:
+		var span := radius * 1.5
+		var tint := Color(1, 1, 1, 0.95) if ready else Color(0.55, 0.58, 0.66, 0.7)
+		draw_texture_rect(icon, Rect2(centre - Vector2(span, span) * 0.5,
+			Vector2(span, span)), false, tint)
 
 	var edge := color if ready else Color(0.42, 0.48, 0.62)
 	if _pressed == index:
@@ -163,6 +176,20 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.005)
 		draw_arc(centre, radius * (1.12 + 0.10 * pulse), 0.0, TAU, 40,
 			Color(color.r, color.g, color.b, 0.45 * pulse), 3.0)
+
+	# Les charges en PASTILLES autour du bouton plutôt qu'en chiffres : sur un
+	# bouton de 33 px sous un pouce, « 3/5 » est illisible, alors qu'on compte
+	# trois points d'un coup d'œil.
+	var charges := int(entry.get("charges", -1))
+	if charges >= 0:
+		var total := maxi(1, int(entry.get("charges_max", 1)))
+		var arc := PI * 0.62
+		for pip in total:
+			var angle := -PI * 0.5 - arc * 0.5 + arc * (float(pip) / maxf(1.0, float(total - 1)))
+			var at := centre + Vector2(cos(angle), sin(angle)) * radius * 1.28
+			var filled := pip < charges
+			draw_circle(at, radius * 0.11,
+				color if filled else Color(0.30, 0.34, 0.44, 0.85))
 
 	if locked:
 		# Cadenas : deux traits suffisent à dire « pas encore » sans police.

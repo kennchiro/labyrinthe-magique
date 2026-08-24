@@ -25,7 +25,7 @@ cadre. C'est ce qui rend le relevé rapide : viser large, laisser trancher.
 Quatre rôles par stage, et pas plus. Il ne s'agit pas de reproduire le
 catalogue, mais de rendre chaque stage reconnaissable :
 
-    maison    le monument du stage — remplace la maisonnette de la forêt
+    maison    l'îlot du stage — sa propre planche, voir MAISON_SHEET
     lisiere   ce qui borde le labyrinthe
     lueur     ce qui éclaire
     semis     ce qui traîne dans les couloirs
@@ -41,47 +41,47 @@ SOURCE = Path("assets/stages")
 OUT = Path("assets/stages/props")
 
 ## stage -> rôle -> boîtes (x0, y0, x1, y1) relevées sur la planche.
+##
+## Plus de `maison` ici : les monuments viennent désormais de leur propre
+## planche (voir MAISON_SHEET), où l'illustrateur les a déjà détourés. Ce qui
+## était découpé des planches d'ambiance — un temple noyé dans sa scène peinte,
+## qu'aucune clé ne séparait de son herbe — n'avait pas de quoi rivaliser.
 BOXES = {
-    1:  {"maison":  [(685, 115, 960, 350)],
-         "lisiere": [(940, 20, 1030, 178)],
+    1:  {"lisiere": [(940, 20, 1030, 178)],
          "lueur":   [(1022, 15, 1110, 135)],
          "semis":   [(691, 470, 790, 560), (860, 470, 950, 560)]},
-    2:  {"maison":  [(855, 30, 1115, 340)],
-         "lisiere": [(1113, 20, 1195, 180)],
+    2:  {"lisiere": [(1113, 20, 1195, 180)],
          "lueur":   [(1282, 96, 1360, 200)],
          "semis":   [(1029, 470, 1120, 560), (691, 470, 790, 560)]},
-    3:  {"maison":  [(758, 15, 1060, 330)],
-         "lisiere": [(1105, 90, 1195, 265)],
+    3:  {"lisiere": [(1105, 90, 1195, 265)],
          "lueur":   [(1275, 15, 1360, 105)],
          "semis":   [(691, 320, 790, 420), (691, 470, 790, 560)]},
-    4:  {"maison":  [(765, 12, 985, 310)],
-         "lisiere": [(1025, 15, 1110, 175)],
+    4:  {"lisiere": [(1025, 15, 1110, 175)],
          "lueur":   [(1198, 96, 1285, 205)],
          "semis":   [(691, 400, 790, 490), (691, 478, 800, 570)]},
-    5:  {"maison":  [(770, 15, 1070, 325)],
-         "lisiere": [(1113, 20, 1195, 180)],
+    5:  {"lisiere": [(1113, 20, 1195, 180)],
          "lueur":   [(1282, 172, 1365, 265)],
          "semis":   [(691, 325, 790, 420), (691, 470, 800, 565)]},
-    6:  {"maison":  [(745, 25, 1090, 340)],
-         "lisiere": [(1113, 20, 1195, 180)],
+    6:  {"lisiere": [(1113, 20, 1195, 180)],
          "lueur":   [(1198, 96, 1285, 205)],
          "semis":   [(691, 401, 790, 495), (691, 478, 795, 570)]},
-    7:  {"maison":  [(765, 15, 1045, 340)],
-         "lisiere": [(1029, 20, 1110, 265)],
+    7:  {"lisiere": [(1029, 20, 1110, 265)],
          "lueur":   [(1198, 172, 1285, 275)],
          "semis":   [(691, 325, 790, 415), (691, 470, 795, 560)]},
-    8:  {"maison":  [(770, 15, 1115, 350)],
-         "lisiere": [(1113, 96, 1195, 265)],
+    8:  {"lisiere": [(1113, 96, 1195, 265)],
          "lueur":   [(1367, 172, 1455, 275)],
          "semis":   [(691, 401, 795, 495), (691, 478, 795, 570)]},
-    # La planche 9 est un JPEG sur DAMIER : le fond n'est ni uniforme ni
-    # texturé, c'est un échiquier de gris neutres aplati dans les pixels.
-    # Elle a son propre détourage — voir `carve_damier`.
-    9:  {"maison":  [(720, 13, 971, 288)],
-         "lisiere": [(633, 260, 738, 422)],
-         "lueur":   [(1071, 6, 1123, 121)],
-         "semis":   [(745, 290, 851, 362), (697, 418, 772, 478)]},
-    10: {"maison":  [(770, 12, 1108, 350)],
+    # Planche 9 REMPLACÉE le 2026-08-24 : l'ancienne était un JPEG de tuiles sur
+    # damier, la nouvelle est une vraie planche d'ambiance au format des autres.
+    # Toutes ses boîtes sont donc remesurées — les anciennes visaient une mise en
+    # page qui n'existe plus et rendaient quatre bouts de mur.
+    9:  {"lisiere": [(785, 325, 925, 505)],
+         "lueur":   [(1190, 364, 1242, 506)],
+         "semis":   [(1002, 532, 1082, 598), (1112, 516, 1196, 594)]},
+    # Le château flotte sur son îlot, et la planche en aligne d'AUTRES juste à
+    # côté : la boîte s'arrête donc avant la tour voisine (x 1030) et sous la
+    # roche de l'îlot (y 320), sans le nuage qui passe dessous.
+    10: {"maison":  [(738, 8, 1030, 318)],
          "lisiere": [(1113, 20, 1195, 180)],
          "lueur":   [(1282, 172, 1365, 270)],
          "semis":   [(691, 470, 795, 565), (860, 470, 960, 565)]},
@@ -89,59 +89,102 @@ BOXES = {
 
 ## Décalage du panneau : les boîtes sont relevées sur la PLANCHE entière.
 CONTRAST = 8.0
+
+# --- La maison de chaque stage ----------------------------------------------------
+#
+# `maison_stage.png` remplace les monuments découpés des planches d'ambiance :
+# dix îlots flottants, un par stage, dans l'ordre — cinq par rangée. Chacun porte
+# le portail du stage et son décor (l'arbre de la forêt, la foudre du canyon, le
+# navire échoué des rivages, les nuages du château du ciel).
+#
+# Rien à détourer ici, et c'est le point : la planche a un VRAI canal alpha et
+# les dix îlots y sont dix formes connexes. Le travail se réduit à trois règles
+# mesurées :
+#
+#   - regrouper par CASE de la grille 5x2, pour que les rochers flottants
+#     restent avec leur île — ils en sont détachés mais lui appartiennent
+#     (mesuré : tous à moins de 15 px, sauf quatre poussières au-delà de 26) ;
+#   - recadrer sur l'alpha VISIBLE et non sur tout pixel non nul. Le halo de
+#     lueur descend jusqu'à alpha 4 et gonfle la boîte de 24 px à gauche et 33
+#     en haut — invisible à l'écran, mais le jeu dimensionne la maison sur la
+#     largeur de sa texture, donc l'île se serait affichée 10 % trop petite ;
+#   - jeter ce qui traîne à plus de 26 px de tout îlot.
+MAISON_SHEET = SOURCE / "../peso&cover/maison_stage.png"
+MAISON_COLUMNS = 5
+MAISON_ROWS = 2
+## En dessous, un pixel appartient au halo et non au dessin.
+MAISON_VISIBLE = 10
+## Une forme plus éloignée que ça d'un îlot ne lui appartient pas.
+MAISON_ORPHAN = 26.0
+## Une forme plus grosse que ça EST un îlot.
+MAISON_ISLAND = 8000
+
+
+def build_maisons() -> dict:
+    """Découpe les dix îlots. Rend {stage: Image}."""
+    with Image.open(MAISON_SHEET) as raw:
+        sheet = raw.convert("RGBA")
+    alpha = np.array(sheet)[..., 3]
+    labels, count = ndimage.label(alpha > 40, structure=np.ones((3, 3)))
+    areas = ndimage.sum(np.ones_like(labels), labels, range(1, count + 1))
+    islands = [i + 1 for i, area in enumerate(areas) if area > MAISON_ISLAND]
+    if len(islands) != MAISON_COLUMNS * MAISON_ROWS:
+        raise SystemExit(f"maison_stage : {len(islands)} îlots trouvés, "
+                         f"{MAISON_COLUMNS * MAISON_ROWS} attendus")
+
+    # Les rochers flottants d'une île en sont détachés : on les lui rend en
+    # mesurant leur distance, plutôt qu'en supposant qu'ils la touchent.
+    distance = ndimage.distance_transform_edt(~np.isin(labels, islands))
+    height, width = alpha.shape
+    cell = (width / float(MAISON_COLUMNS), height / float(MAISON_ROWS))
+    groups: dict = {}
+    for index in range(1, count + 1):
+        member = labels == index
+        if index not in islands and distance[member].min() > MAISON_ORPHAN:
+            continue
+        ys, xs = np.nonzero(member)
+        stage = (int(ys.mean() // cell[1]) * MAISON_COLUMNS
+                 + int(xs.mean() // cell[0])) + 1
+        groups.setdefault(stage, []).append(member)
+
+    out = {}
+    visible = alpha > MAISON_VISIBLE
+    for stage, members in sorted(groups.items()):
+        keep = np.logical_or.reduce(members)
+        ys, xs = np.nonzero(keep & visible)
+        box = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+        piece = np.array(sheet.crop(box))
+        # Hors de l'île retenue, rien ne subsiste — pas même le halo de la
+        # voisine, qui déborde parfois dans la boîte.
+        piece[..., 3] = np.where(keep[box[1]:box[3], box[0]:box[2]], piece[..., 3], 0)
+        out[stage] = Image.fromarray(piece, "RGBA")
+    return out
+
+
 ROLES = ("maison", "lisiere", "lueur", "semis")
 
 
-## Tolérance de la clé de fond, en distance RGB.
-KEY_TOLERANCE = 58.0
-## Largeur du fondu de bordure d'un monument, en pixels.
-FEATHER = 14
+## Part de la boîte considérée comme son CŒUR : une forme qui n'y touche pas
+## n'est pas le monument.
+CORE_SHARE = 0.62
 
 
-def keyed(crop: Image.Image) -> Image.Image | None:
-    """Détoure un MONUMENT : clé de fond depuis les bords, puis fondu.
+def _central_mass(subject: np.ndarray) -> np.ndarray:
+    """Ne garde que ce qui touche le CŒUR de la boîte.
 
-    Le masque de contraste ne sert à rien ici : un temple occupe presque toute
-    sa boîte, et le fond qui l'entoure est lui-même texturé. On part donc des
-    BORDS, dont on sait qu'ils sont du fond, et on efface tout ce qui leur
-    ressemble et qui leur est connecté. QUATRE références (une par côté) plutôt
-    qu'une médiane globale : un ciel en dégradé n'a pas la même couleur en haut
-    qu'en bas, et la médiane unique laissait des coins de décor.
-
-    Puis un FONDU DE BORDURE, dans tous les cas. C'est le filet des planches
-    dont le fond est une SCÈNE peinte (la clairière du stage 1, la jungle du 7) :
-    aucune clé ne détoure une forêt, et la découpe rendait un rectangle à bords
-    droits posé au milieu du labyrinthe. Avec le fondu, ce qui n'a pas pu être
-    détouré s'éteint en vignette — le monument semble poser sur son propre
-    terrain au lieu d'être un autocollant carré.
-    """
-    pixels = np.asarray(crop).astype(float)[..., :3]
-    references = [np.median(pixels[0], axis=0), np.median(pixels[-1], axis=0),
-                  np.median(pixels[:, 0], axis=0), np.median(pixels[:, -1], axis=0)]
-    close = np.zeros(pixels.shape[:2], dtype=bool)
-    for reference in references:
-        close |= np.sqrt(((pixels - reference) ** 2).sum(axis=2)) < KEY_TOLERANCE
-
-    data = np.array(crop)
-    alpha = data[..., 3].astype(float)
-    labels, count = ndimage.label(close, structure=np.ones((3, 3)))
-    if count > 0:
-        edge = set(labels[0]) | set(labels[-1]) | set(labels[:, 0]) | set(labels[:, -1])
-        edge.discard(0)
-        background = np.isin(labels, list(edge))
-        if background.mean() <= 0.9:
-            alpha = np.where(background, 0.0, alpha)
-
-    # Fondu : la distance au bord de la boîte, bornée à FEATHER pixels.
-    height, width = alpha.shape
-    ys = np.minimum(np.arange(height), np.arange(height)[::-1])[:, None]
-    xs = np.minimum(np.arange(width), np.arange(width)[::-1])[None, :]
-    ramp = np.clip(np.minimum(ys, xs) / float(FEATHER), 0.0, 1.0)
-    data[..., 3] = (alpha * ramp).astype(np.uint8)
-
-    out = Image.fromarray(data, "RGBA")
-    bounds = out.getbbox()
-    return out.crop(bounds) if bounds else None
+    Le monument est visé au centre ; ce qui flotte sur les bords appartient à la
+    scène — une branche de l'arbre voisin, un corail, un bout du temple d'à
+    côté. Ce sont eux qu'on voyait accrochés à la maison en jeu."""
+    height, width = subject.shape
+    ys, xs = np.mgrid[0:height, 0:width]
+    core = (((xs - width * 0.5) / (width * CORE_SHARE * 0.5)) ** 2
+            + ((ys - height * 0.5) / (height * CORE_SHARE * 0.5)) ** 2) <= 1.0
+    labels, count = ndimage.label(subject, structure=np.ones((3, 3)))
+    if count == 0:
+        return subject
+    kept = np.unique(labels[core & subject])
+    kept = kept[kept > 0]
+    return np.isin(labels, kept) if kept.size else subject
 
 
 def carve_damier(sheet: Image.Image, box: tuple) -> Image.Image | None:
@@ -157,22 +200,18 @@ def carve_damier(sheet: Image.Image, box: tuple) -> Image.Image | None:
     luma = pixels @ np.array([0.299, 0.587, 0.114]) / 255.0 * 255
     background = (spread < 16) & (luma > 165)
     data = np.array(crop)
-    data[..., 3] = np.where(background, 0, 255)
+    # Même règle que les monuments : ce qui ne touche pas le cœur de la boîte
+    # appartient à la planche, pas au prop. Sans elle, la maison du stage 9
+    # traînait un bloc de ruine de la vignette voisine.
+    data[..., 3] = np.where(_central_mass(~background), 255, 0)
     out = Image.fromarray(data, "RGBA")
     bounds = out.getbbox()
     return out.crop(bounds) if bounds else None
 
 
-def carve(sheet: Image.Image, box: tuple, may_fill: bool = False) -> Image.Image | None:
-    """Découpe une boîte et n'en garde que la forme principale.
-
-    `may_fill` pour les MONUMENTS : un temple occupe légitimement toute sa
-    boîte, alors qu'un petit prop laisse forcément du vide autour de lui. Sans
-    cette distinction, la règle anti-fond rejetait la ziggourat du stage 8 et
-    ne gardait qu'un éclat de trois pixels."""
+def carve(sheet: Image.Image, box: tuple) -> Image.Image | None:
+    """Découpe une boîte et n'en garde que la forme principale."""
     crop = sheet.crop(box).convert("RGBA")
-    if may_fill:
-        return keyed(crop)
     pixels = np.asarray(crop).astype(float)[..., :3]
     gray = pixels @ np.array([0.299, 0.587, 0.114])
     mean = ndimage.uniform_filter(gray, 5)
@@ -192,11 +231,10 @@ def carve(sheet: Image.Image, box: tuple, may_fill: bool = False) -> Image.Image
     total = float(mask.size)
     order = np.argsort(areas)[::-1]
     keep = int(order[0]) + 1
-    if not may_fill:
-        for candidate in order:
-            if areas[candidate] / total <= 0.72:
-                keep = int(candidate) + 1
-                break
+    for candidate in order:
+        if areas[candidate] / total <= 0.72:
+            keep = int(candidate) + 1
+            break
     data = np.array(crop)
     data[..., 3] = np.where(labels == keep, 255, 0)
     out = Image.fromarray(data, "RGBA")
@@ -205,6 +243,8 @@ def carve(sheet: Image.Image, box: tuple, may_fill: bool = False) -> Image.Image
 
 
 def main() -> None:
+    maisons = build_maisons()
+    print(f"maisons : {len(maisons)} îlots depuis {MAISON_SHEET.name}")
     for stage, roles in sorted(BOXES.items()):
         path = SOURCE / f"stage_{stage}.png"
         if not path.exists():
@@ -222,11 +262,17 @@ def main() -> None:
                 for old in folder.glob("*.png"):
                     old.unlink()
                 names = []
+                if role == "maison" and stage in maisons:
+                    cut = maisons[stage]
+                    cut.save(folder / "maison_0.png")
+                    manifest[role] = [{"file": "maison_0.png",
+                                       "w": cut.width, "h": cut.height}]
+                    continue
                 for rank, box in enumerate(roles.get(role, [])):
                     if path.suffix == ".jpeg":
                         cut = carve_damier(sheet, box)
                     else:
-                        cut = carve(sheet, box, may_fill=(role == "maison"))
+                        cut = carve(sheet, box)
                     if cut is None:
                         print(f"  ! stage {stage} {role} {box} : rien de détouré")
                         continue

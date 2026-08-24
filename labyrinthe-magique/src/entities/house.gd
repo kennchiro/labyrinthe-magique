@@ -11,9 +11,20 @@ extends Node2D
 
 const TEXTURE := preload("res://assets/sprites/house.png")
 const PROPS_PATH := "res://assets/stages/props/"
-## Largeur visée, en cases. Un peu plus large que la clairière 3x3 : la maison
-## doit déborder sur les haies, sinon elle a l'air posée dans un trou.
-const TARGET_WIDTH_TILES := 3.6
+## Encombrement visé, en cases. Un peu plus large que la clairière 3x3 : la
+## maison doit déborder sur les haies, sinon elle a l'air posée dans un trou.
+##
+## DEUX bornes et non une seule, parce que les monuments n'ont pas tous la même
+## silhouette : les anciens étaient larges (274x234), les îlots flottants de
+## `maison_stage.png` sont HAUTS (280x460). Mis à l'échelle sur la seule
+## largeur, un îlot ferait six cases de haut et avalerait le carrefour. On
+## retient donc le facteur le plus contraignant des deux.
+const TARGET_WIDTH_TILES := 3.8
+const TARGET_HEIGHT_TILES := 4.6
+## Part de la hauteur remontée au-dessus de l'origine. Les îlots PENDENT sous
+## leur plateforme : les centrer poserait le portail hors de la clairière et
+## laisserait la roche flotter sur le couloir du bas.
+const ANCHOR_LIFT := 0.30
 
 ## Teinte de la maison scellée : froide et sombre. Une maison verrouillée qui
 ## reste chaleureuse invite à s'en approcher — exactement le contresens à éviter.
@@ -28,6 +39,8 @@ var locked := true
 ## Couleurs des gemmes qui manquent encore, dans l'ordre du niveau.
 var _missing: Array[Color] = []
 var _time := 0.0
+## Hauteur du sceau, mesurée sur le sprite (voir setup).
+var _seal_y := -64.0
 ## Monte de 0 à 1 quand la porte s'ouvre : sert au flash d'ouverture.
 var _unseal := 0.0
 
@@ -47,9 +60,15 @@ func setup(p_tile_size: int, stage: int = 0) -> void:
 		if loaded != null:
 			texture = loaded
 	sprite.texture = texture
-	var factor := (tile_size * TARGET_WIDTH_TILES) / float(texture.get_width())
+	var factor := minf((tile_size * TARGET_WIDTH_TILES) / float(texture.get_width()),
+		(tile_size * TARGET_HEIGHT_TILES) / float(texture.get_height()))
 	sprite.scale = Vector2(factor, factor)
-	sprite.offset = Vector2(0.0, -texture.get_height() * 0.16)
+	sprite.offset = Vector2(0.0, -texture.get_height() * ANCHOR_LIFT)
+	# Le sceau se pose juste au-dessus du SOMMET RÉEL du sprite, mesuré ici, et
+	# non à une hauteur fixe : les monuments plats et les îlots flottants n'ont
+	# pas la même silhouette, et une constante qui allait aux premiers plantait
+	# le sceau en plein milieu des seconds.
+	_seal_y = (sprite.offset.y - texture.get_height() * 0.5) * factor - tile_size * 0.5
 	sprite.modulate = TINT_LOCKED if locked else TINT_OPEN
 	queue_redraw()
 
@@ -92,7 +111,7 @@ func _draw() -> void:
 
 ## Sceau : un anneau au-dessus du toit, une pastille par gemme manquante.
 func _draw_seal(s: float) -> void:
-	var centre := Vector2(0.0, -s * 2.05)
+	var centre := Vector2(0.0, _seal_y)
 	var pulse := 0.5 + 0.5 * sin(_time * 2.4)
 	var radius := s * 0.52
 

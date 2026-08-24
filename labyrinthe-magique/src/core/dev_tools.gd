@@ -18,6 +18,7 @@ extends Node
 ##   --potion           remplit la jauge de mana
 ##   --kills N          simule N ennemis éliminés (test de l'Extra Power)
 ##   --fx               rejoue en boucle les cinq éclats élémentaires (contrôle visuel)
+##   --demo-stage N    en démo, ouvre directement le décor du stage N
 ##   --use-slot N      lance le sort du slot N dès qu'il part (test des invocations)
 ##   --goblin / --hunter  colle cet ennemi au joueur (test de sa pose de coup)
 ##   --cast             attaque dès qu'une cible est à portée
@@ -97,6 +98,11 @@ func apply_command_line() -> void:
 	if slot_arg >= 0 and slot_arg + 1 < args.size():
 		_slot_wanted = int(args[slot_arg + 1])
 		_slot_tries = 240
+	# Avance de N décors en démo, pour capturer un stage précis :
+	#   --demo --demo-stage 6
+	var demo_arg := args.find("--demo-stage")
+	if demo_arg >= 0 and demo_arg + 1 < args.size():
+		game.demo_stage(int(args[demo_arg + 1]) - 1)
 	var kills_arg := args.find("--kills")
 	if kills_arg >= 0 and kills_arg + 1 < args.size():
 		for i in int(args[kills_arg + 1]):
@@ -128,6 +134,12 @@ func apply_command_line() -> void:
 	# fois sur deux.
 	if "--warp" in args:
 		_warp_tries = 30
+	# Lance un SORT précis en boucle : la seule façon de capturer la boule de
+	# feu à l'image près, sans jouer jusqu'à ce qu'elle soit prête.
+	var skill_arg := args.find("--skill")
+	if skill_arg >= 0 and skill_arg + 1 < args.size():
+		_skill_slot = int(args[skill_arg + 1])
+		_skill_tries = 40
 	if "--raze" in args:
 		for lair in game.level.lairs:
 			if lair.is_vulnerable():
@@ -192,6 +204,8 @@ var _slot_wanted := -1
 var _slot_tries := 0
 var _auto_walk := false
 var _warp_tries := 0
+var _skill_slot := -1
+var _skill_tries := 0
 var _auto_cast := false
 var _show_fx := false
 var _fx_timer := 0.0
@@ -200,6 +214,11 @@ var _tap_countdown := 0
 
 
 func _process(delta: float) -> void:
+	if _skill_tries > 0 and _skill_slot >= 0:
+		_skill_tries -= 1
+		if game.level.player != null and game.level.use_ability(_skill_slot):
+			_skill_tries = 0
+
 	if _pending_tap.x >= 0:
 		_tap_countdown -= 1
 		if _tap_countdown <= 0 and game.level.player != null:

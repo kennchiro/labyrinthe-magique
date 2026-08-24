@@ -3,7 +3,7 @@
     192,
     112
   ],
-  "feet_y": 109.5,
+  "feet_y": 110.1,
   "poses": [
     "idle",
     "walk_1",
@@ -15,15 +15,15 @@
   "directions": [
     "down",
     "up",
-    "left",
-    "right"
+    "right",
+    "left"
   ],
-  "source": "mage_element.png",
+  "source": "mage_supreme.png",
   "grid": {
-    "dx": 159,
-    "dy": 153,
-    "ox": 25,
-    "oy": 13,
+    "dx": 238,
+    "dy": 235,
+    "ox": 20,
+    "oy": 23,
     "col0": 0,
     "row0": 0
   }

@@ -28,6 +28,7 @@ var _trail: Array[Vector2] = []
 var tint: Color = TINT
 var _drawn := false
 var _frames := 1
+var _plume: CPUParticles2D = null
 ## Cadence du flip-book, en images par seconde.
 const FLIP_FPS := 12.0
 
@@ -37,8 +38,16 @@ const FLIP_FPS := 12.0
 ## de flamme du Mage du Feu porte déjà ses couleurs, le reteindre le salirait.
 ## `p_frames` > 1 : la bande est un FLIP-BOOK — les quatre comètes du Feu se
 ## relaient en vol, et le trait vit au lieu de glisser figé.
+## `p_scale` et `p_trail` viennent de la COMPÉTENCE : c'est ce qui fait qu'une
+## boule de feu ne ressemble pas à une flèche de feu.
+##
+## La traînée est en CPUParticles2D et non en GPUParticles2D : le jeu tourne en
+## `gl_compatibility` pour couvrir iOS, Android et le Web avec un seul code, et
+## les particules CPU s'y comportent à l'identique partout. Pour une poignée
+## d'émetteurs, le coût est nul et le risque de rendu divergent disparaît.
 func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
-		p_tint: Color = TINT, p_texture: Texture2D = null, p_frames: int = 1) -> void:
+		p_tint: Color = TINT, p_texture: Texture2D = null, p_frames: int = 1,
+		p_scale: float = 1.0, p_trail: float = 0.0, p_flames: float = 0.0) -> void:
 	tile_size = p_tile_size
 	tint = p_tint
 	_drawn = p_texture != null
@@ -51,8 +60,12 @@ func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
 	sprite.hframes = _frames
 	var cell_width := float(texture.get_width()) / float(_frames)
 	var extent := maxf(cell_width, float(texture.get_height()))
-	var factor := (tile_size * 0.95) / extent
+	var factor := (tile_size * 0.95 * maxf(0.2, p_scale)) / extent
 	sprite.scale = Vector2(factor, factor)
+	if p_trail > 0.0:
+		_build_trail(p_trail, p_scale)
+	if p_flames > 0.0:
+		_build_plume(p_flames, p_scale)
 
 	var material := CanvasItemMaterial.new()
 	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -60,6 +73,62 @@ func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
 	self.material = material
 	if _points.size() > 0:
 		position = _points[0]
+
+
+## Le PANACHE : un cône de flammes derrière la boule, qui pointe toujours à
+## l'opposé du vol — la forme triangulaire d'une comète.
+##
+## Le cône est obtenu par la DISPERSION et non par une forme d'émission : les
+## particules partent vers l'arrière dans un angle de 24°, s'écartent en
+## vieillissant, et dessinent d'elles-mêmes le triangle. Une forme d'émission
+## triangulaire aurait donné un triangle figé, qui tourne comme un panneau ;
+## celui-ci se déforme avec la trajectoire, comme du feu.
+func _build_plume(density: float, scale_hint: float) -> void:
+	# Peu de flammes, et PÂLES. En blending additif, une trentaine de blobs qui
+	# se chevauchent saturent en blanc pur : le panache devenait une boule de
+	# lumière sans forme, et la boule de feu disparaissait dedans. C'est la
+	# rareté qui laisse voir le triangle.
+	_plume = FxTextures.flame_emitter(int(30.0 * density), 0.5,
+		tile_size * 0.42 * scale_hint,
+		Color(1.0, 0.78, 0.34, 0.55), Color(0.92, 0.22, 0.03, 0.0), 0.0, 21.0)
+	add_child(_plume)
+	# Les flammes RESTENT où elles sont nées : sans ça le panache colle à la
+	# boule et se lit comme une aura, pas comme une traînée qu'on laisse.
+	_plume.local_coords = false
+	# Vitesses très ÉTALÉES : les rapides fuient loin derrière, les lentes
+	# restent près de la boule. C'est cet écart qui creuse le triangle — à
+	# vitesse égale, toutes les flammes resteraient sur un même arc.
+	_plume.initial_velocity_min = tile_size * 0.15
+	_plume.initial_velocity_max = tile_size * 2.2
+	_plume.emitting = true
+
+
+## Braises semées derrière le projectile. Elles TOMBENT légèrement et
+## s'éteignent : une traînée qui suit exactement la trajectoire ressemble à un
+## trait de crayon, une traînée qui se disperse ressemble à du feu.
+func _build_trail(density: float, scale_hint: float) -> void:
+	var embers := CPUParticles2D.new()
+	add_child(embers)
+	embers.amount = clampi(int(28.0 * density), 6, 64)
+	embers.lifetime = 0.55
+	embers.local_coords = false          # les braises RESTENT où elles sont nées
+	embers.spread = 32.0
+	embers.gravity = Vector2(0.0, 34.0)
+	embers.initial_velocity_min = 6.0
+	embers.initial_velocity_max = 26.0
+	embers.scale_amount_min = tile_size * 0.05 * scale_hint
+	embers.scale_amount_max = tile_size * 0.13 * scale_hint
+	embers.color = Color(tint.r, tint.g, tint.b, 0.85)
+	# `color_ramp` attend un Gradient, pas une GradientTexture1D — la braise
+	# passe du blanc chaud à la couleur de l'élément, puis s'éteint.
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1.0, 0.95, 0.7, 0.9))
+	ramp.set_color(1, Color(tint.r, tint.g * 0.5, tint.b * 0.2, 0.0))
+	embers.color_ramp = ramp
+	var material := CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	embers.material = material
+	embers.emitting = true
 
 
 ## La cible bouge pendant le vol : le dernier point du trajet la suit, sinon
@@ -91,6 +160,11 @@ func _process(delta: float) -> void:
 		sprite.rotation += delta * 6.0
 	if _frames > 1:
 		sprite.frame = int(_elapsed * FLIP_FPS) % _frames
+	# Le panache pointe à l'OPPOSÉ du vol, remis à jour à chaque image : c'est
+	# ce qui le fait pivoter dans les virages du labyrinthe au lieu de traîner
+	# derrière comme une écharpe raide.
+	if _plume != null and _trail.size() >= 2 and _trail[0] != _trail[1]:
+		_plume.direction = (_trail[1] - _trail[0]).normalized()
 	queue_redraw()
 
 

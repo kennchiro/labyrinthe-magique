@@ -47,7 +47,11 @@ SHEETS = {
 ## (découpe stricte à la boîte, pour les dessins aux lueurs jointives).
 ORBS = {
     "fire":    ([(1103, 446, 1192, 524), (1192, 446, 1276, 524),
-                 (1276, 446, 1363, 524), (1363, 446, 1449, 524)], "left", "formes"),
+                 (1276, 446, 1363, 524), (1363, 446, 1449, 524)], "none", "formes"),
+    # ⚠️ PAS de retournement : la comète de la planche pointe DÉJÀ vers la
+    # droite, c'est-à-dire vers le zéro de rotation de Godot. La retourner la
+    # faisait voler à reculons — tête en arrière, queue devant — et le défaut
+    # ne se voit qu'en tirant vers la droite, jamais sur une capture fixe.
     "water":   ([(1175, 632, 1278, 706)], "none", "formes"),
     # Les pierres volantes de la rangée d'effets — le seul dessin de la planche
     # qui se lise comme un jet ; les cristaux, eux, sont tous scellés à un socle.
@@ -66,10 +70,37 @@ IMPACTS = {
     "earth":   (1292, 590, 1376, 692),   # le tourbillon d'énergie verte
     "shadow":  (1436, 438, 1536, 600),   # la colonne de fumée violette
     "supreme": (952, 601, 1111, 738),    # la galaxie irisée
-    # La frappe BLEUE : les éclairs commencent à y=424 — la première boîte les
-    # décapitait — et l'anneau d'or voisin déborde à gauche, d'où la fenêtre.
-    "thunder": ("window", 1301, 422, 1397, 506),
+    # LA FRAPPE BLEUE, avec son anneau au sol. Deux boîtes jetées avant
+    # celle-ci : la première décapitait les éclairs (ils commencent à y=362, pas
+    # 422), la seconde rendait un fragment bleu illisible de 96 x 84 — une
+    # bouillie signalée par l'utilisateur. Celle-ci prend la décharge ENTIÈRE,
+    # du haut des éclairs au bas de l'anneau, en écartant le trait d'or voisin.
+    # ⚠️ TROISIÈME boîte. La deuxième (1262, 362, 1352, 516) tranchait le dessin
+    # des DEUX côtés : la pointe des éclairs commence à y=352 et la branche de
+    # droite va jusqu'à x=1372. Le résultat, signalé par l'utilisateur comme
+    # « cassé », était un buisson bleu étêté. Mesurée au quadrillage : le dessin
+    # entier tient dans (1256, 348) - (1376, 508), anneau au sol compris.
+    "thunder": ("window", 1256, 348, 1376, 508),
     "air":     (1270, 436, 1370, 546),   # la tornade
+}
+
+## Éléments SUPPLÉMENTAIRES d'une planche, découpés à part de la triade
+## orbe/impact/zone : ils servent à des sorts particuliers.
+##
+## Les nuages de la planche de la Foudre en sont l'exemple : ils étaient là
+## depuis le début, dessinés avec leurs éclairs, et le jeu affichait à leur
+## place des ronds gris tracés en code. On ne dessine à la main que ce que la
+## planche ne fournit pas.
+EXTRAS = {
+    "thunder": {
+        "cloud": (1137, 542, 1243, 672),      # nuage bleu et son éclair
+        "cloud_dark": (1230, 542, 1336, 672), # nuage d'orage, plus sombre
+        "bolt": (1343, 545, 1409, 649),       # l'éclair seul
+        # Le blason au foudre. Il paraît AU LANCEMENT DE L'EXTRA, droit et
+        # transparent au-dessus du mage — jamais en rotation : une emblème qui
+        # tourne se lit comme un objet ramassable qui vole.
+        "crest": (1396, 352, 1514, 510),
+    },
 }
 
 ZONES = {
@@ -187,6 +218,14 @@ def main() -> None:
             (out_dir / "orb.json").write_text(json.dumps(
                 {"frames": len(frames), "cell": list(cell)}), encoding="utf-8")
             report.append(f"orbe x{len(frames)} {cell}")
+
+        for name, box in EXTRAS.get(cid, {}).items():
+            drawn = shapes.window(box)
+            if drawn is None:
+                print(f"  ! {cid} : rien dans la boîte {name}")
+                continue
+            drawn.save(out_dir / f"{name}.png")
+            report.append(f"{name} {drawn.size}")
 
         for name, table in (("impact", IMPACTS), ("zone", ZONES)):
             entry = table[cid]

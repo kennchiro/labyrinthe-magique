@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "fire_bolt",
+    "fire_ball",
+    "fire_ground",
+    "fire_aura",
+    "fire_ember",
+    "fire_nova"
+  ],
+  "size": 256
+}

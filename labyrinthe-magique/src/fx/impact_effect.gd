@@ -22,6 +22,16 @@ extends Node2D
 ## d'écran serait impossible.
 
 const DURATION := 0.55
+## Envergure MAXIMALE du dessin d'impact, en cases.
+##
+## Il était mis à l'échelle du rayon du sort, sans plafond : l'ultime du Mage du
+## Feu (rayon 5,5) affichait un vortex de huit cases de large, parfaitement
+## opaque, qui effaçait le mage et le labyrinthe sous un disque orange. Un gros
+## sort doit avoir un gros ANNEAU — la texture, elle, sature vite.
+const CENTREPIECE_MAX_TILES := 3.4
+## Opacité du dessin. En dessous de 1, on continue de voir le décor au travers,
+## ce qui garde le jeu lisible pendant l'éclat.
+const CENTREPIECE_ALPHA := 0.78
 ## Formes disponibles. Chaque élément pioche la sienne.
 enum Shape { FLAME, DROP, SHARD, RUNE, SPARK }
 
@@ -42,7 +52,7 @@ var _drawn: Texture2D = null
 
 func setup(p_tile_size: int, p_element: Element.Kind, p_radius: float,
 		p_duration: float = DURATION, rng_seed: int = 0,
-		p_drawn: Texture2D = null) -> void:
+		p_drawn: Texture2D = null, p_flames: float = 0.0) -> void:
 	_drawn = p_drawn
 	tile_size = p_tile_size
 	element = p_element
@@ -51,12 +61,21 @@ func setup(p_tile_size: int, p_element: Element.Kind, p_radius: float,
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed if rng_seed != 0 else 7919
-	_build(rng)
+	# Un impact À FLAMMES ne dessine PAS ses particules géométriques : les
+	# losanges et les éclats se lisaient comme des confettis jaunes posés
+	# par-dessus le feu, et c'est eux qu'on voyait au lieu de l'explosion. Quand
+	# il y a de vraies flammes, elles suffisent.
+	if p_flames <= 0.0:
+		_build(rng)
+	else:
+		_rings = 1
 
 	if _additive:
 		var material := CanvasItemMaterial.new()
 		material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		self.material = material
+	if p_flames > 0.0:
+		_burst(p_flames)
 
 
 ## Chaque élément a sa gestuelle : le feu MONTE, l'eau RETOMBE, la terre est
@@ -120,6 +139,56 @@ func _build(rng: RandomNumberGenerator) -> void:
 		})
 
 
+## L'EXPLOSION : une bouffée de flammes qui part dans toutes les directions et
+## RETOMBE. Les particules dessinées de la classe partent en ligne droite et
+## s'amortissent — élégant pour un éclat, trop propre pour une explosion. Le
+## feu, lui, doit monter puis redescendre.
+##
+## En une seule salve (`one_shot`) : une explosion qui continue d'émettre une
+## demi-seconde après le coup se lit comme un incendie, pas comme un impact.
+func _burst(density: float) -> void:
+	var reach := tile_size * maxf(1.0, radius_tiles)
+	# 1. LE CŒUR : une boule de feu dense qui s'ouvre d'un coup. Courte —
+	#    c'est le flash, pas l'incendie.
+	var core := FxTextures.flame_emitter(int(34.0 * density * maxf(1.0, radius_tiles)),
+		0.34, tile_size * 1.25, Color(1.0, 0.95, 0.74, 0.9),
+		Color(1.0, 0.45, 0.08, 0.0), 0.0, 180.0)
+	add_child(core)
+	core.one_shot = true
+	core.explosiveness = 0.98            # tout part sur la même image
+	core.local_coords = false
+	core.initial_velocity_min = reach * 0.2
+	core.initial_velocity_max = reach * 0.9
+	core.damping_min = 60.0
+	core.damping_max = 120.0             # la boule s'ouvre puis se fige
+	core.emitting = true
+
+	# 2. LES PROJECTIONS : des langues qui fusent plus loin et RETOMBENT.
+	#    Sans elles l'explosion est une sphère propre, sans éclaboussure.
+	var spray := FxTextures.flame_emitter(int(26.0 * density * maxf(1.0, radius_tiles)),
+		0.62, tile_size * 0.62, Color(1.0, 0.78, 0.32, 0.8),
+		Color(0.88, 0.18, 0.02, 0.0), 90.0, 180.0)
+	add_child(spray)
+	spray.one_shot = true
+	spray.explosiveness = 0.9
+	spray.local_coords = false
+	spray.initial_velocity_min = reach * 0.8
+	spray.initial_velocity_max = reach * 2.1
+	spray.emitting = true
+
+	# 3. LA FUMÉE : elle survit au feu et monte. C'est elle qui donne un APRÈS à
+	#    l'explosion — sans elle, le feu s'éteint et il ne s'est rien passé.
+	var smoke := FxTextures.smoke_emitter(int(18.0 * density * maxf(1.0, radius_tiles)),
+		_duration * 1.5, tile_size * 1.5, -34.0)
+	add_child(smoke)
+	smoke.one_shot = true
+	smoke.explosiveness = 0.55           # elle sort en gerbe, pas d'un bloc
+	smoke.local_coords = false
+	smoke.initial_velocity_min = reach * 0.15
+	smoke.initial_velocity_max = reach * 0.8
+	smoke.emitting = true
+
+
 func _process(delta: float) -> void:
 	_life += delta
 	if _life >= _duration:
@@ -158,9 +227,10 @@ func _draw_centrepiece(t: float) -> void:
 	if _drawn == null:
 		return
 	var grow := 0.55 + 0.60 * (1.0 - pow(1.0 - t, 2.4))
-	var alpha := pow(1.0 - t, 0.8)
+	var alpha := pow(1.0 - t, 0.8) * CENTREPIECE_ALPHA
 	var extent := maxf(float(_drawn.get_width()), float(_drawn.get_height()))
-	var scale_factor := (tile_size * radius_tiles * 1.5 / extent) * grow
+	var span := minf(radius_tiles * 1.5, CENTREPIECE_MAX_TILES)
+	var scale_factor := (tile_size * span / extent) * grow
 	draw_set_transform(Vector2.ZERO, t * 1.6, Vector2(scale_factor, scale_factor))
 	draw_texture(_drawn, -Vector2(_drawn.get_width(), _drawn.get_height()) * 0.5,
 		Color(1, 1, 1, alpha))

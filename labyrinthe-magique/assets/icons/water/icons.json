@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "water_jet",
+    "water_wave",
+    "water_geyser",
+    "water_shield",
+    "water_circle",
+    "water_current"
+  ],
+  "size": 256
+}

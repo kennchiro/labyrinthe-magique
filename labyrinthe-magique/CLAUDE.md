@@ -14,6 +14,7 @@ godot --path .
 # pour que toutes les captures de développement continuent de fonctionner.
 godot --path . -- --menu          # force l'écran-titre
 godot --path . -- --select        # force la sélection des personnages
+godot --path . -- --demo --demo-stage 6   # essai : décor du stage 6, sans mourir
 godot --path . -- --stages        # force la sélection de stage
 godot --path . -- --demo --character thunder   # le terrain d'essai, tout débloqué
 
@@ -29,6 +30,10 @@ godot --headless --path . --script res://tests/test_maze.gd
 #   … test_portals, test_grid_mover, test_combat, test_victory
 godot --headless --path . --script res://tests/test_balance.gd   # LENT (minutes)
 
+# Fiches de référence des personnages et du bestiaire — RÉGÉNÉRER après tout
+# changement d'équilibrage, elles sont générées et ne doivent jamais diverger.
+godot --headless --path . --script res://tools/dump_reference.gd
+
 # Assets : la planche source ne sert JAMAIS directement, tout passe par le pipeline
 tools/.venv/bin/python tools/build_assets.py        # décor, gemmes, tuiles
 tools/.venv/bin/python tools/build_characters.py    # les sept mages
@@ -38,8 +43,15 @@ tools/.venv/bin/python tools/build_stage_tiles.py   # le terrain des dix stages
 tools/.venv/bin/python tools/build_warps.py         # les colonnes de téléportation
 tools/.venv/bin/python tools/build_stage_props.py   # décor + monument de chaque stage
 tools/.venv/bin/python tools/build_spell_fx.py      # orbe, impact, zone par mage
+tools/.venv/bin/python tools/build_skill_icons.py   # icônes des sorts (fond magenta)
+tools/.venv/bin/python tools/build_invocateur.py    # l'Invocateur, ses créatures, ses effets
 tools/.venv/bin/python tools/check_characters.py    # vérifie le découpage + le gobelin
+tools/.venv/bin/python tools/check_profiles.py      # tous les left.png regardent-ils à GAUCHE ?
 godot --headless --path . --import      # OBLIGATOIRE après tout nouveau PNG
+
+# Contrôle visuel des invocations, hors partie : les 3 créatures x 4 directions
+# x (repos, coup) sur une seule planche — impossible à voir en jouant.
+godot --path . --resolution 1200x390 --script res://tools/preview_summons.gd -- /tmp/summons.png
 
 # Build iOS (équipe Nano&Co, certificat « Apple Development: Maharo elie »)
 godot --headless --path . --export-debug "iOS" build/ios/LabyrintheMagique.xcodeproj
@@ -109,11 +121,20 @@ demander à l'utilisateur de regarder son écran.
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême`.
 
 L'**Invocateur** est à part sur toute la ligne :
-- sa planche (`mage_invocateur.jpeg`) est un **JPEG sans alpha** sur damier peint,
-  aux orientations inégales (4 poses de face, 5 de dos, 4 à gauche, 3 à droite —
-  la droite boucle en ping-pong) et sans rangée d'attaque. Elle est découpée par
-  **`tools/build_invocateur.py`** (mage + créatures + effets), pas par
-  build_characters.py ;
+- sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
+  vrai canal alpha, dessin bien plus fin, quatre fois plus de poses). Elle est
+  découpée par **`tools/build_invocateur.py`** (mage + créatures + effets), pas
+  par build_characters.py, parce qu'elle n'a **aucune grille** : ses 14 poses de
+  marche, ses 6 poses de sort, ses 4 créatures et sa douzaine d'effets sont
+  posés librement. Les boîtes de l'outil sont les **boîtes englobantes des
+  formes connexes**, relevées par étiquetage — exactes au pixel ;
+- ses orientations restent **inégales** : 4 poses de face, 4 de dos, 6 de profil
+  GAUCHE, et rien vers la droite — ni pour lui ni pour son dragon. La droite est
+  le miroir de la gauche, comme sur la planche du spectre ;
+- ⚠️ la planche ne dessine **pas le bâton dans toutes les poses de marche** (il
+  manque dans 3 des 6 poses de profil, dans 2 des 4 poses de dos). Le cycle suit
+  malgré tout l'ordre de la planche : l'orbe du bâton apparaît et disparaît
+  pendant la marche. C'est le DESSIN, pas le découpage ;
 - il ne se bat pas, il **invoque** : voir « Invocations » ci-dessous.
 
 Noms, couleurs et sprites viennent de `assets/peso&cover/` — c'est la **source
@@ -140,6 +161,53 @@ celle-ci, est à quelqu'un d'autre. On ne peut PAS simplement jeter tout ce qui
 n'est pas la forme principale — le bâton du mage de l'Eau et les feuilles du mage
 de la Terre sont détachés du corps et parfaitement légitimes.
 
+## Le mode démo
+
+Lancé par le bouton **ESSAI** de la sélection des mages (ou `--demo`). Il sert à
+deux choses, et la seconde est venue après : essayer les sorts d'un personnage —
+tout est débloqué, rien ne se recharge, on ne meurt pas — et **visiter les
+décors**. Les dix stages y sont préparés en terrain d'essai : même labyrinthe
+clément, seule la PEAU change (tuiles, props, monument, roster), parce que c'est
+`config.stage` que lisent le rendu, le semis de décor et la maison.
+
+On en change par les flèches en haut de l'écran, au clavier par `Page↑` / `Page↓`
+(ou `[` / `]`), et en capture par `--demo-stage N`. Le tour est cyclique.
+
+⚠️ Rien de tout cela n'existe hors démo : deux flèches qui changent de stage en
+pleine partie seraient une triche, pas un outil. `GameManager.demo_stage()` le
+garantit à la source.
+
+## Fiches de référence
+
+`docs/PERSONNAGES.md` et `docs/BESTIAIRE.md` listent chaque mage avec ses six
+créneaux, chaque créature avec ses rapports, et les PV réels stage par stage.
+
+⚠️ Les deux sont **GÉNÉRÉS** par `tools/dump_reference.gd`, qui lit
+`CharacterCatalog`, `Bestiary`, `LevelConfig` et `CombatSystem`. Ne jamais les
+éditer à la main : une fiche recopiée ment dès le premier réglage, et une fiche
+qui ment est pire que pas de fiche — on finit par corriger le jeu pour qu'il
+colle au document. Corriger un chiffre se fait dans le code, puis on régénère.
+
+## Les monuments de stage
+
+La « maison » de chaque stage est un **îlot flottant** découpé de
+`assets/peso&cover/maison_stage.png` par `tools/build_stage_props.py` — dix îlots
+dans l'ordre des stages, cinq par rangée, chacun portant le portail et le décor
+de son thème.
+
+Cette planche a un **vrai canal alpha** : rien à détourer. Le travail se réduit à
+trois règles mesurées — regrouper par case de la grille 5×2 pour que les rochers
+flottants restent avec leur île (tous à moins de 15 px, sauf quatre poussières
+au-delà de 26) ; recadrer sur l'alpha **visible** (> 10) et non sur tout pixel non
+nul, le halo de lueur descendant à alpha 4 gonflait la boîte de 24 px et
+l'affichage s'en trouvait 10 % trop petit ; jeter ce qui traîne loin de tout îlot.
+
+⚠️ `House` cadre le monument dans une **boîte à deux bornes** (3,8 × 4,6 cases) et
+non sur sa seule largeur : les anciens monuments étaient larges, ces îlots sont
+hauts (280×460), et une mise à l'échelle sur la largeur en aurait fait six cases
+de haut. Le sceau des gemmes suit le **sommet réel** du sprite, mesuré au moment
+du `setup()` — à hauteur fixe, il tombait au milieu de l'île.
+
 ## Les ennemis
 
 **Onze créatures**, toutes au format des mages, dans `assets/enemies/<id>/`.
@@ -153,6 +221,19 @@ planches : **r0 de face, r1 de dos, r2 de profil, r3 l'attaque**. Le profil sert
 aux deux côtés, retourné pose par pose. Deux planches (l'ombre, le chevalier)
 ont leur **grille imposée à la main** : la détection y mesurait un pas de deux
 rangées et rendait un dos coupé en deux moitiés empilées.
+
+⚠️ **La convention ne dit PAS de quel côté regarde la rangée de profil**, et la
+supposer coûte cher : lue comme la gauche sur les neuf planches, elle regarde en
+réalité vers la **DROITE sur sept d'entre elles**. Sept créatures ont donc
+marché à reculons pendant des semaines. C'est ce que déclare `profile` dans
+`build_bestiary.py` (défaut `"right"`, exceptions écrites : l'ombre et le démon
+de cristal). Rien ne l'attrape tout seul — les fichiers existent, les bandes
+font la bonne taille, `check_characters.py` ne juge que le CADRAGE et les tests
+headless ne chargent aucune texture. D'où **`tools/check_profiles.py`**, qui
+pose côte à côte la pose de foulée de chaque `left.png` : elles doivent TOUTES
+regarder à gauche. Les indices qui tranchent, dans l'ordre — l'œil ou la
+gueule ; la traînée du coup, qui part DEVANT ; la poussière et la cape, qui
+restent DERRIÈRE.
 
 Le gobelin et le spectre restent produits par `build_characters.py`, et chacun
 a fallu son mode de découpe :
@@ -240,12 +321,70 @@ l'Air.
   l'extérieur) — sinon « Porte scellée » clignote à la frame zéro ; et les flags
   de dev qui téléportent le mage (`--on-portal`, `--at-lair`) doivent
   `cancel_path()`, sinon il retraverse le labyrinthe vers sa porte.
+- **Le roster est cumulatif ET la nouveauté passe devant.** Le stage N contient
+  les espèces des stages 1 à N — mais l'effectif plafonne (huit poursuivants au
+  stage 10 pour onze espèces), donc l'ordre de placement compte. `LevelConfig`
+  range la **nouveauté du chapitre en premier** (`_build_lineup`), sinon c'est
+  elle qui tombe : mesuré, le Chevalier Noir et le Golem de Givre n'entraient
+  jamais en jeu. Les anciennes suivent, décalées d'un cran à l'épisode 2.
+  Invariant vérifié par `test_combat` (`_test_rosters`).
 - **Braiding obligatoire** (~30-38 % des culs-de-sac supprimés) : un labyrinthe parfait
   rend la poursuite injuste (impasse = mort sans recours).
 - **Points de vie** = ceux du personnage + le bonus du stage (0/+1/+2) : la tournée dure 1 à 3 minutes,
   un seul PV donnait 90 % de captures en simulation.
 - **Boussole** : direction à vol d'oiseau vers la gemme la plus proche **en distance de
   chemin**. Elle donne un cap, jamais un itinéraire — sinon le labyrinthe ne sert plus.
+- **La signature visuelle d'un sort est une DONNÉE de la compétence**
+  (`Ability.projectile_scale`, `projectile_speed`, `trail_density`, `shockwave`,
+  `flames`), pas du personnage. Deux sorts de même forme se ressemblaient trait
+  pour trait — le jeu donnait la même orbe à tous les projectiles d'un mage.
+- **Le seuil d'ultime suit la constitution** : `kills = base_health + 1`, sauf le
+  Suprême (8, ultime le plus puissant) et l'Invocateur (6, ses kills viennent de
+  ses invocations). Un mage fragile atteint son ultime plus tôt.
+- **Un ULTIME a le droit de casser une règle** — `Ability.pierces_walls` mesure le
+  rayon à vol d'oiseau là où tout le reste du jeu utilise la distance de chemin.
+  Condition non négociable : que ça se voie (l'onde de choc géante).
+- **Le générateur d'images NE RESPECTE PAS l'ordre du prompt.** La table de
+  `build_skill_icons.py` relève ce que chaque case MONTRE, jamais ce qui a été
+  demandé — vérifier la planche avant de découper.
+- **Le dégorgement se mesure en « magenta-ité »** (ce qu'un pixel a de rouge ET
+  de bleu en plus de son vert), jamais par un réglage propre à un élément : une
+  règle taillée pour le feu virait l'eau au turquoise. Elle sert aussi à rendre
+  TRANSPARENT ce qui est translucide — le fond vu à travers un dôme de verre.
+- **Les icônes de sorts sont commandées sur FOND MAGENTA UNI**, jamais en
+  transparence : les modèles d'image tiennent mal l'alpha. Détourage par TEINTE
+  (300°), pas par distance RGB — les halos roses d'une flamme sont trop proches
+  du magenta en distance brute. Tout le magenta part, y compris ENCLAVÉ.
+  L'échelle se fait sur la DIAGONALE : les boutons tactiles sont ronds.
+- **`Ability.Kind.STORM`** : un nuage qui SUIT le mage et frappe tout seul. La
+  seule chose du jeu qui accompagne le joueur au lieu de l'attendre quelque part.
+  Relancer le remet à neuf — deux nuages doubleraient la cadence en silence.
+- **`Ability.Kind.CHAIN`** : un arc qui rebondit d'ennemi en ennemi en
+  s'épuisant. Le parcours est calculé au lancement puis joué relais par relais —
+  le recalculer à chaque saut laisserait la chaîne changer d'avis en vol.
+- **`_apply_damage` a DEUX freins distincts**, `with_trait` et `empowered`. Un
+  sort qui chaîne déjà ne doit pas déclencher le trait de son élément, mais doit
+  quand même profiter de l'exaltation. Les dégâts dérivés (brûlure, arc, écho)
+  passent `false, false`.
+- **`Ability.empower_bonus`** renforce tous les coups du mage pendant un temps.
+  Il ne s'applique QU'AU COUP D'ORIGINE : appliqué aux dégâts dérivés (brûlure,
+  arc, écho, météore), il se multiplierait au lieu de s'ajouter — sans rien
+  casser, juste en faussant tous les chiffres.
+- **`Ability.Kind.WAVE`** : un front qui DÉFERLE devant le lanceur et frappe ce
+  qu'il traverse. La boule de feu cherche une cible, la vague prend le couloir.
+  Chaque ennemi n'encaisse qu'une fois — sans mémoire des touchés, il prend un
+  coup par case traversée.
+- **`Ability.arc`** limite un souffle à un cône devant le lanceur, mesuré à vol
+  d'oiseau : le joueur juge « devant » à ce qu'il voit, pas à la topologie.
+- **Sorts à CHARGES** (`Ability.charges`) : N lancers d'affilée, puis une
+  recharge qui les rend TOUTES. Tant qu'il reste une charge, le sort est prêt.
+  Les charges s'affichent en chiffres au clavier, en pastilles au pouce.
+- **Zones-pièges** (`Ability.snare` / `snare_burn`) : appliquées UNE FOIS par
+  créature et par passage, avec verrou. Une zone tique deux fois par seconde —
+  sans verrou, elle reprend sa victime à chaque tick et l'ennemi ne repart jamais.
+- **Pas d'addon VFX** : le renderer est `gl_compatibility` (iOS + Web + desktop
+  d'un seul code) et la plupart supposent Forward+. Shader + CPUParticles2D
+  suffisent — CPU et non GPU, pour un rendu identique sur mobile.
 - **Chaque élément MARQUE ses coups d'un trait** (brûlure, trempe, ébranlement,
   ponction, arc, bourrasque, écho — `CombatSystem`, bloc TRAITS) : c'est ce qui
   fait sept mages et non sept teintes. Les zones n'en déclenchent aucun, et les
@@ -264,6 +403,14 @@ l'Air.
   le **dragon vole** par-dessus les haies, droit sur sa proie — c'est ce qui en
   fait l'ultime. Leurs coups ne déclenchent PAS de trait élémentaire : le trait
   est la signature du mage, pas de ses bêtes.
+  Côté image, `SummonVisual` lit **`assets/allies/allies.json`** exactement comme
+  `Player` lit son `frames.json` : une BANDE par créature et par direction
+  (`hframes`), poses d'inaction d'abord, poses de coup ensuite, aucun nom de
+  fichier ni nombre de poses codé en dur. La **case est commune à toutes les
+  directions d'une créature** — c'est elle qu'on met à l'échelle, pas le dessin :
+  le dragon qui pique a les ailes rabattues, celui qui monte les a déployées, et
+  ce rapport-là doit tenir. La teinte de coup a disparu avec sa raison d'être :
+  les créatures ont maintenant une vraie pose de morsure et de souffle.
 - **Les poursuivants refusent le dernier pas**, celui qui les ferait monter sur la
   case du mage (`Enemy._update_desired`) : deux sprites superposés, on ne voit plus
   ni qui frappe ni où l'on est. `CATCH_DISTANCE` vaut donc une case pleine, sinon un
