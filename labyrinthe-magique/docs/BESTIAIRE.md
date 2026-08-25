@@ -78,6 +78,7 @@ vivent dans `CombatSystem.SUMMON_KINDS`.
 | **imp** | Diablotins | 2 | 120 s | 4.6 c/s | 10 | 0.9 s | 1.1 case | suit les couloirs |
 | **gargouille** | Gargouille | 1 | 120 s | 4.0 c/s | 18 | 1.1 s | 1.1 case | suit les couloirs |
 | **dragon** | Dragon ancien | 1 | 120 s | 3.6 c/s | 34 | 1.3 s | 1.6 case | vole par-dessus les murs |
+| **ombre** | — | 0 | 0 s | 4.2 c/s | 12 | 1.1 s | 1.5 case | suit les couloirs |
 
 Il n'y en a jamais plus de **4** à la fois (au-delà, la plus ancienne
 cède la place). Leurs kills nourrissent l'extra du mage, mais leurs

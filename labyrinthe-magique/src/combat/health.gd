@@ -10,12 +10,17 @@ extends RefCounted
 signal damaged(amount: int, remaining: int)
 signal healed(amount: int, remaining: int)
 signal died
+## Un coup a été REFUSÉ par l'immunité. L'interface s'en sert pour le dire :
+## un coup encaissé sans effet et un coup jamais porté se ressemblent trop.
+signal deflected
 
 var maximum: int
 var current: int
 ## Absorption temporaire (bouclier d'eau, écorce de terre…). Elle encaisse avant
 ## les points de vie et ne se régénère pas toute seule.
 var shield: int = 0
+## Rien ne peut l'entamer. Posé par le CombatSystem, qui en tient le temps.
+var immune := false
 
 
 func _init(p_maximum: int) -> void:
@@ -35,6 +40,14 @@ func ratio() -> float:
 ## besoin pour afficher le bon nombre quand un bouclier a absorbé une partie.
 func take(damage: Damage) -> int:
 	if not is_alive() or damage.amount <= 0:
+		return 0
+	# L'IMMUNITÉ EST POSÉE ICI, et pas au point de contact avec un ennemi.
+	#
+	# Un mage intouchable doit l'être pour tout ce qui blesse — le corps à
+	# corps, mais aussi ce qu'on ajoutera demain. Placée sur la santé, la règle
+	# n'a qu'un seul endroit où mentir.
+	if immune:
+		deflected.emit()
 		return 0
 
 	var left := damage.amount

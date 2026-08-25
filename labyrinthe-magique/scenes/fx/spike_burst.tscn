@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/spike_burst.gd" id="1_burst"]
+
+[node name="SpikeBurst" type="Node2D"]
+z_index = 6
+script = ExtResource("1_burst")
+
+[node name="Body" type="Sprite2D" parent="."]

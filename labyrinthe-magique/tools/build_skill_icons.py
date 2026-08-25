@@ -24,7 +24,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-SOURCE = Path("assets/peso&cover")
+SOURCE = Path("assets/peso&cover/sorts")
 OUT = Path("assets/icons")
 
 ## planche -> (personnage, noms des six icônes dans l'ordre de lecture)
@@ -49,6 +49,13 @@ SHEETS = {
     "mage_thunder_skills.png": ("thunder", [
         "thunder_bolt", "thunder_chain", "thunder_field",
         "thunder_storm", "thunder_flash", "thunder_judgement",
+    ]),
+    # Relevé case par case : rocher lancé et sa traînée · rangée de pics qui
+    # s'éloigne · coque de pierre au cristal // gerbe de cristaux verts ·
+    # silhouette qui plonge dans le sol · sol éclaté de crevasses.
+    "mage_earth_skills.png": ("earth", [
+        "earth_rock", "earth_spikes", "earth_aegis",
+        "earth_crystals", "earth_burrow", "earth_quake",
     ]),
     "mage_water_skills.png": ("water", [
         "water_jet", "water_wave", "water_geyser",

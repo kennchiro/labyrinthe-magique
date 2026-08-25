@@ -74,8 +74,13 @@ static func smoke_emitter(amount: int, life: float, size: float,
 
 ## Émetteur de flammes prêt à l'emploi, en blending additif.
 ## `rise` NÉGATIF fait monter le feu ; positif le fait retomber.
+## `additive` : une flamme de FEU ajoute de la lumière, c'est ce qui lui donne
+## son cœur incandescent. Une flamme SOMBRE fait l'inverse — elle mange la
+## lumière — et l'additif lui est structurellement interdit : le noir n'y
+## existe pas, et le violet y sature en rose. Elle se compose donc normalement.
 static func flame_emitter(amount: int, life: float, size: float,
-		hot: Color, cold: Color, rise: float, spread: float) -> CPUParticles2D:
+		hot: Color, cold: Color, rise: float, spread: float,
+		additive: bool = true) -> CPUParticles2D:
 	var flames := CPUParticles2D.new()
 	flames.texture = soft_blob()
 	flames.amount = clampi(amount, 6, 240)
@@ -98,6 +103,7 @@ static func flame_emitter(amount: int, life: float, size: float,
 	ramp.set_color(1, cold)
 	flames.color_ramp = ramp
 	var material := CanvasItemMaterial.new()
-	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD if additive \
+		else CanvasItemMaterial.BLEND_MODE_MIX
 	flames.material = material
 	return flames

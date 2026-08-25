@@ -43,6 +43,10 @@ const HIT_FLASH_DURATION := 0.14
 const TINT_SOAK := Color(0.55, 0.75, 1.45)
 const TINT_STAGGER := Color(1.5, 1.4, 1.0)
 const TINT_BURN := Color(1.6, 0.85, 0.55)
+## Le poison d'ombre : SOMBRE et violacé, là où les autres statuts éclaircissent.
+## Une créature empoisonnée doit avoir l'air éteinte, pas illuminée — et une
+## teinte claire aurait été confondue avec la trempe sur un stage bleu.
+const TINT_POISON := Color(0.62, 0.42, 0.82)
 ## Ralentissement d'un ennemi trempé — la MÊME valeur que CombatSystem.SOAK_FACTOR.
 const SOAK_FACTOR := 0.62
 ## Coup porté au joueur : l'ennemi se jette en avant. Sans ce mouvement, un
@@ -96,6 +100,9 @@ var _soak_left := 0.0
 var _soak_factor := SOAK_FACTOR
 var _stagger_left := 0.0
 var _burn_left := 0.0
+## Temps d'empoisonnement restant. Il dure DIX FOIS plus qu'une brûlure : sa
+## teinte doit donc être discrète, sinon un stage entier vire au violet.
+var _poison_left := 0.0
 
 
 func setup_enemy(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size: int,
@@ -155,6 +162,10 @@ func burn_glow(duration: float) -> void:
 	_burn_left = maxf(_burn_left, duration)
 
 
+func poison_glow(duration: float) -> void:
+	_poison_left = maxf(_poison_left, duration)
+
+
 func _update_desired(delta: float) -> void:
 	if ai == null:
 		return
@@ -163,6 +174,7 @@ func _update_desired(delta: float) -> void:
 	_soak_left = maxf(0.0, _soak_left - delta)
 	_stagger_left = maxf(0.0, _stagger_left - delta)
 	_burn_left = maxf(0.0, _burn_left - delta)
+	_poison_left = maxf(0.0, _poison_left - delta)
 	mover.speed = _base_speed * (_soak_factor if _soak_left > 0.0 else 1.0)
 	if _soak_left <= 0.0:
 		_soak_factor = SOAK_FACTOR
@@ -198,6 +210,13 @@ func _update_desired(delta: float) -> void:
 		return
 	if _soak_left > 0.0:
 		_show_state(TINT_SOAK)
+		return
+	# LE POISON VIENT APRÈS LA TREMPE, et non avant comme la brûlure. Il dure
+	# quinze secondes : passer devant les autres statuts reviendrait à masquer,
+	# tout ce temps-là, ce que la créature est en train de subir d'autre.
+	if _poison_left > 0.0:
+		var seep := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.004)
+		_show_state(TINT_POISON.lerp(TINT_CHASE, 0.30 * seep))
 		return
 	match ai.state:
 		EnemyAI.State.CHASE:
@@ -242,6 +261,7 @@ func revive_at(cell: Vector2i) -> void:
 	_soak_left = 0.0
 	_stagger_left = 0.0
 	_burn_left = 0.0
+	_poison_left = 0.0
 	if _base_speed > 0.0:
 		mover.speed = _base_speed
 	set_dead(false)

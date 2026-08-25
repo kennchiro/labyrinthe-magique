@@ -70,26 +70,37 @@ DIRECTIONS = ["down", "up", "left", "right"]
 ## ancrage aux rangées et colonnes réellement mesurées.
 ## `mode` vaut "grille" par défaut ; `out` vaut assets/characters/ par défaut.
 SHEETS = {
-    "mage_fire.png": {"id": "fire", "col0": 0, "row0": 0},
-    "mage_circle.png": {"id": "water", "col0": 0, "row0": 0},
-    "mage_earth.png": {"id": "earth", "col0": 0, "row0": 0},
-    "mage_dark.png": {"id": "shadow", "col0": 0, "row0": 0},
-    # Planche REFAITE le 2026-08-24 : l'ancienne (mage_element.png) dessinait une
-    # silhouette fine noyée dans une aura, illisible à 38 px de haut dans un
-    # couloir. La nouvelle a un corps compact et une grille propre — mais elle
-    # dessine DEUX profils droite et aucun gauche, d'où le miroir. Grille
-    # imposée : son pas de 238 px sort de la fenêtre de détection (70-220), et
-    # ses orbes élémentaires flottent détachées du corps, ce qui interdit aussi
-    # la découpe par formes connexes (7, 6, 8 et 12 formes au lieu de 6).
-    "mage_supreme.png": {
-        "id": "supreme", "grid": (238, 235, 20, 23),
-        "rows": {"down": 0, "up": 1, "right": 2},
-        "directions": ["down", "up", "right"],
-        "mirror": {"left": "right"},
-    },
-    "mage_thunder.png": {"id": "thunder", "col0": 0, "row0": 0},
-    "mage_wind.png": {"id": "air", "col0": 0, "row0": 0},
-    "enemi_2.png": {"id": "goblin", "mode": "formes", "out": OUT_ENEMIES},
+    # LES HUIT MAGES, PLANCHES REFAITES LE 2026-08-25.
+    #
+    # Les anciennes avaient été dessinées séparément et occupaient leur case
+    # commune de 60 % (Feu) à 93 % (Invocateur) : un mage paraissait plus petit
+    # qu'un autre sans qu'aucune règle du jeu ne le dise. Les huit nouvelles sont
+    # commandées sur le même gabarit — 6 colonnes x 4 rangées de 256 px, le
+    # personnage à 80 % de la hauteur de sa case, pieds près du bas.
+    #
+    # GRILLE IMPOSÉE et non détectée : un pas de 256 px sort de la fenêtre
+    # d'autocorrélation (calibrée sur 70-220). C'est justement pour ça que le
+    # prompt exige une grille régulière — ce qui est promis peut être imposé.
+    #
+    # ⚠️ Elles ne remplacent PAS les anciennes sur le disque. `build_spell_fx.py`
+    # et `build_warps.py` découpent l'orbe, l'impact, la zone et la colonne de
+    # téléportation de chaque mage à des coordonnées relevées à la main DANS les
+    # anciennes planches, qui restent donc en place tant que les planches
+    # d'effets de la refonte ne sont pas arrivées.
+    "refonte/feu.png": {"id": "fire", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/eau.png": {"id": "water", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/terre.png": {"id": "earth", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/tenebres.png": {"id": "shadow", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/foudre.png": {"id": "thunder", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/air.png": {"id": "air", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/supreme.png": {"id": "supreme", "grid": (256, 256, 0, 0), "gutter": True},
+    # L'Invocateur rejoint la table commune. Son ancienne planche n'avait aucune
+    # grille — ses poses étaient posées librement, d'où `build_invocateur.py` et
+    # sa découpe par formes connexes. Celle-ci en a une : le mage revient donc
+    # ici, et l'outil dédié ne garde que ce que lui seul sait faire — les
+    # créatures invoquées et leurs effets.
+    "refonte/invocateur.png": {"id": "invocateur", "grid": (256, 256, 0, 0), "gutter": True},
+    "creatures/enemi_2.png": {"id": "goblin", "mode": "formes", "out": OUT_ENEMIES},
     # Spectre : tout vient de la RANGÉE 1. La rangée 0 est la même créature avec
     # une couronne de lumière que les poses d'attaque n'ont pas — alterner les
     # deux ferait clignoter la couronne. Colonnes retenues, dans l'ordre des
@@ -97,7 +108,7 @@ SHEETS = {
     # (col. 7) pour le cycle, puis l'orbe chargée à bout de bras (col. 4). Les
     # colonnes 5 et 6 — projectile déjà parti, portail qui s'ouvre — racontent un
     # tir à distance, que cet ennemi ne fait pas : il frappe au contact.
-    "enemi_1.png": {
+    "creatures/enemi_1.png": {
         "id": "hunter", "mode": "poses", "out": OUT_ENEMIES,
         "directions": ["down"], "band": 200, "row": 1, "row_shapes": 8,
         "columns": [0, 1, 2, 3, 7, 4],
@@ -239,9 +250,92 @@ def _cells_by_grid(image: Image.Image, alpha: np.ndarray, config: dict) -> tuple
             boxes[(direction, pose)] = cell_box(
                 dx, dy, ox, oy, config.get("col0", 0) + pose_index,
                 config.get("row0", 0) + row_index)
+        if config.get("gutter"):
+            # Les cinq séparations sont RELEVÉES sur la rangée, pas déduites de
+            # la grille — et elles servent aux deux cases qu'elles séparent.
+            col0, row0 = config.get("col0", 0), config.get("row0", 0)
+            top = oy + (row0 + row_index) * dy
+            lines = [ox + (col0 + i) * dx for i in range(1, len(POSES))]
+            cuts = _row_cuts(alpha, top, dy, lines)
+            edges = [ox + col0 * dx] + cuts + [alpha.shape[1]]
+            for pose_index, pose in enumerate(POSES):
+                boxes[(direction, pose)] = (
+                    edges[pose_index], top, edges[pose_index + 1], top + dy)
     return boxes, {"dx": dx, "dy": dy, "ox": ox, "oy": oy,
                    "col0": config.get("col0", 0), "row0": config.get("row0", 0)}
 
+
+## Nombre de gouttières mises en concurrence, les plus larges d'abord. Assez
+## pour que les vraies séparations y soient toutes, assez peu pour que l'essai
+## de toutes les combinaisons reste instantané.
+GUTTER_CANDIDATES = 10
+
+
+def _row_cuts(alpha: np.ndarray, top: int, dy: int, lines: list) -> list:
+    """Les cinq séparations RÉELLES d'une rangée de six poses.
+
+    ⚠️ LA GRILLE ANNONCÉE N'EST PAS CELLE QUI EST DESSINÉE. Les planches de la
+    refonte respectent leurs 6 x 4 cases de 256 dans l'ensemble, mais chaque pose
+    y flotte : la pose d'attaque déborde de 40 à 125 px dans la case de gauche
+    (le générateur la centre sur son SORT et non sur son mage), et une écharpe,
+    un éclair ou un pan de cape franchissent régulièrement une ligne.
+
+    Découpées sur les lignes théoriques, ces poses se volent des morceaux : le
+    lanceur de sort était rendu à la case voisine et il ne restait dans la case
+    d'attaque que la boule de feu (22 % de remplissage sur les Ténèbres) ; un
+    éclat d'éclair flottait à côté du Mage de la Foudre, arraché à la pose
+    suivante.
+
+    On cherche donc, autour de chaque ligne, la vraie GOUTTIÈRE : une bande vide
+    ayant de l'encre des deux côtés. La condition « des deux côtés » distingue
+    une séparation d'une marge ; la fenêtre de recherche empêche de confondre la
+    gouttière avec le vide qui sépare un mage de son orbe flottante. Sans
+    candidat, on garde la ligne — elle est fausse de quelques pixels, jamais de
+    cent.
+    """
+    band = alpha[top:top + dy]
+    ink = band.any(axis=0)
+    marks = np.nonzero(ink)[0]
+    if marks.size < 2:
+        return lines
+
+    gutters = []
+    x = int(marks[0])
+    while x < marks[-1]:
+        if ink[x]:
+            x += 1
+            continue
+        start = x
+        while x < marks[-1] and not ink[x]:
+            x += 1
+        gutters.append((start + (x - start) // 2, x - start))
+
+    # ⚠️ NI LA LARGEUR NI LA PROXIMITÉ NE TRANCHENT, et les deux ont été
+    # essayées. Sur la rangée de profil des Ténèbres, dont les poses dérivent
+    # vers la droite, « la plus large » allait chercher la gouttière de la pose
+    # SUIVANTE ; sur sa rangée de dos, « la plus proche » préférait le vide qui
+    # sépare le mage de son orbe. Une rangée demandait l'inverse de l'autre.
+    #
+    # Ce qui tranche est ce qu'on sait de la planche : SIX POSES ÉGALEMENT
+    # ESPACÉES. On essaie donc les combinaisons de cinq gouttières et on garde
+    # celle qui donne les cases de marche les plus régulières, à largeur de
+    # gouttière égale. La case d'attaque est exclue de la mesure de régularité :
+    # elle porte le sort en plus du mage et elle est légitimement plus large.
+    if len(gutters) < len(lines):
+        return lines
+    from itertools import combinations
+    left = lines[0] - (lines[1] - lines[0] if len(lines) > 1 else 0)
+    best, best_score = None, None
+    for pick in combinations(sorted(gutters, key=lambda g: -g[1])[:GUTTER_CANDIDATES],
+                             len(lines)):
+        cuts = sorted(g[0] for g in pick)
+        walking = [b - a for a, b in zip([left] + cuts[:-1], cuts)]
+        if min(walking) <= 0:
+            continue
+        score = sum(g[1] for g in pick) - 1.5 * (max(walking) - min(walking))
+        if best_score is None or score > best_score:
+            best, best_score = cuts, score
+    return best if best else lines
 
 def _cells_by_rows(image: Image.Image, alpha: np.ndarray, config: dict) -> tuple:
     """Boîtes quand chaque RANGÉE est une orientation, désignée à la main.
@@ -433,13 +527,89 @@ def _claim_cell(image: Image.Image, labels: np.ndarray, sizes: np.ndarray,
     return Image.fromarray(pixels, "RGBA")
 
 
+## Écart au fond en deçà duquel un pixel EST le fond, et au-delà duquel il est
+## franchement le dessin. Entre les deux, le bord anti-crénelé, dont l'alpha se
+## dose — sans quoi la silhouette sort en escalier.
+KEY_IN = 4
+KEY_OUT = 26
+## Écart au fond en deçà duquel le fond COULE, de proche en proche, depuis les
+## bords de la planche. Serré exprès — voir la note dans `keyed_on_flat`.
+KEY_FLOOD = 8
+## Surface minimale d'une forme, en pixels de la PLANCHE. En dessous, c'est de
+## la poussière de détourage et non un morceau du dessin.
+KEY_MIN_SHAPE = 600
+
+
+def keyed_on_flat(image: Image.Image) -> Image.Image:
+    """Détoure une planche livrée SANS transparence, sur son fond uni.
+
+    ⚠️ Les planches de la refonte arrivent en RGB sur un gris très foncé — c'est
+    ce que le prompt demande, un fond uni se relisant mieux qu'un alpha que les
+    modèles d'image tiennent mal. Converties en RGBA, elles sont donc opaques
+    d'un bord à l'autre : le découpage rendait huit carrés gris parfaitement
+    identiques, et la mesure de « remplissage » annonçait fièrement 78 % pour
+    tout le monde. Un défaut qui se félicite lui-même est le pire de tous.
+
+    Le fond n'est retiré que là où il TOUCHE LE BORD de la planche, de proche en
+    proche. Une pénombre au creux d'une capuche a beau avoir la couleur du fond,
+    elle n'y est pas reliée : elle reste.
+    """
+    from scipy import ndimage
+    rgb = np.asarray(image.convert("RGB")).astype(int)
+    border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
+    background = np.median(border, axis=0)
+
+    distance = np.abs(rgb - background).max(axis=2)
+
+    # ⚠️ LE SEUIL EST SERRÉ, ET C'EST LA CONNEXITÉ QUI TRAVAILLE. Le Sorcier des
+    # Ténèbres, vu de dos, est une robe NOIRE sur un gris très foncé : un quart
+    # de ses pixels sont à une distance de 2 ou 3 du fond, c'est-à-dire dans le
+    # bruit de la planche (p99 = 2). Aucune clé par couleur ne peut les
+    # distinguer, et un seuil confortable de 30 lui mangeait les trois quarts du
+    # corps — il ne restait qu'une capuche violette et une orbe flottante.
+    #
+    # Le seuil ne sert donc qu'à FAIRE COULER le fond depuis les bords. Ce qui
+    # est de la couleur du fond mais enfermé dans une silhouette n'est pas
+    # atteint : le contour du personnage, lui, s'écarte franchement du gris, et
+    # il suffit à faire barrage.
+    flat = distance < KEY_FLOOD
+    parts, _ = ndimage.label(flat)
+    edges = np.unique(np.concatenate([parts[0], parts[-1], parts[:, 0], parts[:, -1]]))
+    outside = np.isin(parts, edges[edges > 0])
+
+    # Le fondu du bord ne s'applique qu'AU BORD. Appliqué partout, il rendait
+    # translucide l'intérieur d'une robe sombre — le même défaut, en plus discret.
+    alpha = np.full(distance.shape, 255.0)
+    alpha[outside] = 0.0
+    rim = ndimage.binary_dilation(outside, iterations=2) & ~outside
+    alpha[rim] = np.clip((distance[rim] - KEY_IN) / float(KEY_OUT - KEY_IN),
+                         0.0, 1.0) * 255.0
+
+    # LA POUSSIÈRE PART. Ce que la clé laisse d'une ombre portée, d'une étincelle
+    # ou d'un grain de compression, ce sont des taches de quelques pixels qui
+    # deviennent des points sales à côté du mage — mesuré : jusqu'à quarante par
+    # pose sur la planche du Suprême. Les orbes qui gravitent autour de lui, elles,
+    # pèsent plus de mille pixels et ne risquent rien.
+    kept, _ = ndimage.label(alpha > ALPHA_THRESHOLD)
+    if kept.max():
+        areas = ndimage.sum(np.ones_like(kept), kept, range(1, kept.max() + 1))
+        dust = np.zeros(kept.max() + 1, dtype=bool)
+        dust[1:] = areas < KEY_MIN_SHAPE
+        alpha[dust[kept]] = 0.0
+
+    data = np.dstack([rgb.astype(np.uint8), alpha.astype(np.uint8)])
+    return Image.fromarray(data, "RGBA")
+
+
 def measure(path: Path, config: dict) -> dict:
     """Découpe et nettoie une planche, sans encore décider de la taille de case.
 
     La case, elle, est COMMUNE à tous les personnages et ne peut donc être
     arrêtée qu'une fois toutes les planches mesurées (voir main)."""
     from scipy import ndimage
-    image = Image.open(SOURCE / path).convert("RGBA")
+    image = Image.open(SOURCE / path)
+    # Une planche sans canal alpha est une planche à détourer : voir plus haut.
+    image = keyed_on_flat(image) if image.mode != "RGBA" else image.convert("RGBA")
     mask = np.array(image)[..., 3] > ALPHA_THRESHOLD
     finder = {"formes": _cells_by_shapes, "poses": _cells_by_poses,
               "rangees": _cells_by_rows}.get(

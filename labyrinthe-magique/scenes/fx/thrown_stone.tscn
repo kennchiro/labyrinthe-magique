@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/thrown_stone.gd" id="1_thrown"]
+
+[node name="ThrownStone" type="Node2D"]
+z_index = 12
+script = ExtResource("1_thrown")
+
+[node name="Body" type="Sprite2D" parent="."]

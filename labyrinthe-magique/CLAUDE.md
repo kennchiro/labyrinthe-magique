@@ -39,15 +39,23 @@ tools/.venv/bin/python tools/build_assets.py        # décor, gemmes, tuiles
 tools/.venv/bin/python tools/build_characters.py    # les sept mages
 tools/.venv/bin/python tools/build_stage_art.py     # vignettes des dix stages
 tools/.venv/bin/python tools/build_bestiary.py      # les neuf créatures restantes
-tools/.venv/bin/python tools/build_stage_tiles.py   # le terrain des dix stages
+tools/.venv/bin/python tools/build_stage_tiles.py   # terrain TEINTÉ (repli des stages sans planche)
+tools/.venv/bin/python tools/build_terrain.py       # terrain DESSINÉ — À LANCER APRÈS le précédent
 tools/.venv/bin/python tools/build_warps.py         # les colonnes de téléportation
 tools/.venv/bin/python tools/build_stage_props.py   # décor + monument de chaque stage
 tools/.venv/bin/python tools/build_spell_fx.py      # orbe, impact, zone par mage
 tools/.venv/bin/python tools/build_skill_icons.py   # icônes des sorts (fond magenta)
 tools/.venv/bin/python tools/build_invocateur.py    # l'Invocateur, ses créatures, ses effets
+tools/.venv/bin/python tools/build_ombre.py        # l'Ombre maléfique de la Faille + son gaz
+tools/.venv/bin/python tools/build_prompts.py      # les 30 prompts de terrain + leurs références
 tools/.venv/bin/python tools/check_characters.py    # vérifie le découpage + le gobelin
 tools/.venv/bin/python tools/check_profiles.py      # tous les left.png regardent-ils à GAUCHE ?
 godot --headless --path . --import      # OBLIGATOIRE après tout nouveau PNG
+
+# Contrôle visuel de l'implosion d'ombre : six instants sur une bande. Un effet
+# de deux tiers de seconde ne se juge pas en jeu, et le chasser à la frame près
+# avec --frames ne marche pas — le mage n'est jamais au même endroit.
+godot --path . --resolution 1440x240 --script res://tools/preview_implosion.gd -- /tmp/implosion.png
 
 # Contrôle visuel des invocations, hors partie : les 3 créatures x 4 directions
 # x (repos, coup) sur une seule planche — impossible à voir en jouant.
@@ -76,11 +84,23 @@ Tout nouveau système de combat doit suivre la même règle.
 **3. Toute la difficulté vit dans `LevelConfig`.** Ajouter un stage = ajouter une
 fabrique statique, pas une ligne de gameplay.
 
+**4bis. Les planches sources sont RANGÉES PAR NATURE.** `assets/peso&cover/`
+n'est plus un tas : `mages/` (les huit planches de personnage), `sorts/` (icônes
+et animations de sorts), `creatures/` (ennemis et invocations), `decor/`,
+`interface/`, `terrain/`. Les tables de `build_characters.py` et
+`build_bestiary.py` portent le sous-dossier dans leur CLÉ, ce qui leur permet de
+lire deux dossiers avec un seul `SOURCE`.
+⚠️ `export_presets.cfg` exclut désormais des DOSSIERS entiers. La seule planche
+brute qui parte dans l'app est `interface/couverture.png`, que l'écran-titre
+`preload`. Vérifier après tout changement : le filtre compare le chemin COMPLET
+(`res://…`), un motif sans `*/` devant ne mord jamais — 30 Mo sont déjà partis
+comme ça une fois.
+
 **4. Les assets sont générés, pas bricolés à la main.** `tools/build_assets.py` est la
 seule source des fichiers de `assets/sprites/`, `assets/tiles/` et `assets/ui/` ;
 `tools/build_characters.py` celle de `assets/characters/` et `assets/enemies/`.
 Les planches brutes restent dans `assets/raw/` (décor) ou `assets/peso&cover/`
-(personnages et ennemis, telles que fournies).
+(personnages, ennemis et sorts, telles que fournies — voir 4bis pour le rangement).
 
 **5bis. Le jeu est en PAYSAGE sur téléphone.** Le **manche analogique** est à
 gauche, les cinq boutons de combat à droite, le labyrinthe entre les deux.
@@ -177,6 +197,39 @@ On en change par les flèches en haut de l'écran, au clavier par `Page↑` / `P
 pleine partie seraient une triche, pas un outil. `GameManager.demo_stage()` le
 garantit à la source.
 
+## Les prompts d'images
+
+Les prompts de commande vivent dans **`docs/prompts/`**, rangés par nature :
+`mages/` (les huit planches de personnage), `sorts/` (sorts et créatures), les
+`terrain_*` avec leurs références dans `ref/`. `docs/PROMPTS.md` est la porte
+d'entrée — elle les indexe et retient ce que dix planches ont appris. Le prompt et l'outil de découpage vont ENSEMBLE : le prompt impose ce que
+l'outil sait vérifier, et l'outil échoue en silence sur tout ce que le prompt n'a
+pas exigé.
+
+✅ Refonte des mages FAITE le 2026-08-25 : les huit planches de personnage
+viennent de `assets/peso&cover/refonte/`, toutes sur le même gabarit (6 x 4
+cases de 256, grille IMPOSÉE). Ils occupaient leur case commune de 60 % à 93 %,
+ils l'occupent maintenant de 62 % à 66 % — **écart entre mages x1,07**, vérifié
+par `check_characters.py` à chaque passage.
+⚠️ Les ANCIENNES planches restent en place et ne doivent pas être supprimées :
+elles sont encore la source de l'orbe, de l'impact, de la zone et de la colonne
+de téléportation de chaque mage (`build_spell_fx.py`, `build_warps.py`), à des
+coordonnées relevées à la main dedans. Les planches d'effets de la refonte
+(`refonte/*_fx.png`) ne sont pas encore arrivées.
+⚠️ Ces planches n'ont PAS de canal alpha : fond gris uni, détouré par
+`keyed_on_flat()`. Le seuil y est SERRÉ et c'est la connexité qui travaille — le
+dos du Sorcier des Ténèbres est une robe noire sur gris très foncé, dont un
+quart des pixels est à distance 2 du fond, dans le bruit de la planche. Un seuil
+confortable lui mange les trois quarts du corps ; le fondu du bord, appliqué
+ailleurs qu'au bord, rend translucide l'intérieur des robes sombres.
+⚠️ La grille ANNONCÉE n'est pas celle qui est DESSINÉE : chaque pose flotte, et
+la pose d'attaque déborde de 40 à 125 px dans sa voisine (le générateur la centre
+sur le SORT, pas sur le mage). `_row_cuts()` découpe sur les vraies gouttières,
+choisies par RÉGULARITÉ — ni la plus large ni la plus proche ne marchent, deux
+rangées demandaient l'inverse l'une de l'autre.
+⚠️ `check_characters.py` mesure aussi les MORCEAUX DÉTACHÉS : un contrôle qui ne
+regarde que des hauteurs laisse passer un mage amputé de son écharpe.
+
 ## Fiches de référence
 
 `docs/PERSONNAGES.md` et `docs/BESTIAIRE.md` listent chaque mage avec ses six
@@ -201,6 +254,12 @@ flottants restent avec leur île (tous à moins de 15 px, sauf quatre poussière
 au-delà de 26) ; recadrer sur l'alpha **visible** (> 10) et non sur tout pixel non
 nul, le halo de lueur descendant à alpha 4 gonflait la boîte de 24 px et
 l'affichage s'en trouvait 10 % trop petit ; jeter ce qui traîne loin de tout îlot.
+
+⚠️ Le sol de la clairière n'a **aucun traitement particulier**. Il était réchauffé
+(×1,45 en rouge) pour signaler l'objectif du temps de la maisonnette de bois ;
+avec l'îlot il dessinait un damier de carrés clairs à cheval sur les couloirs,
+qu'on prenait pour un autre terrain. Ce qui désigne l'objectif, c'est ce qui est
+POSÉ dessus — l'îlot, son portail allumé, son sceau de gemmes.
 
 ⚠️ `House` cadre le monument dans une **boîte à deux bornes** (3,8 × 4,6 cases) et
 non sur sa seule largeur : les anciens monuments étaient larges, ces îlots sont
@@ -275,6 +334,28 @@ l'Air.
   bord à bord sur un fond opaque et texturé.
   ⚠️ Un monument se détoure par CLÉ DE FOND depuis les bords, pas par contraste :
   son masque de contraste revient plein et rend un rectangle opaque.
+- **Le terrain DESSINÉ prime sur le terrain teinté** (2026-08-25). Les dix stages
+  ont désormais leurs planches dans `assets/peso&cover/terrain/` — sol, mur,
+  décor — découpées par `tools/build_terrain.py`, qui s'exécute APRÈS
+  `build_stage_tiles.py` et écrase son résultat. Trois découpages sans rapport :
+  - le **sol** est une plaque pleine rendue raccordable par l'outil (décalage
+    torique + fondu). On ne demande JAMAIS « seamless » à un modèle : il dessine
+    un cadre pour faire semblant. Période portée de 3 à 6 cases, lue dans la
+    LARGEUR de la texture et non plus codée en dur ;
+  - le **mur** est un **autotile de 16 pièces**, une par configuration de voisins
+    (haut 1, droite 2, bas 4, gauche 8). ⚠️ Les planches livrées dessinent des
+    pièces qui **FLOTTENT** — magenta tout autour, y compris du côté à raccorder —
+    et aucune ne respecte l'ordre demandé. L'outil n'en garde donc que TROIS (la
+    croix et les deux barres), mesure leur topologie, et FABRIQUE les seize :
+    prolonger un bras jusqu'au bord, ou y recopier le rebord de la barre
+    perpendiculaire. Tout vient du dessin livré, rien n'est inventé ;
+  - le **décor** remplace les props générés dans `stages/props/stage_N/{semis,lueur}`.
+  ⚠️ Le détourage du magenta n'est PAS celui des icônes de sorts : ici les
+  cristaux roses des Cavernes sont **plus magenta que le fond** (0,96 contre
+  0,86). On sépare par CHROMATICITÉ — l'ombre portée garde la direction de
+  couleur du fond, un cristal non — et on n'efface que ce qui touche le bord.
+  ⚠️ `HEDGE_SHADE` ne s'applique QU'À la tuile de repli : appliquée à un mur
+  dessiné elle repeint le dessin et défait l'écart de luminance imposé.
 - **Chaque stage a son terrain**, teinté d'après sa planche d'ambiance
   (`assets/tiles/stage_<N>/`, chargé par `MazeRenderer.set_stage`). Ce ne sont pas
   des tuiles découpées : essayé, ça donne de la bouillie — un mur d'une case de
@@ -382,6 +463,57 @@ l'Air.
 - **Zones-pièges** (`Ability.snare` / `snare_burn`) : appliquées UNE FOIS par
   créature et par passage, avec verrou. Une zone tique deux fois par seconde —
   sans verrou, elle reprend sa victime à chaque tick et l'ennemi ne repart jamais.
+- **`Ability.pull_radius` / `pull_cells`** : le sort ASPIRE au lieu d'écarter.
+  Miroir exact du souffle de l'Air (`_push_away` / `_haul_in`) — deux éléments
+  qui déplaceraient dans le même sens ne se distingueraient plus. Le souffle
+  porte volontairement PLUS LOIN que les dégâts : un sort qui n'aspirerait que
+  ce qu'il frappe déjà ne servirait à rien, c'est le fait de ramener de loin ce
+  qu'on va frapper qui fait le sort. Il ne dépose jamais une créature SUR le
+  mage, et `pull_min` l'arrête AVANT le contact — mesuré : déposé au contact, le
+  poursuivant frappe dans la seconde, et le sort offre le coup qu'il devait
+  éviter. La butée doit rester DANS le rayon des dégâts, sinon le sort range la
+  meute hors de portée de sa propre explosion. Elle ne repousse personne : une
+  créature déjà collée y reste — le sort corrige ce qu'il provoque, pas ce
+  qu'il trouve.
+  ⚠️ L'aspiration recalcule son champ depuis `player_cell` au lieu de prendre
+  `context.player_field`, qui est celui de l'IA et date de 300 ms : c'est le
+  même piège que l'arrêt au corps à corps, et il ramènerait vers l'endroit où
+  le mage ÉTAIT.
+- **`Ability.summon_portals`** : le sort ouvre des passages AU LOIN au lieu
+  d'appeler ses créatures autour du lanceur. C'est toute la différence entre
+  invoquer et DÉCHIRER — l'Invocateur fait naître ses bêtes à ses pieds et le
+  trajet est leur contrepartie ; une faille s'ouvre là où sont les proies. Les
+  portes sont plafonnées (une par ennemi viderait un stage tardif d'un seul
+  geste) et ne s'ouvrent jamais SUR la case d'une proie, même règle que le refus
+  du dernier pas. Sans proie, le sort est REFUSÉ et ne coûte rien : un ultime
+  gagné en quatre kills ne se dépense pas dans un couloir vide.
+  `summon_cap` relève le plafond commun pour ce sort seul — celui-ci existe pour
+  empêcher l'Invocateur d'accumuler lancer après lancer, ce qu'un ultime à usage
+  unique ne peut pas faire.
+- **`Ability.residue_duration`** : une explosion qui laisse une trace n'est plus
+  un instant, c'est un LIEU. La zone dérivée est fabriquée comme les pics de la
+  ligne de terre (`_residue_of`) et ne reprend PAS les dégâts de l'explosion —
+  une flaque qui referait le coup entier serait le vrai sort, et l'explosion son
+  décor. Elle naît après `_apply_area` : sinon la créature qu'on vient de
+  ramener serait empoisonnée avant d'avoir encaissé.
+- **`Ability.poison_duration` / `poison_damage`** : long, faible et FIXE, là où
+  la brûlure est courte, violente et proportionnelle au coup. Il ne récompense
+  pas la puissance du sort mais le fait d'avoir tenu quelqu'un dans l'ombre, et
+  il SUIT sa victime hors de la zone. Il tique à la SECONDE et non au demi-tick
+  des zones : sur de petits dégâts entiers, l'arrondi de `damage * ZONE_TICK`
+  doublerait en silence le chiffre annoncé au joueur.
+- **`Ability.slow_sustained`** : l'englu tient tant que la créature est dans la
+  zone. Le drapeau ne change pas `slow_duration`, il en change le SENS — ce
+  n'est plus la durée de l'effet mais sa TRAÎNÉE une fois dehors. Sans lui, un
+  ralentissement décompté rend l'allure à qui reste PLANTÉ dans le sort, soit
+  l'inverse de ce qu'un piège doit faire. Il se réarme par FRAME et non au tick
+  de zone : la traînée est plus courte que l'intervalle des ticks, donc au tick
+  l'ennemi retrouverait son allure deux fois par seconde. Le champ de distances
+  passe alors par `_field_from`, sans quoi c'est un BFS par zone et par frame.
+  ⚠️ Retenir et RONGER vont ensemble : un englu soutenu sur une zone qui ne
+  prélève qu'une fois punit le passage, pas la présence — l'ennemi retenu ne
+  paie alors plus rien pour le temps qu'il y perd, ce qui est exactement à
+  l'envers. Les dégâts restent sur le tick, c'est une usure et non une rafale.
 - **Pas d'addon VFX** : le renderer est `gl_compatibility` (iOS + Web + desktop
   d'un seul code) et la plupart supposent Forward+. Shader + CPUParticles2D
   suffisent — CPU et non GPU, pour un rendu identique sur mobile.
@@ -403,6 +535,23 @@ l'Air.
   le **dragon vole** par-dessus les haies, droit sur sa proie — c'est ce qui en
   fait l'ultime. Leurs coups ne déclenchent PAS de trait élémentaire : le trait
   est la signature du mage, pas de ses bêtes.
+  ⚠️ Une planche d'APPOINT (des poses ajoutées après coup) n'est jamais à la même
+  échelle que la première : mesuré 22 % d'écart sur l'Ombre. On la remet à
+  l'échelle sur la LARGEUR DU MANTEAU — la hauteur enfle avec le jet — et on la
+  fait passer par le MÊME outil, donc le même alignement, sinon la créature
+  sursaute au moment de frapper. Voir `tools/build_ombre.py`, qui consigne six
+  pièges de découpage dont deux silencieux (une toile d'alignement trop courte
+  ampute le bas des poses ; un étiquetage sur le voile fond quatre poses en une).
+  ⚠️ `SummonVisual.HEIGHTS` donne des hauteurs de CASE, jamais de créature, et
+  les cases ne sont pas remplies pareil : la gargouille occupe 88 % de la
+  sienne, l'Ombre 67 % — sa case doit tenir le jet de gaz, qui descend 50 px
+  plus bas que sa fumée au repos. À hauteur de case égale, elle paraissait donc
+  plus PETITE alors qu'elle était réglée plus haut.
+  ⚠️ Une créature dont la planche n'existe pas encore EMPRUNTE celle d'une
+  autre, teintée (`SummonVisual.STAND_INS`), au lieu de lever une erreur : la
+  mécanique se règle avant que le dessin n'existe, et une invocation invisible
+  se lit comme un sort cassé. La teinte est assez sombre pour qu'aucune capture
+  ne soit prise pour l'apparence définitive.
   Côté image, `SummonVisual` lit **`assets/allies/allies.json`** exactement comme
   `Player` lit son `frames.json` : une BANDE par créature et par direction
   (`hframes`), poses d'inaction d'abord, poses de coup ensuite, aucun nom de

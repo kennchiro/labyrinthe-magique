@@ -271,6 +271,124 @@ les fichiers manquants.
 
 ## 5. Journal
 
+### 2026-08-24 — le SORCIER DES TÉNÈBRES, sort 1 : la Rune
+
+Premier des quatre mages qui restaient à habiller. Choisi parce que c'est le
+personnage PAR DÉFAUT (`CharacterCatalog.default_id()`) — celui que la plupart
+des joueurs voient en premier — et qu'il était à **0 sort sur 6** avec une
+signature propre. Mesure de départ :
+
+| mage | sorts signés |
+|---|---|
+| Feu, Foudre | 5/6 (la fuite seule reste générique) |
+| Eau | 3/6 |
+| Terre | 2/6 |
+| **Ténèbres, Air, Invocateur, Suprême** | **0/6** |
+
+**Ce que la capture a montré.** La Rune se posait bien au sol et y restait — la
+mécanique était bonne. Mais son dessin était l'anneau générique de n'importe
+quelle zone : même silhouette que la nappe de feu, à la couleur près. Et sa
+description promettait un piège (« le premier ennemi qui passe dessus explose »)
+là où le code livrait une flaque : 18 dégâts par seconde pendant 8 s, soit 144 à
+qui s'attarde et 9 à qui traverse — l'inverse exact de ce qui était annoncé.
+
+**Deux directions essayées, la seconde retenue.**
+
+1. *Flamme sombre* (violet et noir, 15 s, recharge 1 s). Abandonnée après essai :
+   trop bruyante au sol, et le sort devenait un outil qu'on sème sans y penser.
+2. *Le PORTAIL du mage, posé au sol* — retenu. La Rune reprend le dessin de sa
+   translation (`warp.png`), qui ne servait qu'à elle : c'est le même passage,
+   ouvert pour soi ou laissé derrière soi. **Trois charges**, rendues d'un coup
+   après 8 s, huit secondes de tenue chacune.
+
+⚠️ **ON NE PEUT PAS DESSINER DU NOIR EN ADDITIF** — leçon de la première
+direction, qui vaut pour toutes les suivantes. Les zones se composaient en
+`BLEND_MODE_ADD`, hérité du feu, de la glace et de la foudre qui veulent cette
+lumière. En additif une cendre noire n'ajoute rien et un violet vif sature en
+ROSE : la première version rendait un nuage rose, l'exact opposé du noir demandé.
+Il faut le corriger à DEUX endroits — le nœud, mais aussi ses particules, qui
+portent leur propre matériau et n'héritent pas de celui du parent
+(`FxTextures.flame_emitter` prend désormais un paramètre `additive`).
+
+**Ce qui a demandé une seconde passe sur le portail** : dessiné pour une colonne
+verticale vue de face, très lumineux, il NOYAIT le mage debout dessus une fois
+posé à plat et composé en additif. Assombri (alpha 0,26 au lieu de 0,55, teinté
+de violet), écrasé à 0,66 en hauteur — au sol, un passage est une ellipse basse —
+et son cœur brillant remplacé par un ŒIL SOMBRE : c'est un trou, pas une lampe,
+et c'est ce qui garde le mage lisible.
+
+**L'ouverture est progressive** (0,42 s, lissage de Hermite adouci aux deux
+bouts) : disque qui s'écarte depuis le centre, anneau qui prend son ampleur. Une
+zone qui apparaît d'un coup se lit comme un défaut d'affichage ; un passage
+s'OUVRE. Deux anneaux tournent en SENS INVERSE — c'est ce qui donne la profondeur
+du puits sans avoir à dessiner un puits.
+
+**Vérifié headless** : 3 évocations acceptées d'affilée, la 4e refusée, les trois
+charges rendues ensemble 8 s après la dernière.
+
+**LE PÉAGE** (demandé ensuite) : marcher dessus coûte 10 PV et un cinquième de
+la vitesse pendant 3 s, UNE FOIS par passage. Nouveau champ `Ability.damage_once`.
+
+La distinction compte, et elle ne se lit pas dans les chiffres : une zone qui
+ronge prélève par seconde et punit la PRÉSENCE — 18/s, c'est 144 à qui s'attarde
+et 9 à qui traverse. Un péage prélève au franchissement et punit le PASSAGE,
+c'est-à-dire exactement le rôle d'un piège posé sur la route qu'on sait que le
+poursuivant prendra. Les deux effets sont posés ensemble et sous le même verrou :
+les séparer laisserait un ennemi ralenti sans rien avoir perdu, ou saigné sans
+ralentir, et le joueur ne comprendrait pas ce que son sort fait.
+
+⚠️ Le verrou se REARME après 3,5 s, comme celui du brasier : un ennemi qui campe
+sur le portail est repris. Mesuré : 20 PV en 6 s pour un ennemi immobile, contre
+10 pour une traversée. Sans le réarmement, s'installer dessus serait gratuit.
+
+**LA PLANCHE DESSINÉE** (`skill_rune.png`, commandée sur le prompt de
+`docs/prompts/sorts/shadow_rune.md`). Six poses du portail vu de dessus — anneau de runes
+gravées, puits qui se creuse, éclats violets — découpées par
+`tools/build_rune.py` en une bande jouée en `hframes`. Le procédural ne garde
+que ce que la bande ne peut pas faire : l'ouverture, dont la durée appartient au
+sort.
+
+⚠️ **LE DÉTOURAGE PARTAGÉ DÉTRUIT LE VIOLET.** `build_skill_icons.keyed` corrige
+la frange magenta en retirant à chaque pixel « ce qu'il a de rouge ET de bleu en
+plus de son vert ». C'est exactement la signature du VIOLET autant que du
+magenta : essayé, le portail sortait bleu-gris et son cœur devenait translucide.
+La formule avait été validée sur le feu, l'eau et la foudre — trois éléments
+dont la couleur est loin du magenta. Elle ne peut pas servir ici.
+
+Le vrai discriminant n'est d'ailleurs pas la teinte : 78 % de la planche est de
+teinte magenta, portail compris. C'est la CLARTÉ qui sépare — le fond est un
+magenta vif (r,b ≥ 200 avec g ≤ 60, mesuré à 67 % pour un fond qui en occupe
+69 %), le portail un violet sombre. `build_rune.py` a donc son propre détourage,
+et son dégorgement ne touche que les pixels réellement mêlés au fond.
+
+⚠️ **ALIGNEMENT — la rangée du bas est dessinée 91 px plus haut.** Retour du
+terrain, invisible sur la planche et flagrant en jeu : le portail sautait d'un
+tiers de case entre la 3e et la 4e image, puis redescendait en bouclant.
+
+Ni la position dans la case (elle porte le décalage) ni la boîte englobante (les
+éclats qui s'échappent changent de hauteur à chaque pose) ne peuvent servir de
+repère. On aligne sur le **bord avant du corps opaque** — le point où l'ellipse
+touche le sol : mesuré à y 462 sur les trois images du haut et y 371 sur les
+trois du bas, identique à l'intérieur de chaque rangée. C'est exactement le rôle
+que jouent les pieds pour les personnages. Seuil à alpha 200 volontairement
+haut : les éclats sont translucides, les inclure ferait dépendre le repère de ce
+qui vole autour plutôt que de l'anneau.
+
+⚠️ **SIX POSES ENCHAÎNÉES SÈCHEMENT = SIX SACCADES PAR TOUR.** Chaque pose est un
+sixième de tour ; les afficher l'une après l'autre fait voir le SAUT et non la
+rotation. Deux calques montrent donc DEUX poses consécutives et se fondent selon
+la partie fractionnaire du temps — entre la pose 2 et la 3, on voit
+littéralement l'entre-deux. C'est aussi ce qui permet de tourner LENTEMENT
+(4,5 images/s, un tour en 1,3 s) sans que ça devienne un diaporama.
+
+Des BRAISES rares montent du puits. Elles ne décorent pas : elles donnent un
+mouvement continu entre deux poses dessinées — sans elles, l'œil n'a que le
+fondu pour croire que quelque chose tourne.
+
+**Le retour visuel du péage existait déjà** par les chemins partagés : l'ennemi
+touché éclaire (`flash_hit`), un « -10 » monte (`_spawn_damage_number`) et la
+teinte de trempe s'applique (`Enemy.soak`). Rien à écrire de neuf.
+
 ### 2026-08-24 — sept créatures marchaient à reculons
 
 Signalé en jouant : le Golem de Lave avançait de dos. Sa rangée de profil est
@@ -640,6 +758,316 @@ effets et que les ennemis riposteront.
 - **Reste à faire pour que ce soit jouable** : brancher tout ça au `Level` (PV des
   ennemis, barres de vie, vagues de réapparition), au `GameManager` (kills, ultime) et
   au HUD (boutons HIT / SKILL / EXTRA HIT).
+
+### 2026-08-25 — le MAGE DE L'AIR
+
+**L'audit** : quatre problèmes sur cinq sorts. La Tornade était la QUATRIÈME
+zone immobile du jeu (après le brasier, le cercle glacé et le champ de foudre)
+et sa description — « malmène tout ce qu'elle touche » — ne disait rien. La
+Bourrasque annonce « balaie le couloir » et ne pousse rien, en portant en plus
+le nom du trait élémentaire de l'Air. Le Voile d'air est le bouclier de l'Eau
+avec des chiffres plus petits. Le Cyclone annonce que « le labyrinthe entier est
+aspiré » : c'est un cercle de dégâts.
+
+**TORNADE — elle AVANCE, et elle EMPORTE.** Elle remonte le couloir toute seule
+sur sept cases, virages compris, et ce qu'elle attrape voyage avec elle : happé,
+blessé chaque seconde, puis lâché là où elle meurt — loin, et en tas avec les
+autres qu'elle a ramassés.
+
+C'est le pilier de l'Air : le **DÉPLACEMENT**. Rien d'autre dans le jeu ne fait
+parcourir des cases à une créature — le trait de l'élément la pousse de deux
+cases, une fois. Et ça donne enfin corps à la fiche du personnage : « il gagne
+les combats qu'il refuse de livrer ». Ses dégâts sont faibles pour cette raison :
+c'est un sort de position.
+
+Le chemin est calculé D'UN COUP au lancement. Recalculé en route, la tornade
+changerait d'avis à chaque carrefour et le joueur ne pourrait plus prévoir où
+elle emmène ses poursuivants.
+
+Un test interdit que les trois autres zones du jeu se mettent à voyager — sans
+quoi l'Air reperdrait son pilier au premier réglage.
+
+⚠️ **La rotation par shader a échoué.** Ce qui tourne à l'œil sur une tornade,
+ce sont ses bandes : la première version les faisait défiler en décalant la
+texture horizontalement. Raté — un dessin de tornade n'est pas RÉPÉTABLE
+horizontalement, donc le bord gauche réapparaissait à droite et le tout
+s'étalait en bouillie bleue.
+
+Une planche de huit images a donc été commandée (`tornado_spin.png`,
+silhouette identique, seules les bandes qui tournent, la huitième bouclant sur
+la première). L'outil de découpe d'animation de la Terre a été généralisé pour
+la prendre — même détourage magenta, même boîte commune à toute la rangée.
+
+⚠️ Une largeur de planche n'est pas toujours divisible par son nombre d'images
+(1774 pour huit). Le découpage se fait donc par ARRONDI sur la largeur totale et
+non par une taille de case fixe : à un pixel près par colonne, l'écart
+s'accumule et la dernière image sort décalée.
+
+Le reste du mouvement accompagne le tour : le corps respire en largeur, les
+débris happés tournent autour de la base, et la colonne GLISSE d'une case à
+l'autre au lieu d'y sauter — sans quoi l'œil perd ce qu'elle emporte.
+
+⚠️ **La colonne de téléportation de l'Air était COUPÉE EN DEUX** — signalé par
+l'utilisateur. La boîte de découpe s'arrêtait à x=900 alors que le cercle
+magique au sol va jusqu'à 960 : le mage se téléportait dans une demi-colonne
+tranchée net. Refaite (804 → 962 ; la colonne voisine, celle AVEC la
+silhouette, commence à 965). Les six autres mages ont été vérifiés à la même
+occasion : ils sont entiers, l'Air était le seul cassé.
+
+**GRAND SOUFFLE — il projette, et le MUR fait le reste.** Il s'appelait
+« Bourrasque », comme le TRAIT élémentaire de l'Air : le joueur lisait le même
+mot à deux endroits pour deux choses différentes. Et il annonçait « balaie le
+couloir » en ne balayant rien.
+
+Tout ce qui entoure le mage part maintenant de quatre cases, et ce qui PERCUTE
+UNE PAROI avant d'avoir fini sa course encaisse le choc. **Le labyrinthe devient
+l'arme** : souffler dans un couloir ouvert déplace, souffler contre un
+cul-de-sac tue. Le même bouton donne deux résultats selon l'endroit où l'on se
+tient — c'est ce qui fait un sort qu'on apprend à jouer.
+
+Il complète la Tornade au lieu de la doubler : elle EMMÈNE (linéaire, longue,
+elle range les poursuivants ailleurs), il ÉCARTE (radial, instantané, il dégage
+un corps-à-corps). Un test refuse que l'un se mette à faire l'autre.
+
+⚠️ **Le test a trouvé un cumul que je n'avais pas vu** : le trait de l'Air
+pousse de deux cases, et il se déclenchait PAR-DESSUS la projection du sort. La
+course réelle dépassait donc celle qu'annonce le sort, et le calcul du choc
+contre la pierre — « a-t-elle parcouru moins que prévu ? » — se faisait de
+travers. Un sort qui pousse ne déclenche plus la poussée de son élément, comme
+la Chaîne d'éclairs ne déclenche pas l'arc de la Foudre. `_apply_area` a reçu le
+drapeau qui manquait.
+
+⚠️ **Et une épreuve du feu qui ne prouvait rien** (la quatrième de la série) :
+elle ne vérifiait la règle du mur que SI le hasard du labyrinthe avait bloqué
+la course — ce qu'il n'avait pas fait. Sabotée, elle passait. Le cas est
+désormais FABRIQUÉ : on cherche un cul-de-sac dans la grille, on place le mage à
+son entrée et la créature au fond. Sabotée, l'épreuve rapporte « plaquée sans
+issue, elle n'encaisse que 18 au lieu de 32 ».
+
+**Le rendu a été refait sur retour de l'utilisateur.** La première version
+traçait ses anneaux en code : un rond pâle qui ne disait ni la direction ni la
+force, avec par-dessus l'éclat générique — lequel plantait une tornade
+TOURNOYANTE au centre du mage, là où le sort chasse vers l'extérieur.
+
+Une planche a été commandée (`wind_blast.png`, deux rangées de six images) :
+un CÔNE qui souffle vers la droite, pointe à gauche, et une ONDE concentrique.
+Le cône est posé pointe sur le mage et orienté par son regard ; l'onde reste
+centrée et ne pivote JAMAIS. Les deux jouent ensemble, l'onde une fraction de
+seconde après le cône — sinon elles se confondent en une seule tache.
+
+S'y ajoutent une SECOUSSE brève (0,32 s, bien plus faible que le Séisme : le
+seul sort qui projette doit faire encaisser la caméra) et l'ÉCLAT BLANC sec au
+point de choc — c'est lui, et lui seul, qui apprend au joueur que la pierre
+fait mal.
+
+⚠️ **Le bloc d'affichage a d'abord atterri dans la MAUVAISE FONCTION.**
+`_on_projectile_hit` et `_on_blast_fired` se terminent toutes deux par le même
+`if ability.shockwave:` — l'ancre choisie pour l'insertion. Le Grand souffle
+n'étant pas un projectile, rien ne s'affichait, et rien ne criait non plus :
+le code était parfaitement valide. Trois captures ont été perdues à chercher
+un bug de rendu qui n'existait pas. *Une ancre d'édition doit être unique dans
+le fichier, pas seulement plausible.*
+
+⚠️ **Et un vrai bug trouvé au passage** : les tableaux d'images du Level ne
+sont pas vidés avant d'être remplis, et le chargement des textures est refait à
+chaque niveau. Mesuré : douze images de cône au lieu de six, donc une animation
+qui joue deux fois trop vite dès le deuxième niveau. Quatre tableaux étaient
+concernés (cône, onde, tornade, gerbes).
+
+Deux réglages de taille : à deux fois le rayon, l'onde avalait le quart de
+l'écran ; et l'additif d'un dessin déjà blanc SATURE — à pleine opacité, le
+souffle devenait une tache où l'on ne distinguait plus ni les volutes ni le
+mage.
+
+### 2026-08-25 — le MAGE DE LA TERRE
+
+**PICS DE TERRE — la gerbe COURT DANS LE COULOIR.** C'était un souffle
+circulaire autour du mage : la même mécanique que trois autres sorts du jeu,
+dessinée avec l'éclat générique. La Terre n'avait aucun geste à elle.
+
+Elle part maintenant de ses pieds et file droit devant, **virages du couloir
+compris**, en frappant tout ce qu'elle croise — c'est le pilier de la Terre, la
+LIGNE, là où la Foudre a la chaîne et le Feu ses placements. Nouvelle forme
+`Ability.Kind.LINE`.
+
+La gerbe suit le couloir tant qu'il n'y a **qu'une seule façon de continuer**. À
+une intersection elle s'arrête : au-delà, « tout droit » ne veut plus rien dire,
+et une gerbe qui choisirait sa route à la place du joueur serait un sort qu'on
+ne peut pas viser.
+
+Second temps, celui qui en fait un sort de Terre : **les pointes restent
+plantées 4 s** et mordent ce qui passe dessus. Elles sont implémentées comme des
+ZONES d'une seule case — le mécanisme existe, il est éprouvé, il sait déjà
+mordre par seconde, ralentir et expirer. Écrire un second système qui ferait la
+même chose aurait été deux fois le code et deux fois les bugs.
+
+**Les pics étaient DÉJÀ DESSINÉS**, en trois tailles, pendant que le sort
+s'affichait en rond générique. Même histoire que les nuages de la Foudre. La
+gerbe jaillit avec un dépassement (elle sort trop haut d'un dixième puis se
+pose — sans quoi elle monte comme un ascenseur) et soulève une motte de terre :
+une pierre qui perce le sol sans remuer un grain de poussière n'a aucun poids.
+
+⚠️ **Une épreuve du feu qui n'a rien prouvé.** Le test « la gerbe ne frappe
+qu'une fois » posait une créature IMMOBILE — or une créature immobile n'est de
+toute façon à portée que d'une seule case du chemin. Sabotée, la mémoire des
+touchés n'a fait crier personne. Réécrit : la créature RECULE désormais au
+rythme de la gerbe, le seul cas où cette mémoire compte. Le sabotage donne
+maintenant « la créature encaisse 165 pour une gerbe à 30 ».
+
+Leçon générale : *une épreuve du feu qui ne crie pas ne prouve pas que le code
+est bon — elle prouve que l'épreuve est mauvaise.*
+
+**ÉGIDE DE PIERRE — le Mur de pierre est remplacé.** Le mur marchait, mais il
+était INVISIBLE : la case qu'il dressait était rendue comme n'importe quel mur
+du labyrinthe, donc le joueur ne pouvait ni reconnaître le sien, ni savoir quand
+il tomberait. Et la Terre venait de recevoir son sort de terrain avec les Pics :
+deux sorts de couloir sur trois, c'était un mage à une seule idée.
+
+Il a désormais le seul RÉPIT du jeu. La distinction avec le bouclier de l'Eau
+est le cœur du sort : celui de l'Eau est une **réserve** (45 dégâts absorbés,
+il tombe quand il est vidé), celui-ci est un **temps** (rien ne l'entame
+pendant 30 s, quoi qu'il traverse). Un test refuse que les deux se confondent.
+
+L'immunité est posée sur la SANTÉ et non au point de contact avec un ennemi :
+un mage intouchable doit l'être pour tout ce qui blesse, y compris ce qu'on
+ajoutera demain. La règle n'a ainsi qu'un seul endroit où mentir.
+
+⚠️ **Trente secondes, c'est énorme** — demandé, assumé, et payé par la recharge
+la plus longue du jeu : 60 s. Un test interdit que la recharge descende sous la
+durée, ce qui rendrait l'immunité permanente sans que rien ne le signale.
+
+**L'égide se VOIT, en deux temps.** Une immunité est comme un bonus de dégâts :
+la seule chose d'un jeu d'action qu'on ne peut pas voir. La coque de pierre
+paraît d'abord — c'est le geste — puis se disperse en cailloux et en étoiles
+vertes qui tournent autour de son torse tant qu'il est intouchable. Une coque
+immobile plantée devant lui l'aurait caché trente secondes durant, et n'aurait
+rien dit du temps qui reste ; l'orbite, elle, s'accélère et se resserre dans les
+quatre dernières secondes.
+
+⚠️ Deux corrections signalées par l'utilisateur : la coque était **coupée à
+gauche et en bas** (boîte à 1388 alors que la pierre commence à 1375), et elle
+EFFAÇAIT le mage à pleine opacité. Recoupée au quadrillage, et ramenée à 42 %
+d'opacité : ce qui compte est de reconnaître le mage protégé, pas d'admirer la
+pierre.
+
+**ÉCLATS DE CRISTAL — une FAILLE qui surgit, loin devant.** Le sort mentait
+deux fois : il annonçait « trois éclats » et en tirait UN, et ce coup-là (14
+dégâts toutes les 8 s) était *strictement moins bon que son attaque de base*
+(23 toutes les 0,7 s). Un bouton qu'aucun joueur n'avait de raison d'appuyer.
+
+Il est passé par trois concepts avant de se fixer, tous essayés en jeu :
+
+1. **un cristal PLANTÉ qui tire tout seul** (forme `TURRET`) — refusé : le
+   cristal restait en arrière et le mage le plus lent du jeu ne peut pas
+   revenir le chercher ;
+2. **le même, qui SUIT le mage** — refusé : c'était l'Orage de la Foudre en
+   vert, ce que j'avais signalé avant de le faire ;
+3. **des pierres en orbite qu'il LANCE une par une** — refusé aussi : le
+   concept ne portait pas, malgré trois passes sur la taille des projectiles.
+
+**La forme retenue tient les deux moitiés ensemble** — c'est la quatrième, et
+elle réconcilie tout ce qui précède : *l'orbe de pierre s'installe autour du
+mage, et le BALAYAGE part tout seul dès qu'une créature entre à portée.*
+
+L'orbe est celui de la troisième version (les éclats en orbite, comme ceux de
+l'Égide) ; le balayage est la faille de cristal et de roche. Le mage ne vise
+rien : il pose le sort sur lui et va faire autre chose pendant qu'il travaille —
+ce qui convient au plus lent des sept.
+
+La faille elle-même est la LIGNE des Pics de terre, à une différence près : elle
+se lève D'UN COUP au lieu de courir. Le même geste à deux vitesses donne deux
+sorts qui ne se confondent pas — l'un se VISE, devant soi, et tient le terrain ;
+l'autre se DÉCLENCHE seul, vers ce qui approche.
+
+Une vitesse de **zéro** dit « simultané » dans le catalogue. C'est une valeur
+qui se lit, là où un seuil en secondes aurait été un chiffre magique de plus.
+La boucle d'entretien a dû être corrigée au passage : elle avançait d'UNE case
+par image, ce qui étalait une faille de dix cases sur un sixième de seconde.
+Elle consomme désormais le temps écoulé — ce qui rend aussi la cadence des Pics
+indépendante du framerate.
+
+**Une planche d'animation a été commandée pour l'occasion** (prompt donné à
+l'utilisateur, rendu par ChatGPT) : `earth_spikes_anim.png`, deux rangées de six
+images — cristal vert et roche brune — la fissure, la percée, la montée, la
+pleine hauteur, l'éclat, l'affaissement. Découpée par `tools/build_spike_anim.py`.
+
+⚠️ **Le point délicat du découpage est l'ALIGNEMENT.** Recadrée sur son contenu,
+la première image (une fissure large et basse) et la quatrième (une gerbe haute
+et étroite) n'ont ni la même taille ni le même centre : jouées à la suite, les
+pics SAUTENT. Le découpage calcule donc une boîte COMMUNE à toute la rangée et y
+taille les six. Un peu plus de pixels, une animation qui tient debout.
+
+Les deux matières alternent selon la case (`(x + y) % 2`), donc d'une case à la
+suivante le long du balayage : deux gerbes identiques côte à côte se liraient
+comme une image copiée-collée.
+
+⚠️ **La durée des gerbes a dû être séparée de celle du sort.** Les deux se
+lisaient dans le même champ, ce qui allait tant que la ligne était lancée à la
+main — mais un orbe qui tient trente secondes aurait laissé trente secondes de
+pierres derrière chaque balayage, et le couloir ne se serait plus jamais
+rouvert. `spike_life` porte désormais la durée des gerbes ; à zéro, elles durent
+le temps du sort, comme avant.
+
+Le kit de la Terre tient enfin : les Pics hérissent le couloir devant soi et
+tiennent le terrain, la Faille frappe loin et d'un coup, l'Égide protège le
+mage. Trois gestes, trois portées, aucun doublon.
+
+Un test refuse explicitement que les deux lignes se confondent — même portée,
+même vitesse ou même durée de gerbes font échouer la suite.
+
+**SÉISME — cinq secondes de tremblement, et les parois cèdent.** L'ultime était
+une détonation circulaire de plus : `BLAST`, 120 dégâts, rayon 5.
+
+Trois choses le composent désormais :
+
+1. **La caméra tremble**, fort puis de moins en moins. Amplitude ET fréquence
+   décroissent ensemble : la première seconde est une secousse serrée et
+   violente, la dernière un balancement lourd. Faire décroître la seule
+   amplitude donne une vibration régulière qui s'éteint — ça se lit comme un
+   moteur qu'on arrête, pas comme un séisme. Le décalage est appliqué à la
+   caméra APRÈS le suivi du mage, jamais à sa cible : sinon le lissage de la
+   caméra avale la secousse et il ne reste qu'un flottement.
+2. **Des pans cèdent par vagues de trois**, et la cadence s'emballe puis se
+   calme — avalanche d'abord, grondement ensuite. Chaque éboulement fait tomber
+   des blocs, monter de la poussière, et JAILLIR la pierre : la même planche
+   animée que la Faille, ce qui donne au mage une signature d'un bout à l'autre
+   de son kit.
+3. **Le tremblement lui-même blesse**, partout, tant qu'il dure.
+
+⚠️ **Deux erreurs de conception, toutes deux prises par la mesure.**
+
+La première version faisait céder les pans AU PIED DES MURS, avec un commentaire
+qui promettait qu'y longer une paroi serait dangereux et tenir un carrefour
+sûr. Mesuré : **97 à 99 % des cases d'un labyrinthe touchent un mur**. La règle
+était décorative et le commentaire, faux. Retirée.
+
+La seconde est plus grave : sans le point 3, l'ultime était un SPECTACLE.
+Mesuré : vingt-sept éboulements tirés au sort sur six cents cases ne touchent
+une créature donnée qu'une fois sur cinq — l'épreuve du feu l'a montrée en
+posant une proie à douze pas, qui traversait tout le séisme sans une
+égratignure. Le tremblement fait maintenant sept dégâts par seconde à tout ce
+qui tient debout : les pans restent la grosse frappe locale et aléatoire, la
+secousse est le fond continu qui n'épargne personne.
+
+⚠️ **Et une épreuve du feu qui ne prouvait rien**, la troisième de cette
+séance : « plus de pans au début qu'à la fin » passait même à cadence
+CONSTANTE, parce que la toute première vague part à l'instant zéro et fait
+pencher la moitié initiale. L'épreuve exige désormais un tiers d'écart, que
+seule une vraie décélération produit — sabotée, elle rapporte « 15 pans contre
+12 : le séisme ne se calme pas assez ».
+
+Ce qui le sépare de l'Embrasement du Feu n'est donc pas l'endroit où ça tombe,
+mais la TEXTURE : le Feu lâche quatorze météores lourdes à cadence égale, la
+Terre fait crouler des pans qui s'espacent, sur un fond de secousse continue.
+
+**Code laissé en place** : la forme `TURRET` et ses rendus (`stone_orbit.gd`,
+`thrown_stone.gd`, `crystal_turret.gd`, `thrown_glow.gdshader`) ne sont plus
+employés par aucun mage. Le projet n'est pas sous git : on ne supprime pas ce
+qui a coûté trois itérations avant d'être sûr que personne n'en veut. À jeter
+d'un bloc le jour où ce sera décidé.
+
+`Ability.Kind.WALL` n'est plus employé par aucun mage. Le mécanisme reste en
+place : il servira à qui en aura besoin.
 
 ### 2026-08-24 — le MAGE DE LA FOUDRE
 
@@ -1700,3 +2128,340 @@ nombre.
   l'attaque de base abattait un poursuivant en trois secondes et la simulation
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
+
+## 2026-08-25 — les huit mages redessinés sur le même gabarit
+
+Les huit planches avaient été dessinées séparément, et chacune occupait la case
+commune comme elle voulait : **de 60 % (Feu) à 93 % (Invocateur)**. Un mage
+paraissait donc plus petit qu'un autre sans qu'aucune règle du jeu ne le
+justifie. Huit planches neuves, commandées sur le même gabarit — 6 x 4 cases de
+256, personnage à 80 % de la hauteur, pieds près du bas.
+
+**Résultat : 62 à 66 %, écart entre mages x1,07** au lieu de x1,55.
+
+Les anciennes planches restent en place et ne sont PAS écrasées : elles sont
+encore la source de l'orbe, de l'impact, de la zone et de la colonne de
+téléportation de chaque mage (`build_spell_fx.py`, `build_warps.py`), découpés à
+des coordonnées relevées à la main dedans. Les planches d'effets de la refonte
+n'étant pas encore arrivées, les deux jeux coexistent — le personnage vient des
+neuves, ses effets des anciennes.
+
+Six pièges, dont quatre se félicitaient eux-mêmes :
+
+1. **les nouvelles planches n'ont pas de canal alpha.** Elles arrivent en RGB
+   sur un gris uni — c'est ce que le prompt demande, un fond uni se relisant
+   mieux qu'un alpha que les modèles tiennent mal. Converties en RGBA, elles
+   sont opaques d'un bord à l'autre : le découpage a rendu huit carrés gris
+   parfaitement identiques, et la mesure de remplissage a annoncé fièrement
+   **78 % pour tout le monde**. Un défaut qui se félicite lui-même est le pire
+   de tous. D'où `keyed_on_flat()`, qui ne retire le fond que là où il TOUCHE LE
+   BORD, de proche en proche : une pénombre au creux d'une capuche a beau avoir
+   la couleur du fond, elle n'y est pas reliée ;
+2. **la pose d'attaque est dessinée À CHEVAL sur la ligne.** Mesuré sur les huit
+   planches et les quatre rangées : le mage qui lance son sort déborde de 40 à
+   125 px dans la case de gauche. Le générateur centre cette pose sur son SORT,
+   pas sur son mage. Découpée à la ligne théorique, elle perdait son lanceur —
+   le corps, dont le centre tombe à gauche, était rendu à la case voisine, et il
+   ne restait dans la case d'attaque que la boule de feu. **22 % de remplissage
+   au lieu de 65 sur les Ténèbres.** `_attack_box()` cherche donc la vraie
+   séparation : la plus large bande vide AYANT DE L'ENCRE DES DEUX CÔTÉS ;
+3. **`check_characters.py` annonçait « les 0 planches sont bien découpées ».**
+   Il ne reconnaissait plus une entrée de mage (la clé porte maintenant son
+   sous-dossier, et la grille est imposée au lieu d'être détectée), sautait donc
+   les huit, et concluait au succès. Réécrit : il ne compare plus une détection
+   à la réalité — il n'y a plus de détection — mais mesure les trois défauts que
+   les prompts visent, **et il les mesure sur la BANDE DÉCOUPÉE**. Mesurer le
+   remplissage sur la planche revenait à mesurer le débordement que le découpage
+   retire : la pose de profil du Feu y pèse 89 % de sa case à cause de la fumée
+   de la rangée du dessus, et 58 % une fois rendue à sa voisine ;
+4. **la pose d'attaque ne se mesure pas comme les autres.** Elle porte le sort
+   en plus du mage : la faire entrer dans l'écart de marche accusait les huit
+   planches d'un coup, ce qui est le signe d'un contrôle faux et non de huit
+   planches fausses.
+
+**5. La grille annoncée n'est pas celle qui est dessinée.** Les planches
+respectent leurs 6 x 4 cases dans l'ensemble, mais chaque pose y flotte : une
+écharpe, un éclair, un pan de cape franchissent régulièrement une ligne. La
+bande de face du Mage de l'Air est sortie avec une écharpe volée à la pose
+suivante et un lanceur amputé — pendant que le contrôleur annonçait huit
+planches irréprochables, puisqu'il ne mesurait que des hauteurs. Chaque pose est
+maintenant découpée sur sa vraie GOUTTIÈRE.
+
+⚠️ Et le choix de la gouttière a demandé trois essais. « La plus large » allait
+chercher celle de la pose suivante sur une rangée dont les poses dérivent ; « la
+plus proche » préférait le vide entre le mage et son orbe. **Une rangée demandait
+l'inverse de l'autre.** Ce qui tranche est ce qu'on SAIT de la planche — six
+poses également espacées : on essaie les combinaisons de cinq gouttières et on
+garde celle qui donne les cases de marche les plus régulières.
+
+**6. Le Sorcier des Ténèbres, vu de dos, est une robe NOIRE sur un gris très
+foncé.** Un quart de ses pixels sont à une distance de 2 ou 3 du fond,
+c'est-à-dire dans le bruit de la planche (p99 = 2) : aucune clé par couleur ne
+peut les distinguer, et un seuil confortable lui mangeait les trois quarts du
+corps — il ne restait qu'une capuche violette et une orbe flottante. Le seuil ne
+sert donc plus qu'à FAIRE COULER le fond depuis les bords, et c'est la connexité
+qui travaille : ce qui est de la couleur du fond mais enfermé dans une
+silhouette n'est jamais atteint. Le fondu du bord, lui, ne s'applique qu'au bord
+— appliqué partout, il rendait translucide l'intérieur des robes sombres.
+
+Le contrôle qui porte toute la refonte est le dernier ajouté : **l'écart ENTRE
+mages**. Chacun peut être irréprochable pris à part et l'ensemble rester bancal
+— c'était exactement l'état d'avant.
+
+L'Invocateur a rejoint la table commune de `build_characters.py` : sa nouvelle
+planche a une grille régulière, là où l'ancienne posait ses poses librement.
+`build_invocateur.py` ne découpe donc plus le mage — il ne garde que ce que lui
+seul sait faire, les créatures invoquées et leurs effets — mais sa fonction
+`build_mage` reste, inappelée et entière : le jour où l'on redécoupe depuis
+l'ancienne planche, il faut ce code et non un souvenir.
+
+## 2026-08-25 — la Faille des ténèbres déchire au lieu d'exploser
+
+L'ultime du Sorcier des Ténèbres faisait 110 dégâts sur 6 cases. Même geste que
+son Implosion, même lecture, un chiffre trois fois plus haut : rien qui
+ressemble à un ULTIME. La règle du projet dit qu'un ultime a le droit de casser
+une règle du jeu ; celui-là n'en cassait aucune.
+
+Il en casse deux maintenant. **Il agit loin du lanceur** — trois failles
+s'ouvrent près des poursuivants les plus proches, quand tous les autres sorts du
+jeu partent du mage. Et **il continue d'agir deux minutes**, quand tout le reste
+se joue en une seconde.
+
+Deux ombres par faille, six au plus. Elles chassent avec la machinerie des
+invocations (`_update_summons`), donc dans le CombatSystem et non dans le Level
+— la simulation d'équilibrage les fait chasser en headless avec les règles du
+jeu. Leur souffle est un gaz : portée d'une case et demie là où les marcheurs
+frappent au contact, 12 dégâts, et surtout le **poison** de 3 PV/s emprunté à
+l'Implosion. Le kit du mage se tient enfin d'un bout à l'autre : la Rune retient,
+l'Implosion rassemble et empoisonne, la Faille envoie ce qui empoisonne.
+
+Trois arbitrages qui auraient pu partir de travers :
+
+- **une porte par ennemi aurait été la fin de la partie.** À huit poursuivants,
+  seize ombres nettoient le labyrinthe pendant que le joueur regarde. Trois
+  portes prennent la meute qui arrive — celle qu'on avait sous les yeux en
+  lançant le sort — et laissent le reste au joueur ;
+- **les portes visent les plus PROCHES, pas les plus faibles.** Un ciblage malin
+  qui irait chercher le blessé à l'autre bout du labyrinthe se lirait comme un
+  bug : le joueur lance son ultime en voyant une meute lui arriver dessus ;
+- **sans proie, le sort est refusé** et ne coûte rien. Il se gagne en quatre
+  kills : le dépenser dans un couloir vide serait un vol pur.
+
+La porte réutilise le portail de la Rune, joué plus vite et affiché 2,4 s. Ce
+n'est pas une économie de dessin : c'est le même passage, ouvert pour soi au sol
+ou déchiré au loin, et le joueur doit le reconnaître.
+
+### La planche, arrivée dans la foulée
+
+`ombre_malefique.png` respecte le prompt case pour case : 4 x 5, fond magenta,
+profil tourné à gauche. Découpée par **`tools/build_ombre.py`** — un outil de
+plus et non une entrée dans `build_invocateur.py`, parce que la clé de fond ne
+pouvait pas être la même :
+
+⚠️ **la clé des icônes DISSOUT cette créature.** `build_skill_icons.keyed()`
+retire « ce qu'un pixel a de rouge ET de bleu en plus de son vert » — la
+signature du magenta, mais aussi celle du VIOLET, et l'ombre est violette d'un
+bout à l'autre. On sépare ici sur la seule chose qui distingue vraiment le fond
+du sujet : le fond a son rouge et son bleu À ÉGALITÉ (|r-b| ≈ 5), le gaz violet
+a une teinte mesurée à 277°, c'est-à-dire beaucoup plus de bleu que de rouge.
+
+⚠️ **les dessins débordent de leur case.** Le prompt demandait 40 px de marge ;
+la fumée de la rangée 1 descend cinq pixels dans la case de la rangée 2. Une
+découpe à la grille aurait coupé les traînées et semé des fragments en haut des
+cases voisines. On découpe avec débordement et chaque forme connexe revient à la
+case où tombe son centre — la règle de `build_characters._claim_cell`.
+
+⚠️ **l'alignement se fait sur la CAPUCHE, pas sur le bas.** Les seize poses ont
+été calées sur le haut du corps : la créature lévite, sa fumée traîne à des
+hauteurs différentes selon la pose (40 px d'écart mesurés entre le profil et le
+dos) et le souffle en projette encore plus bas. Ce que l'œil suit chez une
+créature qui flotte, c'est sa tête.
+
+Quatre directions écrites sur le disque, la droite étant le miroir de la gauche
+— le moteur lit un dossier sans avoir à deviner quoi retourner.
+
+### Les deux rangées manquantes
+
+La première planche ne dessinait le souffle que de FACE : trois attaques sur
+quatre ne montraient rien. Plutôt que de tout régénérer — un modèle d'image ne
+redessine pas deux fois le même personnage, on aurait jeté une planche réussie
+pour en obtenir une autre — on a demandé **les deux rangées manquantes seules**,
+la planche existante jointe en référence (`ombre_souffle.png`, addendum de
+`docs/prompts/sorts/ombre_malefique.md`). Le même outil les découpe, et l'ÉLAN de frappe qui
+servait de pis-aller a été retiré : il n'avait plus aucun cas où s'appliquer.
+
+Six pièges, tous mesurés, tous consignés dans `build_ombre.py` :
+
+1. **la planche d'appoint n'est pas à la même échelle** — 22 % plus grande
+   (manteau de 238 px contre 192 de dos). Sans correction, l'ombre enflait d'un
+   cinquième au moment de souffler. On remet chaque rangée à l'échelle de la vue
+   qu'elle prolonge, en comparant la LARGEUR DU MANTEAU : la hauteur ne vaut
+   rien, elle enfle avec le jet ;
+2. **la toile d'alignement doit grandir de ce qu'on descend.** Décaler une pose
+   dans une toile de sa taille d'origine lui coupe le bas. Tant que tout venait
+   d'une seule planche les décalages étaient de quelques pixels ; la seconde, à
+   la capuche bien plus basse, a fait tomber cent pixels de fumée sous la toile
+   — **la créature a rétréci d'un tiers sans un mot** ;
+3. **on n'étiquette pas sur le voile.** À alpha > 24, les quatre poses de profil
+   ne font qu'UNE forme connexe : les volutes les plus ténues d'un souffle
+   effleurent la fumée d'à côté. Trois cases sur quatre ressortaient vides. On
+   sépare sur ce qui est FERME (alpha > 110), puis on rend le voile au
+   propriétaire le plus proche ;
+4. **on ne sonde pas un point.** Le milieu de la boîte du manteau tombe dans un
+   TROU sur trois poses sur quatre — une silhouette encapuchonnée est creuse
+   entre sa tête et ses bras. On prend la forme qui contient le PLUS de manteau ;
+5. **une rangée a des créatures ou elle n'en a pas**, et ça se décide pour la
+   rangée entière. Les nuages de la rangée du gaz seul ont des cœurs assez
+   foncés pour passer pour des manteaux dès qu'on desserre le seuil : deux se
+   faisaient ancrer pendant que les deux autres étaient aspirés par leurs
+   voisins ;
+6. **un souffle ne part que d'un côté**, et du même côté pour toute la rangée.
+   Il reste sinon des bouffées du jet VOISIN : sa tête part si loin qu'elle se
+   pose derrière la créature d'à côté, et aucune mesure de distance ne peut
+   deviner qu'elle ne lui appartient pas. Le sens du souffle, lui, le dit. La
+   règle ne mord que si la rangée penche franchement — sur le souffle de face,
+   le gaz descend et se répartit, rien n'est retiré.
+
+Le jet de profil est enfin ROGNÉ : il porte à 294 px de l'axe, une case qui le
+contiendrait ferait 588 px de large pour une créature qui en occupe 165, et le
+moteur mettant la CASE à l'échelle, l'ombre y paraîtrait minuscule. On garde son
+départ et on laisse filer sa queue — laquelle tombe là où `GasPuff` pose déjà
+son nuage sur la victime. Le dessin rogné est celui qui faisait doublon.
+
+Vérifié à la mesure et non à l'œil : sur les 32 poses, l'axe du manteau est à 0
+du centre de sa case et la capuche à y = 174. Aucun sursaut possible.
+
+La rangée du GAZ SEUL sert vraiment : `GasPuff` la joue **sur la victime** et
+non sur le souffleur. La créature a sa pose de souffle ; ce qui manquait à
+l'écran était l'endroit où le nuage ARRIVE — sans quoi on voit une ombre
+gesticuler et un ennemi perdre des points de vie sans lien visible entre les
+deux. Quatre poses fondues deux à deux, comme le portail de la Rune.
+
+Le pis-aller (`SummonVisual.STAND_INS`) a servi une heure et est maintenant
+vide. Le mécanisme reste — c'est la quatrième créature ajoutée au jeu — mais
+sans entrée qui traîne : elle masquerait un découpage cassé derrière un
+remplacement convaincant.
+
+⚠️ **Non mesuré :** six chasseurs pendant deux minutes est probablement le sort
+le plus fort du jeu, et `test_balance` ne tient toujours pas dans le temps
+disponible. Le chiffre à baisser en premier est le nombre de portes.
+
+Couvert par `test_combat._test_shadow_rift` : refus sans proie, une porte par
+créature jusqu'au plafond, deux ombres par porte, portes ouvertes SUR les proies
+et non aux pieds du mage, et chasse effective avec poison en 12 s simulées.
+
+## 2026-08-25 — l'Explosion d'ombre devient une IMPLOSION
+
+Le troisième créneau du Sorcier des Ténèbres était une explosion ordinaire :
+34 dégâts sur 2,6 cases. C'est-à-dire **son propre ultime en plus petit** — la
+Faille des ténèbres fait 110 sur 6 cases, même forme, même geste. Dans un kit de
+cinq sorts, le troisième n'apprenait rien au joueur. Sa description mentait par
+-dessus le marché : « elle repousse et blesse », alors que repousser est le trait
+de l'AIR et que ce sort ne déplaçait personne.
+
+Elle ASPIRE maintenant. `Ability.pull_radius` / `pull_cells` : les créatures à
+4,6 cases sont ramenées de 3 cases vers le mage, PUIS l'explosion part sur 2,6.
+Le souffle porte donc plus loin que les dégâts, et c'est tout le sort — le joueur
+convertit de la distance en dégâts au lieu d'en gagner.
+
+`_haul_in` est le miroir exact de `_push_away`, à un signe près sur la
+comparaison du champ. C'était voulu : l'Air écarte, l'Ombre ramène, et deux
+éléments qui déplaceraient dans le même sens ne se distingueraient plus.
+
+Ce que ça noue : on aspire la meute dans la Rune posée à ses pieds, elle y rampe
+à 18 % et s'y use à 10 PV/s, et les deux translations restent là pour ressortir.
+Trois sorts qui se répondent, là où il y avait trois sorts sans rapport. Et
+c'est le seul mage du jeu qui ATTIRE ses poursuivants, à 3 PV — vérifié en jeu :
+le dragonnet ramené a touché le mage dans la seconde. Le risque est le sort.
+
+Deux pièges rencontrés :
+
+- **le champ de l'IA date de 300 ms.** Pris tel quel, il ramenait vers l'endroit
+  où le mage était — exactement le défaut qui avait faussé l'arrêt au corps à
+  corps. On recalcule depuis `player_cell`, via le cache d'une frame ;
+- **une aspiration ne se dessine pas comme une explosion à l'envers.** Trois
+  versions du VFX ont été jetées : des volutes radiales font une ÉTOILE, et une
+  étoile est symétrique — rien n'y dit si les branches entrent ou sortent. C'est
+  la SPIRALE qui tranche, un tourbillon n'ayant qu'un sens. Les deux autres
+  finissaient sur un écran vide juste avant le claquement, l'anneau et les
+  volutes atteignant zéro ensemble : d'où la « gorge » (`THROAT`), un fond
+  d'anneau que l'ouverture reprend à la frame suivante.
+
+Le VFX ne se jugeait pas en jeu — il dure deux tiers de seconde et le mage n'est
+jamais au même endroit d'un lancer à l'autre, si bien que `--frames` tombait
+tantôt avant, tantôt après. D'où `tools/preview_implosion.gd`, qui pose six
+copies à six instants sur une bande, et `--skill-delay` pour lancer un sort une
+fois les poursuivants sortis.
+
+**Deux corrections le jour même**, après essai en jeu :
+
+1. **elle livrait son lanceur.** Le souffle déposait les poursuivants AU CONTACT
+   du mage, qui frappaient dans la seconde : le sort offrait le coup qu'il
+   devait éviter. `Ability.pull_min` arrête l'aspiration à deux cases — la meute
+   est rangée sur un anneau, dans l'explosion (rayon 2,6) mais hors de portée
+   des griffes. Elle ne repousse personne pour autant : une créature déjà collée
+   y reste, le sort corrige ce qu'il provoque et non ce qu'il trouve ;
+2. **l'ombre reste.** Une flaque noire de quinze secondes est laissée là où tout
+   le monde vient d'être rassemblé (`residue_duration`), et elle empoisonne :
+   1 PV par seconde pendant 15 s, poison qui SUIT sa victime dehors. L'explosion
+   cesse d'être un instant pour devenir un LIEU, et c'est ce qui donne son prix
+   au fait d'y avoir tiré la meute.
+
+Le poison tique à la SECONDE et non au demi-tick des zones : `damage * ZONE_TICK`
+sur un dégât de 1 s'arrondit à 1 par demi-tick, ce qui aurait fait 2 PV/s là où
+la fiche en annonce 1. Un chiffre annoncé faux est pire qu'un chiffre faible.
+
+15 PV au total contre 100 à 460 selon la créature : c'est peu, et c'est assumé —
+ce sort n'achève pas par sa flaque, il installe un endroit où l'on ne veut pas
+rester pendant que la Rune, elle, ronge pour de bon.
+
+Côté image, la flaque est la seule zone du jeu qui ÉTEINT au lieu de s'allumer
+(composition normale, comme la rune). Sa frange est faite de lobes de rayons
+INÉGAUX : à taille égale ils se lisaient comme une rosace de cercles empilés,
+c'est-à-dire une figure — exactement ce qu'une flaque ne doit pas être.
+
+Couvert par `test_combat._test_shadow_implosion` : le souffle doit porter plus
+loin que les dégâts, une créature à 4 pas doit être ramenée ET avoir encaissé
+(ce qui vérifie l'ordre aspirer-puis-frapper), aucune ne doit finir sur le mage
+ni en deçà de la butée, la butée doit rester dans le rayon, la flaque doit
+empoisonner à 1 PV/s pile, et le poison doit continuer hors de la flaque.
+
+## 2026-08-24 — la Rune retient et ronge
+
+L'englu de la Rune était un compte à rebours : trois secondes à 80 % de
+l'allure, prises à l'entrée. Un poursuivant traversait donc le portail sans
+presque ralentir, et — pire — retrouvait sa vitesse en restant DEDANS. Une zone
+qui rend l'allure à qui s'attarde en elle fait le contraire d'un piège.
+
+Nouveau réglage : `Ability.slow_sustained`. Le drapeau ne change pas la valeur
+de `slow_duration`, il en change le SENS — ce n'est plus la durée de l'effet
+mais sa TRAÎNÉE, le temps qu'il faut pour repartir une fois dehors. Tant que la
+créature est dans le rayon, l'englu est réarmé à chaque frame. La Rune passe
+donc de « 3 s à 80 % » à « 18 % de l'allure tant qu'on y reste, 0,5 s de
+traînée ».
+
+**Première version, jetée le jour même :** les dégâts avaient gardé le verrou du
+péage — 10 PV une seule fois par passage. Erreur de conception, et elle se voit
+dès qu'on l'écrit : retenir quelqu'un sans rien lui prendre pendant qu'il est
+retenu, c'est offrir l'immobilisation. Un ennemi englué dix secondes payait le
+même prix que celui qui traversait en courant. `Ability.damage_once` n'avait
+donc plus aucun usage et a été retiré ; la Rune est redevenue une zone
+ordinaire côté dégâts — 10 PV par seconde, sur le tick de zone.
+
+Le chiffrage tient : huit secondes pleines coûtent 80 PV, quand le spectre du
+stage 1 en a déjà 100 et le Golem de Givre 460. La rune use, elle n'exécute pas.
+
+Deux points non évidents :
+
+- **retenir et ronger vont ENSEMBLE.** C'est la leçon de la version jetée : un
+  englu soutenu posé sur un prélèvement unique punit le passage, pas la
+  présence, et laisse le temps perdu dedans entièrement gratuit ;
+- **l'englu se réarme par frame, les dégâts au tick.** À 0,5 s de tick, la
+  traînée de 0,5 s expirerait entre deux passages et l'ennemi retrouverait son
+  allure deux fois par seconde. Les dégâts, eux, n'ont aucune raison de sortir
+  du tick : c'est une usure, pas une rafale. Le champ de distances passe par le
+  cache d'une frame (`_field_from`), sinon c'est un BFS par zone et par frame.
+
+Couvert par `test_combat._test_rune_drain` : 3 s sur la rune doivent coûter
+~30 PV et ~180 réarmements d'englu, et la sortie doit tout couper net.
+

@@ -391,7 +391,7 @@ def build_mage_animations() -> dict:
 # disque franchement opaque — puis on rebouche le trou laissé au centre, sinon
 # on verrait le décor à travers la base dès que le bouton se déplace.
 
-PAD_SHEET = Path("assets/peso&cover/pad_mobile.png")
+PAD_SHEET = Path("assets/peso&cover/interface/pad_mobile.png")
 UI = Path("assets/ui")
 ## Boîte du manche bleu, relevée à la main sur la planche.
 PAD_STICK_BOX = (760, 728, 1010, 998)

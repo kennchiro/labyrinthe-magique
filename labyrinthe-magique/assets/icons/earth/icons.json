@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "earth_rock",
+    "earth_spikes",
+    "earth_aegis",
+    "earth_crystals",
+    "earth_burrow",
+    "earth_quake"
+  ],
+  "size": 256
+}

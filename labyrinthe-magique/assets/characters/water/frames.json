@@ -1,9 +1,9 @@
 {
   "cell": [
-    192,
+    232,
     112
   ],
-  "feet_y": 109.4,
+  "feet_y": 110.2,
   "poses": [
     "idle",
     "walk_1",
@@ -18,12 +18,12 @@
     "left",
     "right"
   ],
-  "source": "mage_circle.png",
+  "source": "eau.png",
   "grid": {
-    "dx": 142,
-    "dy": 153,
-    "ox": 100,
-    "oy": 48,
+    "dx": 256,
+    "dy": 256,
+    "ox": 0,
+    "oy": 0,
     "col0": 0,
     "row0": 0
   }

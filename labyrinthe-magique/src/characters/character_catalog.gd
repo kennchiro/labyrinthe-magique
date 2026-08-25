@@ -76,9 +76,28 @@ static func shadow() -> CharacterStats:
 	c.abilities = [
 		Ability.make({
 			"id": "shadow_rune", "display_name": "Rune",
-			"description": "Piège posé au sol : le premier ennemi qui passe dessus explose.",
+			"description": "Un passage laissé au sol. Qui marche dessus rampe et perd 10 PV par seconde tant qu'il n'en est pas sorti.",
 			"kind": Ability.Kind.ZONE, "element": Element.Kind.SHADOW,
-			"damage": 18, "radius": 1.2, "duration": 8.0, "cooldown": 8.0,
+			# LE PORTAIL DU MAGE, POSÉ AU SOL. Il reprend le dessin de sa
+			# translation — le même passage, ouvert pour soi ou laissé derrière
+			# soi — au lieu du disque générique des zones.
+			#
+			# TROIS CHARGES rendues d'un coup après 8 s : on ne pose pas un
+			# passage, on installe un DISPOSITIF. Trois recharges séparées
+			# donneraient un sort qu'on lance sans y penser ; une seule qui rend
+			# tout oblige à choisir le moment où l'on ouvre les trois.
+			"zone_style": "portail", "charges": 3,
+			# La rune ne punit ni l'attente ni le passage : elle punit d'être
+			# DEDANS. L'englu est SOUTENU : il tient tant que la créature est dans la
+			# rune et ne s'épuise qu'une demi-seconde après sa sortie. À 18 %
+			# de son allure, traverser un portail large de trois cases devient
+			# une éternité — et c'est ce qui donne son prix aux 10 PV par
+			# seconde : la rune ne prélève pas un péage à l'entrée, elle RONGE
+			# celui qu'elle retient. Huit secondes pleines coûtent 80 PV, soit
+			# moins qu'un spectre de départ : on use, on n'exécute pas.
+			"slow_sustained": true,
+			"slow_duration": 0.5, "slow_factor": 0.18,
+			"damage": 10, "radius": 1.4, "duration": 8.0, "cooldown": 8.0,
 		}),
 		Ability.make({
 			"id": "shadow_blink", "display_name": "Translation",
@@ -87,10 +106,42 @@ static func shadow() -> CharacterStats:
 			"range": 4, "cooldown": 9.0,
 		}),
 		Ability.make({
-			"id": "shadow_burst", "display_name": "Explosion d'ombre",
-			"description": "Détonation autour du mage, elle repousse et blesse.",
+			"id": "shadow_burst", "display_name": "Implosion d'ombre",
+			"description": "L'ombre inspire : elle arrache les poursuivants à leur couloir, les rassemble, puis claque — et la flaque qu'elle laisse empoisonne quinze secondes durant.",
 			"kind": Ability.Kind.BLAST, "element": Element.Kind.SHADOW,
-			"damage": 34, "radius": 2.6, "cooldown": 9.0,
+			# ELLE ASPIRE, ELLE NE REPOUSSE PAS. La version précédente était une
+			# explosion ordinaire — c'est-à-dire l'ultime du même mage en plus
+			# petit (110 sur 6 cases contre 34 sur 2,6). Deux sorts de même forme
+			# dans un kit de cinq, le troisième créneau ne servait à rien.
+			#
+			# Le souffle porte à 4,6 cases quand les dégâts n'en couvrent que
+			# 2,6 : on ramène de loin ce qu'on va frapper de près. Le sort ne
+			# gagne donc pas en portée, il convertit de la distance en dégâts.
+			#
+			# Et il RASSEMBLE, ce qui le noue au reste du personnage : on aspire
+			# la meute dans la Rune posée à ses pieds, elle y rampe et s'y use,
+			# et les deux translations restent là pour ressortir. C'est le seul
+			# mage du jeu qui ATTIRE, à 3 PV — le risque fait partie du sort.
+			#
+			# ELLE S'ARRÊTE À DEUX CASES ET NE LIVRE PAS SON LANCEUR. Première
+			# version mesurée en jeu : le dragonnet ramené collait le mage et
+			# touchait dans la seconde — le sort OFFRAIT le coup qu'il devait
+			# éviter. La meute est maintenant rangée sur un anneau, dans
+			# l'explosion (rayon 2,6) mais hors de portée des griffes.
+			"pull_radius": 4.6, "pull_cells": 3, "pull_min": 2,
+			"damage": 34, "radius": 2.6, "cooldown": 9.0, "shockwave": true,
+			# ET L'OMBRE RESTE. Quinze secondes de flaque noire là où tout le
+			# monde vient d'être rassemblé : l'explosion cesse d'être un instant
+			# pour devenir un LIEU, et c'est ce qui donne son prix au fait d'y
+			# avoir tiré la meute. Le poison SUIT sa victime dehors — on n'en
+			# sort pas en reculant d'une case.
+			#
+			# 1 PV par seconde, quinze secondes : 15 PV, contre 100 à 460 selon
+			# la créature. C'est peu, et c'est voulu — ce sort ne tue pas par sa
+			# flaque, il installe un endroit où l'on ne veut pas rester pendant
+			# que la Rune, elle, ronge pour de bon.
+			"residue_duration": 15.0,
+			"poison_duration": 15.0, "poison_damage": 1,
 		}),
 	]
 	c.escape = Ability.make({
@@ -101,9 +152,26 @@ static func shadow() -> CharacterStats:
 	})
 	c.ultimate = Ability.make({
 		"id": "shadow_rift", "display_name": "Faille des ténèbres",
-		"description": "Le labyrinthe se déchire : tout ce qui est proche est pulvérisé.",
-		"kind": Ability.Kind.BLAST, "element": Element.Kind.SHADOW,
-		"damage": 110, "radius": 6.0, "cooldown": 1.0, "is_ultimate": true,
+		"description": "Le labyrinthe se déchire près de chaque poursuivant. Deux ombres sortent de chaque faille et les traquent deux minutes durant, à coups de gaz violet.",
+		# CE N'ÉTAIT QU'UNE EXPLOSION EN PLUS GROS. 110 dégâts sur 6 cases : le
+		# même geste que l'Implosion, la même lecture, et rien qui ressemble à un
+		# ULTIME — juste un chiffre trois fois plus haut. Un ultime a le droit de
+		# casser une règle du jeu ; celui-ci n'en cassait aucune.
+		#
+		# Il en casse deux maintenant. Il ouvre des passages LOIN du lanceur, là
+		# où sont les proies — tous les autres sorts partent du mage. Et il
+		# continue d'agir deux minutes après avoir été lancé, quand tout le reste
+		# du jeu se joue en une seconde.
+		#
+		# TROIS FAILLES, DEUX OMBRES CHACUNE. Une porte par poursuivant serait la
+		# fin de la partie sur un stage tardif : à huit poursuivants, seize
+		# ombres nettoieraient le labyrinthe pendant que le joueur regarde. Trois
+		# portes prennent la meute qui arrive — celle qu'on avait sous les yeux
+		# en lançant le sort — et laissent le reste au joueur.
+		"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
+		"summon_id": "ombre", "summon_portals": 3, "summon_count": 2,
+		"summon_cap": 6, "duration": 120.0,
+		"cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 
@@ -393,23 +461,97 @@ static func earth() -> CharacterStats:
 		"damage": 23, "range": 6, "cooldown": 0.7,
 	})
 	c.abilities = [
+		# PICS DE TERRE — la gerbe COURT DANS LE COULOIR.
+		#
+		# C'était un souffle circulaire autour du mage : la même mécanique que
+		# trois autres sorts du jeu. Elle part maintenant de ses pieds et file
+		# droit devant, virages du couloir compris, en frappant tout ce qu'elle
+		# croise — c'est le pilier de la Terre, la LIGNE, là où la Foudre a la
+		# chaîne et le Feu ses placements.
+		#
+		# Puis les pointes RESTENT quatre secondes : ce qui passe dessus est
+		# mordu et ralenti. C'est ce second temps qui en fait un sort de Terre
+		# et non un simple tir — il hérisse un couloir comme son Mur en ferme un
+		# autre. Les deux se jouent ensemble.
 		Ability.make({
 			"id": "earth_spikes", "display_name": "Pics de terre",
-			"description": "Des pointes de roche jaillissent du sol autour du mage.",
-			"kind": Ability.Kind.BLAST, "element": Element.Kind.EARTH,
-			"damage": 30, "radius": 2.2, "cooldown": 6.0,
+			"description": "Une gerbe de pierre court dans le couloir et y reste plantée.",
+			"kind": Ability.Kind.LINE, "element": Element.Kind.EARTH,
+			"damage": 30, "range": 6, "cooldown": 6.0,
+			# La gerbe met une demi-seconde à parcourir ses six cases : assez
+			# lent pour se voir partir, trop rapide pour être esquivé.
+			"line_speed": 12.0, "radius": 0.6,
+			"duration": 4.0, "line_bite": 6,
+			"slow_duration": 1.2, "slow_factor": 0.55,
 		}),
+		# ÉGIDE DE PIERRE — il devient INTOUCHABLE, il ne ferme plus un couloir.
+		#
+		# C'était le « Mur de pierre » : une case de pierre posée derrière lui
+		# pendant huit secondes. Le sort marchait, mais il était INVISIBLE — le
+		# mur qu'il dressait était rendu comme n'importe quel mur du labyrinthe,
+		# donc le joueur ne pouvait ni le reconnaître, ni savoir quand il
+		# tomberait. Et la Terre venait de recevoir son sort de terrain avec les
+		# Pics : deux sorts de couloir sur trois, c'était un mage à une idée.
+		#
+		# Il a maintenant le seul répit du jeu. Le bouclier de l'Eau est une
+		# RÉSERVE : quarante-cinq dégâts absorbés, et il tombe. Celui-ci est un
+		# RÉPIT : rien ne l'entame pendant trente secondes, quoi qu'il traverse.
+		#
+		# ⚠️ Trente secondes d'intouchabilité, c'est énorme — assumé, demandé,
+		# et payé par la recharge la plus longue du jeu : soixante secondes. La
+		# fenêtre de vulnérabilité reste donc plus longue que le répit.
 		Ability.make({
-			"id": "earth_wall", "display_name": "Mur de pierre",
-			"description": "Ferme le couloir derrière soi. Les poursuivants doivent contourner.",
-			"kind": Ability.Kind.WALL, "element": Element.Kind.EARTH,
-			"duration": 8.0, "cooldown": 14.0,
+			"id": "earth_aegis", "display_name": "Égide de pierre",
+			"description": "Une coque de pierre l'enveloppe : plus rien ne peut le toucher.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.EARTH,
+			"immune": true, "duration": 30.0, "cooldown": 60.0,
 		}),
+		# ÉCLATS DE CRISTAL — il PLANTE le cristal, et le cristal se bat seul.
+		#
+		# Le sort mentait deux fois. Il annonçait « trois éclats » et en tirait
+		# UN ; et ce coup-là — 14 dégâts toutes les 8 s — était strictement
+		# moins bon que son attaque de base, qui frappe à 23 toutes les 0,7 s.
+		# Un bouton qu'aucun joueur n'avait de raison d'appuyer.
+		#
+		# Le cristal fiché dans le sol est la seule chose du jeu qui attaque
+		# SANS le joueur. Les créatures de l'Invocateur chassent ; le cristal ne
+		# bouge jamais, et c'est ce qui les sépare au premier coup d'œil.
+		#
+		# Il complète enfin le kit : le cristal tient le couloir sous le feu,
+		# les Pics le hérissent, l'Égide protège le mage. Les trois sorts se
+		# jouent ENSEMBLE, là où ils se faisaient concurrence.
+		#
+		# Jusqu'à sept éclats s'il est bien placé — mais seulement s'il l'est.
+		# La récompense va au choix de l'endroit, ce qui est le geste du mage
+		# lent : il ne peut pas courir corriger une erreur de placement.
 		Ability.make({
 			"id": "earth_crystals", "display_name": "Éclats de cristal",
-			"description": "Trois éclats partent sur les ennemis les plus proches.",
-			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.EARTH,
-			"damage": 14, "range": 10, "cooldown": 8.0,
+			"description": "Un orbe de pierre l'entoure et fend le sol dès qu'une créature approche.",
+			"kind": Ability.Kind.TURRET, "element": Element.Kind.EARTH,
+			# CADENCE SERRÉE. À 1,3 s entre deux éclats, le cristal avait l'air
+			# de réfléchir entre chaque tir : ce qui doit se lire comme une
+			# mitraille de pierre ressemblait à une horloge. À 0,7 s il crache.
+			# Les dégâts par éclat baissent d'autant — c'est le même sort, joué
+			# deux fois plus vite.
+			# L'ORBE tient trente secondes et balaie tout seul toutes les deux
+			# secondes, dès qu'une créature entre à portée. Le mage n'a rien à
+			# viser : c'est un sort qu'on POSE sur soi et qui travaille pendant
+			# qu'on fait autre chose — ce qui convient au plus lent des sept.
+			"damage": 24, "range": 7, "cooldown": 34.0,
+			"duration": 30.0, "turret_interval": 2.0,
+			# L'orbe SUIT le mage : la faille part toujours de ses pieds, où
+			# qu'il aille. Posé quelque part, il ouvrirait des couloirs qu'il a
+			# déjà quittés.
+			"turret_follows": true,
+			"turret_sweep": true, "line_speed": 0.0, "radius": 0.6,
+			# Les gerbes ne restent que deux secondes : entre deux balayages,
+			# le couloir doit se rouvrir. Le terrain, c'est le rôle des Pics,
+			# qui tiennent quatre secondes et mordent deux fois plus fort.
+			"spike_life": 2.0, "line_bite": 4,
+			# Les gerbes sont jouées par la planche ANIMÉE, cristal et pierre en
+			# alternance d'une case à l'autre.
+			"spike_anim": true,
+			"slow_duration": 0.8, "slow_factor": 0.6,
 		}),
 	]
 	c.escape = Ability.make({
@@ -418,11 +560,36 @@ static func earth() -> CharacterStats:
 		"kind": Ability.Kind.BLINK, "element": Element.Kind.EARTH,
 		"range": 4, "cooldown": 8.0,
 	})
+	# SÉISME — le labyrinthe TREMBLE, et ses parois cèdent.
+	#
+	# C'était une détonation circulaire de plus. Il ouvre maintenant cinq
+	# secondes de tremblement : la caméra part en secousses serrées qui se
+	# calment, et des pans de mur s'effondrent par vagues — d'abord une
+	# avalanche, puis un grondement.
+	#
+	# Les éboulements ne tombent pas n'importe où : ils cèdent AU PIED DES MURS.
+	# C'est ce qui les sépare de la pluie de météores du Feu, qui tombe du ciel
+	# sur des cases tirées au hasard. Ici, longer une paroi est dangereux et
+	# tenir le milieu d'un carrefour ne l'est pas — le labyrinthe lui-même
+	# devient l'arme.
+	#
+	# Et chaque éboulement fait JAILLIR la pierre : le sol s'ouvre là où il a
+	# reçu, cristal ou roche selon la case. C'est la même planche animée que la
+	# Faille, ce qui donne au mage une signature visuelle d'un bout à l'autre de
+	# son kit.
 	c.ultimate = Ability.make({
 		"id": "earth_quake", "display_name": "Séisme",
-		"description": "Le labyrinthe tremble et tout ce qui tient debout tombe.",
+		"description": "Cinq secondes de tremblement : les parois cèdent et la pierre jaillit.",
 		"kind": Ability.Kind.BLAST, "element": Element.Kind.EARTH,
-		"damage": 120, "radius": 5.0, "cooldown": 1.0, "is_ultimate": true,
+		"damage": 110, "radius": 5.0, "cooldown": 1.0, "is_ultimate": true,
+		"shockwave": true, "pierces_walls": true,
+		"quake_duration": 5.0, "quake_interval": 0.55, "quake_slides": 3,
+		"quake_damage": 16, "quake_radius": 1.3,
+		# Le fond continu : sept par seconde pendant cinq secondes, soit
+		# trente-cinq dégâts pour qui reste debout du début à la fin. C'est ce
+		# qui fait du Séisme un ultime et non un spectacle — les éboulements,
+		# tirés au sort, ne touchent une créature donnée qu'une fois sur cinq.
+		"quake_tremor": 7,
 	})
 	return c
 
@@ -587,17 +754,54 @@ static func air() -> CharacterStats:
 		"damage": 12, "range": 12, "cooldown": 0.42,
 	})
 	c.abilities = [
+		# TORNADE — elle AVANCE, et elle EMPORTE.
+		#
+		# C'était la QUATRIÈME zone immobile du jeu, après le brasier du Feu, le
+		# cercle glacé de l'Eau et le champ de la Foudre. Une tornade qui ne
+		# bouge pas n'est pas une tornade ; et sa description — « malmène tout
+		# ce qu'elle touche » — ne disait rien de ce qu'elle faisait.
+		#
+		# Elle remonte maintenant le couloir toute seule sur sept cases, et ce
+		# qu'elle attrape VOYAGE avec elle : happé, blessé chaque seconde, puis
+		# lâché là où elle meurt — loin, et en tas avec les autres.
+		#
+		# C'est le pilier de l'Air : le DÉPLACEMENT. Rien d'autre dans le jeu ne
+		# fait parcourir des cases à une créature — le trait de l'élément la
+		# pousse de deux cases, une fois. Et ça donne enfin corps à la fiche du
+		# personnage : « il gagne les combats qu'il refuse de livrer ».
+		#
+		# Ses dégâts sont faibles POUR CETTE RAISON : c'est un sort de position.
 		Ability.make({
 			"id": "air_tornado", "display_name": "Tornade",
-			"description": "Une colonne d'air qui malmène tout ce qu'elle touche.",
+			"description": "Elle remonte le couloir et emporte ce qu'elle attrape.",
 			"kind": Ability.Kind.ZONE, "element": Element.Kind.AIR,
-			"damage": 13, "radius": 2.4, "duration": 4.5, "cooldown": 8.0,
+			"damage": 10, "radius": 1.4, "duration": 4.0, "cooldown": 10.0,
+			"range": 7, "zone_travel": 3.0, "zone_carries": true,
+			"zone_style": "tornade",
 		}),
+		# GRAND SOUFFLE — il projette, et le MUR fait le reste.
+		#
+		# Il s'appelait « Bourrasque », comme le TRAIT élémentaire de l'Air : le
+		# joueur lisait le même mot à deux endroits pour deux choses
+		# différentes. Et il annonçait « balaie le couloir » en ne balayant
+		# rien — un cercle de dégâts de plus.
+		#
+		# Tout ce qui entoure le mage part maintenant de quatre cases. Et ce qui
+		# PERCUTE UNE PAROI avant d'avoir fini sa course encaisse le choc : le
+		# labyrinthe devient l'arme. Souffler dans un couloir ouvert déplace,
+		# souffler contre un cul-de-sac tue — le même bouton donne deux
+		# résultats selon l'endroit où l'on se tient.
+		#
+		# Il complète la Tornade au lieu de la doubler : elle EMMÈNE (linéaire,
+		# longue, elle range les poursuivants ailleurs), il ÉCARTE (radial,
+		# instantané, il dégage un corps-à-corps). L'un se prépare, l'autre se
+		# dégaine.
 		Ability.make({
-			"id": "air_gust", "display_name": "Bourrasque",
-			"description": "Un souffle qui balaie le couloir autour du mage.",
+			"id": "air_gust", "display_name": "Grand souffle",
+			"description": "Il projette tout autour de lui. Ce qui heurte un mur le paie.",
 			"kind": Ability.Kind.BLAST, "element": Element.Kind.AIR,
-			"damage": 23, "radius": 3.2, "cooldown": 7.0,
+			"damage": 18, "radius": 3.0, "cooldown": 7.0,
+			"blow_cells": 4, "slam_damage": 14,
 		}),
 		Ability.make({
 			"id": "air_veil", "display_name": "Voile d'air",

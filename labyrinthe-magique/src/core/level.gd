@@ -18,6 +18,11 @@ const IMPACT_EFFECT_SCENE := preload("res://scenes/entities/impact_effect.tscn")
 const LAIR_SCENE := preload("res://scenes/entities/enemy_lair.tscn")
 const WARP_SCENE := preload("res://scenes/fx/warp_effect.tscn")
 const SHOCKWAVE_SCENE := preload("res://scenes/fx/shockwave.tscn")
+const IMPLOSION_SCENE := preload("res://scenes/fx/implosion.tscn")
+## Temps d'affichage d'une faille, en secondes. Juste de quoi voir sortir les
+## deux ombres — voir `_on_rift_opened`.
+const RIFT_SHOW := 2.4
+const GAS_PUFF_SCENE := preload("res://scenes/fx/gas_puff.tscn")
 const WARP_TRAIL_SCENE := preload("res://scenes/fx/warp_trail.tscn")
 const METEOR_SCENE := preload("res://scenes/fx/meteor.tscn")
 const COLUMN_SCENE := preload("res://scenes/fx/pressure_column.tscn")
@@ -28,6 +33,12 @@ const ARC_SCENE := preload("res://scenes/fx/lightning_arc.tscn")
 const CLOUD_SCENE := preload("res://scenes/fx/storm_cloud.tscn")
 const SKY_SCENE := preload("res://scenes/fx/sky_cloud.tscn")
 const CREST_SCENE := preload("res://scenes/fx/spell_crest.tscn")
+const SPIKE_SCENE := preload("res://scenes/fx/earth_spike.tscn")
+const TURRET_SCENE := preload("res://scenes/fx/crystal_turret.tscn")
+const THROWN_SCENE := preload("res://scenes/fx/thrown_stone.tscn")
+const BURST_SCENE := preload("res://scenes/fx/spike_burst.tscn")
+const SLIDE_SCENE := preload("res://scenes/fx/rock_slide.tscn")
+const TORNADO_SCENE := preload("res://scenes/fx/tornado.tscn")
 const DAMAGE_NUMBER_SCENE := preload("res://scenes/entities/damage_number.tscn")
 const TILE_SIZE := MazeRenderer.TILE_SIZE
 ## Nombre de cases visibles sur le PLUS PETIT côté de l'écran, en poursuite.
@@ -116,11 +127,37 @@ var _orb_texture: Texture2D = null
 var _orb_frames := 1
 var _impact_texture: Texture2D = null
 var _zone_texture: Texture2D = null
+## Le portail du mage. Il servait à la seule translation ; la Rune des Ténèbres
+## le pose désormais AU SOL, ce qui lie visuellement les deux sorts d'un même
+## personnage — c'est le même passage, ouvert pour soi ou laissé derrière soi.
+var _warp_texture: Texture2D = null
+## Bande d'images du portail posé au sol, et son nombre de poses.
+var _rune_texture: Texture2D = null
+var _rune_frames := 1
 ## Nuage dessiné de la planche, quand le personnage en a un.
 var _cloud_texture: Texture2D = null
 var _cloud_lit_texture: Texture2D = null
 ## Le blason du mage, quand sa planche en fournit un.
 var _crest_texture: Texture2D = null
+## Les pics et la terre soulevée, pour les sorts de la Terre.
+var _spikes_texture: Texture2D = null
+var _dust_texture: Texture2D = null
+var _crystal_texture: Texture2D = null
+var _tornado_texture: Texture2D = null
+var _curl_texture: Texture2D = null
+## Les deux moitiés du Grand souffle, six images chacune. « wave » et non
+## « burst » : `_burst_frames` désigne déjà les gerbes de la Terre.
+var _cone_frames: Array[Texture2D] = []
+var _wave_frames: Array[Texture2D] = []
+var _tornado_frames: Array[Texture2D] = []
+var _shard_texture: Texture2D = null
+var _boulder_texture: Texture2D = null
+var _gem_texture: Texture2D = null
+## matière -> six images d'éruption.
+var _burst_frames := {}
+var _aegis_texture: Texture2D = null
+var _rock_texture: Texture2D = null
+var _spark_texture: Texture2D = null
 var gems: Array[Gem] = []
 var potions: Array[Potion] = []
 var teleport_system: TeleportSystem = null
@@ -230,6 +267,9 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.enemy_staggered.connect(_on_enemy_status.bind("stagger"))
 	combat.enemy_burning.connect(_on_enemy_status.bind("burn"))
 	combat.enemy_pushed.connect(_on_enemy_pushed)
+	combat.enemy_hauled.connect(_on_enemy_hauled)
+	combat.enemy_poisoned.connect(_on_enemy_poisoned)
+	combat.rift_opened.connect(_on_rift_opened)
 	combat.chain_arced.connect(_on_chain_arced)
 	combat.storm_gathered.connect(_on_storm_gathered)
 	combat.storm_dispersed.connect(_on_storm_dispersed)
@@ -242,6 +282,15 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.player_empowered.connect(_on_player_empowered)
 	combat.player_calmed.connect(_on_player_calmed)
 	combat.player_shielded.connect(_on_player_shielded)
+	combat.enemy_slammed.connect(_on_enemy_slammed)
+	combat.zone_moved.connect(_on_zone_moved)
+	combat.quake_started.connect(_on_quake_started)
+	combat.quake_slide.connect(_on_quake_slide)
+	combat.turret_planted.connect(_on_turret_planted)
+	combat.turret_fired.connect(_on_turret_fired)
+	combat.turret_faded.connect(_on_turret_faded)
+	combat.player_made_immune.connect(_on_player_made_immune)
+	combat.player_immunity_faded.connect(_on_immunity_faded)
 	combat.player_shield_faded.connect(_on_shield_faded)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
@@ -655,9 +704,56 @@ func _load_character_fx() -> void:
 	_orb_texture = _texture_or_null(folder + "orb.png")
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	_zone_texture = _texture_or_null(folder + "zone.png")
+	_warp_texture = _texture_or_null(folder + "warp.png")
+	_rune_texture = _texture_or_null(folder + "rune.png")
+	_rune_frames = 1
+	var rune_meta := FileAccess.get_file_as_string(folder + "rune.json")
+	var rune_parsed: Variant = JSON.parse_string(rune_meta)
+	if rune_parsed != null:
+		_rune_frames = maxi(1, int((rune_parsed as Dictionary).get("frames", 1)))
 	_cloud_texture = _texture_or_null(folder + "cloud_dark.png")
 	_cloud_lit_texture = _texture_or_null(folder + "cloud.png")
 	_crest_texture = _texture_or_null(folder + "crest.png")
+	_spikes_texture = _texture_or_null(folder + "spikes.png")
+	_dust_texture = _texture_or_null(folder + "dust.png")
+	_crystal_texture = _texture_or_null(folder + "crystal.png")
+	_tornado_texture = _texture_or_null(folder + "tornado.png")
+	_curl_texture = _texture_or_null(folder + "curl.png")
+	# ⚠️ ON VIDE AVANT DE REMPLIR. Ces tableaux sont des membres du Level, et
+	# le chargement des textures est refait à chaque niveau : sans ce
+	# nettoyage, les images s'EMPILENT — mesuré, douze images de cône au lieu
+	# de six au deuxième niveau, et l'animation jouait deux fois plus vite.
+	_cone_frames.clear()
+	_wave_frames.clear()
+	_tornado_frames.clear()
+	_burst_frames.clear()
+	for i in 6:
+		var frame := _texture_or_null("%sblast_cone_%d.png" % [folder, i])
+		if frame != null:
+			_cone_frames.append(frame)
+		var wave := _texture_or_null("%sblast_burst_%d.png" % [folder, i])
+		if wave != null:
+			_wave_frames.append(wave)
+	# Le tour complet de la tornade, huit images.
+	for i in 8:
+		var turn := _texture_or_null("%stornado_spin_%d.png" % [folder, i])
+		if turn != null:
+			_tornado_frames.append(turn)
+	_shard_texture = _texture_or_null(folder + "shard.png")
+	_boulder_texture = _texture_or_null(folder + "boulder.png")
+	_gem_texture = _texture_or_null(folder + "gem.png")
+	# Les deux éruptions de la planche animée, six images chacune.
+	for matter in ["crystal", "stone"]:
+		var suite: Array[Texture2D] = []
+		for i in 6:
+			var frame := _texture_or_null("%sspikes_%s_%d.png" % [folder, matter, i])
+			if frame != null:
+				suite.append(frame)
+		if not suite.is_empty():
+			_burst_frames[matter] = suite
+	_aegis_texture = _texture_or_null(folder + "aegis.png")
+	_rock_texture = _texture_or_null(folder + "rock.png")
+	_spark_texture = _texture_or_null(folder + "spark.png")
 	_orb_frames = 1
 	var meta := FileAccess.get_file_as_string(folder + "orb.json")
 	var parsed: Variant = JSON.parse_string(meta)
@@ -708,6 +804,15 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 	var impact_time := ImpactEffect.DURATION * (2.0 if ability.flames > 0.0 else 1.0)
 	_spawn_impact(cell, ability.element, maxf(0.9, ability.radius),
 		impact_time, _impact_texture, ability.flames)
+	# L'ASPIRATION SE DESSINE AVANT LES TRAÎNÉES. Le nœud est posé ici parce que
+	# `blast_fired` part avant que les créatures ne soient déplacées : l'anneau
+	# est donc déjà à l'écran quand les traînées le rejoignent.
+	if ability.pull_radius > 0.0:
+		var implosion: Implosion = IMPLOSION_SCENE.instantiate()
+		entities.add_child(implosion)
+		implosion.position = maze_renderer.cell_to_world(cell)
+		implosion.setup(TILE_SIZE, ability.pull_radius,
+			Element.color(ability.element), int(cell.x * 73 + cell.y * 31))
 	if ability.shockwave:
 		_spawn_shockwave(cell, ability)
 
@@ -747,6 +852,96 @@ func _on_player_shielded(amount: int, duration: float) -> void:
 		player.add_child(_bubble)
 		_bubble.setup(TILE_SIZE, Element.color(character.element), duration)
 	player_shielded.emit(amount)
+
+
+## Alterne cristal et pierre d'un tir à l'autre.
+var _shard_flip := false
+
+## Les cristaux plantés. Indexés par leur identifiant : deux cristaux peuvent
+## tenir deux couloirs à la fois.
+var _turret_nodes := {}
+
+
+func _on_turret_planted(id: int, ability: Ability, cell: Vector2i) -> void:
+	# DEUX FORMES pour un même sort. S'il ACCOMPAGNE le mage, ce sont des
+	# pierres en ORBITE autour de lui : ce qui tourne est ce qui part, le stock
+	# est visible, et le projectile est la pierre même qui vient de quitter le
+	# cercle. Un cristal flottant crachait des éclats sortis de nulle part.
+	#
+	# Planté, c'est la colonne de cristal fichée dans le sol — aucun mage ne
+	# s'en sert aujourd'hui, mais la forme existe et le rendu avec.
+	if ability.turret_follows and player != null:
+		var orbit := StoneOrbit.new()
+		player.add_child(orbit)
+		# L'ORBITE est faite de petits éclats, comme celle de l'Égide : c'est
+		# la RÉSERVE du mage. Ce qui en part est le gros rocher rond ou la
+		# grande gemme — et c'est ce contraste de taille qui fait qu'un jet se
+		# remarque au milieu du cercle qui tourne.
+		orbit.setup(TILE_SIZE, ability.duration, [_rock_texture, _spark_texture])
+		_turret_nodes[id] = orbit
+		_spawn_impact(cell, ability.element, 1.0, 0.45)
+		return
+	var turret: CrystalTurret = TURRET_SCENE.instantiate()
+	entities.add_child(turret)
+	turret.position = maze_renderer.cell_to_world(cell)
+	turret.setup(TILE_SIZE, ability.duration, _crystal_texture)
+	_turret_nodes[id] = turret
+	# La terre remuée, comme pour les Pics : ce qui perce le sol doit en
+	# soulever.
+	_spawn_impact(cell, ability.element, 1.0, 0.45)
+
+
+func _on_turret_fired(id: int, ability: Ability, cell: Vector2i, index: int) -> void:
+	if index >= enemies.size():
+		return
+	# L'orbe ne lance rien : il OUVRE LE SOL. Les gerbes sont dessinées par les
+	# zones que le balayage plante ; ici, seule la réserve réagit — un éclat
+	# quitte le cercle et l'anneau vert s'ouvre à sa place, pour que le joueur
+	# rattache la faille à SON orbe et non au décor.
+	if not _turret_nodes.has(id):
+		return
+	var node: Node2D = _turret_nodes[id]
+	if is_instance_valid(node) and node is StoneOrbit:
+		(node as StoneOrbit).launch(enemies[index].position)
+
+
+func _on_turret_faded(id: int) -> void:
+	if not _turret_nodes.has(id):
+		return
+	# Les deux formes du sort s'éteignent différemment : l'orbite se resserre,
+	# la colonne plantée s'affaisse dans le sol.
+	var node: Node2D = _turret_nodes[id]
+	if is_instance_valid(node):
+		if node is StoneOrbit:
+			(node as StoneOrbit).stop()
+		elif node is CrystalTurret:
+			(node as CrystalTurret).fade()
+		else:
+			node.queue_free()
+	_turret_nodes.erase(id)
+
+
+## L'égide de pierre. Elle vit ATTACHÉE au mage, comme la bulle et l'aura :
+## l'immunité le suit, elle n'est pas posée quelque part.
+var _aegis: EarthAegis = null
+
+
+func _on_player_made_immune(duration: float) -> void:
+	if player == null:
+		return
+	if _aegis != null and is_instance_valid(_aegis):
+		_aegis.refresh(duration)
+		return
+	_aegis = EarthAegis.new()
+	player.add_child(_aegis)
+	_aegis.setup(TILE_SIZE, duration, _aegis_texture, _rock_texture,
+		_spark_texture)
+
+
+func _on_immunity_faded() -> void:
+	if _aegis != null and is_instance_valid(_aegis):
+		_aegis.stop()
+	_aegis = null
 
 
 func _on_shield_faded() -> void:
@@ -789,8 +984,36 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	var eclat := _impact_texture
 	if ability.is_ultimate and _crest_texture != null:
 		eclat = null
-	_spawn_impact(cell, ability.element, ability.radius, 0.75, eclat,
-		ability.flames)
+	# LE GRAND SOUFFLE A SON PROPRE DESSIN : rien d'autre par-dessus.
+	#
+	# L'éclat générique posait une tornade TOURNOYANTE au centre du mage — une
+	# image qui pivote sur elle-même là où le sort chasse vers l'extérieur —
+	# et ses grosses bulles blanches couvraient le cône et l'onde dessinés.
+	# Signalé deux fois ; le sort se suffit.
+	var souffle: bool = ability.blow_cells > 0 and not _cone_frames.is_empty()
+	if not souffle:
+		_spawn_impact(cell, ability.element, ability.radius, 0.75, eclat,
+			ability.flames)
+	# LE CÔNE DEVANT, L'ONDE AUTOUR. Deux animations dessinées — la première
+	# version traçait ses anneaux en code, ce qui donnait un rond pâle qui ne
+	# disait ni la direction ni la force.
+	#
+	# ⚠️ Ce bloc a d'abord atterri dans `_on_projectile_hit` : les deux
+	# fonctions se terminent par le même « if ability.shockwave », et j'ai
+	# ancré dessus. Le Grand souffle n'est pas un projectile, donc rien ne
+	# s'affichait — et rien ne criait non plus, puisque le code était valide.
+	if souffle:
+		var blast := WindBlast.new()
+		entities.add_child(blast)
+		blast.position = maze_renderer.cell_to_world(cell)
+		blast.setup(TILE_SIZE, ability.radius, combat_context.player_facing,
+			_cone_frames, _wave_frames)
+		# UNE SECOUSSE COURTE. C'est le seul sort du jeu qui projette : la
+		# caméra doit encaisser avec le labyrinthe, sinon le souffle n'a l'air
+		# de rien peser. Bien plus brève et plus faible que le Séisme.
+		_shake_total = 0.32
+		_shake_left = _shake_total
+		_shake_time = 0.0
 	if ability.column_burst:
 		var column: PressureColumn = COLUMN_SCENE.instantiate()
 		entities.add_child(column)
@@ -801,18 +1024,80 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 
 
 func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
+	# LES PICS NE SONT PAS UNE NAPPE. Une gerbe de pierre se dresse : elle a une
+	# base au sol et une hauteur, là où le brasier et le cercle glacé s'étalent.
+	# Elle a donc son propre nœud, avec son jaillissement et sa terre soulevée,
+	# plutôt qu'un style de plus dans `ZoneEffect` — qui dessine en ADDITIF, ce
+	# qui ferait briller la roche comme une flamme.
+	# LA TORNADE a son propre dessin, et elle MARCHE : ce n'est pas une nappe
+	# posée mais une colonne qui remonte le couloir.
+	if ability.zone_style == "tornade":
+		# La planche du TOUR si elle est là, l'image unique sinon : le sort
+		# reste jouable même sans l'animation.
+		var suite := _tornado_frames
+		if suite.is_empty() and _tornado_texture != null:
+			suite = [_tornado_texture] as Array[Texture2D]
+		if suite.is_empty():
+			return
+		var tornado: Tornado = TORNADO_SCENE.instantiate()
+		entities.add_child(tornado)
+		tornado.position = maze_renderer.cell_to_world(cell)
+		tornado.setup(TILE_SIZE, ability.duration, suite,
+			Element.color(ability.element))
+		_zone_nodes[zone_id] = tornado
+		return
+	# LA FAILLE joue la planche ANIMÉE : cristal et pierre en alternance selon
+	# la case. Deux gerbes identiques côte à côte se lisent comme une image
+	# copiée-collée ; alternées, le couloir se hérisse de deux matières.
+	if ability.zone_style == "eruption" and not _burst_frames.is_empty():
+		var matter := "crystal" if (cell.x + cell.y) % 2 == 0 else "stone"
+		if not _burst_frames.has(matter):
+			matter = _burst_frames.keys()[0]
+		var burst: SpikeBurst = BURST_SCENE.instantiate()
+		entities.add_child(burst)
+		burst.position = maze_renderer.cell_to_world(cell)
+		burst.setup(TILE_SIZE, ability.duration, _burst_frames[matter])
+		_zone_nodes[zone_id] = burst
+		return
+	if ability.zone_style == "pics":
+		var spike: EarthSpike = SPIKE_SCENE.instantiate()
+		entities.add_child(spike)
+		spike.position = maze_renderer.cell_to_world(cell)
+		spike.setup(TILE_SIZE, ability.duration, _spikes_texture, _dust_texture)
+		_zone_nodes[zone_id] = spike
+		return
 	var zone: ZoneEffect = ZONE_EFFECT_SCENE.instantiate()
 	entities.add_child(zone)
 	zone.position = maze_renderer.cell_to_world(cell)
 	zone.setup(TILE_SIZE, Element.color(ability.element), ability.radius,
-		ability.duration, _zone_texture, ability.flames,
-		ability.zone_style, ability.snare > 0.0)
+		ability.duration,
+		# LA FLAQUE D'OMBRE N'A PAS DE DESSIN. Les autres zones posent le cercle
+		# de leur planche — l'anneau de feu, le cercle de pierres ; celle-ci est
+		# une absence, et n'importe quel motif lumineux par-dessus la ferait
+		# ressembler à un sort qui s'allume.
+		null if ability.zone_style == "ombre" else
+		(_warp_texture if ability.zone_style == "portail" else _zone_texture),
+		ability.flames, ability.zone_style, ability.snare > 0.0)
+	if ability.zone_style == "portail" and _rune_texture != null:
+		# 4,5 images par seconde : un tour complet en une seconde et un tiers.
+		# Plus vite, le portail devient une toupie ; plus lentement, le fondu
+		# entre deux poses s'étire et l'anneau a l'air de flotter.
+		zone.play_strip(_rune_texture, _rune_frames, 4.5)
 	_zone_nodes[zone_id] = zone
+
+
+## La zone qui MARCHE a changé de case : son rendu glisse jusque-là.
+func _on_zone_moved(zone_id: int, cell: Vector2i) -> void:
+	if not _zone_nodes.has(zone_id):
+		return
+	var node: Node2D = _zone_nodes[zone_id]
+	if is_instance_valid(node) and node is Tornado:
+		(node as Tornado).walk_to(maze_renderer.cell_to_world(cell))
 
 
 func _on_zone_expired(zone_id: int) -> void:
 	if _zone_nodes.has(zone_id):
-		var zone: ZoneEffect = _zone_nodes[zone_id]
+		var zone: Node2D = _zone_nodes[zone_id]
 		if is_instance_valid(zone):
 			zone.queue_free()
 		_zone_nodes.erase(zone_id)
@@ -850,10 +1135,22 @@ func _on_summon_moved(id: int, grid_position: Vector2, facing: Vector2i) -> void
 		visual.set_facing(facing)
 
 
-func _on_summon_struck(id: int, _target: int) -> void:
+func _on_summon_struck(id: int, target: int) -> void:
 	var visual: SummonVisual = _summon_nodes.get(id)
-	if visual != null and is_instance_valid(visual):
-		visual.flash_strike()
+	if visual == null or not is_instance_valid(visual):
+		return
+	visual.flash_strike()
+	# LE GAZ SE POSE SUR LA VICTIME, pas sur celui qui souffle. La créature a sa
+	# pose de souffle ; ce qui manque à l'écran est l'endroit où le nuage ARRIVE,
+	# sans quoi on voit une ombre gesticuler et un ennemi perdre des points de
+	# vie sans lien visible entre les deux.
+	var gas: Texture2D = visual.gas_texture()
+	if gas == null or target < 0 or target >= enemies.size():
+		return
+	var puff: GasPuff = GAS_PUFF_SCENE.instantiate()
+	entities.add_child(puff)
+	puff.position = enemies[target].position
+	puff.setup(TILE_SIZE, gas, visual.gas_frames())
 
 
 func _on_summon_expired(id: int) -> void:
@@ -963,6 +1260,69 @@ func _on_enemy_soaked(index: int, duration: float, factor: float) -> void:
 	if _structure_at(index) != null or index >= enemies.size():
 		return
 	enemies[index].soak(duration, factor)
+
+
+## ASPIRÉE vers le mage. La créature est déplacée d'un coup, comme pour un
+## souffle — mais l'effet, lui, part de LÀ OÙ ELLE ÉTAIT et non de son point
+## d'arrivée. Sans cette traînée, le joueur voit trois poursuivants changer de
+## case sans raison et croit à un bug ; avec elle, il voit son sort les tirer.
+## LA PORTE QUI S'OUVRE SUR UNE PROIE.
+##
+## Elle réutilise le portail de la Rune — même dessin, même rotation. Ce n'est
+## pas une économie : c'est le même passage, ouvert pour soi au sol ou déchiré
+## au loin, et le joueur doit le reconnaître. Deux portails différents pour le
+## même mage donneraient deux sorts sans rapport.
+##
+## Elle ne dure que le temps de laisser sortir ce qu'elle contient. Une porte qui
+## resterait ouverte deux minutes deviendrait un décor, et le joueur cesserait de
+## regarder ce qui en sort.
+func _on_rift_opened(cell: Vector2i) -> void:
+	var rift: ZoneEffect = ZONE_EFFECT_SCENE.instantiate()
+	entities.add_child(rift)
+	rift.position = maze_renderer.cell_to_world(cell)
+	rift.setup(TILE_SIZE, Element.color(Element.Kind.SHADOW), 1.2, RIFT_SHOW,
+		_warp_texture, 0.0, "portail", false)
+	if _rune_texture != null:
+		rift.play_strip(_rune_texture, _rune_frames, 6.0)
+
+
+func _on_enemy_poisoned(index: int, duration: float) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	enemies[index].poison_glow(duration)
+
+
+func _on_enemy_hauled(index: int, cell: Vector2i) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	var enemy: Enemy = enemies[index]
+	# La traînée suit le COULOIR et non la ligne droite : l'aspiration se mesure
+	# en distance de chemin, donc une créature tirée depuis l'autre côté d'un
+	# virage doit être vue passer par le virage. Une corde tendue à travers la
+	# haie dirait que le sort traverse les murs, ce qu'il ne fait pas.
+	var path := combat.trajectory(enemy.mover.decision_cell(), cell)
+	var points := PackedVector2Array()
+	for step in path:
+		points.append(maze_renderer.cell_to_world(step))
+	enemy.mover.teleport_to(cell)
+	enemy.snap_to_mover()
+	if points.size() >= 2:
+		var trail: WarpTrail = WARP_TRAIL_SCENE.instantiate()
+		entities.add_child(trail)
+		trail.setup(points, TILE_SIZE, Element.color(Element.Kind.SHADOW))
+
+
+## PLAQUÉE CONTRE LA PIERRE. L'éclat est posé sur la case où la course s'est
+## arrêtée : c'est le seul indice qui apprend que le mur fait mal.
+func _on_enemy_slammed(index: int, cell: Vector2i) -> void:
+	if index >= enemies.size():
+		return
+	var mark := SlamMark.new()
+	entities.add_child(mark)
+	mark.position = maze_renderer.cell_to_world(cell)
+	mark.setup(TILE_SIZE)
+	if is_instance_valid(enemies[index]):
+		enemies[index].flash_hit()
 
 
 func _on_enemy_pushed(index: int, cell: Vector2i) -> void:
@@ -1365,6 +1725,69 @@ func _check_capture() -> void:
 		player_caught.emit()
 
 
+## LE TREMBLEMENT DE TERRE, à l'écran.
+##
+## Amplitude et FRÉQUENCE décroissent ensemble : la première seconde est une
+## secousse serrée et violente, la dernière un balancement lourd. Faire décroître
+## la seule amplitude donne une vibration régulière qui s'éteint — ça ne se lit
+## pas comme un séisme, mais comme un moteur qu'on arrête.
+##
+## Le décalage est appliqué à la caméra APRÈS le suivi du mage, jamais à sa
+## cible : sinon le lissage de la caméra avale la secousse et il ne reste qu'un
+## flottement.
+var _shake_left := 0.0
+var _shake_total := 1.0
+var _shake_time := 0.0
+
+
+func _on_quake_started(duration: float, _ability: Ability) -> void:
+	_shake_total = maxf(0.2, duration)
+	_shake_left = _shake_total
+	_shake_time = 0.0
+
+
+func _on_quake_slide(cell: Vector2i, ability: Ability) -> void:
+	var slide: RockSlide = SLIDE_SCENE.instantiate()
+	entities.add_child(slide)
+	slide.position = maze_renderer.cell_to_world(cell)
+	# La graine vient de la CASE : deux captures du même séisme donnent le même
+	# éboulement, ce qui permet de comparer deux images.
+	slide.setup(TILE_SIZE, [_boulder_texture, _rock_texture, _gem_texture],
+		_dust_texture, cell.x * 73 + cell.y * 31 + 1)
+	_spawn_impact(cell, ability.element, ability.quake_radius, 0.5)
+	# ET LA PIERRE JAILLIT : c'est le séisme qui la fait sortir. Les gerbes de
+	# la planche animée servent ici comme pour la Faille — une matière ou
+	# l'autre selon la case.
+	if _burst_frames.is_empty():
+		return
+	var matter := "crystal" if (cell.x + cell.y) % 2 == 0 else "stone"
+	if not _burst_frames.has(matter):
+		matter = _burst_frames.keys()[0]
+	var burst: SpikeBurst = BURST_SCENE.instantiate()
+	entities.add_child(burst)
+	burst.position = maze_renderer.cell_to_world(cell)
+	burst.setup(TILE_SIZE, 1.6, _burst_frames[matter])
+
+
+## Le décalage de secousse du moment, ou zéro hors séisme.
+func _shake_offset(delta: float) -> Vector2:
+	if _shake_left <= 0.0:
+		return Vector2.ZERO
+	_shake_left = maxf(0.0, _shake_left - delta)
+	_shake_time += delta
+	var force := _shake_left / _shake_total
+	# La force décroît en CARRÉ : la violence du départ doit s'entendre, et la
+	# fin ne doit pas traîner.
+	# Mesuré en capture : à 0,55 case le départ donnait quinze pixels de monde,
+	# soit une secousse honnête mais pas un séisme. On veut que la première
+	# seconde soit désagréable.
+	var amplitude := TILE_SIZE * 0.75 * force * force
+	var speed := 34.0 * (0.35 + 0.65 * force)
+	return Vector2(
+		sin(_shake_time * speed) * amplitude,
+		cos(_shake_time * speed * 1.37 + 1.1) * amplitude * 0.8)
+
+
 func _update_camera(snap: bool) -> void:
 	if grid == null:
 		return
@@ -1404,6 +1827,8 @@ func _update_camera(snap: bool) -> void:
 		camera.position_smoothing_enabled = true
 	else:
 		camera.position = target
+	# La secousse s'ajoute APRÈS le lissage : voir l'en-tête de `_shake_offset`.
+	camera.offset = _shake_offset(get_process_delta_time())
 
 
 static func _clamp_axis(value: float, visible: float, world: float, padding: float) -> float:

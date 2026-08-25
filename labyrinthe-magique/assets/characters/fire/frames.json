@@ -1,9 +1,9 @@
 {
   "cell": [
-    192,
+    232,
     112
   ],
-  "feet_y": 109.4,
+  "feet_y": 110.1,
   "poses": [
     "idle",
     "walk_1",
@@ -18,12 +18,12 @@
     "left",
     "right"
   ],
-  "source": "mage_fire.png",
+  "source": "feu.png",
   "grid": {
-    "dx": 153,
-    "dy": 153,
-    "ox": 143,
-    "oy": 130,
+    "dx": 256,
+    "dy": 256,
+    "ox": 0,
+    "oy": 0,
     "col0": 0,
     "row0": 0
   }

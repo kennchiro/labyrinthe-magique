@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/rock_slide.gd" id="1_slide"]
+
+[node name="RockSlide" type="Node2D"]
+z_index = 14
+script = ExtResource("1_slide")

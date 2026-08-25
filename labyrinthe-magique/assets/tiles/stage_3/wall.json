@@ -1,0 +1,13 @@
+{
+  "piece": 64,
+  "columns": 4,
+  "rows": 4,
+  "variants": 2,
+  "bits": {
+    "up": 1,
+    "right": 2,
+    "down": 4,
+    "left": 8
+  },
+  "source": "terrain_3_mur.png"
+}

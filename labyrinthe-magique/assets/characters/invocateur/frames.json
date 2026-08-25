@@ -1,9 +1,9 @@
 {
   "cell": [
-    144,
+    232,
     112
   ],
-  "feet_y": 107.6,
+  "feet_y": 110.3,
   "poses": [
     "idle",
     "walk_1",
@@ -18,5 +18,13 @@
     "left",
     "right"
   ],
-  "source": "mage_invocateur.png"
+  "source": "invocateur.png",
+  "grid": {
+    "dx": 256,
+    "dy": 256,
+    "ox": 0,
+    "oy": 0,
+    "col0": 0,
+    "row0": 0
+  }
 }

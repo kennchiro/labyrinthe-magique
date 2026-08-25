@@ -1,9 +1,9 @@
 {
   "cell": [
-    192,
+    232,
     112
   ],
-  "feet_y": 110.1,
+  "feet_y": 110.2,
   "poses": [
     "idle",
     "walk_1",
@@ -15,15 +15,15 @@
   "directions": [
     "down",
     "up",
-    "right",
-    "left"
+    "left",
+    "right"
   ],
-  "source": "mage_supreme.png",
+  "source": "supreme.png",
   "grid": {
-    "dx": 238,
-    "dy": 235,
-    "ox": 20,
-    "oy": 23,
+    "dx": 256,
+    "dy": 256,
+    "ox": 0,
+    "oy": 0,
     "col0": 0,
     "row0": 0
   }

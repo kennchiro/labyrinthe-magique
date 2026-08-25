@@ -21,6 +21,9 @@ extends Node
 ##   --demo-stage N    en démo, ouvre directement le décor du stage N
 ##   --use-slot N      lance le sort du slot N dès qu'il part (test des invocations)
 ##   --goblin / --hunter  colle cet ennemi au joueur (test de sa pose de coup)
+##   --skill-delay F    attend F secondes avant --skill (le temps que les
+##                      ennemis arrivent : un sort qui agit SUR EUX ne se
+##                      capture pas à la frame zéro, le labyrinthe est vide)
 ##   --cast             attaque dès qu'une cible est à portée
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
@@ -136,10 +139,17 @@ func apply_command_line() -> void:
 		_warp_tries = 30
 	# Lance un SORT précis en boucle : la seule façon de capturer la boule de
 	# feu à l'image près, sans jouer jusqu'à ce qu'elle soit prête.
+	var delay_arg := args.find("--skill-delay")
+	if delay_arg >= 0 and delay_arg + 1 < args.size():
+		_skill_delay = float(args[delay_arg + 1])
 	var skill_arg := args.find("--skill")
 	if skill_arg >= 0 and skill_arg + 1 < args.size():
 		_skill_slot = int(args[skill_arg + 1])
-		_skill_tries = 40
+		# QUATRE SECONDES DE RELANCES et non deux tiers de seconde. Un sort qui
+		# exige une CIBLE — la Faille des ténèbres n'ouvre rien sans proie — est
+		# refusé tant que personne n'est sorti de son repaire, et la capture
+		# repartait sans l'avoir jamais lancé.
+		_skill_tries = 240
 	if "--raze" in args:
 		for lair in game.level.lairs:
 			if lair.is_vulnerable():
@@ -206,6 +216,8 @@ var _auto_walk := false
 var _warp_tries := 0
 var _skill_slot := -1
 var _skill_tries := 0
+## Attente avant de lancer `--skill`, en secondes.
+var _skill_delay := 0.0
 var _auto_cast := false
 var _show_fx := false
 var _fx_timer := 0.0
@@ -214,7 +226,9 @@ var _tap_countdown := 0
 
 
 func _process(delta: float) -> void:
-	if _skill_tries > 0 and _skill_slot >= 0:
+	if _skill_delay > 0.0:
+		_skill_delay -= delta
+	elif _skill_tries > 0 and _skill_slot >= 0:
 		_skill_tries -= 1
 		if game.level.player != null and game.level.use_ability(_skill_slot):
 			_skill_tries = 0

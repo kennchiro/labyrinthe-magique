@@ -19,7 +19,7 @@ signal start_requested
 signal journey_requested
 signal select_requested
 
-const COVER := preload("res://assets/peso&cover/couverture.png")
+const COVER := preload("res://assets/peso&cover/interface/couverture.png")
 
 ## Rectangles des boutons peints, en fraction de l'image (x0, y0, x1, y1).
 const HOTSPOTS := {

@@ -109,7 +109,7 @@ CONTRAST = 8.0
 #     en haut — invisible à l'écran, mais le jeu dimensionne la maison sur la
 #     largeur de sa texture, donc l'île se serait affichée 10 % trop petite ;
 #   - jeter ce qui traîne à plus de 26 px de tout îlot.
-MAISON_SHEET = SOURCE / "../peso&cover/maison_stage.png"
+MAISON_SHEET = SOURCE / "../peso&cover/decor/maison_stage.png"
 MAISON_COLUMNS = 5
 MAISON_ROWS = 2
 ## En dessous, un pixel appartient au halo et non au dessin.

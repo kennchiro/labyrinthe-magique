@@ -28,7 +28,7 @@ colonne vide, ni séparer deux colonnes qui se touchent.
 from pathlib import Path
 from PIL import Image
 
-SOURCE = Path("assets/peso&cover")
+SOURCE = Path("assets/peso&cover/mages")
 OUT = Path("assets/characters")
 
 ## id -> (planche, boîte (x0, y0, x1, y1) relevée sur la planche)
@@ -39,7 +39,12 @@ WARPS = {
     "shadow":  ("mage_dark.png",    (1128, 802, 1240, 868)),  # portail d'ombre
     "supreme": ("mage_element.png", (761, 675, 872, 906)),   # moitié GAUCHE du bloc
     "thunder": ("mage_thunder.png", (767, 711, 927, 985)),   # moitié GAUCHE du bloc
-    "air":     ("mage_wind.png",    (795, 740, 900, 980)),   # colonne de plumes
+    # ⚠️ Boîte refaite : la précédente (795, 740, 900, 980) coupait le dessin
+    # EN DEUX — le cercle magique au sol va jusqu'à x=960, elle s'arrêtait à
+    # 900. Le mage de l'Air se téléportait donc dans une demi-colonne tranchée
+    # net, signalé par l'utilisateur. La colonne voisine, celle AVEC la
+    # silhouette, commence à 965 : on s'arrête juste avant.
+    "air":     ("mage_wind.png",    (804, 714, 962, 968)),   # colonne de plumes
 }
 
 ## Hauteur commune, en pixels. Les colonnes vont du simple au double d'une

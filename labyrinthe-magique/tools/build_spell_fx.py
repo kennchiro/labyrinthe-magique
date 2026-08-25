@@ -30,7 +30,7 @@ from PIL import Image
 import numpy as np
 from scipy import ndimage
 
-SOURCE = Path("assets/peso&cover")
+SOURCE = Path("assets/peso&cover/mages")
 OUT = Path("assets/characters")
 
 SHEETS = {
@@ -100,6 +100,43 @@ EXTRAS = {
         # transparent au-dessus du mage — jamais en rotation : une emblème qui
         # tourne se lit comme un objet ramassable qui vole.
         "crest": (1396, 352, 1514, 510),
+    },
+    # L'Air : ses TORNADES dessinées, dont le jeu n'employait aucune — la
+    # Tornade s'affichait avec l'anneau de vent générique des zones.
+    "air": {
+        "tornado": (1262, 22, 1390, 175),        # la grande, en détail
+        "tornado_small": (1186, 180, 1294, 328), # l'entonnoir étroit
+        "curl": (1316, 193, 1360, 278),          # la volute, une lame d'air
+    },
+    # La Terre : ses PICS étaient dessinés depuis le début, en trois tailles,
+    # pendant que « Pics de terre » s'affichait comme un éclat circulaire
+    # générique. Même histoire que les nuages de la Foudre.
+    "earth": {
+        "spikes": (1284, 16, 1388, 176),       # la gerbe de pierre, taille d'une case
+        "spikes_big": (1396, 20, 1526, 180),   # la même, avec ses cristaux
+        "dust": (1400, 550, 1526, 650),        # la motte de terre soulevée
+        # L'ÉGIDE et ce en quoi elle se disperse : la coque de pierre à son
+        # cristal, puis les cailloux et les étoiles vertes qui tournent autour
+        # du mage tant qu'il est intouchable.
+        # Mesurée au quadrillage après une première coupe qui tranchait la
+        # pierre à GAUCHE (1388 alors qu'elle commence à 1375), à droite, et
+        # la poussière du bas. La coque entière tient dans cette boîte.
+        "aegis": (1372, 356, 1524, 516),
+        # Le cristal PLANTÉ, avec son socle de pierre : le sort qui se bat
+        # tout seul. Il était dessiné, lui aussi.
+        "crystal": (1086, 192, 1194, 352),
+        # CE QUE LE MAGE MET EN ORBITE ET LANCE : le gros rocher rond fendu et
+        # le grand cristal vert. Les premiers essais employaient un caillou et
+        # un éclat minuscules — signalés comme invisibles en jeu, et ils
+        # l'étaient : vingt pixels de haut.
+        "boulder": (1074, 66, 1156, 154),
+        "gem": (1106, 371, 1159, 458),
+        # L'ÉCLAT qui part du cristal : le petit cristal dessiné à côté du
+        # pilier, sur la planche. Le tir alterne avec `rock` — du cristal ET de
+        # la pierre, puisque c'est ce que le sort arrache au sol.
+        "shard": (1160, 266, 1182, 292),
+        "rock": (982, 556, 1016, 596),
+        "spark": (1136, 548, 1176, 598),
     },
 }
 

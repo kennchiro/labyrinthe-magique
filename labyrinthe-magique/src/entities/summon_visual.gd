@@ -30,7 +30,23 @@ const CATALOGUE_PATH := ALLIES_PATH + "allies.json"
 ## mise à l'échelle : les poses d'une même créature n'ont pas toutes la même
 ## taille (l'aile ouverte, le souffle, le dragon qui pique ailes rabattues) et
 ## c'est justement ce rapport-là qu'il faut garder.
-const HEIGHTS := {"imp": 44.0, "gargouille": 52.0, "dragon": 88.0}
+## ⚠️ C'EST LA CASE QUI EST MISE À L'ÉCHELLE, PAS LE DESSIN — et une case n'est
+## pas remplie de la même façon d'une créature à l'autre. La gargouille occupe
+## 88 % de la sienne, l'ombre 67 % : sa case doit tenir le jet de gaz, qui
+## descend cinquante pixels plus bas que sa fumée au repos. À hauteur de case
+## égale, elle paraissait donc plus PETITE que la gargouille alors qu'elle est
+## réglée plus haut. Ces nombres sont des hauteurs de CASE, pas de créature.
+const HEIGHTS := {"imp": 44.0, "gargouille": 52.0, "dragon": 88.0, "ombre": 93.0}
+## Créature dont on emprunte les bandes tant que la planche d'une nouvelle n'est
+## pas découpée, avec sa teinte de remplacement.
+##
+## Un `push_error` et un sprite absent seraient pire qu'un pis-aller : la
+## mécanique se teste et se règle avant que le dessin n'existe, et une invocation
+## invisible se lit comme un sort cassé. On emprunte donc, et on TEINTE — assez
+## sombre pour qu'aucune capture ne soit prise pour l'apparence définitive.
+## Vide tant qu'aucune planche ne manque, et c'est l'état normal : une entrée
+## qui traîne masquerait un découpage cassé derrière un pis-aller convaincant.
+const STAND_INS := {}
 ## Cadence du battement d'ailes, en images par seconde.
 const IDLE_FPS := 7.0
 ## Vitesse du balancement de vol stationnaire.
@@ -51,6 +67,9 @@ var _facing: Vector2i = Vector2i.DOWN
 var _strike_left := 0.0
 var _bob := 0.0
 var _time := 0.0
+## Le nuage de gaz de la créature, s'il y en a un dans son descripteur.
+var _gas: Texture2D = null
+var _gas_frames := 0
 
 
 func setup(p_kind: String, p_tile_size: int) -> void:
@@ -73,13 +92,24 @@ func _load_bands() -> void:
 		push_error("Descripteur des invocations introuvable (%s)" % CATALOGUE_PATH)
 		return
 	var catalogue: Dictionary = parsed
-	if not catalogue.has(kind_id):
+	var read_id := kind_id
+	if not catalogue.has(read_id) and STAND_INS.has(read_id):
+		var stand_in: Dictionary = STAND_INS[read_id]
+		read_id = str(stand_in["borrow"])
+		_sprite.modulate = stand_in["tint"] as Color
+		push_warning("« %s » n'a pas encore de planche : bandes de « %s » empruntées."
+			% [kind_id, read_id])
+	if not catalogue.has(read_id):
 		push_error("Invocation inconnue dans allies.json : « %s »" % kind_id)
 		return
-	var entry: Dictionary = catalogue[kind_id]
+	var entry: Dictionary = catalogue[read_id]
 	_mirror_left = bool(entry.get("mirror_left", false))
 	var cell: Array = entry["cell"]
 	_cell = Vector2(float(cell[0]), float(cell[1]))
+	if entry.has("gas"):
+		var gas: Dictionary = entry["gas"]
+		_gas = load(ALLIES_PATH + str(gas["file"]))
+		_gas_frames = maxi(1, int(gas.get("frames", 1)))
 	for direction in (entry["directions"] as Dictionary):
 		var band: Dictionary = entry["directions"][direction]
 		var texture: Texture2D = load(ALLIES_PATH + str(band["file"]))
@@ -90,6 +120,19 @@ func _load_bands() -> void:
 			"idle": maxi(1, int(band.get("idle", 1))),
 			"strike": maxi(0, int(band.get("strike", 0))),
 		}
+
+
+## LE SOUFFLE DE LA CRÉATURE, quand sa planche en fournit un.
+##
+## Rendu ici plutôt que chargé par le Level : c'est une pièce de la planche de
+## l'invocation, elle est décrite dans le même descripteur, et le Level n'a pas
+## à savoir quel fichier appartient à quelle créature.
+func gas_texture() -> Texture2D:
+	return _gas
+
+
+func gas_frames() -> int:
+	return _gas_frames
 
 
 func set_facing(facing: Vector2i) -> void:

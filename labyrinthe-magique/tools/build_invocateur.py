@@ -48,7 +48,7 @@ from PIL import Image
 from scipy import ndimage
 from build_characters import (CELL_PADDING, FRAME_HEIGHT, POSES, SOURCE, anchor)
 
-SHEET = SOURCE / "mage_invocateur.png"
+SHEET = SOURCE / "mages/mage_invocateur.png"
 OUT_MAGE = Path("assets/characters/invocateur")
 OUT_ALLIES = Path("assets/allies")
 
@@ -229,6 +229,18 @@ def crop_clean(image: Image.Image, box, mirror: bool = False) -> Image.Image:
     return out.transpose(Image.FLIP_LEFT_RIGHT) if mirror else out
 
 
+## ⚠️ LE MAGE N'EST PLUS DÉCOUPÉ ICI depuis la refonte du 2026-08-25.
+##
+## Sa planche a maintenant une grille régulière comme les sept autres, et il est
+## donc passé dans la table commune de `build_characters.py` — c'est ce qui lui
+## donne la MÊME case, la même échelle et le même calage sur les pieds que ses
+## confrères, ce qui est tout l'objet de la refonte. Il occupait 93 % de sa case
+## quand le Feu en occupait 60.
+##
+## Cette fonction reste, inappelée mais entière, parce que l'ANCIENNE planche
+## (`mages/mage_invocateur.png`) est encore la source des créatures invoquées et
+## de leurs effets, découpés juste en dessous : le jour où l'on redécoupe le mage
+## depuis cette planche-là, il faut ce code et non un souvenir.
 def build_mage(image: Image.Image) -> None:
     """Les quatre bandes du mage, six poses chacune, calées sur les pieds."""
     cells = {}
@@ -355,7 +367,10 @@ def build_fx(image: Image.Image) -> None:
 
 def main() -> None:
     image = load_sheet()
-    build_mage(image)
+    # `build_mage` n'est PLUS appelé : le mage vient de la planche de refonte,
+    # par la table commune de `build_characters.py`. L'appeler ici écraserait
+    # sans un mot la bande qui vient d'y être découpée — voir la note au-dessus
+    # de la fonction.
     build_allies(image)
     build_fx(image)
 

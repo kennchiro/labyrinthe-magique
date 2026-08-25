@@ -40,10 +40,12 @@ from pathlib import Path
 import json
 import sys
 import numpy as np
+from scipy import ndimage
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_characters import SOURCE, OUT, OUT_ENEMIES, SHEETS, detect_grid, cell_box, ALPHA_THRESHOLD, POSES, DIRECTIONS
+from build_characters import (SOURCE, OUT, OUT_ENEMIES, SHEETS, detect_grid, cell_box,
+                              ALPHA_THRESHOLD, POSES, DIRECTIONS, keyed_on_flat)
 
 ## Écart admis entre une case calculée et la rangée réellement mesurée. Au-delà,
 ## la case mord sur sa voisine. 26 px pour un pas d'environ 150 : un sixième de case.
@@ -92,6 +94,166 @@ def bands(profile: np.ndarray, gap: int, minimum: int) -> list:
     if start is not None and len(profile) - start >= minimum:
         out.append((start, len(profile)))
     return out
+
+
+## Part minimale de la case qu'une pose doit occuper.
+##
+## ⚠️ Ce n'est PAS la promesse des prompts (80 % de la case de la PLANCHE) : la
+## case du jeu est commune aux mages ET aux créatures, et c'est le Démon de
+## Cristal qui la fixe. Les mages y tiennent 59 à 65 %, ce qui est sain. Ce
+## seuil-ci ne cherche donc pas la belle taille : il attrape une pose CASSÉE —
+## un lanceur rendu à la case voisine ne laissant que sa boule de feu, mesuré à
+## 22 % sur les Ténèbres avant le recalage de la gouttière.
+MIN_FILL = 0.45
+## Écart maximal ENTRE MAGES. C'est la promesse de la refonte, et la seule
+## mesure qui la vérifie : ils allaient de 60 % à 93 % de leur case, sans qu'
+## aucune règle du jeu ne le justifie.
+MAX_BETWEEN = 1.20
+## Écart maximal toléré entre la plus grande et la plus petite pose d'une
+## planche. Au-delà, le personnage enfle et rétrécit en marchant.
+MAX_SPREAD = 1.35
+
+
+## Distance maximale, en largeurs de case, entre le personnage et une forme
+## détachée. Au-delà, ce n'est plus son bâton ni son orbe : c'est un morceau de
+## la pose voisine.
+##
+## ⚠️ CE CONTRÔLE MANQUAIT, et c'est ce qui l'a rendu nécessaire : la bande de
+## face du Mage de l'Air a été livrée avec une écharpe volée à la pose suivante
+## et un lanceur amputé, pendant que le contrôleur annonçait huit planches
+## irréprochables. Il ne mesurait que des hauteurs — un mage tronqué de son
+## écharpe garde la sienne.
+MAX_STRAY = 0.20
+
+
+def _stray_shape(cell: np.ndarray, cell_w: int) -> float:
+    """Écart entre le personnage et la forme détachée la plus lointaine."""
+    labels, count = ndimage.label(cell)
+    if count < 2:
+        return 0.0
+    areas = ndimage.sum(np.ones_like(labels), labels, range(1, count + 1))
+    main = int(np.argmax(areas)) + 1
+    body = np.nonzero((labels == main).any(axis=0))[0]
+    worst = 0.0
+    for index in range(1, count + 1):
+        # Une poussière de quelques pixels ne se voit pas ; ce qu'on cherche est
+        # un MORCEAU — une manche, une écharpe, un éclat de sort.
+        if index == main or areas[index - 1] < 30:
+            continue
+        here = np.nonzero((labels == index).any(axis=0))[0]
+        gap = max(here[0] - body[-1], body[0] - here[-1], 0) / float(cell_w)
+        worst = max(worst, gap)
+    return worst
+
+
+def _spread_between_mages() -> tuple:
+    """Écart de remplissage entre le plus petit et le plus grand des mages."""
+    mesures = {}
+    for config in SHEETS.values():
+        if "grid" not in config:
+            continue
+        folder = OUT / config["id"]
+        meta = folder / "frames.json"
+        if not meta.exists():
+            continue
+        cell_w, cell_h = json.loads(meta.read_text(encoding="utf-8"))["cell"]
+        band = np.array(Image.open(folder / "down.png"))[..., 3] > ALPHA_THRESHOLD
+        hauteurs = []
+        for index in range(band.shape[1] // cell_w):
+            cell = band[:, index * cell_w:(index + 1) * cell_w]
+            rows_here = np.nonzero(cell.any(axis=1))[0]
+            if rows_here.size:
+                hauteurs.append(rows_here[-1] - rows_here[0])
+        if hauteurs:
+            mesures[config["id"]] = float(np.median(hauteurs)) / cell_h
+    if len(mesures) < 2:
+        return ()
+    petit = min(mesures, key=mesures.get)
+    grand = max(mesures, key=mesures.get)
+    return (mesures[grand] / mesures[petit],
+            f"{petit} {mesures[petit] * 100:.0f} %",
+            f"{grand} {mesures[grand] * 100:.0f} %")
+
+
+def check_imposed(name: str, config: dict) -> tuple:
+    """Contrôle d'une planche à grille IMPOSÉE — les huit mages de la refonte.
+
+    La grille n'étant plus détectée, il n'y a plus rien à comparer entre une
+    détection et la réalité. Le contrôle porte sur les trois défauts que les
+    prompts cherchent à éviter, et il les cherche AU BON ENDROIT :
+
+    - sur la PLANCHE, la seule chose qu'elle seule sache dire : une case vide,
+      signe que la grille imposée est décalée d'un cran ;
+    - sur la BANDE DÉCOUPÉE, tout le reste. Mesurer le remplissage sur la
+      planche revient à mesurer le débordement que le découpage RETIRE : la
+      pose de profil du Feu y pèse 89 % de sa case à cause de la fumée de la
+      rangée du dessus, et 58 % une fois rendue à sa voisine. Le contrôle
+      accusait donc huit planches saines.
+
+    ⚠️ Ces planches arrivent SANS canal alpha, sur un fond uni. Les lire telles
+    quelles rend une image opaque de bord en bord, et tous les contrôles passent
+    avec brio sur vingt-quatre carrés gris — c'est arrivé.
+    """
+    problems, warnings = [], []
+    image = Image.open(SOURCE / name)
+    image = keyed_on_flat(image) if image.mode != "RGBA" else image.convert("RGBA")
+    alpha = np.array(image)[..., 3] > ALPHA_THRESHOLD
+    dx, dy, ox, oy = config["grid"]
+    height, width = alpha.shape
+
+    for row in range(4):
+        for col in range(6):
+            x0, y0 = ox + col * dx, oy + row * dy
+            if x0 + dx > width or y0 + dy > height:
+                problems.append(f"case ({row + 1}, {col + 1}) : hors de l'image")
+                continue
+            if not alpha[y0:y0 + dy, x0:x0 + dx].any():
+                problems.append(f"case ({row + 1}, {col + 1}) : VIDE — la grille "
+                                "imposée est probablement décalée")
+
+    folder = OUT / config["id"]
+    meta = folder / "frames.json"
+    if not meta.exists():
+        problems.append("aucune bande découpée : relancer build_characters.py")
+        return problems, warnings
+    cell_w, cell_h = json.loads(meta.read_text(encoding="utf-8"))["cell"]
+    fills, walking = [], []
+    for direction in DIRECTIONS:
+        strip = folder / f"{direction}.png"
+        if not strip.exists():
+            continue
+        band = np.array(Image.open(strip))[..., 3] > ALPHA_THRESHOLD
+        count = band.shape[1] // cell_w
+        for index in range(count):
+            cell = band[:, index * cell_w:(index + 1) * cell_w]
+            rows_here = np.nonzero(cell.any(axis=1))[0]
+            if not rows_here.size:
+                problems.append(f"{direction}, pose {index + 1} : VIDE")
+                continue
+            part = (rows_here[-1] - rows_here[0]) / float(cell_h)
+            fills.append(part)
+            stray = _stray_shape(cell, cell_w)
+            if stray > MAX_STRAY:
+                problems.append(f"{direction}, pose {index + 1} : un morceau "
+                                f"traîne à {stray:.2f} case du personnage — il "
+                                "appartient à la pose voisine")
+            # La pose d'ATTAQUE porte le sort en plus du mage : elle est
+            # légitimement plus grande et n'entre pas dans l'écart de marche.
+            if index < count - 1:
+                walking.append(part)
+
+    if fills:
+        if min(fills) < MIN_FILL:
+            problems.append(f"une pose n'occupe que {min(fills) * 100:.0f} % de sa "
+                            f"case (minimum {MIN_FILL * 100:.0f} %) — elle est "
+                            "probablement coupée")
+        if walking:
+            spread = max(walking) / max(min(walking), 1e-6)
+            if spread > MAX_SPREAD:
+                problems.append(f"la taille varie de x{spread:.2f} d'une pose de "
+                                "marche à l'autre : le mage enfle en marchant")
+        warnings.append(f"remplissage {min(fills) * 100:.0f} a {max(fills) * 100:.0f} %")
+    return problems, warnings
 
 
 def check(name: str, config: dict) -> tuple:
@@ -202,7 +364,24 @@ def main() -> None:
         # Les entrées d'ENNEMIS ajoutées par le pipeline voisin ont une autre
         # géométrie (clé « mode ») : elles ne se vérifient pas comme une grille
         # de mage.
-        if "mode" in config or "row0" not in config:
+        if "mode" in config:
+            continue
+        if "grid" in config and "row0" not in config:
+            path = SOURCE / name
+            if not path.exists():
+                print(f"  ! {name} introuvable")
+                continue
+            checked += 1
+            problems, warnings = check_imposed(name, config)
+            if problems:
+                failures += 1
+                print(f"❌  {config['id']} ({name})")
+                for trouble in problems:
+                    print(f"      {trouble}")
+            else:
+                print(f"✅  {config['id']:11s} {' · '.join(warnings)}")
+            continue
+        if "row0" not in config:
             continue
         path = SOURCE / name
         if not path.exists():
@@ -225,6 +404,18 @@ def main() -> None:
                 note = f"  ({len(warnings)} débordement(s) de lueur)"
             print(f"✅  {config['id']:8s} {len(DIRECTIONS)} directions x {len(POSES)} poses,"
                   f" toutes cadrées{note}")
+    # LE CONTRÔLE QUI PORTE TOUTE LA REFONTE : les huit mages doivent occuper
+    # leur case de la même façon. Chacun peut être irréprochable pris à part et
+    # l'ensemble rester bancal — c'était exactement l'état d'avant.
+    print("")
+    entre = _spread_between_mages()
+    if entre:
+        ecart, plus_petit, plus_grand = entre
+        verdict = "✅" if ecart <= MAX_BETWEEN else "❌"
+        print(f"{verdict}  écart entre mages x{ecart:.2f} "
+              f"(du {plus_petit} au {plus_grand}, maximum toléré x{MAX_BETWEEN:.2f})")
+        if ecart > MAX_BETWEEN:
+            failures += 1
     print("")
     if failures:
         print(f"❌  {failures} planche(s) sur {checked} mal découpée(s)")

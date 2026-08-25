@@ -21,12 +21,12 @@ func _initialize() -> void:
 	var root := Node2D.new()
 	get_root().add_child(root)
 	var background := ColorRect.new()
-	background.size = Vector2(CELL.x * 8, CELL.y * 3)
+	background.size = Vector2(CELL.x * 8, CELL.y * 4)
 	background.color = Color(0.10, 0.12, 0.16)
 	root.add_child(background)
 
 	var line := 0
-	for kind in ["imp", "gargouille", "dragon"]:
+	for kind in ["imp", "gargouille", "dragon", "ombre"]:
 		var column := 0
 		for facing in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
 			for striking in [false, true]:
@@ -41,7 +41,7 @@ func _initialize() -> void:
 				column += 1
 		line += 1
 
-	get_root().size = Vector2i(int(CELL.x * 8), int(CELL.y * 3))
+	get_root().size = Vector2i(int(CELL.x * 8), int(CELL.y * 4))
 	await process_frame
 	await process_frame
 	var image := get_root().get_texture().get_image()

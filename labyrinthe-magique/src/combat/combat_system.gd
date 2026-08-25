@@ -19,6 +19,21 @@ signal blast_fired(ability: Ability, cell: Vector2i)
 ## Un front DÉFERLE : le chemin qu'il va parcourir et le temps qu'il y mettra.
 ## Émis au lancement pour que le jeu puisse l'animer d'un bout à l'autre.
 signal wave_launched(ability: Ability, path: Array, duration: float)
+## La gerbe de pierre PART : le chemin entier et le temps qu'elle met à le
+## parcourir. Le Level anime la course ; les dégâts, eux, sont appliqués case
+## par case ici.
+signal line_erupted(ability: Ability, path: Array, duration: float)
+## Un cristal est PLANTÉ, il tire, puis il s'éteint.
+signal turret_planted(id: int, ability: Ability, cell: Vector2i)
+signal turret_fired(id: int, ability: Ability, cell: Vector2i, index: int)
+signal turret_faded(id: int)
+## LE SÉISME. Le sol tremble pendant `duration`, puis des pans de mur cèdent :
+## chaque éboulement est un coup à part entière, à l'endroit où il tombe.
+signal quake_started(duration: float, ability: Ability)
+signal quake_slide(cell: Vector2i, ability: Ability)
+## La zone qui AVANCE a changé de case. Le rendu la suit ; les dégâts, eux,
+## sont appliqués ici comme pour n'importe quelle zone.
+signal zone_moved(id: int, cell: Vector2i)
 signal zone_created(zone_id: int, ability: Ability, cell: Vector2i)
 signal zone_expired(zone_id: int)
 signal wall_raised(cell: Vector2i)
@@ -37,6 +52,9 @@ signal player_healed(amount: int)
 signal player_shielded(amount: int, duration: float)
 ## Il est tombé — épuisé par les coups, ou arrivé à échéance.
 signal player_shield_faded
+## Le mage devient INTOUCHABLE pour la durée annoncée.
+signal player_made_immune(duration: float)
+signal player_immunity_faded
 ## Émis quand le geste est refusé, avec la raison : l'interface le dit au joueur
 ## au lieu de laisser croire à un bug.
 signal use_refused(reason: String)
@@ -50,7 +68,23 @@ signal use_refused(reason: String)
 signal enemy_soaked(index: int, duration: float, factor: float)
 signal enemy_staggered(index: int, duration: float)
 signal enemy_pushed(index: int, cell: Vector2i)
+## PROJETÉE CONTRE UNE PAROI : sa course a été bloquée avant la fin. L'interface
+## s'en sert pour le flash sec du choc — c'est lui qui apprend au joueur, en une
+## partie, que la pierre fait mal.
+signal enemy_slammed(index: int, cell: Vector2i)
+## RAMENÉE vers le mage, et non écartée. Signal distinct de `enemy_pushed` alors
+## que les deux ne font que déplacer une créature : ce ne sont pas les mêmes
+## événements pour le joueur, donc pas le même effet à l'écran — un souffle
+## éclate à l'arrivée, une aspiration laisse une traînée derrière elle.
+signal enemy_hauled(index: int, cell: Vector2i)
 signal enemy_burning(index: int, duration: float)
+## EMPOISONNÉE. Le signal porte la durée, comme la brûlure : c'est au Level de
+## décider combien de temps la créature doit être vue verdir.
+signal enemy_poisoned(index: int, duration: float)
+## UNE FAILLE S'OUVRE sur cette case. Le signal ne porte pas les créatures qui
+## en sortent : elles arrivent par `summon_spawned` comme toutes les autres, et
+## le Level n'a pas à savoir laquelle vient de quelle porte.
+signal rift_opened(cell: Vector2i)
 ## Un arc SAUTE d'une créature à l'autre. `from_index` vaut -1 pour le premier
 ## trait, qui part du mage lui-même.
 signal chain_arced(from_index: int, to_index: int)
@@ -110,6 +144,12 @@ const SUMMON_KINDS := {
 	"imp": {"speed": 4.6, "damage": 10, "period": 0.9, "reach": 1.1, "flies": false},
 	"gargouille": {"speed": 4.0, "damage": 18, "period": 1.1, "reach": 1.1, "flies": false},
 	"dragon": {"speed": 3.6, "damage": 34, "period": 1.3, "reach": 1.6, "flies": true},
+	# L'OMBRE MALÉFIQUE de la Faille des ténèbres. Elle ne mord pas : elle
+	# SOUFFLE un gaz violet, d'où une portée d'une case et demie là où les
+	# marcheurs frappent au contact. Ses dégâts sont modestes et son poison fait
+	# le reste — c'est une créature qui use, pas qui exécute, et elles sont six.
+	"ombre": {"speed": 4.2, "damage": 12, "period": 1.1, "reach": 1.5,
+		"flies": false, "poison": 3},
 }
 ## Créatures simultanées au maximum. Au-delà, la PLUS ANCIENNE disparaît : une
 ## armée sans plafond viderait le labyrinthe à la place du joueur.
@@ -140,6 +180,10 @@ const SUMMON_FIELD_REFRESH := 0.35
 const BURN_RATIO := 0.30
 const BURN_TICKS := 3
 const BURN_TICK := 0.5
+## Le poison prélève UNE FOIS PAR SECONDE. Pas au demi-tick des zones : sur des
+## dégâts entiers et petits, un demi-tick arrondi à 1 doublerait silencieusement
+## le chiffre annoncé au joueur — « 1 PV » deviendrait 2 PV par seconde.
+const POISON_TICK := 1.0
 const SOAK_FACTOR := 0.62
 const SOAK_DURATION := 2.2
 const STAGGER_DURATION := 0.7
@@ -175,6 +219,7 @@ var _next_summon_id := 1
 var _summon_field := PackedInt32Array()
 var _summon_field_timer := 0.0
 var _burning := {}                     # index -> {ticks, timer, damage}
+var _poisoned := {}                    # index -> {time_left, timer, damage}
 var _echoes: Array[Dictionary] = []
 var _stagger_locks := {}               # index -> secondes avant le prochain ébranlement
 ## index -> secondes avant qu'un piège de zone puisse le reprendre. Sans ce
@@ -186,7 +231,17 @@ var _rng := RandomNumberGenerator.new()
 var _empower_bonus := 0
 var _empower_left := 0.0
 var _shield_left := 0.0
+## Temps d'intouchabilité restant, pour le bouclier de la Terre.
+var _immune_left := 0.0
 var _waves: Array[Dictionary] = []
+## Les gerbes de pierre en cours de course.
+var _lines: Array[Dictionary] = []
+## Les séismes en cours. Un seul à la fois en pratique, mais la file coûte le
+## même prix qu'un champ et se relit comme les autres effets.
+var _quakes: Array[Dictionary] = []
+## Les cristaux plantés qui tirent tout seuls.
+var _turrets: Array[Dictionary] = []
+var _next_turret_id := 1
 var _chains: Array[Dictionary] = []
 var _storm := {}
 var _sky: Array[Dictionary] = []
@@ -268,9 +323,13 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_zones(delta, context)
 	_update_walls(delta)
 	_update_burns(delta, context)
+	_update_poisons(delta, context)
 	_update_echoes(delta, context)
 	_update_meteors(delta, context)
 	_update_waves(delta, context)
+	_update_lines(delta, context)
+	_update_turrets(delta, context)
+	_update_quakes(delta, context)
 	_update_chains(delta, context)
 	_update_storm(delta, context)
 	_update_sky(delta, context)
@@ -279,6 +338,11 @@ func update(delta: float, context: CombatContext) -> void:
 		if _empower_left <= 0.0:
 			_empower_bonus = 0
 			player_calmed.emit()
+	if _immune_left > 0.0:
+		_immune_left = maxf(0.0, _immune_left - delta)
+		if _immune_left <= 0.0:
+			health.immune = false
+			player_immunity_faded.emit()
 	if _shield_left > 0.0:
 		_shield_left = maxf(0.0, _shield_left - delta)
 		# Il tombe de DEUX façons : l'échéance, ou les coups qui l'ont vidé.
@@ -328,6 +392,15 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 		var zone: Dictionary = _zones[i]
 		zone["time_left"] = float(zone["time_left"]) - delta
 		zone["tick"] = float(zone["tick"]) - delta
+		if zone.has("path"):
+			_walk_zone(zone, delta, context)
+		# L'englu SOUTENU se réarme à CHAQUE frame, pas au tick de la zone : sa
+		# traînée est plus courte que l'intervalle des ticks, sans quoi l'ennemi
+		# retrouverait son allure deux fois par seconde entre deux passages. Les
+		# dégâts, eux, restent sur le tick — c'est une usure, pas une rafale.
+		var held: Ability = zone["ability"]
+		if held.slow_sustained and held.slow_duration > 0.0:
+			_apply_chill(held, zone["cell"], context)
 		if float(zone["tick"]) <= 0.0:
 			zone["tick"] = ZONE_TICK
 			# Les dégâts d'une zone sont exprimés PAR SECONDE : on n'en applique
@@ -341,11 +414,49 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 			_apply_area(slice, zone["cell"], context, ability)
 			if ability.snare > 0.0:
 				_apply_snare(ability, zone["cell"], context)
-			if ability.slow_duration > 0.0:
+			if ability.slow_duration > 0.0 and not ability.slow_sustained:
 				_apply_chill(ability, zone["cell"], context)
+			if ability.poison_duration > 0.0:
+				_apply_poison(ability, zone["cell"], context)
 		if float(zone["time_left"]) <= 0.0:
 			_zones.remove_at(i)
 			zone_expired.emit(int(zone["id"]))
+
+
+## La zone qui marche : elle avance d'une case, et EMPORTE ce qu'elle tient.
+##
+## Les créatures happées sont replacées sur la case de la tornade elle-même.
+## C'est brutal, et c'est voulu : une tornade ne traîne pas ses victimes
+## derrière elle, elle les tient dedans. Elles ressortent là où elle meurt —
+## loin, et en tas.
+func _walk_zone(zone: Dictionary, delta: float, context: CombatContext) -> void:
+	var path: Array = zone["path"]
+	zone["walk"] = float(zone["walk"]) - delta
+	if float(zone["walk"]) > 0.0:
+		return
+	zone["walk"] = float(zone["step"])
+	var index := int(zone["index"])
+	if index >= path.size():
+		# Au bout de sa course, elle s'éteint sans attendre sa durée : une
+		# tornade qui tournerait sur place au fond d'un cul-de-sac ne serait
+		# plus qu'une zone immobile de plus.
+		zone["time_left"] = minf(float(zone["time_left"]), 0.2)
+		return
+	zone["index"] = index + 1
+	var cell: Vector2i = path[index]
+	var ability: Ability = zone["ability"]
+	if ability.zone_carries:
+		var field := Pathfinder.distance_field(grid, [zone["cell"]] as Array[Vector2i])
+		for prey in context.enemy_cells.size():
+			if not context.enemy_alive(prey) or context.is_structure(prey):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[prey])
+			if distance < 0 or float(distance) > ability.radius:
+				continue
+			context.enemy_cells[prey] = cell
+			enemy_pushed.emit(prey, cell)
+	zone["cell"] = cell
+	zone_moved.emit(int(zone["id"]), cell)
 
 
 ## Le piège du brasier : ce qui entre est RETENU, puis repart en brûlant.
@@ -370,17 +481,36 @@ func _apply_snare(ability: Ability, centre: Vector2i, context: CombatContext) ->
 				"damage": 0, "ability": ability, "burn": ability.snare_burn})
 
 
-## Le givre d'une zone : elle ne retient pas, elle ENGLUE. Même verrou que le
-## piège — une fois par créature et par passage.
+## Champ de distances depuis une case, mis en cache le temps d'une frame : une
+## zone à englu soutenu le redemande à chaque frame, et le recalculer coûterait
+## un BFS complet par zone et par frame.
+var _field_cache := {}
+var _field_frame := -1
+
+
+func _field_from(centre: Vector2i) -> PackedInt32Array:
+	var frame := Engine.get_process_frames()
+	if frame != _field_frame:
+		_field_frame = frame
+		_field_cache.clear()
+	if not _field_cache.has(centre):
+		_field_cache[centre] = Pathfinder.distance_field(grid, [centre] as Array[Vector2i])
+	return _field_cache[centre]
+
+
 func _apply_chill(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
-	var field := Pathfinder.distance_field(grid, [centre] as Array[Vector2i])
+	# Le champ passe par le CACHE : un englu soutenu appelle cette fonction à
+	# chaque frame, et un BFS complet par zone et par frame se paierait.
+	var field := _field_from(centre)
 	for i in context.enemy_cells.size():
-		if not context.enemy_alive(i) or context.is_structure(i) or _snare_locks.has(i):
+		if not context.enemy_alive(i) or (context.is_structure(i)
+				or (_snare_locks.has(i) and not ability.slow_sustained)):
 			continue
 		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
 		if distance < 0 or float(distance) > ability.radius:
 			continue
-		_snare_locks[i] = ability.slow_duration + 0.5
+		if not ability.slow_sustained:
+			_snare_locks[i] = ability.slow_duration + 0.5
 		enemy_soaked.emit(i, ability.slow_duration, ability.slow_factor)
 
 
@@ -430,9 +560,19 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.ZONE:
 			fired = _cast_zone(ability, context)
 		Ability.Kind.SHIELD:
-			health.add_shield(ability.damage)
-			_shield_left = ability.duration
-			player_shielded.emit(ability.damage, ability.duration)
+			# DEUX boucliers dans le jeu, et ils ne se jouent pas pareil. Celui
+			# de l'Eau ABSORBE une quantité de dégâts : il tombe quand il est
+			# vidé, même avant l'échéance. Celui de la Terre rend INTOUCHABLE :
+			# il ne tombe qu'à l'heure dite, quoi qu'il encaisse. C'est la
+			# différence entre une réserve et un répit.
+			if ability.immune:
+				health.immune = true
+				_immune_left = ability.duration
+				player_made_immune.emit(ability.duration)
+			else:
+				health.add_shield(ability.damage)
+				_shield_left = ability.duration
+				player_shielded.emit(ability.damage, ability.duration)
 			fired = true
 		Ability.Kind.HEAL:
 			player_healed.emit(health.heal(ability.damage))
@@ -443,6 +583,10 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_blink(ability, context)
 		Ability.Kind.WAVE:
 			fired = _cast_wave(ability, context)
+		Ability.Kind.LINE:
+			fired = _cast_line(ability, context)
+		Ability.Kind.TURRET:
+			fired = _cast_turret(ability, context)
 		Ability.Kind.CHAIN:
 			fired = _cast_chain(ability, context)
 		Ability.Kind.STORM:
@@ -531,9 +675,41 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 
 func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 	blast_fired.emit(ability, context.player_cell)
-	_apply_area(ability, context.player_cell, context)
+	# L'ASPIRATION PASSE AVANT LES DÉGÂTS, sinon elle ne sert à rien : ce qu'elle
+	# ramène doit encore trouver l'explosion en arrivant.
+	if ability.pull_radius > 0.0:
+		_haul_in(ability, context)
+	# Un sort qui PROJETTE ne déclenche pas la poussée de son élément : les deux
+	# s'additionneraient, et la course réelle ne serait plus celle qu'annonce le
+	# sort. Voir l'en-tête de `_apply_area`.
+	_apply_area(ability, context.player_cell, context, null,
+		ability.blow_cells <= 0)
+	# LE SOUFFLE PROJETTE, APRÈS les dégâts.
+	#
+	# Avant, il enverrait ses victimes hors du rayon de l'explosion et le sort
+	# ne blesserait plus personne. C'est l'ordre inverse de l'aspiration de
+	# l'Ombre, et pour la même raison.
+	if ability.blow_cells > 0:
+		_blow_away(ability, context)
+	# L'OMBRE RESTE APRÈS LE COUP. Posée ici et non dans `_cast_zone` : c'est une
+	# conséquence de l'explosion, pas un sort de zone déguisé — et elle doit
+	# naître APRÈS `_apply_area`, sinon la créature qui vient d'être ramenée
+	# serait empoisonnée avant d'avoir encaissé.
+	if ability.residue_duration > 0.0:
+		var residue := _residue_of(ability)
+		var id := _next_zone_id
+		_next_zone_id += 1
+		_zones.append({"id": id, "ability": residue, "cell": context.player_cell,
+			"time_left": residue.duration, "tick": 0.0})
+		zone_created.emit(id, residue, context.player_cell)
 	if ability.rain_count > 0:
 		_summon_rain(ability)
+	if ability.quake_duration > 0.0:
+		_quakes.append({
+			"ability": ability, "time_left": ability.quake_duration,
+			"tick": 0.0,
+		})
+		quake_started.emit(ability.quake_duration, ability)
 	if ability.sky_clouds > 0:
 		_gather_sky(ability)
 	if ability.heal_self > 0:
@@ -588,10 +764,22 @@ func _update_meteors(delta: float, context: CombatContext) -> void:
 func _cast_zone(ability: Ability, context: CombatContext) -> bool:
 	var id := _next_zone_id
 	_next_zone_id += 1
-	_zones.append({
+	var zone := {
 		"id": id, "ability": ability, "cell": context.player_cell,
 		"time_left": ability.duration, "tick": 0.0,
-	})
+	}
+	# LA TORNADE REMONTE LE COULOIR. Le chemin est calculé D'UN COUP au
+	# lancement, virages compris — recalculé en route, elle changerait d'avis à
+	# chaque carrefour et le joueur ne pourrait plus prévoir où elle emmène ses
+	# poursuivants.
+	if ability.zone_travel > 0.0:
+		var reach := ability.range if ability.range > 0 else 7
+		zone["path"] = _corridor_ahead(context.player_cell,
+			context.player_facing, reach)
+		zone["step"] = 1.0 / maxf(0.1, ability.zone_travel)
+		zone["walk"] = float(zone["step"])
+		zone["index"] = 0
+	_zones.append(zone)
 	zone_created.emit(id, ability, context.player_cell)
 	return true
 
@@ -902,6 +1090,322 @@ func _break_on_wave(wave: Dictionary, cell: Vector2i, context: CombatContext) ->
 		_apply_damage(i, ability, context)
 
 
+## PICS DE TERRE : la gerbe COURT DANS LE COULOIR, elle n'entoure pas le mage.
+##
+## C'était un souffle circulaire de plus — la même mécanique que trois autres
+## sorts du jeu, dessinée avec l'éclat générique. Le Mage de la Terre est le
+## lent, le résistant, celui qui ferme un couloir : il lui fallait un geste à
+## lui. C'est la LIGNE, comme la Foudre a la chaîne.
+##
+## Deux temps. La gerbe part des pieds du mage et file devant, de case en case,
+## en frappant tout ce qu'elle croise. Puis les pointes RESTENT plantées : ce
+## qui passe dessus est mordu et ralenti. Le premier temps est une attaque, le
+## second est du terrain — et c'est le second qui le distingue du Feu (dont le
+## brasier cloue sur place) et de l'Eau (dont le cercle englue sans blesser).
+func _cast_line(ability: Ability, context: CombatContext) -> bool:
+	var path := _corridor_ahead(context.player_cell, context.player_facing,
+		ability.range)
+	if path.is_empty():
+		use_refused.emit("mur")
+		return false
+	var duration := float(path.size()) / maxf(1.0, ability.line_speed)
+	var line := {
+		"ability": ability, "path": path, "index": 0,
+		"step": duration / float(path.size()), "timer": 0.0,
+		# Comme la vague : chaque créature n'encaisse l'éruption QU'UNE FOIS,
+		# même si elle recule devant la gerbe qui monte.
+		"hit": {},
+		"plant": _plant_of(ability),
+	}
+	line_erupted.emit(ability, path, duration)
+
+	# D'UN COUP quand la vitesse est NULLE.
+	#
+	# La boucle d'entretien consomme le temps ÉCOULÉ, ce qui est juste pour une
+	# gerbe qui court : elle avance de ce que le temps permet. Mais aucune
+	# vitesse, si haute soit-elle, ne lève dix cases dans la même image par ce
+	# chemin — la Faille, censée surgir, se voyait courir. Une vitesse de zéro
+	# dit donc « simultané » : on lève tout ici même et la ligne n'entre jamais
+	# dans la file. C'est une valeur qui se lit dans le catalogue, là où un
+	# seuil en secondes aurait été un chiffre magique de plus.
+	if ability.line_speed <= 0.0:
+		for cell in path:
+			_erupt(line, cell, context)
+		return true
+	_lines.append(line)
+	return true
+
+
+## Le couloir DEVANT le mage, virages compris.
+##
+## Une ligne qui s'arrêterait au premier mur serait inutilisable dans un
+## labyrinthe : on y voit rarement plus de trois cases devant soi. La gerbe suit
+## donc le couloir — tant qu'il n'y a qu'une seule façon de continuer. À une
+## intersection elle s'arrête : au-delà, « tout droit » ne veut plus rien dire,
+## et une gerbe qui choisirait sa route à la place du joueur serait un sort
+## qu'on ne peut pas viser.
+func _corridor_ahead(from: Vector2i, facing: Vector2i, limit: int) -> Array[Vector2i]:
+	var path: Array[Vector2i] = []
+	var cell := from
+	var dir := facing
+	for step in limit:
+		var next: Vector2i = cell + dir
+		if not grid.is_floor_v(next):
+			var options: Array[Vector2i] = []
+			for side in [Vector2i(dir.y, dir.x), Vector2i(-dir.y, -dir.x)]:
+				if grid.is_floor_v(cell + side):
+					options.append(side)
+			if options.size() != 1:
+				break
+			dir = options[0]
+			next = cell + dir
+		cell = next
+		path.append(cell)
+	return path
+
+
+## Le sort DÉRIVÉ des pics plantés : une zone d'une seule case.
+##
+## Les pointes qui restent sont une zone comme les autres — elles mordent par
+## seconde, elles ralentissent, elles expirent. Plutôt que d'écrire un second
+## mécanisme qui ferait la même chose, on fabrique le sort correspondant et on
+## laisse tourner celui qui existe et qui est éprouvé.
+func _plant_of(ability: Ability) -> Ability:
+	# La durée des GERBES, distincte de celle du sort : un orbe qui tient trente
+	# secondes ne doit pas laisser trente secondes de pierres derrière chaque
+	# balayage, sinon le couloir se referme pour de bon.
+	var life := ability.spike_life if ability.spike_life > 0.0 else ability.duration
+	return Ability.make({
+		"id": ability.id + "_plant", "display_name": ability.display_name,
+		"kind": Ability.Kind.ZONE, "element": ability.element,
+		"damage": ability.line_bite, "radius": 0.5, "duration": life,
+		"slow_duration": ability.slow_duration, "slow_factor": ability.slow_factor,
+		"zone_style": "eruption" if ability.spike_anim else "pics",
+	})
+
+
+func _update_lines(delta: float, context: CombatContext) -> void:
+	for i in range(_lines.size() - 1, -1, -1):
+		var line: Dictionary = _lines[i]
+		line["timer"] = float(line["timer"]) - delta
+		if float(line["timer"]) > 0.0:
+			continue
+		var path: Array = line["path"]
+		# TOUT CE QUE LE TEMPS ÉCOULÉ PERMET, et pas une case par image.
+		#
+		# La gerbe des Pics court à douze cases par seconde : une case par
+		# image suffisait. La Faille, elle, se lève D'UN COUP — cent cases par
+		# seconde — et une case par image l'aurait étalée sur dix images, soit
+		# un sixième de seconde de retard sur la dernière. On consomme donc le
+		# temps accumulé, ce qui rend la cadence indépendante du framerate.
+		var budget := 32
+		while float(line["timer"]) <= 0.0 and budget > 0:
+			budget -= 1
+			line["timer"] = float(line["timer"]) + float(line["step"])
+			var index := int(line["index"])
+			if index >= path.size():
+				break
+			line["index"] = index + 1
+			_erupt(line, path[index], context)
+		if int(line["index"]) >= path.size():
+			_lines.remove_at(i)
+
+
+## Une case se soulève : elle frappe, puis elle reste.
+func _erupt(line: Dictionary, cell: Vector2i, context: CombatContext) -> void:
+	var ability: Ability = line["ability"]
+	var already: Dictionary = line["hit"]
+	var field := Pathfinder.distance_field(grid, [cell] as Array[Vector2i])
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or already.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		already[i] = true
+		_apply_damage(i, ability, context)
+	var plant: Ability = line["plant"]
+	if plant.duration <= 0.0:
+		return
+	var id := _next_zone_id
+	_next_zone_id += 1
+	_zones.append({
+		"id": id, "ability": plant, "cell": cell,
+		"time_left": plant.duration, "tick": 0.0,
+	})
+	zone_created.emit(id, plant, cell)
+
+
+## ÉCLATS DE CRISTAL : il PLANTE le cristal, et le cristal se bat tout seul.
+##
+## Le sort MENTAIT : il annonçait « trois éclats » et en tirait un. C'était un
+## Rocher plus faible, plus lointain, et huit fois plus lent — strictement
+## moins bon que l'attaque de base du même mage. Aucune raison d'appuyer.
+##
+## Le cristal fiché dans le sol est la seule chose du jeu qui attaque SANS le
+## joueur. L'Invocateur a des créatures, mais elles CHASSENT ; le cristal ne
+## bouge jamais, et c'est ce qui les sépare à l'œil nu. Il récompense le seul
+## mage qui ne peut pas fuir : il plante, il hérisse le couloir de pics, il
+## s'entoure de son égide, et il tient.
+func _cast_turret(ability: Ability, context: CombatContext) -> bool:
+	# Devant lui de préférence — un cristal posé sur ses propres pieds ne dit
+	# pas au joueur qu'il vient de tenir un couloir. Mais le nez au mur, il le
+	# plante sur place plutôt que de refuser : un bouton qui ne part pas parce
+	# qu'on regarde la pierre serait incompréhensible.
+	var cell: Vector2i = context.player_cell + context.player_facing
+	if not grid.is_floor_v(cell):
+		cell = context.player_cell
+	var id := _next_turret_id
+	_next_turret_id += 1
+	_turrets.append({
+		"id": id, "ability": ability, "cell": cell,
+		"time_left": ability.duration,
+		# Le PREMIER éclat part tout de suite. Un cristal qui reste muet une
+		# seconde et demie après avoir été planté se lit comme un sort raté.
+		"tick": 0.0,
+	})
+	turret_planted.emit(id, ability, cell)
+	return true
+
+
+func _update_turrets(delta: float, context: CombatContext) -> void:
+	for i in range(_turrets.size() - 1, -1, -1):
+		var turret: Dictionary = _turrets[i]
+		turret["time_left"] = float(turret["time_left"]) - delta
+		turret["tick"] = float(turret["tick"]) - delta
+		var ability: Ability = turret["ability"]
+		# LE CRISTAL SUIT LE MAGE. Il est fiché dans le sol à ses pieds et
+		# repart avec lui : c'est ce que demande le mage le plus lent du jeu,
+		# qui ne peut pas revenir chercher ce qu'il a laissé derrière.
+		if ability.turret_follows:
+			turret["cell"] = context.player_cell
+		if float(turret["tick"]) <= 0.0:
+			turret["tick"] = maxf(0.1, ability.turret_interval)
+			var cell: Vector2i = turret["cell"]
+			var prey := _nearest_in_reach(cell, ability.range, context)
+			if prey >= 0:
+				turret_fired.emit(int(turret["id"]), ability, cell, prey)
+				if ability.turret_sweep:
+					# L'ORBE N'ENVOIE RIEN : IL OUVRE LE SOL.
+					#
+					# Une faille se lève dans le couloir, du mage jusqu'à sa
+					# proie, et frappe tout ce qui s'y trouve. C'est le balayage
+					# des Pics de terre — déclenché tout seul, dès qu'une
+					# créature entre à portée, au lieu d'être visé à la main.
+					_sweep_to(ability, cell, context.enemy_cells[prey], context)
+				else:
+					# Coup D'ORIGINE : il déclenche donc le trait de la Terre,
+					# comme s'il venait du mage.
+					_apply_damage(prey, ability, context)
+		if float(turret["time_left"]) <= 0.0:
+			_turrets.remove_at(i)
+			turret_faded.emit(int(turret["id"]))
+
+
+## LE SÉISME : le sol tremble, et la pierre CÈDE par pans.
+##
+## Ce qui le sépare de la pluie de météores du Feu n'est PAS l'endroit où ça
+## tombe — mesuré : 97 à 99 % des cases d'un labyrinthe touchent un mur, donc
+## une règle « les pans cèdent au pied des parois » aurait été décorative. Une
+## première version la posait quand même, avec un commentaire qui promettait
+## qu'y longer un mur serait dangereux : c'était faux.
+##
+## La vraie différence est la TEXTURE. Le Feu lâche quatorze météores lourdes
+## étalées sur sa durée ; la Terre fait crouler des pans par vagues de trois, et
+## la CADENCE s'emballe au début puis se calme — les premières secondes sont une
+## avalanche, les dernières un grondement. Un test garde cette décroissance.
+func _update_quakes(delta: float, context: CombatContext) -> void:
+	for i in range(_quakes.size() - 1, -1, -1):
+		var quake: Dictionary = _quakes[i]
+		var ability: Ability = quake["ability"]
+		quake["time_left"] = float(quake["time_left"]) - delta
+		quake["tick"] = float(quake["tick"]) - delta
+		# LE TREMBLEMENT LUI-MÊME BLESSE, partout, tant qu'il dure.
+		#
+		# Sans lui, l'ultime était un spectacle : mesuré, vingt-sept
+		# éboulements tirés au sort sur six cents cases ne touchaient presque
+		# jamais une créature donnée. Les pans qui cèdent restent la grosse
+		# frappe, locale et aléatoire ; la secousse est le fond continu qui
+		# n'épargne personne.
+		if ability.quake_tremor > 0:
+			quake["grind"] = float(quake.get("grind", 0.0)) - delta
+			if float(quake["grind"]) <= 0.0:
+				quake["grind"] = ZONE_TICK
+				var slice := Ability.make({
+					"id": ability.id, "kind": Ability.Kind.BLAST,
+					"element": ability.element,
+					"damage": maxi(1, int(round(ability.quake_tremor * ZONE_TICK))),
+				})
+				for prey in context.enemy_cells.size():
+					if context.enemy_alive(prey):
+						_apply_damage(prey, slice, context, false, false)
+		if float(quake["tick"]) <= 0.0:
+			# Au début, une vague tombe deux fois plus vite qu'à la fin.
+			var left := clampf(float(quake["time_left"]) / maxf(0.1,
+				ability.quake_duration), 0.0, 1.0)
+			quake["tick"] = ability.quake_interval * (1.6 - 0.6 * left)
+			for slide in ability.quake_slides:
+				_collapse(ability, context)
+		if float(quake["time_left"]) <= 0.0:
+			_quakes.remove_at(i)
+
+
+## Un pan cède, quelque part sur le sol du labyrinthe.
+func _collapse(ability: Ability, context: CombatContext) -> void:
+	var cells := grid.all_floor_cells()
+	if cells.is_empty():
+		return
+	var cell: Vector2i = cells[_rng.randi_range(0, cells.size() - 1)]
+	quake_slide.emit(cell, ability)
+	var blow := Ability.make({
+		"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.quake_damage, "radius": ability.quake_radius,
+	})
+	_apply_area(blow, cell, context, ability)
+
+
+## Le balayage automatique de l'orbe : une faille du mage jusqu'à sa proie.
+##
+## Le chemin est celui du COULOIR, virages compris — la faille contourne la
+## pierre, elle ne la traverse pas. Elle se lève d'un coup : rien à faire
+## avancer, donc rien à mettre dans la file des lignes.
+func _sweep_to(ability: Ability, from: Vector2i, prey: Vector2i,
+		context: CombatContext) -> void:
+	var route := trajectory(from, prey)
+	var path: Array[Vector2i] = []
+	for i in range(1, route.size()):
+		if path.size() >= ability.range:
+			break
+		path.append(route[i])
+	if path.is_empty():
+		return
+	var line := {
+		"ability": ability, "path": path, "index": 0, "step": 0.0, "timer": 0.0,
+		"hit": {}, "plant": _plant_of(ability),
+	}
+	line_erupted.emit(ability, path, 0.0)
+	for cell in path:
+		_erupt(line, cell, context)
+
+
+## La proie la plus proche d'une CASE, en distance de chemin — pas à vol
+## d'oiseau. Un ennemi à deux cases derrière un mur est à dix cases de marche :
+## le cristal ne doit pas tirer à travers la pierre.
+func _nearest_in_reach(cell: Vector2i, reach: int, context: CombatContext) -> int:
+	var field := Pathfinder.distance_field(grid, [cell] as Array[Vector2i])
+	var best := -1
+	var best_distance := reach + 1
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or distance > reach or distance >= best_distance:
+			continue
+		best_distance = distance
+		best = i
+	return best
+
+
 func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	var destination := context.player_cell
 	for step in ability.range:
@@ -922,6 +1426,8 @@ func _cast_summon(ability: Ability, context: CombatContext) -> bool:
 	if not SUMMON_KINDS.has(ability.summon_id):
 		push_error("Créature d'invocation inconnue : " + ability.summon_id)
 		return false
+	if ability.summon_portals > 0:
+		return _tear_rifts(ability, context)
 	for i in maxi(1, ability.summon_count):
 		# Les créatures naissent autour du mage, chacune sur sa case praticable :
 		# empilées sur la sienne, on ne verrait qu'une seule invocation.
@@ -944,6 +1450,94 @@ func _cast_summon(ability: Ability, context: CombatContext) -> bool:
 	# plantée une tierce de seconde à sa naissance a l'air cassée.
 	_summon_field_timer = 0.0
 	return true
+
+
+
+## LA FAILLE DES TÉNÈBRES : des portes s'ouvrent SUR LES PROIES.
+##
+## L'ultime ne fait pas venir des créatures, il ouvre un ENDROIT. C'est ce qui le
+## sépare de l'Invocateur, dont les bêtes naissent aux pieds du mage et doivent
+## traverser le labyrinthe : ici le trajet est déjà fait, la porte s'ouvre au
+## contact de ce qu'elle vient chasser.
+##
+## Une porte par créature, les plus proches d'abord, plafonnées à
+## `summon_portals`. Autant de portes que d'ennemis viderait un stage tardif
+## d'un seul geste — l'ultime cesserait d'être un coup pour devenir la fin de la
+## partie.
+##
+## Les portes ne s'ouvrent PAS sur la case de la proie mais à côté : une ombre
+## née sous les pieds d'un ennemi serait invisible, et deux sprites empilés ne
+## disent ni qui frappe ni ce qui est frappé — la même règle que le refus du
+## dernier pas des poursuivants.
+func _tear_rifts(ability: Ability, context: CombatContext) -> bool:
+	var prey := _closest_prey(ability.summon_portals, context)
+	if prey.is_empty():
+		# AUCUNE PROIE : le sort est refusé et ne coûte rien. Un ultime dépensé
+		# dans un couloir vide serait un vol pur — il se gagne en quatre kills.
+		use_refused.emit("cible")
+		return false
+	for index in prey:
+		var door := _rift_cell(context.enemy_cells[index])
+		rift_opened.emit(door)
+		for i in maxi(1, ability.summon_count):
+			var cell := _rift_spawn_cell(door, i)
+			var summon := {
+				"id": _next_summon_id, "kind": ability.summon_id,
+				"position": Vector2(cell), "cell": cell,
+				"time_left": ability.duration, "strike_in": 0.6,
+				"facing": Vector2i.DOWN, "target": -1,
+			}
+			_next_summon_id += 1
+			_summons.append(summon)
+			summon_spawned.emit(int(summon["id"]), ability.summon_id, summon["position"])
+	var cap := maxi(MAX_SUMMONS, ability.summon_cap)
+	while _summons.size() > cap:
+		var oldest: Dictionary = _summons.pop_front()
+		summon_expired.emit(int(oldest["id"]))
+	_summon_field_timer = 0.0
+	return true
+
+
+## Les N créatures vivantes les plus proches du mage, en distance de chemin.
+##
+## Les plus proches et non les plus faibles : le joueur lance son ultime en
+## voyant une meute lui arriver dessus, et les portes doivent s'ouvrir sur CETTE
+## meute-là. Un ciblage malin qui irait chercher le blessé à l'autre bout du
+## labyrinthe se lirait comme un bug.
+func _closest_prey(count: int, context: CombatContext) -> Array[int]:
+	var field := _field_from(context.player_cell)
+	var scored: Array = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0:
+			continue
+		scored.append({"index": i, "distance": distance})
+	scored.sort_custom(func(a, b): return int(a["distance"]) < int(b["distance"]))
+	var chosen: Array[int] = []
+	for entry in scored:
+		if chosen.size() >= maxi(1, count):
+			break
+		chosen.append(int(entry["index"]))
+	return chosen
+
+
+## La case de la porte : voisine de la proie, praticable. À défaut, la sienne —
+## mieux vaut une porte mal placée qu'un ultime qui n'ouvre rien.
+func _rift_cell(prey: Vector2i) -> Vector2i:
+	for step in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(prey + step):
+			return prey + step
+	return prey
+
+
+func _rift_spawn_cell(door: Vector2i, offset: int) -> Vector2i:
+	var candidates: Array[Vector2i] = [door]
+	for step in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(door + step):
+			candidates.append(door + step)
+	return candidates[offset % candidates.size()]
 
 
 func _summon_spawn_cell(context: CombatContext, offset: int) -> Vector2i:
@@ -1014,6 +1608,14 @@ func _try_strike(summon: Dictionary, stats: Dictionary, target: int,
 		"element": Element.Kind.SHADOW, "damage": int(stats["damage"]),
 	})
 	_apply_damage(target, blow, context, false)
+	# LE GAZ EMPOISONNE. C'est ce qui fait d'un souffle autre chose qu'une
+	# morsure à distance : il ne compte pas sur le coup mais sur ce qu'il laisse,
+	# et six ombres qui empoisonnent la même créature ne l'empoisonnent pas six
+	# fois — la pose la plus récente remplace la précédente, comme une flaque.
+	if stats.has("poison") and context.enemy_alive(target):
+		_poisoned[target] = {"time_left": POISON_TICK * 6.0,
+			"timer": POISON_TICK, "damage": int(stats["poison"])}
+		enemy_poisoned.emit(target, POISON_TICK * 6.0)
 	return true
 
 
@@ -1149,9 +1751,38 @@ func _chain_to_neighbour(index: int, dealt: int, ability: Ability,
 
 ## La bourrasque : l'ennemi recule en SUIVANT le gradient de distance au mage —
 ## il est soufflé le long du couloir, jamais à travers une haie.
-func _push_away(index: int, context: CombatContext) -> void:
+## LE GRAND SOUFFLE : tout ce qui entoure le mage part en arrière, et ce qui
+## percute une paroi le paie.
+##
+## La projection réemploie le pas du souffle élémentaire, à ceci près qu'elle
+## compte les cases RÉELLEMENT parcourues : une créature coincée contre la
+## pierre après une seule case a été plaquée, et c'est là que le sort fait mal.
+func _blow_away(ability: Ability, context: CombatContext) -> void:
+	var field := Pathfinder.distance_field(grid, [context.player_cell] as Array[Vector2i])
+	for index in context.enemy_cells.size():
+		if not context.enemy_alive(index) or context.is_structure(index):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[index])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		var travelled := _push_away(index, context, ability.blow_cells)
+		if travelled >= ability.blow_cells or ability.slam_damage <= 0:
+			continue
+		# Course écourtée : elle a rencontré un mur. Le choc est un coup
+		# DÉRIVÉ — il ne redéclenche ni le trait de l'élément (qui pousserait
+		# une seconde fois) ni l'exaltation, déjà comptée sur le souffle.
+		var slam := Ability.make({
+			"id": ability.id, "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.slam_damage,
+		})
+		_apply_damage(index, slam, context, false, false)
+		enemy_slammed.emit(index, context.enemy_cells[index])
+
+
+func _push_away(index: int, context: CombatContext, cells: int = PUSH_CELLS) -> int:
 	var cell: Vector2i = context.enemy_cells[index]
-	for _step in PUSH_CELLS:
+	var travelled := 0
+	for _step in cells:
 		var best := cell
 		var here := Pathfinder.value_at(grid, context.player_field, cell)
 		for direction in MazeGrid.NEIGHBORS:
@@ -1165,10 +1796,61 @@ func _push_away(index: int, context: CombatContext) -> void:
 		if best == cell:
 			break
 		cell = best
+		travelled += 1
 	if cell == context.enemy_cells[index]:
-		return
+		return 0
 	context.enemy_cells[index] = cell
 	enemy_pushed.emit(index, cell)
+	return travelled
+
+
+
+## L'ombre INSPIRE : elle ramène à elle ce qu'elle attrape.
+##
+## Miroir exact de `_push_away`, et c'est voulu — l'Air écarte, l'Ombre ramène.
+## Deux éléments qui déplaceraient dans le même sens ne se distingueraient plus
+## l'un de l'autre.
+##
+## ⚠️ Le champ est recalculé depuis `player_cell` et NON pris dans
+## `context.player_field`, qui est celui de l'IA et date de 300 ms. Sur un
+## déplacement d'ennemi, un tiers de seconde de retard ramène vers l'endroit où
+## le mage ÉTAIT — le même piège qui avait faussé l'arrêt au corps à corps. Le
+## cache d'une frame fait que ça ne coûte qu'un BFS par lancer.
+func _haul_in(ability: Ability, context: CombatContext) -> void:
+	var field := _field_from(context.player_cell)
+	for i in context.enemy_cells.size():
+		# Les REPAIRES ne bougent pas : une maison qu'on tire à soi n'a pas de
+		# sens, et la déplacer sortirait le décor de sa case.
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var reach := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if reach < 0 or float(reach) > ability.pull_radius:
+			continue
+		var cell: Vector2i = context.enemy_cells[i]
+		for _step in ability.pull_cells:
+			var here := Pathfinder.value_at(grid, field, cell)
+			# ON S'ARRÊTE SUR L'ANNEAU, pas au contact. `pull_min` vaut au moins
+			# 1 — jamais sur la case du mage, deux sprites superposés et l'on ne
+			# voit plus ni qui frappe ni où l'on est — mais un sort qui
+			# rassemble a intérêt à s'arrêter plus loin encore : déposé au
+			# contact, le poursuivant frappe dans la seconde.
+			if here <= maxi(1, ability.pull_min):
+				break
+			var best := cell
+			for direction in MazeGrid.NEIGHBORS:
+				var next: Vector2i = cell + direction
+				if not grid.is_floor_v(next) or grid.is_occupied(next):
+					continue
+				var value := Pathfinder.value_at(grid, field, next)
+				if value >= 0 and value < here:
+					here = value
+					best = next
+			if best == cell:
+				break
+			cell = best
+		if cell != context.enemy_cells[i]:
+			context.enemy_cells[i] = cell
+			enemy_hauled.emit(i, cell)
 
 
 func _update_burns(delta: float, context: CombatContext) -> void:
@@ -1189,6 +1871,75 @@ func _update_burns(delta: float, context: CombatContext) -> void:
 		_apply_damage(index, tick, context, false, false)
 		if int(burn["ticks"]) <= 0:
 			_burning.erase(index)
+
+
+
+## LE POISON RONGE LOIN DE SA SOURCE.
+##
+## Calqué sur la brûlure, à trois différences près, et ce sont elles qui en font
+## un autre effet : il dure dix fois plus longtemps, il ne dépend pas du coup qui
+## l'a posé, et il SUIT sa victime — une créature qui sort de l'ombre l'emporte
+## avec elle. C'est ce qui distingue « ne reste pas là » de « tu y es passé ».
+##
+## Se reposer le RENOUVELLE plutôt que de s'ajouter : deux flaques d'ombre qui
+## se chevaucheraient doubleraient la cadence en silence, comme deux nuages
+## d'orage l'avaient déjà fait.
+func _update_poisons(delta: float, context: CombatContext) -> void:
+	for index in _poisoned.keys():
+		if not context.enemy_alive(index):
+			_poisoned.erase(index)
+			continue
+		var poison: Dictionary = _poisoned[index]
+		poison["time_left"] = float(poison["time_left"]) - delta
+		poison["timer"] = float(poison["timer"]) - delta
+		if float(poison["timer"]) <= 0.0:
+			poison["timer"] = POISON_TICK
+			var tick := Ability.make({"id": "poison", "display_name": "Poison d'ombre",
+				"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SHADOW,
+				"damage": int(poison["damage"])})
+			# NI TRAIT NI EXALTATION. Le trait de l'Ombre est la Ponction : un
+			# poison qui le déclencherait soignerait le mage une fois par seconde
+			# et par créature empoisonnée, sans qu'il ait rien à faire.
+			_apply_damage(index, tick, context, false, false)
+		if float(poison["time_left"]) <= 0.0:
+			_poisoned.erase(index)
+
+
+## L'ombre empoisonne CE QU'ELLE TOUCHE, une fois par passage.
+##
+## Même verrou que le givre et le piège : une zone tique deux fois par seconde,
+## et sans verrou elle repose le poison à chaque tic — la durée annoncée ne
+## voudrait plus rien dire.
+func _apply_poison(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var field := _field_from(centre)
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i) or _snare_locks.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		_snare_locks[i] = POISON_TICK
+		_poisoned[i] = {"time_left": ability.poison_duration,
+			"timer": POISON_TICK, "damage": maxi(1, ability.poison_damage)}
+		enemy_poisoned.emit(i, ability.poison_duration)
+
+
+## L'OMBRE QUE L'EXPLOSION LAISSE DERRIÈRE ELLE.
+##
+## Une zone dérivée, fabriquée comme les pics de la ligne de terre : le sort
+## d'origine n'a pas à être une zone, il lui suffit d'en décrire une. Elle ne
+## reprend PAS les dégâts de l'explosion — une flaque qui referait 34 par seconde
+## serait le vrai sort, et l'explosion son décor.
+func _residue_of(ability: Ability) -> Ability:
+	return Ability.make({
+		"id": ability.id + "_ombre", "display_name": ability.display_name,
+		"kind": Ability.Kind.ZONE, "element": ability.element,
+		"damage": 0, "radius": ability.radius,
+		"duration": ability.residue_duration,
+		"poison_duration": ability.poison_duration,
+		"poison_damage": ability.poison_damage,
+		"zone_style": "ombre",
+	})
 
 
 func _update_echoes(delta: float, context: CombatContext) -> void:
@@ -1220,8 +1971,14 @@ func _update_echoes(delta: float, context: CombatContext) -> void:
 ## Explosions et zones : le rayon se mesure en DISTANCE DE CHEMIN, pas à vol
 ## d'oiseau. Une explosion qui traverse une haie pour toucher le couloir d'à côté
 ## serait incompréhensible dans un labyrinthe.
+## `with_trait` à false quand le sort FAIT DÉJÀ ce que fait le trait de son
+## élément. Le cas est né avec le Grand souffle : il projette de quatre cases,
+## et le trait de l'Air en poussait deux de plus par-dessus. Les deux se
+## cumulaient, donc la course réelle dépassait celle du sort et le choc contre
+## la pierre se comptait de travers. Même raison que la Chaîne d'éclairs, qui ne
+## déclenche pas l'arc de la Foudre.
 func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
-		reported: Ability = null) -> void:
+		reported: Ability = null, with_trait: bool = true) -> void:
 	# UN ULTIME PASSE LES MURS. Ailleurs le rayon se mesure en distance de
 	# chemin — une explosion ne doit pas traverser une haie. Ici on mesure à vol
 	# d'oiseau : le souffle balaye le labyrinthe sans se soucier des couloirs.
@@ -1231,7 +1988,7 @@ func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
 				continue
 			if Vector2(context.enemy_cells[i] - centre).length() > ability.radius:
 				continue
-			_apply_damage(i, ability, context)
+			_apply_damage(i, ability, context, with_trait)
 			if reported != null and context.enemy_alive(i):
 				enemy_damaged.emit(i, 0, reported)
 		return
@@ -1245,7 +2002,7 @@ func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
 			continue
 		if not _within_arc(ability, centre, context.enemy_cells[i], context):
 			continue
-		_apply_damage(i, ability, context)
+		_apply_damage(i, ability, context, with_trait)
 		if reported != null and context.enemy_alive(i):
 			# La zone rapporte la compétence D'ORIGINE et non sa tranche : c'est
 			# elle que l'interface et les effets doivent nommer.

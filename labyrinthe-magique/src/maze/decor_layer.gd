@@ -77,7 +77,9 @@ func set_stage(index: int) -> void:
 func _load_role(index: int, role: String) -> Array[Texture2D]:
 	var out: Array[Texture2D] = []
 	var folder := "res://assets/stages/props/stage_%d/%s/" % [index, role]
-	for rank in 6:
+	# Douze rangs et non six : les planches de terrain fournissent dix objets de
+	# semis par stage, et s'arrêter à six en jetterait quatre sans rien dire.
+	for rank in 12:
 		var path := folder + "%s_%d.png" % [role, rank]
 		if not ResourceLoader.exists(path):
 			continue

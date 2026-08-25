@@ -37,6 +37,9 @@ func _init() -> void:
 	_test_flat_index()
 	_test_demo_free_use()
 	_test_zone_snare()
+	_test_rune_drain()
+	_test_shadow_implosion()
+	_test_shadow_rift()
 	_test_charges()
 	_test_volcanic_ultimate()
 	_test_ultimate_thresholds()
@@ -48,6 +51,12 @@ func _init() -> void:
 	_test_thunder_field()
 	_test_storm()
 	_test_sky_judgement()
+	_test_earth_line()
+	_test_earth_aegis()
+	_test_earth_rift()
+	_test_earth_quake()
+	_test_air_tornado()
+	_test_air_gust()
 
 	print("")
 	if _failures.is_empty():
@@ -898,6 +907,249 @@ func _test_zone_snare() -> void:
 			% plain.display_name)
 
 
+
+## La RUNE du Sorcier des Ténèbres : elle RONGE ce qu'elle retient.
+##
+## Deux promesses, et chacune peut casser toute seule. Les dégâts doivent
+## s'accumuler seconde après seconde tant que la créature est dessus — un
+## prélèvement unique ferait un péage, pas un piège. Et l'englu doit être réarmé
+## à CHAQUE frame, pas au tick de la zone : sa traînée est plus courte que
+## l'intervalle des ticks, donc au tick l'ennemi retrouverait son allure deux
+## fois par seconde. Le tout doit se couper net à la sortie.
+func _test_rune_drain() -> void:
+	var stats := CharacterCatalog.shadow()
+	var parts := _context(stats)
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# L'ennemi est SUR la rune : c'est la case du mage qui la reçoit.
+	_add_enemy(context, context.player_cell, 4000)
+
+	var rune: Ability = null
+	for ability in stats.abilities:
+		if ability.slow_sustained:
+			rune = ability
+	if rune == null:
+		_fail("aucune zone à englu soutenu dans le catalogue du Sorcier des Ténèbres")
+		return
+	if rune.slow_factor > 0.2:
+		_fail("la rune laisse %d %% d'allure : on la traverse encore" % int(rune.slow_factor * 100.0))
+	if rune.slow_duration > 1.0:
+		_fail("la traînée dure %.1f s : trop longue pour une sortie de rune" % rune.slow_duration)
+
+	var soaks := {"count": 0, "factor": 1.0}
+	combat.enemy_soaked.connect(func(_i: int, _d: float, f: float) -> void:
+		soaks["count"] += 1
+		soaks["factor"] = f)
+
+	combat.use(rune, context)
+	for i in 180:
+		combat.update(DT, context)
+	var lost: int = 4000 - context.enemy_health[0].current
+	var expected: int = rune.damage * 3
+	if absf(float(lost - expected)) > float(rune.damage):
+		_fail("3 s dans la rune coûtent %d PV au lieu de ~%d : l'usure ne s'accumule pas"
+			% [lost, expected])
+	if soaks["count"] < 170:
+		_fail("l'englu n'est réarmé que %d fois en 180 frames : il se compte au lieu de tenir"
+			% soaks["count"])
+	if not is_equal_approx(soaks["factor"], rune.slow_factor):
+		_fail("l'englu posé vaut %.2f au lieu de %.2f" % [soaks["factor"], rune.slow_factor])
+
+	# DEHORS : plus un dégât, plus un englu. Ce qui retient doit lâcher prise.
+	var before: int = soaks["count"]
+	var spared: int = context.enemy_health[0].current
+	context.enemy_cells[0] = _cell_at(parts[0], context.player_field, 6)
+	for i in 120:
+		combat.update(DT, context)
+	if soaks["count"] != before:
+		_fail("la rune englue encore une créature qui en est sortie")
+	if context.enemy_health[0].current != spared:
+		_fail("la rune ronge encore une créature qui en est sortie")
+
+
+
+## L'IMPLOSION D'OMBRE : elle ramène avant de frapper.
+##
+## Trois promesses. Le souffle porte PLUS LOIN que les dégâts, sinon il n'aurait
+## aucun effet — ce qu'il attrape serait déjà dans l'explosion. Ce qu'il ramène
+## doit encore trouver l'explosion en arrivant, donc l'ordre compte : aspirer
+## PUIS frapper. Et il ne dépose personne SUR le mage, sous peine de deux
+## sprites superposés et d'un coup gratuit.
+func _test_shadow_implosion() -> void:
+	var stats := CharacterCatalog.shadow()
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+
+	var burst: Ability = null
+	for ability in stats.abilities:
+		if ability.pull_radius > 0.0:
+			burst = ability
+	if burst == null:
+		_fail("aucun sort à aspiration dans le catalogue du Sorcier des Ténèbres")
+		return
+	if burst.pull_radius <= burst.radius:
+		_fail("le souffle (%s) ne porte pas plus loin que les dégâts (%s) : il ne sert à rien"
+			% [burst.pull_radius, burst.radius])
+
+	# Une créature HORS de portée des dégâts mais dans celle du souffle : c'est
+	# le cas qui définit le sort.
+	var far := _cell_at(grid, context.player_field, 4)
+	if far.x < 0:
+		_fail("aucune case à 4 pas du mage sur cette graine")
+		return
+	_add_enemy(context, far, 4000)
+	# Et une autre COLLÉE au mage : elle ne doit pas lui monter dessus.
+	var near := _cell_at(grid, context.player_field, 1)
+	_add_enemy(context, near, 4000)
+
+	var hauls := {"count": 0}
+	combat.enemy_hauled.connect(func(_i: int, _c: Vector2i) -> void:
+		hauls["count"] += 1)
+
+	combat.use(burst, context)
+	if hauls["count"] < 1:
+		_fail("l'implosion n'a ramené personne alors qu'une créature était à 4 pas")
+	var pulled := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0])
+	if pulled >= 4:
+		_fail("la créature est restée à %d pas : elle n'a pas été aspirée" % pulled)
+	if context.enemy_cells[0] == context.player_cell:
+		_fail("l'implosion dépose une créature SUR le mage")
+	if context.enemy_cells[1] == context.player_cell:
+		_fail("l'implosion pousse sur le mage une créature déjà collée à lui")
+	# ELLE NE LIVRE PAS SON LANCEUR. Ramenée au contact, la créature frappe dans
+	# la seconde et le sort offre le coup qu'il devait éviter.
+	if pulled < burst.pull_min:
+		_fail("l'implosion dépose une créature à %d pas du mage, sa butée est à %d"
+			% [pulled, burst.pull_min])
+	# Et elle reste DANS l'explosion : une butée plus large que le rayon
+	# rangerait la meute hors de portée de son propre sort.
+	if float(burst.pull_min) > burst.radius:
+		_fail("la butée (%d) dépasse le rayon (%s) : le sort range la meute hors de ses dégâts"
+			% [burst.pull_min, burst.radius])
+
+	# Ramenée À PORTÉE, elle doit avoir encaissé : c'est tout l'intérêt d'aspirer
+	# avant de frapper. Une créature à 4 pas d'un sort de rayon 2,6 ne prend
+	# rien si l'ordre est inversé.
+	if context.enemy_health[0].current >= 4000:
+		_fail("la créature ramenée n'a rien encaissé : l'explosion part avant l'aspiration")
+
+	# L'OMBRE RESTE, ET ELLE EMPOISONNE. Trois secondes plus tard, la flaque doit
+	# encore être là et la créature avoir perdu un PV par seconde — ni plus (un
+	# demi-tick arrondi doublerait le chiffre annoncé), ni moins.
+	if burst.residue_duration <= 0.0:
+		_fail("l'implosion ne laisse aucune ombre derrière elle")
+		return
+	var poisons := {"count": 0, "duration": 0.0}
+	combat.enemy_poisoned.connect(func(_i: int, d: float) -> void:
+		poisons["count"] += 1
+		poisons["duration"] = d)
+	var after_blast: int = context.enemy_health[0].current
+	for i in int(3.0 / DT):
+		combat.update(DT, context)
+	var bled: int = after_blast - context.enemy_health[0].current
+	if poisons["count"] < 1:
+		_fail("la flaque d'ombre n'empoisonne personne")
+	if not is_equal_approx(poisons["duration"], burst.poison_duration):
+		_fail("le poison annonce %.0f s au lieu de %.0f" % [poisons["duration"], burst.poison_duration])
+	if absf(float(bled - burst.poison_damage * 3)) > float(burst.poison_damage):
+		_fail("3 s de poison coûtent %d PV au lieu de ~%d : le tic n'est pas à la seconde"
+			% [bled, burst.poison_damage * 3])
+
+	# IL SUIT SA VICTIME DEHORS. Le poison est ce que l'on emporte, pas ce que
+	# l'on subit sur place — sortir de la flaque ne doit pas l'effacer.
+	var outside: int = context.enemy_health[0].current
+	context.enemy_cells[0] = _cell_at(grid, context.player_field, 8)
+	for i in int(3.0 / DT):
+		combat.update(DT, context)
+	if context.enemy_health[0].current >= outside:
+		_fail("le poison s'arrête dès que la créature sort de l'ombre")
+
+
+## LA FAILLE DES TÉNÈBRES : des portes s'ouvrent SUR LES PROIES.
+##
+## Quatre promesses. Les portes s'ouvrent près des poursuivants et non aux pieds
+## du mage — c'est ce qui sépare cet ultime de l'Invocateur, dont les bêtes
+## doivent traverser le labyrinthe. Chaque porte lâche deux ombres, jamais une.
+## Le compte est PLAFONNÉ : une porte par ennemi viderait un stage tardif d'un
+## seul geste. Et le sort est refusé quand il n'y a personne à chasser, sinon un
+## ultime gagné en quatre kills se dépense dans un couloir vide.
+func _test_shadow_rift() -> void:
+	var stats := CharacterCatalog.shadow()
+	var rift: Ability = stats.ultimate
+	if rift.kind != Ability.Kind.SUMMON or rift.summon_portals <= 0:
+		_fail("la Faille des ténèbres n'ouvre aucune porte")
+		return
+	if rift.summon_count < 2:
+		_fail("une faille ne lâche que %d ombre" % rift.summon_count)
+	if rift.duration < 120.0:
+		_fail("les ombres ne tiennent que %.0f s au lieu de 120" % rift.duration)
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+
+	# 1. SANS PROIE, LE SORT EST REFUSÉ. Il ne coûte rien et ne pose rien.
+	var refusals := {"count": 0}
+	combat.use_refused.connect(func(_why: String) -> void: refusals["count"] += 1)
+	if combat.use(rift, context):
+		_fail("la Faille part alors qu'il n'y a personne à chasser")
+	if refusals["count"] < 1:
+		_fail("la Faille échoue en silence : le joueur ne saura pas pourquoi")
+
+	# 2. AVEC DES PROIES : une porte par créature, plafonnée, deux ombres chacune.
+	var prey_count := rift.summon_portals + 2
+	for i in prey_count:
+		_add_enemy(context, _cell_at(grid, context.player_field, 2 + i), 4000)
+	var doors := {"count": 0, "cells": []}
+	var born := {"count": 0}
+	combat.rift_opened.connect(func(cell: Vector2i) -> void:
+		doors["count"] += 1
+		doors["cells"].append(cell))
+	combat.summon_spawned.connect(func(_id: int, kind: String, _p: Vector2) -> void:
+		born["count"] += 1
+		if kind != rift.summon_id:
+			_fail("la Faille fait sortir un « %s » au lieu d'une ombre" % kind))
+
+	if not combat.use(rift, context):
+		_fail("la Faille est refusée alors que %d créatures sont là" % prey_count)
+	if doors["count"] != rift.summon_portals:
+		_fail("%d portes ouvertes pour %d créatures : le plafond de %d ne tient pas"
+			% [doors["count"], prey_count, rift.summon_portals])
+	if born["count"] != rift.summon_portals * rift.summon_count:
+		_fail("%d ombres sorties de %d portes : ce n'est pas %d par porte"
+			% [born["count"], doors["count"], rift.summon_count])
+
+	# 3. LES PORTES S'OUVRENT SUR LES PROIES, pas sur le mage. Sans quoi le sort
+	#    redevient une invocation ordinaire et son trajet coûte le double.
+	for cell in doors["cells"]:
+		var to_player := Pathfinder.value_at(grid, context.player_field, cell)
+		var to_prey := 999
+		for enemy_cell in context.enemy_cells:
+			to_prey = mini(to_prey, absi(cell.x - enemy_cell.x) + absi(cell.y - enemy_cell.y))
+		if to_prey > 1:
+			_fail("une porte s'ouvre à %d cases de toute proie" % to_prey)
+		if to_player <= 1:
+			_fail("une porte s'ouvre au pied du mage : c'est une invocation, pas une faille")
+
+	# 4. ELLES CHASSENT VRAIMENT, et leur gaz empoisonne.
+	var poisons := {"count": 0}
+	combat.enemy_poisoned.connect(func(_i: int, _d: float) -> void: poisons["count"] += 1)
+	var before := 0
+	for health in context.enemy_health:
+		before += health.current
+	for i in int(12.0 / DT):
+		combat.update(DT, context)
+	var after := 0
+	for health in context.enemy_health:
+		after += health.current
+	if after >= before:
+		_fail("les ombres n'ont blessé personne en 12 s")
+	if poisons["count"] < 1:
+		_fail("le gaz des ombres n'empoisonne pas")
+
 ## Les CHARGES : cinq brasiers d'affilée, puis la recharge, puis les cinq
 ## reviennent d'un coup. Trois promesses distinctes, et chacune peut casser
 ## seule — d'où trois vérifications.
@@ -1631,3 +1883,533 @@ func _test_sky_judgement() -> void:
 		_fail("l'ultime du Feu lève aussi des nuages : les deux se confondent")
 	if ultimate.rain_count > 0:
 		_fail("l'ultime de la Foudre fait aussi pleuvoir : c'est celui du Feu")
+
+
+## LES PICS DE TERRE COURENT DANS LE COULOIR, ils n'entourent pas le mage.
+##
+## Le sort était un souffle circulaire — la même mécanique que trois autres du
+## jeu. Ces épreuves gardent les deux temps qui en font un sort de Terre : la
+## gerbe qui FILE, et les pointes qui RESTENT.
+func _test_earth_line() -> void:
+	var stats := CharacterCatalog.earth()
+	var spikes: Ability = stats.abilities[0]
+	if spikes.kind != Ability.Kind.LINE:
+		_fail("les Pics de terre ne courent pas : ce n'est pas une ligne")
+		return
+	if spikes.duration <= 0.0 or spikes.line_bite <= 0:
+		_fail("les pics ne restent pas plantés : la moitié du sort manque")
+
+	# 1. LE CHEMIN. On le relève d'abord à vide, sur une grille de graine fixe :
+	#    il servira ensuite à poser une créature dessus.
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var route := {"path": [] as Array}
+	combat.line_erupted.connect(func(_a: Ability, path: Array, _d: float) -> void:
+		route["path"] = path)
+	if not combat.use(spikes, context):
+		_fail("les Pics de terre refusent de partir depuis le départ du mage")
+		return
+	var path: Array = route["path"]
+	if path.size() < 2:
+		_fail("la gerbe ne fait que %d case : ce n'est pas une ligne" % path.size())
+		return
+	# Chaque case du chemin est praticable et TOUCHE la précédente : une ligne
+	# qui saute par-dessus un mur serait un sort qui traverse la pierre.
+	var previous: Vector2i = context.player_cell
+	for step in path:
+		var cell: Vector2i = step
+		if not grid.is_floor_v(cell):
+			_fail("la gerbe passe dans un mur en %s" % cell)
+		if absi(cell.x - previous.x) + absi(cell.y - previous.y) != 1:
+			_fail("la gerbe saute de %s à %s" % [previous, cell])
+		previous = cell
+
+	# 2. L'ÉRUPTION frappe ce qu'elle croise, UNE SEULE FOIS — même une créature
+	#    qui RECULE devant elle.
+	#
+	#    ⚠️ La première version de cette épreuve ne prouvait rien : elle posait
+	#    une créature immobile, et une créature immobile n'est de toute façon à
+	#    portée que d'une seule case. Sabotée, la mémoire des touchés n'a fait
+	#    crier personne. On fait donc reculer la créature AU RYTHME de la gerbe,
+	#    ce qui est le seul cas où cette mémoire compte.
+	parts = _context(stats)
+	combat = parts[1]
+	context = parts[2]
+	var victim: Vector2i = path[1]
+	_add_enemy(context, victim, 900)
+	var coups := {"n": 0, "total": 0}
+	combat.enemy_damaged.connect(func(_i: int, dealt: int, _a: Ability) -> void:
+		coups["n"] += 1
+		coups["total"] += dealt)
+	combat.use(spikes, context)
+	var pas := spikes.range / maxf(1.0, spikes.line_speed) / float(path.size())
+	var couru := 0.0
+	for i in int(1.0 / DT):
+		combat.update(DT, context)
+		couru += DT
+		var devant := int(couru / pas)
+		if devant < path.size():
+			context.enemy_cells[0] = path[devant]
+	if coups["n"] == 0:
+		_fail("la gerbe traverse la créature sans la toucher")
+	var eruption: int = coups["total"]
+	if eruption > spikes.damage + stats.attack.damage:
+		_fail("la créature encaisse %d pour une gerbe à %d : elle est frappée à chaque case"
+			% [eruption, spikes.damage])
+
+	# 3. LES POINTES RESTENT. C'est le second temps du sort, celui qui en fait
+	#    du terrain plutôt qu'un tir : la créature qui campe dessus continue
+	#    d'être mordue longtemps après le passage de la gerbe.
+	var plantes := {"posees": 0, "finies": 0}
+	combat.zone_created.connect(func(_id: int, _a: Ability, _c: Vector2i) -> void:
+		plantes["posees"] += 1)
+	combat.zone_expired.connect(func(_id: int) -> void: plantes["finies"] += 1)
+	parts = _context(stats)
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, victim, 900)
+	combat.zone_created.connect(func(_id: int, _a: Ability, _c: Vector2i) -> void:
+		plantes["posees"] += 1)
+	combat.zone_expired.connect(func(_id: int) -> void: plantes["finies"] += 1)
+	var morsures := {"total": 0}
+	combat.use(spikes, context)
+	for i in int(0.6 / DT):
+		combat.update(DT, context)
+	combat.enemy_damaged.connect(func(_i: int, dealt: int, _a: Ability) -> void:
+		morsures["total"] += dealt)
+	for i in int((spikes.duration - 0.8) / DT):
+		combat.update(DT, context)
+	if plantes["posees"] != path.size():
+		_fail("%d pics plantés pour %d cases parcourues"
+			% [plantes["posees"], path.size()])
+	if morsures["total"] <= 0:
+		_fail("les pics plantés ne mordent pas ce qui reste dessus")
+
+	# 4. Et ils s'effacent : un couloir hérissé pour toujours serait un mur, et
+	#    le mage en a déjà un.
+	for i in int(2.0 / DT):
+		combat.update(DT, context)
+	if plantes["finies"] != plantes["posees"]:
+		_fail("%d pics sur %d se sont effacés : le couloir reste fermé"
+			% [plantes["finies"], plantes["posees"]])
+	var stables: int = morsures["total"]
+	for i in int(1.5 / DT):
+		combat.update(DT, context)
+	if morsures["total"] != stables:
+		_fail("les pics mordent encore après avoir disparu")
+
+
+## L'ÉGIDE DE PIERRE est un RÉPIT, pas une réserve.
+##
+## C'est la seule immunité du jeu. Trois promesses la tiennent : rien ne
+## l'entame, elle s'achève à l'heure dite, et la fenêtre où le mage est
+## vulnérable reste plus longue que celle où il ne l'est pas — sans quoi le
+## sort ne serait pas un sort mais un état permanent.
+func _test_earth_aegis() -> void:
+	var stats := CharacterCatalog.earth()
+	var aegis: Ability = stats.abilities[1]
+	if aegis.kind != Ability.Kind.SHIELD or not aegis.immune:
+		_fail("l'Égide de pierre ne rend pas intouchable")
+		return
+	if aegis.cooldown <= aegis.duration:
+		_fail("l'Égide dure %.0f s et revient toutes les %.0f s : l'immunité est permanente"
+			% [aegis.duration, aegis.cooldown])
+
+	var parts := _context(stats)
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+
+	# 1. RIEN NE L'ENTAME. Le bouclier de l'Eau, lui, se serait vidé.
+	var refuses := {"n": 0}
+	health.deflected.connect(func() -> void: refuses["n"] += 1)
+	combat.use(aegis, context)
+	for coup in 12:
+		health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != stats.base_health:
+		_fail("le mage intouchable perd des points de vie (%d sur %d)"
+			% [health.current, stats.base_health])
+	if refuses["n"] != 12:
+		_fail("%d coups sur 12 seulement ont été refusés" % refuses["n"])
+
+	# 2. ELLE S'ACHÈVE. Une immunité qu'on oublie d'éteindre ne se voit pas :
+	#    le mage traverse le reste du niveau sans rien risquer et personne ne
+	#    s'en aperçoit avant la fin de la partie.
+	for i in int((aegis.duration - 1.0) / DT):
+		combat.update(DT, context)
+	if not health.immune:
+		_fail("l'Égide s'est éteinte avant son heure")
+	for i in int(2.0 / DT):
+		combat.update(DT, context)
+	if health.immune:
+		_fail("l'Égide ne s'éteint jamais : le mage est invincible pour toujours")
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != stats.base_health - 1:
+		_fail("le mage encaisse encore une fois l'Égide tombée")
+
+	# 3. Elle ne fait pas doublon avec le bouclier de l'Eau : l'un absorbe une
+	#    quantité, l'autre offre un temps. Deux sorts qui protègent doivent se
+	#    jouer différemment, sinon l'un des deux mages est une copie.
+	var vague := CharacterCatalog.water().abilities[1]
+	if vague.immune:
+		_fail("le bouclier de l'Eau rend lui aussi intouchable : les deux se confondent")
+	if vague.damage <= 0:
+		_fail("le bouclier de l'Eau n'absorbe plus rien")
+
+
+## L'ORBE TRAVAILLE TOUT SEUL : il s'installe autour du mage et fend le sol dès
+## qu'une créature entre à portée.
+##
+## C'est le seul sort du jeu qui ATTAQUE sans qu'on vise. Trois promesses le
+## tiennent : l'orbe dure, il ne frappe que ce qui approche, et son balayage est
+## bien une faille de couloir — pas un dégât appliqué à distance.
+func _test_earth_rift() -> void:
+	var stats := CharacterCatalog.earth()
+	var rift: Ability = stats.abilities[2]
+	var spikes: Ability = stats.abilities[0]
+	if rift.kind != Ability.Kind.TURRET or not rift.turret_sweep:
+		_fail("les Éclats de cristal ne posent pas d'orbe qui balaie")
+		return
+	if rift.spike_life <= 0.0 or rift.spike_life >= rift.duration:
+		_fail("les gerbes de l'orbe durent %.0f s pour un orbe de %.0f s : "
+			% [rift.spike_life, rift.duration] + "le couloir ne se rouvre pas")
+
+	# 1. UNE PROIE TROP LOIN NE DÉCLENCHE RIEN.
+	#
+	#    ⚠️ La première version de cette épreuve ne posait AUCUNE créature et
+	#    vérifiait qu'il ne se passait rien : elle ne prouvait donc pas que la
+	#    portée était respectée, seulement qu'un orbe seul reste tranquille.
+	#    Sabotée (portée multipliée par cinq), elle n'a fait crier personne.
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var lointaine := _cell_at(grid, context.player_field, rift.range + 4)
+	if lointaine.x >= 0:
+		_add_enemy(context, lointaine, 9000)
+	var failles := {"n": 0, "cases": 0}
+	combat.line_erupted.connect(func(_a: Ability, path: Array, _d: float) -> void:
+		failles["n"] += 1
+		failles["cases"] = path.size())
+	if not combat.use(rift, context):
+		_fail("l'orbe refuse de se poser")
+		return
+	for i in int(3.0 / DT):
+		combat.update(DT, context)
+	if failles["n"] > 0:
+		_fail("l'orbe balaie le couloir vers une proie hors de portée")
+
+	# 2. UNE PROIE ENTRE À PORTÉE : le balayage part TOUT SEUL, et il blesse.
+	var proie := _cell_at(grid, context.player_field, 3)
+	if proie.x < 0:
+		_fail("pas de case à trois pas pour poser la proie")
+		return
+	_add_enemy(context, proie, 9000)
+	var coups := {"total": 0}
+	combat.enemy_damaged.connect(func(_i: int, dealt: int, _a: Ability) -> void:
+		coups["total"] += dealt)
+	for i in int(rift.turret_interval / DT + 4):
+		combat.update(DT, context)
+	if failles["n"] == 0:
+		_fail("une créature est à portée et l'orbe ne fend rien")
+	if coups["total"] < rift.damage:
+		_fail("le balayage passe sous la créature sans la blesser (%d dégâts)"
+			% coups["total"])
+	# La faille suit le COULOIR jusqu'à elle : trois pas de marche, donc au
+	# plus trois cases de gerbes. Un dégât appliqué à distance n'en lèverait
+	# aucune.
+	if failles["cases"] <= 0 or failles["cases"] > rift.range:
+		_fail("la faille couvre %d cases pour une portée de %d"
+			% [failles["cases"], rift.range])
+
+	# 3. IL S'ÉTEINT, et le couloir cesse de s'ouvrir.
+	for i in int(rift.duration / DT):
+		combat.update(DT, context)
+	var stables: int = failles["n"]
+	for i in int(4.0 / DT):
+		combat.update(DT, context)
+	if failles["n"] != stables:
+		_fail("l'orbe balaie encore après s'être éteint")
+
+	# 4. Il ne fait pas doublon avec les Pics : ceux-là se VISENT, à la main,
+	#    devant soi. Celui-ci travaille seul pendant qu'on fait autre chose.
+	if spikes.kind == Ability.Kind.TURRET:
+		_fail("les Pics de terre travaillent eux aussi tout seuls")
+	if spikes.duration <= rift.spike_life:
+		_fail("les gerbes des Pics ne tiennent pas plus que celles de l'orbe")
+
+
+## LE SÉISME : le sol tremble, et les PAROIS cèdent.
+##
+## C'est un ultime de terrain, pas une détonation. Ses promesses : il dure, il
+## fait tomber des pans de mur par vagues, ces pans blessent, et il s'arrête.
+func _test_earth_quake() -> void:
+	var stats := CharacterCatalog.earth()
+	var quake := stats.ultimate
+	if quake.quake_duration <= 0.0:
+		_fail("le Séisme ne fait pas trembler la terre")
+		return
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Une créature LOIN du mage : elle ne doit rien encaisser de la détonation
+	# initiale, seulement des éboulements. C'est ce qui prouve que le séisme
+	# frappe le labyrinthe entier et pas un cercle autour du lanceur.
+	var loin := _cell_at(grid, context.player_field, 12)
+	if loin.x < 0:
+		_fail("pas de case à douze pas pour poser la proie")
+		return
+	_add_enemy(context, loin, 90000)
+
+	# On compte les pans par MOITIÉ de séisme : la promesse est que ça commence
+	# en avalanche et finit en grondement.
+	var pans := {"n": 0, "debut": 0, "fin": 0, "loin": 0}
+	var horloge := {"t": 0.0}
+	combat.quake_slide.connect(func(cell: Vector2i, _a: Ability) -> void:
+		pans["n"] += 1
+		if horloge["t"] < quake.quake_duration * 0.5:
+			pans["debut"] += 1
+		else:
+			pans["fin"] += 1
+		# Et le séisme secoue le LABYRINTHE, pas un cercle autour du mage : on
+		# note ce qui cède au-delà de la portée de la détonation initiale.
+		var distance := Pathfinder.value_at(grid, context.player_field, cell)
+		if distance > int(quake.radius) + 2:
+			pans["loin"] += 1)
+	var secousse := {"duree": 0.0}
+	combat.quake_started.connect(func(duration: float, _a: Ability) -> void:
+		secousse["duree"] = duration)
+	var degats := {"total": 0}
+	combat.enemy_damaged.connect(func(_i: int, dealt: int, _a: Ability) -> void:
+		degats["total"] += dealt)
+
+	combat.use(quake, context)
+	if not is_equal_approx(secousse["duree"], quake.quake_duration):
+		_fail("la secousse annoncée dure %.1f s au lieu de %.1f"
+			% [secousse["duree"], quake.quake_duration])
+	for i in int(quake.quake_duration / DT):
+		horloge["t"] = float(i) * DT
+		combat.update(DT, context)
+
+	if pans["n"] < 6:
+		_fail("%d pans cèdent en %.0f s de séisme" % [pans["n"], quake.quake_duration])
+	# L'AVALANCHE PUIS LE GRONDEMENT. C'est la texture du sort, et la seule
+	# chose qui le sépare vraiment de la pluie du Feu — celle-ci tombe à cadence
+	# égale du début à la fin.
+	# ⚠️ Un simple « plus au début qu'à la fin » ne prouvait RIEN : la toute
+	#    première vague part à l'instant zéro, ce qui suffit à faire pencher la
+	#    moitié initiale même à cadence constante. Sabotée, l'épreuve passait.
+	#    On exige donc un écart d'un tiers, que seule une vraie décélération
+	#    produit.
+	if float(pans["debut"]) < float(pans["fin"]) * 1.33:
+		_fail("%d pans dans la première moitié contre %d dans la seconde : "
+			% [pans["debut"], pans["fin"]] + "le séisme ne se calme pas assez")
+	if pans["loin"] <= 0:
+		_fail("aucun pan ne cède au-delà du souffle : ce n'est pas un séisme")
+	# LE TREMBLEMENT BLESSE, même loin du lanceur. Sans ce fond continu,
+	# l'ultime était un spectacle : mesuré, vingt-sept éboulements tirés au sort
+	# sur six cents cases ne touchent une créature donnée qu'une fois sur cinq.
+	if degats["total"] <= 0:
+		_fail("une créature à douze pas traverse tout le Séisme sans une égratignure")
+	if quake.quake_tremor <= 0:
+		_fail("le tremblement lui-même ne fait rien : seuls les pans frappent")
+
+	# Il S'ARRÊTE. Un séisme qui continue ferait trembler le reste du niveau.
+	var stables: int = pans["n"]
+	for i in int(4.0 / DT):
+		combat.update(DT, context)
+	if pans["n"] != stables:
+		_fail("la terre tremble encore après la fin du Séisme")
+
+	# Il ne fait pas doublon avec l'Embrasement du Feu : celui-là fait pleuvoir
+	# des météores n'importe où, celui-ci effondre les parois.
+	var nova := CharacterCatalog.fire().ultimate
+	if nova.quake_duration > 0.0:
+		_fail("l'ultime du Feu fait trembler la terre lui aussi")
+	if quake.rain_count > 0:
+		_fail("le Séisme fait pleuvoir des météores : c'est l'ultime du Feu")
+
+
+## LA TORNADE AVANCE ET EMPORTE. C'est le pilier de l'Air : le déplacement.
+##
+## Rien d'autre dans le jeu ne fait parcourir des cases à une créature — le
+## trait de l'élément la pousse de deux cases, une fois. Trois promesses : elle
+## marche, elle charrie ce qu'elle attrape, et elle n'est pas une quatrième
+## zone posée.
+func _test_air_tornado() -> void:
+	var stats := CharacterCatalog.air()
+	var tornado: Ability = stats.abilities[0]
+	if tornado.zone_travel <= 0.0:
+		_fail("la Tornade ne bouge pas : c'est une zone posée de plus")
+		return
+	if not tornado.zone_carries:
+		_fail("la Tornade n'emporte rien")
+
+	# Les trois autres zones du jeu restent posées : c'est ce qui distingue
+	# celle-ci, et rien n'empêcherait de le perdre en réglant un chiffre.
+	for autre in [CharacterCatalog.fire().abilities[1],
+			CharacterCatalog.water().abilities[2],
+			CharacterCatalog.thunder().abilities[1]]:
+		if autre.zone_travel > 0.0:
+			_fail("« %s » se déplace elle aussi : l'Air perd son pilier"
+				% autre.display_name)
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Une créature juste devant le mage, sur le chemin de la tornade.
+	var proie := _cell_at(grid, context.player_field, 1)
+	if proie.x < 0:
+		_fail("pas de case voisine pour poser la proie")
+		return
+	_add_enemy(context, proie, 9000)
+	var depart := proie
+
+	var marche := {"n": 0}
+	combat.zone_moved.connect(func(_id: int, _c: Vector2i) -> void:
+		marche["n"] += 1)
+	var portee := {"n": 0}
+	combat.enemy_pushed.connect(func(_i: int, _c: Vector2i) -> void:
+		portee["n"] += 1)
+
+	combat.use(tornado, context)
+	for i in int(tornado.duration / DT):
+		combat.update(DT, context)
+
+	# 1. ELLE MARCHE, et pas d'une case ou deux.
+	if marche["n"] < 3:
+		_fail("la Tornade n'a changé de case que %d fois" % marche["n"])
+
+	# 2. ELLE EMPORTE : la créature a fait du CHEMIN, bien plus que les deux
+	#    cases du souffle élémentaire.
+	var arrivee: Vector2i = context.enemy_cells[0]
+	var voyage := Pathfinder.value_at(grid, Pathfinder.distance_field(grid,
+		[depart] as Array[Vector2i]), arrivee)
+	if portee["n"] <= 0:
+		_fail("la créature n'a pas bougé d'un pouce")
+	elif voyage <= CombatSystem.PUSH_CELLS:
+		_fail("la créature a voyagé de %d cases, le simple souffle de l'Air en "
+			% voyage + "fait %d : la Tornade n'emporte pas" % CombatSystem.PUSH_CELLS)
+
+	# 3. Elle s'éteint, et la créature reste où elle a été lâchée.
+	for i in int(2.0 / DT):
+		combat.update(DT, context)
+	if context.enemy_cells[0] != arrivee:
+		_fail("la créature bouge encore après la fin de la Tornade")
+
+
+## LE GRAND SOUFFLE PROJETTE, ET LE MUR FAIT LE RESTE.
+##
+## Le sort s'appelait « Bourrasque » — comme le TRAIT de l'élément — et
+## annonçait qu'il balayait le couloir sans rien pousser. Trois promesses le
+## tiennent maintenant : il projette loin, le choc contre la pierre coûte, et
+## il ne fait pas doublon avec la Tornade.
+func _test_air_gust() -> void:
+	var stats := CharacterCatalog.air()
+	var gust: Ability = stats.abilities[1]
+	var tornado: Ability = stats.abilities[0]
+	if gust.blow_cells <= 0:
+		_fail("le Grand souffle ne projette rien : il « balaie » toujours à vide")
+		return
+	if gust.blow_cells <= CombatSystem.PUSH_CELLS:
+		_fail("il projette de %d cases, le simple souffle de l'élément en fait %d"
+			% [gust.blow_cells, CombatSystem.PUSH_CELLS])
+	if gust.display_name == Element.trait_name(Element.Kind.AIR):
+		_fail("le sort porte le nom du trait de l'élément : deux choses, un mot")
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var proie := _cell_at(grid, context.player_field, 1)
+	if proie.x < 0:
+		_fail("pas de case voisine pour poser la proie")
+		return
+	_add_enemy(context, proie, 9000)
+
+	var envoyes := {"n": 0}
+	var plaques := {"n": 0}
+	combat.enemy_pushed.connect(func(_i: int, _c: Vector2i) -> void:
+		envoyes["n"] += 1)
+	combat.enemy_slammed.connect(func(_i: int, _c: Vector2i) -> void:
+		plaques["n"] += 1)
+	var encaisse := {"total": 0}
+	combat.enemy_damaged.connect(func(_i: int, dealt: int, _a: Ability) -> void:
+		encaisse["total"] += dealt)
+
+	combat.use(gust, context)
+	if envoyes["n"] == 0:
+		_fail("la créature collée au mage n'est pas projetée")
+	var arrivee: Vector2i = context.enemy_cells[0]
+	var voyage := Pathfinder.value_at(grid, Pathfinder.distance_field(grid,
+		[proie] as Array[Vector2i]), arrivee)
+	if voyage <= 0:
+		_fail("la créature n'a pas quitté sa case")
+
+	# LE CHOC. Selon le labyrinthe, la course peut être libre ou bloquée : on
+	# vérifie la RÈGLE — si elle a été plaquée, elle a payé plus cher que le
+	# souffle seul ; sinon, elle a fait toute la distance annoncée.
+	if plaques["n"] > 0:
+		if voyage >= gust.blow_cells:
+			_fail("le choc a été compté alors que la course était libre")
+		if encaisse["total"] <= gust.damage:
+			_fail("plaquée contre la pierre, elle n'encaisse que %d — pas de choc"
+				% encaisse["total"])
+	elif voyage < gust.blow_cells:
+		_fail("course écourtée à %d cases sur %d, et aucun choc compté"
+			% [voyage, gust.blow_cells])
+
+	# LE CHOC, POUR DE BON.
+	#
+	# ⚠️ La première version de cette épreuve ne vérifiait la règle du mur que
+	#    SI le hasard du labyrinthe avait bloqué la course. Il ne l'avait pas
+	#    fait : sabotée, elle n'a rien dit. On fabrique donc le cas — le mage
+	#    devant un CUL-DE-SAC, la créature au fond. Elle ne peut aller nulle
+	#    part, donc elle prend le mur.
+	var impasse := Vector2i(-1, -1)
+	for cell in grid.all_floor_cells():
+		var issues := 0
+		for side in MazeGrid.NEIGHBORS:
+			if grid.is_floor_v(cell + side):
+				issues += 1
+		if issues == 1:
+			impasse = cell
+			break
+	if impasse.x >= 0:
+		parts = _context(stats)
+		combat = parts[1]
+		context = parts[2]
+		# Le mage se place à l'entrée du cul-de-sac, la créature au fond.
+		var entree := impasse
+		for side in MazeGrid.NEIGHBORS:
+			if grid.is_floor_v(impasse + side):
+				entree = impasse + side
+				break
+		context.player_cell = entree
+		context.player_field = Pathfinder.distance_field(grid,
+			[entree] as Array[Vector2i])
+		_add_enemy(context, impasse, 9000)
+		var chocs := {"n": 0}
+		var pris := {"total": 0}
+		combat.enemy_slammed.connect(func(_i: int, _c: Vector2i) -> void:
+			chocs["n"] += 1)
+		combat.enemy_damaged.connect(func(_i: int, dealt: int, _a: Ability) -> void:
+			pris["total"] += dealt)
+		combat.use(gust, context)
+		if chocs["n"] == 0:
+			_fail("au fond d'un cul-de-sac, la créature n'est pas plaquée")
+		if pris["total"] < gust.damage + gust.slam_damage:
+			_fail("plaquée sans issue, elle n'encaisse que %d au lieu de %d"
+				% [pris["total"], gust.damage + gust.slam_damage])
+
+	# Il ne double pas la Tornade : elle EMMÈNE le long d'un couloir, il ÉCARTE
+	# tout autour. Deux sorts de déplacement doivent se jouer autrement.
+	if tornado.blow_cells > 0:
+		_fail("la Tornade projette elle aussi : les deux sorts se confondent")
+	if gust.zone_carries:
+		_fail("le Grand souffle emporte lui aussi : c'est la Tornade")

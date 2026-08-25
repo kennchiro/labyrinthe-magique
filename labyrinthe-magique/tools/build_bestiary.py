@@ -62,13 +62,13 @@ DEFAULT_PROFILE = "right"
 # `profile` : le côté vers lequel la rangée 2 est DESSINÉE. Ne l'écrire que
 # lorsqu'il diffère du défaut, et seulement après avoir regardé le dessin.
 BESTIARY = {
-    "enemi_0.png": {"id": "serpent", "name": "Serpent d'Émeraude",
+    "creatures/enemi_0.png": {"id": "serpent", "name": "Serpent d'Émeraude",
                     "attack": {"row": 2, "col": 4}},
     # Grilles imposées : la détection mesurait ici un pas de DEUX rangées et
     # rendait un dos coupé en deux moitiés empilées.
     # Profil à GAUCHE : l'ouverture de la capuche et son œil sont à gauche, les
     # volutes de sa traîne restent à droite.
-    "enemi_3.png": {"id": "ombre", "name": "Ombre Encapuchonnée",
+    "creatures/enemi_3.png": {"id": "ombre", "name": "Ombre Encapuchonnée",
                     "attack": {"row": 3, "col": 0}, "grid": (175, 171, 61, 12),
                     "profile": "left"},
     # Grille imposée aussi : l'auto-détection cale ici la phase sur la GRANDE
@@ -76,25 +76,25 @@ BESTIARY = {
     # la première cellule à cheval sur deux poses — la marche sautait la
     # première image et la cinquième sortait vide. Mesuré sur les centres des
     # poses : x = 121, 319, 519, 725, 911, soit un pas de 200 depuis 20.
-    "enemi_4.png": {"id": "dragonnet", "name": "Dragonnet de Feu",
+    "creatures/enemi_4.png": {"id": "dragonnet", "name": "Dragonnet de Feu",
                     "attack": {"row": 3, "col": 0}, "grid": (200, 167, 20, 22)},
-    "enemi_5.png": {"id": "golem", "name": "Golem de Lave",
+    "creatures/enemi_5.png": {"id": "golem", "name": "Golem de Lave",
                     "attack": {"row": 3, "col": 0}},
-    "enemi_6.png": {"id": "archer", "name": "Archer d'Os",
+    "creatures/enemi_6.png": {"id": "archer", "name": "Archer d'Os",
                     "attack": {"row": 3, "col": 0}},
     # Profil à GAUCHE, la seconde exception : sa petite tête cristalline et la
     # lueur rose de son cœur sont à gauche, ses éclats d'épaule fuient à droite.
-    "enemi_7.png": {"id": "cristal", "name": "Démon de Cristal",
+    "creatures/enemi_7.png": {"id": "cristal", "name": "Démon de Cristal",
                     "attack": {"row": 3, "col": 0}, "profile": "left"},
     # Grille imposée : même piège que le dragonnet — la phase auto se cale sur
     # la grande illustration de droite, saute la PREMIÈRE pose de chaque rangée
     # et tranche la pose de charge en case d'attaque. Centres mesurés :
     # x = 89, 253, 420, 578, 744 en face, pas de 166 depuis 6.
-    "enemi_8.png": {"id": "minotaure", "name": "Minotaure",
+    "creatures/enemi_8.png": {"id": "minotaure", "name": "Minotaure",
                     "attack": {"row": 3, "col": 0}, "grid": (166, 170, 6, 0)},
-    "enemi_9.png": {"id": "chevalier", "name": "Chevalier Noir",
+    "creatures/enemi_9.png": {"id": "chevalier", "name": "Chevalier Noir",
                     "attack": {"row": 3, "col": 0}, "grid": (148, 156, 30, 12)},
-    "enemi_10.png": {"id": "givre", "name": "Golem de Givre",
+    "creatures/enemi_10.png": {"id": "givre", "name": "Golem de Givre",
                      "attack": {"row": 3, "col": 0}},
 }
 
