@@ -55,7 +55,59 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 |---|---|
 | la Rune du Sorcier des Ténèbres | [sorts/shadow_rune](prompts/sorts/shadow_rune.md) |
 | l'Ombre maléfique de la Faille (+ son souffle) | [sorts/ombre_malefique](prompts/sorts/ombre_malefique.md) |
+| le Cyclone du Mage de l'Air | [sorts/air_cyclone](prompts/sorts/air_cyclone.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
+
+### Les impacts — la frappe au sol
+
+| sujet | prompt | planche à déposer |
+|---|---|---|
+| l'impact de la Foudre | [sorts/impact_foudre](prompts/sorts/impact_foudre.md) | `impact_thunder.png` |
+
+Le dessin d'impact découpé des planches de personnage est FIXE : le jeu ne peut
+que le faire grandir et pâlir. Une frappe demande à se dérouler — le trait
+tombe, le sol encaisse, la lumière se retire. La Foudre ouvre la série ; le même
+prompt servira aux sept autres en changeant la matière.
+
+### Les huit orbes — le projectile de chaque mage
+
+L'orbe est l'image qui VOYAGE entre le mage et sa cible, pour toute compétence
+de forme `PROJECTILE` — l'attaque de base en tête. Sept des huit sont
+aujourd'hui une image FIXE que le jeu se contente de faire pivoter ; seule celle
+du Feu bat des ailes, en trois images.
+
+Chaque page contient le prompt COMPLET, prêt à copier — rien à assembler.
+
+| mage | prompt | forme voulue | planche à déposer |
+|---|---|---|---|
+| Mage du Feu | [sorts/orbe_feu](prompts/sorts/orbe_feu.md) | la comète | `orb_fire.png` |
+| Mage de l'Eau | [sorts/orbe_eau](prompts/sorts/orbe_eau.md) | la lance | `orb_water.png` |
+| Mage de la Terre | [sorts/orbe_terre](prompts/sorts/orbe_terre.md) | le bloc | `orb_earth.png` |
+| Mage de la Foudre | [sorts/orbe_foudre](prompts/sorts/orbe_foudre.md) | le dard | `orb_thunder.png` |
+| Mage de l'Air | [sorts/orbe_air](prompts/sorts/orbe_air.md) | la lame | `orb_air.png` |
+| Sorcier des Ténèbres | [sorts/orbe_tenebres](prompts/sorts/orbe_tenebres.md) | le croc | `orb_shadow.png` |
+| Sorcier Suprême | [sorts/orbe_supreme](prompts/sorts/orbe_supreme.md) | la sphère | `orb_supreme.png` |
+| Invocateur | [sorts/orbe_invocateur](prompts/sorts/orbe_invocateur.md) | le sceau | `orb_invocateur.png` |
+
+Les planches se déposent dans **`assets/peso&cover/`** (et non dans `refonte/` :
+ce sont des effets, pas des personnages — elles n'écrasent donc aucune planche
+de mage).
+
+**Les trois règles qui comptent**, présentes dans chaque page parce que ce sont
+celles dont l'oubli casse le rendu :
+
+1. **La direction.** Le jeu ORIENTE le sprite le long de sa trajectoire, angle
+   zéro vers la droite. Une orbe dessinée de trois quarts, ou pointant vers le
+   bas, volera de travers dans la moitié des couloirs.
+2. **Le calage.** La pointe reste au même endroit d'une image à l'autre et le
+   projectile grandit vers l'ARRIÈRE. Si la position bouge, le tir tressaute en
+   vol — le même piège que sur l'éruption de la Terre, où la première image
+   large et basse et la quatrième haute et étroite faisaient sauter les gerbes.
+3. **La progression, pas la boucle.** Image 1 = la naissance du tir, image 4 =
+   sa pleine puissance. `MagicOrb` déroule la bande UNE fois en 0,22 s puis
+   tient la dernière image (`"mode": "grow"` dans `orb.json`) ; une bande pensée
+   en boucle ferait retomber le projectile à son étincelle de départ en plein
+   vol.
 
 ## Ce que dix planches ont appris
 

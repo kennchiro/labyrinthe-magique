@@ -63,7 +63,7 @@ Trait : **Trempe** — la cible ralentit de 38 % pendant 2.2 s
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Jet d'eau** | projectile | 14 dégâts · portée 9 · recharge 0.4 s | 0.4 s |
-| SKILL 1 | **Vague** | ? | 34 dégâts · déferle sur 7 cases · recharge 2 s | 2.0 s |
+| SKILL 1 | **Vague** | vague | 34 dégâts · déferle sur 7 cases · recharge 2 s | 2.0 s |
 | SKILL 2 | **Bouclier d'eau** | bouclier | absorbe 45 · 30 s · 2 charges · recharge 5 s | 5.0 s |
 | SKILL 3 | **Cercle glacé** | zone | 6 dégâts/s · rayon 3 · 10 s · 3 charges · recharge 8 s · englue 4 s à 35 % | 8.0 s |
 | FUITE | **Courant** | translation | saut de 6 cases · recharge 7 s | 7.0 s |
@@ -89,9 +89,9 @@ Trait : **Ébranlement** — la cible s'arrête net 0.7 s (une fois toutes les 3
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Rocher** | projectile | 23 dégâts · portée 6 · recharge 0.7 s | 0.7 s |
-| SKILL 1 | **Pics de terre** | ? | 30 dégâts · ligne de 6 cases · recharge 6 s · englue 1.2 s à 55 % · pics plantés 4 s à 6 dégâts/s | 6.0 s |
+| SKILL 1 | **Pics de terre** | ligne | 30 dégâts · ligne de 6 cases · recharge 6 s · englue 1.2 s à 55 % · pics plantés 4 s à 6 dégâts/s | 6.0 s |
 | SKILL 2 | **Égide de pierre** | bouclier | INTOUCHABLE 30 s · recharge 60 s | 60.0 s |
-| SKILL 3 | **Éclats de cristal** | ? | fend le couloir tout seul · 24 dégâts toutes les 2 s · 30 s · portée 7 · autour de lui · recharge 34 s · englue 0.8 s à 60 % | 34.0 s |
+| SKILL 3 | **Éclats de cristal** | tourelle | fend le couloir tout seul · 24 dégâts toutes les 2 s · 30 s · portée 7 · autour de lui · recharge 34 s · englue 0.8 s à 60 % | 34.0 s |
 | FUITE | **Terrier** | translation | saut de 4 cases · recharge 8 s | 8.0 s |
 | EXTRA | **Séisme** | explosion | 110 dégâts · rayon 5 · TRAVERSE LES MURS · la terre tremble 5 s · éboulements à 16 dégâts | 1.0 s |
 
@@ -141,9 +141,9 @@ Trait : **Arc** — le coup saute à un voisin à 4 cases (50 % des dégâts)
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Éclair** | projectile | 10 dégâts · portée 7 · recharge 0.3 s | 0.3 s |
-| SKILL 1 | **Chaîne d'éclairs** | ? | 30 dégâts · 3 relais · portée 7 · recharge 1.8 s | 1.8 s |
+| SKILL 1 | **Chaîne d'éclairs** | chaîne | 30 dégâts · 3 relais · portée 7 · recharge 1.8 s | 1.8 s |
 | SKILL 2 | **Champ de foudre** | zone | 16 dégâts/s · rayon 2.4 · 8 s · 2 charges · recharge 11 s · cloue 5 s | 11.0 s |
-| SKILL 3 | **Orage** | ? | 14 dégâts toutes les 2.0 s · 30 s · portée 5 · recharge 34 s | 34.0 s |
+| SKILL 3 | **Orage** | phénomène | 14 dégâts toutes les 2.0 s · 30 s · portée 5 · recharge 34 s | 34.0 s |
 | FUITE | **Éclair fuyant** | translation | saut de 7 cases · recharge 6 s | 6.0 s |
 | EXTRA | **Jugement céleste** | explosion | 140 dégâts · rayon 6 · TRAVERSE LES MURS · 12 nuages foudroient 15 s | 1.0 s |
 
@@ -171,14 +171,14 @@ Trait : **Bourrasque** — la cible est repoussée de 2 cases
 | SKILL 2 | **Grand souffle** | explosion | 18 dégâts · rayon 3 · recharge 7 s · projette de 4 cases · +14 contre un mur | 7.0 s |
 | SKILL 3 | **Voile d'air** | bouclier | absorbe 38 · 7 s · recharge 11 s | 11.0 s |
 | FUITE | **Rafale** | translation | saut de 7 cases · recharge 6.5 s | 6.5 s |
-| EXTRA | **Cyclone** | explosion | 115 dégâts · rayon 6.5 | 1.0 s |
+| EXTRA | **Cyclone** | phénomène | 20 dégâts / 1.6 s · rayon 4 · 120 s · suit à 2.5 cases/s · TRAVERSE LES MURS | 1.0 s |
 
 - **Lame de vent** — Une lame d'air comprimé, la plus longue portée du royaume.
 - **Tornade** — Elle remonte le couloir et emporte ce qu'elle attrape.
 - **Grand souffle** — Il projette tout autour de lui. Ce qui heurte un mur le paie.
 - **Voile d'air** — Une bulle de vent qui dévie les coups.
 - **Rafale** — Une bourrasque l'emporte hors de portée.
-- **Cyclone** — Le labyrinthe entier est aspiré dans une spirale.
+- **Cyclone** — Une colonne de vent et de foudre se lève et le suit. Elle traîne derrière lui deux minutes durant et foudroie ce qui l'entoure, haies comprises.
 
 ---
 

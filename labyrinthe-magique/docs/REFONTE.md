@@ -759,6 +759,101 @@ effets et que les ennemis riposteront.
   ennemis, barres de vie, vagues de réapparition), au `GameManager` (kills, ultime) et
   au HUD (boutons HIT / SKILL / EXTRA HIT).
 
+### 2026-08-25 — `allies.json` effacé : un fichier COMMUN écrit par deux outils
+
+L'ultime des Ténèbres n'invoquait plus rien : la console répétait
+« Invocation inconnue dans allies.json : « ombre » ». Les six ombres partaient
+bien — le CombatSystem faisait son travail — mais le rendu ne trouvait pas
+la créature et n'affichait personne.
+
+**La cause.** `assets/allies/allies.json` est le catalogue de TOUTES les
+créatures alliées, et deux outils y écrivent : `build_invocateur.py` pour les
+trois bêtes de l'Invocateur, `build_ombre.py` pour l'Ombre maléfique. Le second
+FUSIONNE — il relit le fichier et n'ajoute que sa clé. Le premier repartait
+d'un dictionnaire VIDE et réécrivait tout : chacun de ses passages effaçait
+l'entrée « ombre » posée par l'autre.
+
+Les images, elles, étaient toujours là (03:02) ; seul le descripteur avait été
+réécrit (03:37). Un fichier daté d'après ses propres images est le premier
+endroit où regarder.
+
+**Le correctif** : `build_invocateur.py` fusionne désormais lui aussi. Un
+fichier partagé se relit avant d'être écrit, et chaque outil ne touche qu'à ses
+propres clés. `build_ombre.py` a été relancé pour reposer l'entrée ; vérifié à
+la sonde, les six invocations trouvent leur créature.
+
+### 2026-08-25 — LES HUIT ORBES
+
+Le projectile — l'image qui voyage entre le mage et sa cible pour toute
+compétence de forme `PROJECTILE`, l'attaque de base en tête — était une image
+FIXE pour sept mages sur huit, découpée au petit bonheur dans leur planche de
+personnage. Seule celle du Feu battait, en trois images.
+
+Huit planches ont été commandées (`docs/prompts/sorts/orbe_*.md`), une par
+mage, et découpées par `tools/build_orbs.py` : quatre images qui vont de la
+NAISSANCE du tir à sa PLEINE PUISSANCE.
+
+Les huit silhouettes sont volontairement distinctes, pas seulement recolorées —
+comète, lance, bloc, dard, lame, croc, sphère, sceau. Trois s'écartent
+délibérément du lot : le bloc de Terre est le seul projectile OPAQUE (il ne
+brille pas, il pèse), le croc des Ténèbres le seul COURBE, la sphère du Suprême
+la seule RONDE.
+
+**Le jeu a dû apprendre la progression.** `MagicOrb` rejouait la bande en
+boucle à 12 im/s, ce qui aurait fait retomber le projectile de sa pleine
+puissance à son étincelle de départ, en plein vol. Un `"mode": "grow"` dans
+`orb.json` fait maintenant dérouler la bande UNE fois en 0,22 s, puis tenir la
+dernière image jusqu'à l'impact. Le mode "loop" reste la valeur par défaut.
+
+Trois règles ont été inscrites dans chaque prompt, parce que ce sont celles
+dont l'oubli casse le rendu :
+
+- **la direction** — le jeu ORIENTE le sprite le long de sa trajectoire, angle
+  zéro vers la droite ; une orbe dessinée autrement volerait de travers dans la
+  moitié des couloirs ;
+- **le calage** — la pointe reste au même endroit et le tir grandit vers
+  l'arrière, sinon il tressaute en vol (le découpage applique en plus une boîte
+  COMMUNE aux quatre images, comme pour l'éruption de la Terre) ;
+- **les cases égales** — `sprite.hframes = 4` découpe la texture en quatre parts
+  exactement égales : une bande aux images inégales montrerait des moitiés
+  d'images.
+
+⚠️ **L'ÉTAT FINAL D'UN TIR EST SA FRAPPE, pas son projectile.** Signalé sur la
+Foudre : à l'arrivée, on voyait le dard et non le dessin d'impact — pourtant le
+plus beau du jeu, la frappe au sol avec son anneau.
+
+Deux causes, toutes deux dans le rendu de l'impact :
+
+- **la taille.** Le dessin central est mis à l'échelle du RAYON du sort, or une
+  attaque de base n'a pas de rayon : `maxf(0.9, 0.0)` donnait 0,9 case, noyée
+  sous la lueur des particules. Les tirs en trait brisé posent désormais leur
+  frappe sur 1,7 case ;
+- **la rotation.** Le dessin central tourne sur lui-même — juste pour un
+  vortex, absurde pour une frappe de foudre, qui a un HAUT et un BAS. La
+  vitesse de rotation est devenue un paramètre (`p_spin`), et ces dessins-là
+  passent zéro.
+
+C'est la troisième fois qu'un dessin d'impact générique gêne un sort refait —
+après la tornade tournoyante du Grand souffle et le blason de l'ultime de la
+Foudre. La leçon commune : *un effet générique posé par-dessus un dessin
+commandé le contredit plus souvent qu'il ne l'aide.*
+
+**L'orbe de la Foudre sert, elle aussi.** Son attaque de base est tracée en
+traits brisés depuis sa refonte, donc son orbe n'aurait rien affiché. Les deux
+coexistent désormais, et chacun dit une chose que l'autre ne dit pas : le trait
+brisé donne la DÉCHARGE — instantanée, elle relie le mage à sa cible d'un bout
+à l'autre du couloir — et le dard dessiné donne le COUP, celui qui met un temps
+à arriver et qu'on peut voir venir. Sans le trait, l'élément perd sa signature ;
+sans le dard, le joueur ne sait pas à quel instant le coup porte. Vérifié à la
+sonde : un tir produit bien le dard de quatre images ET ses arcs.
+
+⚠️ **Deux autres outils écrivaient déjà `orb.png`** — `build_spell_fx.py` pour
+les sept mages, `build_invocateur.py` pour le huitième — et les relancer aurait
+effacé les orbes commandées **sans un message d'erreur**, exactement le piège
+déjà documenté pour les planches de personnage. Les deux savent désormais
+reconnaître une orbe commandée à son `"mode": "grow"` et la laissent en place :
+« orbe COMMANDÉE, laissée en place ».
+
 ### 2026-08-25 — le MAGE DE L'AIR
 
 **L'audit** : quatre problèmes sur cinq sorts. La Tornade était la QUATRIÈME
@@ -2128,6 +2223,86 @@ nombre.
   l'attaque de base abattait un poursuivant en trois secondes et la simulation
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
+
+## 2026-08-26 — le Cyclone de l'Air se lève et traîne
+
+L'ultime de l'Air était une explosion de plus : 115 dégâts sur 6,5 cases, le
+même geste que son Grand souffle en plus gros. Rien qui casse une règle, donc
+rien qui ressemble à un ultime.
+
+Il en casse deux maintenant. **Il frappe à travers les haies** — seule chose du
+kit de l'Air à le faire — et **il dure deux minutes**, quand tout le reste de ce
+mage se joue en une seconde. 20 dégâts toutes les 1,6 s, portée 4 : 75 décharges
+en tout, énorme en cumul et faible à l'instant. Il n'exécute personne, il use
+tout ce qui s'attarde autour.
+
+Il réutilise la machinerie du nuage d'orage (`Kind.STORM`) mais s'en sépare sur
+un point, et c'est tout le sort : **il TRAÎNE.** Nouveau champ
+`Ability.storm_follow` — 2,5 cases par seconde contre 4,9 au mage. Il reste en
+arrière dès qu'on court, il rattrape quand on s'arrête, et un mage qui fuit en
+ligne droite le sème. On ne l'emporte pas, on le PROMÈNE.
+
+Trois conséquences qu'il fallait tirer jusqu'au bout :
+
+- **le phénomène a désormais sa propre position** dans le CombatSystem, et c'est
+  elle qui choisit la cible — quand il traîne derrière, c'est ce qu'IL survole
+  qui doit être frappé, pas ce qui entoure le mage ;
+- **il ne peut plus être un enfant du nœud du mage.** Le nuage d'orage l'est —
+  il est au-dessus de sa tête et n'a besoin de personne pour suivre. Le cyclone
+  vit dans `entities`, déplacé par le signal `storm_moved` ;
+- **l'arc part du phénomène**, pas du mage. C'était juste tant que le nuage lui
+  collait au crâne ; avec un cyclone trois cases en arrière, l'éclair semblait
+  sortir de sa main.
+
+Chaque décharge déclenche la bourrasque de l'Air : le cyclone projette ce qu'il
+touche et se prive lui-même de sa cible. C'est sa contrepartie, et elle est
+gratuite — le trait de l'élément existait déjà.
+
+⚠️ En passant : `dump_reference.gd` écrivait « ? » dans la colonne « type » pour
+trois familles de sorts (phénomène, chaîne, vague, ligne, tourelle) depuis leur
+création. Un trou que personne ne remarque — la ligne reste lisible, le tableau
+reste droit, et le type a simplement disparu. Les noms manquants sont écrits, et
+un `push_warning` prévient à la prochaine famille oubliée.
+
+Le dessin reste à faire : en attendant, le cyclone emprunte le nuage d'orage du
+mage de la Foudre. Prompt dans `docs/prompts/sorts/air_cyclone.md`.
+
+## 2026-08-25 — le Grand souffle recadré
+
+Deux défauts signalés sur le deuxième sort du Mage de l'Air, et une seule cause.
+
+**Le cône était tranché.** Ses images 2 à 5 sortaient coupées net à la verticale.
+`wind_blast.png` n'est pas sur sa grille : ses images GRANDISSENT — un cône qui
+s'ouvre, une onde qui s'élargit — et le générateur les a resserrées vers la
+gauche. Les vraies séparations tombent 35 à 72 px avant les lignes régulières,
+et une découpe à la colonne rabotait donc chaque image un peu plus que la
+précédente. `row_cuts()` prend maintenant les gouttières les plus larges.
+
+⚠️ Contrairement aux planches de mages, la RÉGULARITÉ ne peut pas servir de juge
+ici : les images ne sont pas également espacées, elles grandissent. C'est la
+largeur du vide qui tranche — les gouttières parasites, à l'intérieur d'une onde
+qui s'ouvre, sont toutes bien plus fines que celles qui séparent deux images.
+
+**L'onde n'était centrée sur rien.** Chaque image la posait ailleurs dans sa
+boîte : jouée, elle sautait, et le mage n'était au centre d'aucune. La boîte
+commune de l'outil était calée sur la CASE, ce qui suffit à une gerbe de pierre
+qui pousse toujours du même point, pas à un dessin qui dérive.
+
+Chaque famille a maintenant son ANCRE, et c'est le moteur qui l'impose
+(`src/fx/wind_blast.gd`) : l'onde est un Sprite2D CENTRÉ sur le mage, le cône
+est décentré pour que son bord gauche tombe sur lui. On cale donc l'onde sur le
+centre de son anneau, le cône sur sa POINTE — et la boîte est bâtie AUTOUR de
+l'ancre, ce qui la rend immobile d'une image à l'autre.
+
+⚠️ Une boîte commune ne suffit pas : il la faut SYMÉTRIQUE. Bâtie sur les
+débordements réellement mesurés, elle ne l'était pas — l'onde s'étale plus vers
+le bas que vers le haut — et l'ancre se retrouvait 28 px sous le milieu de
+l'image. Le moteur pose ce sprite centré : ce qui n'est pas au milieu de l'image
+n'est pas sur le mage.
+
+Vérifié à la mesure : la pointe du cône est à x = 0 sur les six images, son axe
+à moins d'un demi-pixel du milieu ; le centre de l'anneau est à moins d'un
+demi-pixel du centre de l'image sur les six.
 
 ## 2026-08-25 — les huit mages redessinés sur le même gabarit
 
