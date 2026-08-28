@@ -2,15 +2,30 @@
   "imp": {
     "anchor": "feet",
     "cell": [
-      152,
-      104
+      196,
+      260
     ],
     "mirror_left": true,
     "directions": {
       "down": {
-        "file": "imp.png",
+        "file": "imp_down.png",
         "idle": 4,
-        "strike": 1
+        "strike": 4
+      },
+      "up": {
+        "file": "imp_up.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "left": {
+        "file": "imp_left.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "right": {
+        "file": "imp_right.png",
+        "idle": 4,
+        "strike": 4
       }
     }
   },
@@ -32,31 +47,69 @@
   "dragon": {
     "anchor": "centre",
     "cell": [
-      340,
-      184
+      260,
+      196
     ],
     "mirror_left": false,
     "directions": {
       "up": {
         "file": "dragon_up.png",
-        "idle": 1,
-        "strike": 1
+        "idle": 4,
+        "strike": 4
       },
       "down": {
         "file": "dragon_down.png",
-        "idle": 1,
-        "strike": 1
-      },
-      "right": {
-        "file": "dragon_right.png",
-        "idle": 1,
-        "strike": 1
+        "idle": 4,
+        "strike": 4
       },
       "left": {
         "file": "dragon_left.png",
-        "idle": 1,
-        "strike": 1
+        "idle": 4,
+        "strike": 4
+      },
+      "right": {
+        "file": "dragon_right.png",
+        "idle": 4,
+        "strike": 4
       }
+    }
+  },
+  "ombre": {
+    "anchor": "feet",
+    "cell": [
+      440,
+      424
+    ],
+    "mirror_left": false,
+    "directions": {
+      "down": {
+        "file": "ombre_down.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "up": {
+        "file": "ombre_up.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "left": {
+        "file": "ombre_left.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "right": {
+        "file": "ombre_right.png",
+        "idle": 4,
+        "strike": 4
+      }
+    },
+    "gas": {
+      "file": "ombre_gaz.png",
+      "frames": 4,
+      "cell": [
+        260,
+        291
+      ]
     }
   }
 }

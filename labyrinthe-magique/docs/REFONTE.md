@@ -818,6 +818,84 @@ dont l'oubli casse le rendu :
   exactement égales : une bande aux images inégales montrerait des moitiés
   d'images.
 
+### 2026-08-26 — LE GEYSER DE L'EAU, dessiné
+
+L'ultime de l'Eau faisait trois choses, et deux étaient tracées en code : la
+colonne de pression (un dégradé qui monte) et les trente gouttes de pluie, qui
+empruntaient l'ORBE du mage faute de mieux — une bille qui tombe.
+
+Une planche a été commandée (`geyser_water.png`, deux rangées de six images) :
+la COLONNE qui jaillit, culmine et retombe ; l'ÉCLABOUSSURE d'une goutte qui
+touche le sol. Les deux ont leur ancre, relevée sur la dernière image.
+
+Trois branchements, un par moitié du sort :
+
+- la colonne remplace `PressureColumn`, qui reste le repli ;
+- l'éclaboussure joue à chaque goutte qui tombe — trente gouttes doivent se
+  VOIR tomber, pas seulement compter des dégâts ;
+- **ce qui tombe est ce qui éclabousse** : la goutte en vol est la première
+  image de l'éclaboussure, celle où elle est encore en l'air. Une comète qui
+  tombe convient au Feu, pas à l'Eau.
+
+⚠️ **LA COLONNE SOUS LE MAGE A ÉTÉ ABANDONNÉE**, et c'est l'utilisateur qui a
+trouvé la bonne forme.
+
+Posée par-dessus le personnage, elle l'EFFACE : pendant une seconde, au moment
+le plus chargé de la partie, le joueur ne sait plus où il est. Posée dessous,
+elle n'a plus aucune force. Une version DÉDOUBLÉE — moitié derrière opaque,
+moitié devant à 45 %, le truc classique des effets de transformation — le
+rendait bien visible « dans » le jet, mais le problème de fond restait : un
+effet plein écran centré sur le joueur cache le labyrinthe qu'il doit lire.
+
+**NEUF GEYSERS jaillissent maintenant AU HASARD sur la carte, tous en même
+temps**, et frappent ce qui passe dessus. Plus rien ne se superpose au mage, et
+l'ultime y gagne une PORTÉE : il ne récompense plus seulement d'être au bon
+endroit, il nettoie le labyrinthe. Un test garde la salve — une colonne qui
+sortirait plus tard ferait doublon avec la pluie, qui est l'autre moitié du
+sort.
+
+**LA FLUIDITÉ VIENT DU FONDU, pas du nombre d'images.** Six images sur une
+seconde font cinq images par seconde : un diaporama. On ne peut pas en dessiner
+plus, mais on peut faire se RECOUVRIR deux images consécutives — la suivante
+monte en opacité pendant que la précédente s'efface — et enfler la taille d'un
+cheveu entre les deux. L'œil recompose le mouvement.
+
+**Les gouttes de pluie ont été réduites et rendues liquides.** À une case et
+demie — la taille d'une météore du Feu — trente d'entre elles effaçaient le
+labyrinthe : ramenées au tiers d'une case. Et elles ne TOURNOIENT plus : un
+caillou en chute libre pivote sur lui-même, une goutte garde sa pointe en bas
+et ondule. Un shader (`water_drop.gdshader`) lui donne cette ondulation, plus
+forte vers la pointe, et fait courir un reflet le long de son flanc.
+
+**LA FRAPPE DE LA FOUDRE EST DEVENUE UNE ANIMATION.** Le dessin d'impact
+découpé d'une planche de personnage est FIXE : le jeu ne peut que l'agrandir et
+le faire pâlir. Celui de la Foudre a été jugé raté, et une planche a été
+commandée (`impact_thunder.png`, six images : le trait qui tombe, le contact,
+l'éclat, l'anneau au plus large, la retombée, l'anneau mourant).
+
+⚠️ **Le point d'impact n'est PAS le centre de l'image.** L'éclair tombe du haut
+de la case et l'éclat se produit en bas : centrer le dessin posait la frappe une
+demi-case trop haut, et le sol s'illuminait à côté de la créature touchée.
+L'ANCRE est donc relevée au découpage sur la DERNIÈRE image — celle où il ne
+reste que l'anneau au sol, dont le centre est le point d'impact — et écrite dans
+le descripteur.
+
+⚠️ **Les étincelles débordaient de leur case** — signalé : chaque image
+emportait un morceau de sa voisine. Le prompt exige pourtant des marges ; le
+modèle ne les a pas tenues. Le découpage ne coupe donc plus aux lignes
+théoriques mais au CREUX : autour de chaque ligne, il cherche dans une fenêtre
+de 12 % la colonne la plus vide, c'est-à-dire l'écart entre deux dessins.
+
+Elle est mise à l'échelle sur sa LARGEUR et non sa hauteur : c'est l'anneau au
+sol qui doit couvrir la zone touchée, alors que le trait tombant du ciel
+écraserait tout le reste.
+
+**Un seul endroit la distribue.** `_spawn_impact` remplace le dessin fixe par
+l'animation dès qu'un appel demandait la frappe du personnage — l'attaque de
+base, les frappes du Jugement céleste, les relais de la Chaîne. Le test se fait
+sur la texture demandée plutôt qu'au cas par cas : un seul endroit à tenir, et
+les sept autres mages en hériteront le jour où leur planche arrivera.
+
 ⚠️ **L'ÉTAT FINAL D'UN TIR EST SA FRAPPE, pas son projectile.** Signalé sur la
 Foudre : à l'arrivée, on voyait le dard et non le dessin d'impact — pourtant le
 plus beau du jeu, la frappe au sol avec son anneau.
@@ -2224,48 +2302,212 @@ nombre.
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
 
-## 2026-08-26 — le Cyclone de l'Air se lève et traîne
+## 2026-08-28 — l'écran-titre passe en paysage
+
+La couverture était un PORTRAIT 2:3, et le jeu se joue en paysage. Mesuré en
+capture à 1280x600 : l'illustration n'occupait que **le tiers central** de
+l'écran, les deux bandes restantes étant remplies par elle-même, agrandie et
+assombrie à 30 %. Ça faisait illusion, pas une page d'accueil. Et elle ne
+montrait que **cinq mages** — elle datait d'avant la Foudre et l'Air.
+
+Nouvelle image en 1659x948 : le labyrinthe sur toute la largeur, et **les huit
+mages** de dos.
+
+### Les boutons ne sont plus peints
+
+C'est le vrai changement. Les trois boutons étaient DESSINÉS DANS L'IMAGE, et le
+jeu posait des `Button` transparents dessus à des rectangles relevés à la main
+(`HOTSPOTS`). Deux défauts : le texte était de la peinture — il ne pouvait ni
+changer ni rester net quand on l'agrandissait — et chaque nouvelle couverture
+obligeait à re-mesurer trois rectangles.
+
+Le jeu les dessine maintenant avec `MenuStyle`, comme tous les autres menus.
+`HOTSPOTS` a disparu.
+
+⚠️ **Et ils sont en RANGÉE, pas en colonne.** Le prompt demandait un tiers
+inférieur calme pour les loger ; l'illustration livrée met ses huit mages sur
+toute cette hauteur. Une colonne centrée en couvrait quatre — et ce sont eux
+qu'on est venu regarder. Une rangée basse ne mange qu'un bandeau. Elle est posée
+sur un dégradé sombre : les boutons sont translucides pour laisser voir le
+décor, et sur un dallage éclairé par huit auras ils s'y noyaient.
+
+⚠️ **Trois boutons de MÊME largeur.** Les dimensionner à leur importance était
+joli et faux : c'est « CHOISIR SON MAGE », le plus long libellé, qui se
+retrouvait dans le plus étroit.
+
+Vérifié aux trois formes d'écran où l'ancienne échouait : 1280x720, 1280x600 et
+960x460 (paysage téléphone).
+
+### ⚠️ 48 Mo de planches sources partent dans l'app
+
+Relevé en passant, en vérifiant que l'ancienne couverture cessait d'être
+embarquée. `export_presets.cfg` exclut des DOSSIERS depuis leur rangement, mais
+une quinzaine de planches sont revenues **à la racine** de `assets/peso&cover/`
+et ne sont couvertes par aucun motif : `orb_*.png` pour les huit mages,
+`shadow_rune.png`, `convergence_skill.png`, `impact_thunder.png`,
+`geyser_water.png`, les trois `mage_invocateur_*.png`.
+
+**22,9 Mo que le jeu n'ouvre jamais** — vérifié, aucune n'est citée dans `src/`.
+Le reste (25 Mo) est légitime : la couverture, le fond de sélection et les neuf
+portraits, tous chargés à l'exécution.
+
+Je n'ai exclu que ce qui est à moi — `refonte/` et l'ancienne `couverture.png`,
+soit 19 Mo. Les planches de la racine appartiennent à l'autre session, qui les y
+a déposées et les utilise peut-être encore : les ranger sans le lui dire
+casserait ses outils.
+
+## 2026-08-28 — la fiche de personnage cesse d'être un listing
+
+L'écran de sélection affichait les sept lignes de la fiche dans UN SEUL libellé,
+alignées à l'espace : « SKILL 2   Nom — chiffres », puis la description en
+dessous, décalée de dix espaces. Rien ne se détachait de rien. C'est pourtant
+cet écran qui décide du choix d'un mage.
+
+Refaite en VRAIES LIGNES (`AbilityRow`), une par bouton de la barre d'action,
+avec trois niveaux de lecture :
+
+- **l'icône**, reconnue avant d'être lue — et c'est la même qu'on retrouvera sur
+  le bouton en jeu, ce qui fait de cette fiche un apprentissage et non une
+  notice ;
+- **le nom** en clair, le créneau en petit à côté, dans la couleur de l'élément ;
+- **les chiffres** à droite, en retrait, et la description en dessous.
+
+Le TRAIT a quitté la liste des sorts pour rejoindre la vie et la vitesse : c'est
+une propriété du personnage, pas un bouton. Rangé parmi les sorts, il se lisait
+comme un septième sort qu'on cherchait en vain sur la barre.
+
+Trois pièges de mise en page, tous mesurés en capture :
+
+1. **la pastille ne peut pas dépasser la hauteur de ligne.** C'est elle qui fixe
+   la hauteur minimale du `HBoxContainer` : à 1,15 fois la ligne, six sorts
+   débordaient de la fiche et l'ULTIME se retrouvait coupé en deux ;
+2. **mais l'icône, elle, doit déborder de la pastille.** Les icônes sont
+   découpées pour les boutons RONDS du pad — `fitted()` les inscrit dans 70 % de
+   leur image pour qu'elles ne sortent pas du cercle. Cadrées pile sur la
+   pastille, elles n'en occupaient que les deux tiers et les sorts se lisaient
+   comme de petites taches. On les laisse mordre sur le bord de 15 % ;
+3. **la pastille est TOUJOURS là**, même quand l'icône manque : sans fond, une
+   icône claire et une icône sombre ne commencent pas à la même place à l'œil et
+   la liste ondule. Sans icône du tout, elle se remplit de la couleur du mage.
+
+La hauteur de ligne, le corps du texte et la présence de la description se
+CALCULENT à partir de la place disponible : vérifié en 1280x720 et en 960x460
+(paysage téléphone), où les six sorts tiennent encore avec leurs descriptions.
+
+## 2026-08-28 — le Suprême a ses icônes, les huit mages sont habillés
+
+Sept mages sur huit avaient leurs six icônes ; le Suprême était le dernier sans.
+Planche commandée sur la convention habituelle — 3 x 2 cases de 512, fond
+magenta — et découpée par `build_skill_icons.py` : rose des vents à quatre
+pointes, quatre orbes en spirale, anneau à quatre sceaux, goutte au bourgeon,
+silhouette qui file, météores et onde de choc.
+
+**Rien à coder côté jeu.** `UiIcons` cherche `assets/icons/<mage>/<sort>.png` et
+retombe sur les pastilles colorées quand il ne trouve rien : c'est ce qui a
+permis d'habiller les mages un par un, et le Suprême s'est habillé tout seul dès
+le découpage fait. Vérifié à la barre du clavier ET aux boutons ronds du pad.
+
+⚠️ Cette planche a suivi l'ordre demandé, ce qui n'était vrai ni pour le Feu ni
+pour l'Eau. La table de l'outil relève quand même ce que chaque case MONTRE —
+c'est la seule façon de ne pas se faire avoir la fois où il dérive.
+
+### Une fausse alerte, et une vraie correction
+
+J'ai d'abord cru les couleurs délavées : mesuré, l'orbe bleue passait de
+(125, 76, 210) à (78, 122, 177). **La mesure était fausse** — je comparais un
+point de la planche source à un point de l'icône finale, qui ne se correspondent
+pas après recadrage et mise à l'échelle. Comparée cellule par cellule, la
+saturation est intacte : 0,704 en entrée, 0,698 en sortie. L'impression venait
+de regarder un aperçu sur fond magenta à côté d'une planche sur fond gris.
+
+La correction faite au passage reste, parce qu'elle ferme un risque documenté :
+**le dégorgement ne s'applique plus qu'au BORD**. La « magenta-ité » — ce qu'un
+pixel a de rouge ET de bleu en plus de son vert — est aussi la signature du
+violet, et c'est elle qui avait obligé à écrire un détoureur séparé pour la Rune
+des Ténèbres. L'atténuation d'ALPHA, elle, reste globale : c'est elle qui fait
+disparaître le fond vu à travers un dôme de verre, et ce fond-là est bien à
+l'intérieur du dessin.
+
+Mesuré sur les 48 icônes des huit mages : la correction ne change rien de
+visible (+1 % de saturation au mieux, jamais moins). Elle ne répare pas un
+défaut, elle en empêche un.
+
+## 2026-08-26 — le Cyclone de l'Air : trois colonnes qui chassent
 
 L'ultime de l'Air était une explosion de plus : 115 dégâts sur 6,5 cases, le
 même geste que son Grand souffle en plus gros. Rien qui casse une règle, donc
 rien qui ressemble à un ultime.
 
-Il en casse deux maintenant. **Il frappe à travers les haies** — seule chose du
-kit de l'Air à le faire — et **il dure deux minutes**, quand tout le reste de ce
-mage se joue en une seconde. 20 dégâts toutes les 1,6 s, portée 4 : 75 décharges
-en tout, énorme en cumul et faible à l'instant. Il n'exécute personne, il use
-tout ce qui s'attarde autour.
+**Trois colonnes de vent et de foudre** se lèvent maintenant et partent chasser.
+Elles VOLENT — droit sur les poursuivants, haies comprises — à 3 cases par
+seconde, et tiennent deux minutes. 18 dégâts toutes les 1,5 s chacune : énorme
+en cumul, faible à l'instant. Elles n'exécutent personne, elles usent tout ce
+qui traîne dans le labyrinthe pendant que le mage court aux gemmes.
 
-Il réutilise la machinerie du nuage d'orage (`Kind.STORM`) mais s'en sépare sur
-un point, et c'est tout le sort : **il TRAÎNE.** Nouveau champ
-`Ability.storm_follow` — 2,5 cases par seconde contre 4,9 au mage. Il reste en
-arrière dès qu'on court, il rattrape quand on s'arrête, et un mage qui fuit en
-ligne droite le sème. On ne l'emporte pas, on le PROMÈNE.
+### La version jetée : un phénomène qui SUIT le mage
 
-Trois conséquences qu'il fallait tirer jusqu'au bout :
+Premier jet, écrit et retiré le jour même : une colonne unique qui accompagnait
+le mage en traînant derrière lui (`Ability.storm_follow`, la machinerie du nuage
+d'orage avec une vitesse de suivi). Ça marchait, c'était même joli — et c'était
+le sort de quelqu'un d'autre. Si lentement qu'un phénomène suive son lanceur, il
+reste le nuage d'orage du mage de la Foudre sous un autre dessin.
 
-- **le phénomène a désormais sa propre position** dans le CombatSystem, et c'est
-  elle qui choisit la cible — quand il traîne derrière, c'est ce qu'IL survole
-  qui doit être frappé, pas ce qui entoure le mage ;
-- **il ne peut plus être un enfant du nœud du mage.** Le nuage d'orage l'est —
-  il est au-dessus de sa tête et n'a besoin de personne pour suivre. Le cyclone
-  vit dans `entities`, déplacé par le signal `storm_moved` ;
-- **l'arc part du phénomène**, pas du mage. C'était juste tant que le nuage lui
-  collait au crâne ; avec un cyclone trois cases en arrière, l'éclair semblait
-  sortir de sa main.
+Ce qui distingue vraiment, c'est l'AUTONOMIE : ces colonnes-là ne suivent
+personne. C'est le contrat de l'Invocateur — ça chasse pendant que le mage fait
+autre chose — mais sans créature à nourrir, et à travers les murs.
 
-Chaque décharge déclenche la bourrasque de l'Air : le cyclone projette ce qu'il
-touche et se prive lui-même de sa cible. C'est sa contrepartie, et elle est
-gratuite — le trait de l'élément existait déjà.
+`storm_follow`, la position propre du phénomène, le signal `storm_moved` et le
+reparentage du nuage ont donc été retirés : soixante lignes sans utilisateur.
+`test_combat._test_air_cyclone` garde une trace de l'erreur — il vérifie encore
+que le sort n'est PAS un phénomène qui suit.
+
+### TROIS, et c'est le nombre qui fait le sort
+
+Une seule colonne se contourne ; trois quadrillent. C'est aussi ce qui rend
+acceptable qu'elles soient lentes : à 3 cases/s elles ne rattrapent personne à
+la course, mais elles coupent à travers les haies pendant que leurs proies font
+le tour, et il y en a une devant.
+
+Elles réutilisent la machinerie des invocations — donc le CombatSystem, donc
+`test_balance` peut les faire chasser en headless — avec une entrée de plus dans
+`SUMMON_KINDS`. Leurs coups ne déclenchent pas la bourrasque de l'Air : la règle
+du projet veut qu'un trait élémentaire soit la signature du MAGE, pas de ce
+qu'il envoie à sa place.
+
+### Le dessin
+
+`cyclone_spin.png` (huit images d'un tour, 4 x 2) et `cyclone_bolt.png` (amorce,
+éclair, impact, retombée). Découpées par `build_spike_anim.py`, qui a appris
+deux choses au passage :
+
+- **une animation peut s'étaler sur plusieurs rangées** (`rangees_par_matiere`).
+  Le tour du cyclone tient sur deux lignes de quatre : ce ne sont pas deux
+  matières comme les cristaux et la pierre de l'éruption, c'est une seule
+  animation qui se lit ligne par ligne ;
+- **l'ancre « base »** : le PIED de la colonne se pose sur la case, comme la
+  pointe du cône du Grand souffle se pose sur le mage. Calée sur son centre, la
+  colonne se serait enfoncée dans le sol de la moitié de sa hauteur. Le pied est
+  pris sur l'axe des MASSES et non sur le milieu de la boîte — le sommet du
+  cyclone s'évase d'un côté et aurait tiré le pied avec lui.
+
+⚠️ **Le cyclone n'est pas une créature, même s'il chasse comme elles.** Il n'a ni
+faces ni pose de coup : `SummonVisual` n'aurait rien su lire de lui dans
+`allies.json`. Il a donc son propre nœud (`CycloneColumn`), et `_on_summon_moved`
+ne lui donne pas de direction — une colonne qui tourne n'en a pas, et la
+retourner lui ferait changer de sens de rotation en pleine course.
+
+`CycloneColumn` joue le tour à 13 images par seconde et fait LEVER la colonne :
+la levée et la retombée se jouent sur la hauteur et non sur l'opacité, parce
+qu'une colonne translucide se lit comme une colonne faible quand une colonne
+courte se lit comme une colonne qui monte. `BoltStrike` pose la décharge sur la
+victime, sans fondu entre images — un éclair claque, il ne se fond pas dans le
+suivant.
 
 ⚠️ En passant : `dump_reference.gd` écrivait « ? » dans la colonne « type » pour
-trois familles de sorts (phénomène, chaîne, vague, ligne, tourelle) depuis leur
+cinq familles de sorts (phénomène, chaîne, vague, ligne, tourelle) depuis leur
 création. Un trou que personne ne remarque — la ligne reste lisible, le tableau
 reste droit, et le type a simplement disparu. Les noms manquants sont écrits, et
 un `push_warning` prévient à la prochaine famille oubliée.
-
-Le dessin reste à faire : en attendant, le cyclone emprunte le nuage d'orage du
-mage de la Foudre. Prompt dans `docs/prompts/sorts/air_cyclone.md`.
 
 ## 2026-08-25 — le Grand souffle recadré
 

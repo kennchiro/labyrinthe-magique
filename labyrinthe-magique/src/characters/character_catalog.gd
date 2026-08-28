@@ -431,7 +431,13 @@ static func water() -> CharacterStats:
 		"kind": Ability.Kind.BLAST, "element": Element.Kind.WATER,
 		"damage": 70, "radius": 6.0, "cooldown": 1.0, "is_ultimate": true,
 		"shockwave": true, "pierces_walls": true, "heal_self": 3,
-		"column_burst": true, "flames": 1.0,
+		"flames": 1.0,
+		# NEUF GEYSERS D'UN COUP, éparpillés sur le labyrinthe. La colonne
+		# unique montait sous les pieds du mage et l'effaçait une seconde
+		# durant ; celles-ci frappent ce qui passe et ne cachent rien
+		# d'important. C'est aussi ce qui donne à l'ultime sa PORTÉE : il ne
+		# récompense plus seulement d'être au bon endroit, il nettoie la carte.
+		"geyser_count": 9, "geyser_damage": 26, "geyser_radius": 1.5,
 		"empower_bonus": 10, "empower_duration": 30.0,
 		# Une averse : beaucoup de gouttes, faibles, étalées sur la durée de
 		# l'exaltation. Elles tombent vite (0,45 s) — de la pluie, pas des
@@ -818,9 +824,28 @@ static func air() -> CharacterStats:
 	})
 	c.ultimate = Ability.make({
 		"id": "air_cyclone", "display_name": "Cyclone",
-		"description": "Le labyrinthe entier est aspiré dans une spirale.",
-		"kind": Ability.Kind.BLAST, "element": Element.Kind.AIR,
-		"damage": 115, "radius": 6.5, "cooldown": 1.0, "is_ultimate": true,
+		"description": "Trois colonnes de vent et de foudre se lèvent et partent chasser. Elles vont droit sur les poursuivants, haies comprises, deux minutes durant.",
+		# CE N'ÉTAIT QU'UNE EXPLOSION DE PLUS. 115 dégâts sur 6,5 cases : le même
+		# geste que son Grand souffle en plus gros — rien qui casse une règle,
+		# donc rien qui ressemble à un ultime.
+		#
+		# ⚠️ Et il n'ACCOMPAGNE PAS le mage, essayé et jeté : un phénomène qui le
+		# suit, si lentement soit-il, reste le nuage d'orage du mage de la Foudre
+		# sous un autre dessin. Ces colonnes-là sont AUTONOMES. Elles vont droit
+		# sur les poursuivants pendant que le mage court aux gemmes — c'est le
+		# même contrat que l'Invocateur, mais sans créature à nourrir.
+		#
+		# TROIS, et c'est le nombre qui fait le sort : une seule colonne se
+		# contourne, trois quadrillent. Elles volent, donc elles coupent à
+		# travers les haies pendant que leurs proies font le tour — la seule
+		# chose du kit de l'Air qui traverse un mur, et elle se voit de loin.
+		#
+		# 18 dégâts toutes les 1,5 s chacune, deux minutes : énorme en cumul,
+		# faible à l'instant. Elles n'exécutent personne, elles usent tout ce
+		# qui traîne dans le labyrinthe.
+		"kind": Ability.Kind.SUMMON, "element": Element.Kind.AIR,
+		"summon_id": "cyclone", "summon_count": 3,
+		"duration": 120.0, "cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 
@@ -855,14 +880,14 @@ static func invocateur() -> CharacterStats:
 			"id": "invoc_imps", "display_name": "Diablotins",
 			"description": "Deux diablotins surgissent et pourchassent l'ennemi le plus proche.",
 			"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
-			"summon_id": "imp", "summon_count": 2, "duration": 120.0,
+			"summon_id": "imp", "summon_count": 2, "duration": 30.0,
 			"cooldown": 18.0, "mana_cost": 3,
 		}),
 		Ability.make({
 			"id": "invoc_gargoyle", "display_name": "Gargouille",
 			"description": "Une gargouille de pierre, lente mais qui frappe deux fois plus fort.",
 			"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
-			"summon_id": "gargouille", "summon_count": 1, "duration": 120.0,
+			"summon_id": "gargouille", "summon_count": 1, "duration": 40.0,
 			"cooldown": 22.0, "mana_cost": 3,
 		}),
 		Ability.make({
@@ -911,16 +936,60 @@ static func supreme() -> CharacterStats:
 	})
 	c.abilities = [
 		Ability.make({
-			"id": "supreme_steam", "display_name": "Vapeur brûlante",
-			"description": "Feu et eau mêlés : une nuée qui aveugle et brûle.",
-			"kind": Ability.Kind.ZONE, "element": Element.Kind.WATER,
-			"damage": 11, "radius": 2.8, "duration": 5.0, "cooldown": 9.0,
+			"id": "supreme_convergence", "display_name": "Convergence élémentaire",
+			"description": "Feu, eau, terre et air se fondent en un noyau qui explose à l'impact.",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SUPREME,
+			# Le grand sort du mage : lourd, lisible et puissant, mais il ne prend
+			# pas la place du Prisme des quatre, son ultime à 180 dégâts.
+			"damage": 56, "radius": 2.8, "range": 8, "cooldown": 11.0,
+			# LENT, et deux fois plutôt qu'une. Le sort se CHARGE devant le mage
+			# (7 images à 8 img/s) avant de partir, et la durée totale doit tenir
+			# les deux temps : à 0,4 il ne restait qu'un tiers de seconde de vol,
+			# la comète traversait le couloir d'un trait. À 0,22, la charge tient
+			# ses huit dixièmes et le projectile met encore une seconde pleine à
+			# franchir huit cases — c'est le coup le plus lourd du Suprême, il a
+			# le droit de se voir venir.
+			"projectile_scale": 2.6, "projectile_speed": 0.22,
+			"projectile_visual": "convergence", "shockwave": true,
 		}),
 		Ability.make({
-			"id": "supreme_magma", "display_name": "Coulée de magma",
-			"description": "Feu et terre : la roche fond et coule dans le couloir.",
-			"kind": Ability.Kind.ZONE, "element": Element.Kind.FIRE,
-			"damage": 14, "radius": 2.2, "duration": 6.0, "cooldown": 11.0,
+			# LES QUATRE SCEAUX remplacent la Coulée de magma (2026-08-26).
+			#
+			# Le magma était déclaré `Element.Kind.FIRE` et faisait 14 dégâts/s
+			# sur 2,2 cases : c'était le « Sol embrasé » du Mage du Feu à un nom
+			# près. Il ne combinait rien, et rien n'y disait les quatre éléments —
+			# alors que c'est toute l'identité du Suprême.
+			#
+			# Ici il pose QUATRE zones d'un coup, une par point cardinal, chacune
+			# portant le trait de son élément. Aucun autre mage n'a plus d'UNE
+			# zone : c'est le seul sort de contrôle de terrain qui lui appartienne
+			# en propre. Les dégâts par sceau sont donc modestes — sa force est
+			# de tenir quatre couloirs, pas d'en brûler un.
+			"id": "supreme_seals", "display_name": "Les Quatre Sceaux",
+			"description": "Quatre sceaux se gravent autour de lui : le feu brûle, l'eau ralentit, la terre arrête, l'air balaie.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.SUPREME,
+			# SOIXANTE SECONDES de tenue. C'est le sort le plus long du jeu après
+			# les invocations, et ce n'est pas un sort de combat : c'est un sort
+			# de TERRAIN. On pose ses sceaux sur un carrefour et on va chercher
+			# ses gemmes en sachant que le retour est gardé.
+			#
+			# ⚠️ La recharge est de 12 s : à ce rythme CINQ jeux de sceaux se
+			# chevauchent, soit vingt zones. C'est voulu tant que les dégâts
+			# restent bas — 9/s, la moitié d'une zone ordinaire — mais si le
+			# labyrinthe finit tapissé, c'est la RECHARGE qu'il faut monter, pas
+			# la durée : c'est elle qui décide combien de jeux coexistent.
+			# RAYON 1,15 et non 1,5 : à 1,5 les sceaux voisins de la couronne se
+			# touchaient (2,83 case d'écart pour 3 cases de diamètre) et les
+			# quatre se lisaient comme une seule flaque. À 1,15 il reste six
+			# dixièmes de case entre eux.
+			"damage": 9, "radius": 1.15, "duration": 60.0, "cooldown": 12.0,
+			# Deux cases : assez pour tenir les entrées d'un carrefour, pas assez
+			# pour couvrir un couloir entier depuis l'abri.
+			"seal_ring": 2,
+			# Le sceau est dessiné en GRIS : c'est `ZoneEffect` qui le teint à
+			# l'élément de chaque sceau. Un seul dessin pour quatre zones — sans
+			# quoi les quatre auraient eu quatre diamètres différents.
+			"zone_style": "sceau",
 		}),
 		Ability.make({
 			"id": "supreme_bloom", "display_name": "Renaissance",
@@ -936,9 +1005,48 @@ static func supreme() -> CharacterStats:
 		"range": 6, "cooldown": 6.5,
 	})
 	c.ultimate = Ability.make({
-		"id": "supreme_prism", "display_name": "Prisme des quatre",
-		"description": "Les quatre éléments se rejoignent en un seul trait de lumière.",
+		# LE JUGEMENT DES QUATRE remplace le Prisme (2026-08-28).
+		#
+		# Le Prisme était un BLAST de 180 sur 7 cases : un gros chiffre, et rien
+		# à regarder. Ici le ciel s'ouvre — des météores faites des quatre
+		# éléments tombent SUR les ennemis, et le sol tremble sous elles.
+		"id": "supreme_judgement", "display_name": "Jugement des quatre",
+		"description": "Le ciel s'ouvre : des météores des quatre éléments tombent sur chaque poursuivant, et la terre tremble.",
 		"kind": Ability.Kind.BLAST, "element": Element.Kind.SUPREME,
-		"damage": 180, "radius": 7.0, "cooldown": 1.0, "is_ultimate": true,
+		# LE PLUS PUISSANT DES HUIT ULTIMES, et il doit se voir dans les chiffres.
+		#
+		# 150 de souffle plus douze météores à 75 font 1050 au total, contre 802
+		# pour l'éruption du Mage du Feu (130 + 14 x 48) — le deuxième plus
+		# lourd. Trente pour cent au-dessus, et c'est le rapport qu'il faut : le
+		# Suprême paie son ultime HUIT kills quand les autres en paient cinq, et
+		# il n'a ni la survie de l'Eau ni la vitesse de la Foudre pour les
+		# obtenir. Un ultime qui coûte 60 % plus cher et frappe pareil ne serait
+		# pas un ultime de maître des quatre éléments.
+		"damage": 150, "radius": 6.0, "cooldown": 1.0, "is_ultimate": true,
+		"shockwave": true, "pierces_walls": true, "flames": 1.2,
+		# LA PLUIE VISE. Le total est fixe : douze météores réparties à tour de
+		# rôle sur les poursuivants vivants. Six ennemis en prennent deux chacun ;
+		# les deux derniers en prennent six chacun. C'est ce qui en fait un
+		# jugement et non un feu d'artifice — plus il en reste peu, plus ça tombe.
+		"rain_hunts": true,
+		"rain_count": 12, "rain_damage": 75, "rain_radius": 1.6,
+		# 4,5 s pour douze météores, soit une toutes les 0,37 s : le temps de voir
+		# chacune partir, tomber et frapper. À 2,2 elles se suivaient de si près
+		# que le « une par une » ne se lisait plus.
+		# 1,1 s de chute et non 0,85 : elle part maintenant de vingt-deux cases,
+		# hors de l'écran. Au temps d'avant, elle traversait le champ visible en
+		# un cinquième de seconde — une rayure, pas une météore.
+		# 1,45 s d'attente : les seize images de `jugement_incantation` à 11
+		# img/s. Le ciel ne répond qu'une fois le geste achevé.
+		"rain_delay": 1.45,
+		"rain_duration": 4.5, "rain_fall": 1.1,
+		# LE SÉISME qui suit. Il ne fait presque pas de dégâts : son rôle est de
+		# faire trembler l'écran et le sol pendant que les météores tombent, pour
+		# qu'on sente le poids de ce qui arrive.
+		# UNE SECONDE, remise à neuf à chaque impact. Le séisme n'est plus une
+		# nappe posée au lancement : il repart à chaque météore qui touche, donc
+		# il n'a pas besoin de couvrir toute la pluie — il la suit.
+		"quake_duration": 1.0, "quake_tremor": 6, "quake_interval": 0.5,
+		"quake_radius": 7.0,
 	})
 	return c

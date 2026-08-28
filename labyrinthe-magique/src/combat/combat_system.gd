@@ -31,10 +31,20 @@ signal turret_faded(id: int)
 ## chaque éboulement est un coup à part entière, à l'endroit où il tombe.
 signal quake_started(duration: float, ability: Ability)
 signal quake_slide(cell: Vector2i, ability: Ability)
+## Une colonne d'eau jaillit sur cette case. Toutes partent au même instant :
+## c'est une SALVE, pas une pluie — la pluie, c'est l'autre moitié du sort.
+signal geyser_erupted(cell: Vector2i, ability: Ability)
 ## La zone qui AVANCE a changé de case. Le rendu la suit ; les dégâts, eux,
 ## sont appliqués ici comme pour n'importe quelle zone.
 signal zone_moved(id: int, cell: Vector2i)
 signal zone_created(zone_id: int, ability: Ability, cell: Vector2i)
+## L'INCANTATION des Quatre Sceaux, émise UNE fois par lancement.
+##
+## `zone_created` part quatre fois — une par sceau — et la charge ne doit se
+## jouer qu'une. C'est donc un signal à part plutôt qu'un compteur côté
+## affichage : le Level n'a pas à deviner que quatre zones nées dans la même
+## frame sont un seul sort.
+signal seals_cast(cell: Vector2i)
 signal zone_expired(zone_id: int)
 signal wall_raised(cell: Vector2i)
 signal wall_fell(cell: Vector2i)
@@ -42,6 +52,9 @@ signal blink_performed(from: Vector2i, to: Vector2i)
 signal summon_spawned(id: int, kind_id: String, position: Vector2)
 signal summon_moved(id: int, position: Vector2, facing: Vector2i)
 signal summon_struck(id: int, target_index: int)
+signal summon_projectile_launched(id: int, target_index: int, from: Vector2,
+	to: Vector2, duration: float, ability: Ability)
+signal summon_projectile_hit(id: int, target_index: int, cell: Vector2i, ability: Ability)
 signal summon_expired(id: int)
 signal enemy_damaged(index: int, dealt: int, ability: Ability)
 signal enemy_killed(index: int)
@@ -103,6 +116,9 @@ signal sky_bolt(cell: Vector2i, index: int, ability: Ability)
 ## un rocher qui apparaît au sol sans prévenir n'est pas un événement, c'est un
 ## dégât inexpliqué.
 signal meteor_incoming(cell: Vector2i, delay: float, ability: Ability)
+## L'INCANTATION d'une pluie, émise UNE fois par lancement — même raison que
+## `seals_cast` : `meteor_incoming` part douze fois, le geste ne se fait qu'une.
+signal incantation_cast(cell: Vector2i, ability: Ability)
 signal meteor_landed(cell: Vector2i, ability: Ability)
 ## Le mage est EXALTÉ : ses coups portent plus fort pendant `duration`.
 ## L'interface doit le montrer — un bonus invisible n'est pas un pouvoir, c'est
@@ -141,15 +157,26 @@ const CHARGE_GAP := 0.35
 ##   speed   en cases/s ; reach  distance de frappe (cases, continue)
 ##   period  secondes entre deux coups ; damage  dégâts par coup
 const SUMMON_KINDS := {
-	"imp": {"speed": 4.6, "damage": 10, "period": 0.9, "reach": 1.1, "flies": false},
+	"imp": {"speed": 2.8, "damage": 10, "period": 0.9, "reach": 1.1, "flies": false},
 	"gargouille": {"speed": 4.0, "damage": 18, "period": 1.1, "reach": 1.1, "flies": false},
-	"dragon": {"speed": 3.6, "damage": 34, "period": 1.3, "reach": 1.6, "flies": true},
+	"dragon": {"speed": 3.6, "damage": 34, "period": 1.3, "reach": 10.0,
+		"min_reach": 3.0, "projectile_speed": 0.65, "flies": true},
 	# L'OMBRE MALÉFIQUE de la Faille des ténèbres. Elle ne mord pas : elle
 	# SOUFFLE un gaz violet, d'où une portée d'une case et demie là où les
 	# marcheurs frappent au contact. Ses dégâts sont modestes et son poison fait
 	# le reste — c'est une créature qui use, pas qui exécute, et elles sont six.
 	"ombre": {"speed": 4.2, "damage": 12, "period": 1.1, "reach": 1.5,
 		"flies": false, "poison": 3},
+	# LE CYCLONE de l'ultime de l'Air. Il VOLE — c'est-à-dire qu'il va droit sur
+	# sa proie, haies comprises. Rien d'autre chez ce mage ne traverse un mur,
+	# et c'est ce qui en fait un ultime ; la colonne monte plus haut que les
+	# haies, donc ça se voit.
+	#
+	# Lent (3 cases/s contre 4,5 à 5 aux poursuivants) : il ne rattrape personne
+	# à la course. Ce qu'il rattrape, c'est ce qui s'attarde — et il coupe au
+	# plus court pendant que sa proie fait le tour.
+	"cyclone": {"speed": 3.0, "damage": 18, "period": 1.5, "reach": 1.4,
+		"flies": true},
 }
 ## Créatures simultanées au maximum. Au-delà, la PLUS ANCIENNE disparaît : une
 ## armée sans plafond viderait le labyrinthe à la place du joueur.
@@ -210,6 +237,7 @@ var _charges := {}          # id -> charges restantes (sorts à charges)
 var _refills := {}          # id -> charges à rendre quand la recharge finit
 var _recover := {}          # id -> délai avant la charge suivante
 var _in_flight: Array[Dictionary] = []
+var _summon_projectiles: Array[Dictionary] = []
 var _zones: Array[Dictionary] = []
 var _walls: Array[Dictionary] = []
 var _next_zone_id := 1
@@ -319,6 +347,7 @@ func update(delta: float, context: CombatContext) -> void:
 			_recover[id] = gap
 
 	_update_projectiles(delta, context)
+	_update_summon_projectiles(delta, context)
 	_update_summons(delta, context)
 	_update_zones(delta, context)
 	_update_walls(delta)
@@ -703,13 +732,36 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 			"time_left": residue.duration, "tick": 0.0})
 		zone_created.emit(id, residue, context.player_cell)
 	if ability.rain_count > 0:
-		_summon_rain(ability)
-	if ability.quake_duration > 0.0:
-		_quakes.append({
-			"ability": ability, "time_left": ability.quake_duration,
-			"tick": 0.0,
-		})
-		quake_started.emit(ability.quake_duration, ability)
+		_summon_rain(ability, context)
+	# LES GEYSERS, tous en même temps et au hasard du labyrinthe.
+	if ability.geyser_count > 0:
+		var floor_cells := grid.all_floor_cells()
+		var seen := {}
+		for i in ability.geyser_count:
+			if floor_cells.is_empty():
+				break
+			var cell: Vector2i = floor_cells[_rng.randi_range(0, floor_cells.size() - 1)]
+			# Deux geysers sur la même case seraient un seul geyser qui frappe
+			# deux fois : on tire jusqu'à trouver une case libre, sans insister.
+			if seen.has(cell):
+				continue
+			seen[cell] = true
+			geyser_erupted.emit(cell, ability)
+			_apply_area(Ability.make({
+				"id": ability.id, "kind": Ability.Kind.BLAST,
+				"element": ability.element, "damage": ability.geyser_damage,
+				"radius": ability.geyser_radius,
+			}), cell, context, ability)
+	# LE SÉISME ATTEND LA PREMIÈRE MÉTÉORE. Déclenché au lancement, il tremblait
+	# pendant que le ciel était encore vide : le joueur sentait la secousse avant
+	# d'en voir la cause, et les deux ne se reliaient plus. C'est l'IMPACT qui
+	# ébranle le sol, donc c'est lui qui l'ouvre.
+	#
+	# Seules les pluies qui VISENT attendent : une éruption volcanique tremble
+	# dès le départ, et c'est très bien — elle n'a pas de première météore, elle
+	# en a quatorze qui tombent n'importe où.
+	if ability.quake_duration > 0.0 and not (ability.rain_hunts and ability.rain_count > 0):
+		_start_quake(ability)
 	if ability.sky_clouds > 0:
 		_gather_sky(ability)
 	if ability.heal_self > 0:
@@ -728,16 +780,69 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 ## La pluie de météores. Les cases sont tirées au sort parmi les praticables, et
 ## les délais étalés sur toute la durée : tombées ensemble, douze météores
 ## feraient un seul gros dégât et pas une pluie.
-func _summon_rain(ability: Ability) -> void:
+func _summon_rain(ability: Ability, context: CombatContext) -> void:
 	var cells := grid.all_floor_cells()
 	if cells.is_empty():
 		return
+	# LA PLUIE QUI VISE. Les cibles sont les ennemis VIVANTS, prises à tour de
+	# rôle : le nombre de météores étant fixe, moins il en reste, plus chacun en
+	# reçoit. Deux poursuivants sous six météores chacun, c'est un jugement ;
+	# douze météores éparpillées sur un labyrinthe vide, c'est un feu d'artifice.
+	#
+	# Repli sur le tirage au sort quand il n'y a personne : l'ultime doit partir
+	# même lancé dans le vide, sinon le joueur perd ses huit kills sans rien voir.
+	var hunted: Array[Vector2i] = []
+	if ability.rain_hunts:
+		# Les STRUCTURES vivent dans les mêmes tableaux que les ennemis (voir
+		# CombatContext) : une maison de repaire ne se poursuit pas du ciel, on
+		# s'arrête donc là où les ennemis s'arrêtent.
+		var last := context.structures_from if context.structures_from >= 0 \
+			else context.enemy_cells.size()
+		for i in mini(last, context.enemy_cells.size()):
+			if context.enemy_health[i].is_alive():
+				hunted.append(context.enemy_cells[i])
+	# LE GESTE D'ABORD, LE CIEL ENSUITE. Tous les instants de chute sont décalés
+	# de la durée de l'incantation : la première pierre part quand le mage a fini
+	# de lever les éléments, pas pendant. Le séisme suit tout seul — il s'ouvre
+	# au premier impact, donc il attend avec elles.
+	if ability.rain_delay > 0.0:
+		incantation_cast.emit(context.player_cell, ability)
 	for i in ability.rain_count:
 		var cell: Vector2i = cells[_rng.randi_range(0, cells.size() - 1)]
-		var when := _rng.randf_range(0.0, ability.rain_duration)
-		_meteors.append({"cell": cell, "time_left": when + ability.rain_fall,
-			"ability": ability})
-		meteor_incoming.emit(cell, when + ability.rain_fall, ability)
+		if not hunted.is_empty():
+			cell = hunted[i % hunted.size()]
+		# UNE PAR UNE, et non toutes ensemble. Les deux pluies existantes tirent
+		# leurs délais au hasard : c'est ce qui convient à une averse, où
+		# l'important est qu'il en tombe partout. Celle-ci DÉSIGNE ses cibles —
+		# elle doit donc s'égrener, pour qu'on voie chaque météore partir, tomber
+		# et frapper avant que la suivante ne s'annonce.
+		var when := float(i) * ability.rain_duration / float(maxi(1, ability.rain_count)) \
+			if ability.rain_hunts else _rng.randf_range(0.0, ability.rain_duration)
+		var fall := ability.rain_delay + when + ability.rain_fall
+		_meteors.append({"cell": cell, "time_left": fall, "ability": ability})
+		meteor_incoming.emit(cell, fall, ability)
+
+
+## Ouvre le séisme d'un sort. Sorti de `_cast_blast` parce qu'il n'y part plus
+## toujours : la pluie qui vise le déclenche à son premier impact.
+func _start_quake(ability: Ability) -> void:
+	if ability.quake_duration <= 0.0:
+		return
+	for quake in _quakes:
+		if quake["ability"] != ability:
+			continue
+		# CHAQUE MÉTÉORE SECOUE À NOUVEAU. Le séisme n'est pas EMPILÉ — douze
+		# séismes superposés multiplieraient par douze les dégâts de tremblement —
+		# il est REMIS À NEUF : sa durée repart de zéro et la secousse d'écran
+		# reprend à pleine amplitude. On sent donc un coup par impact, et le sol
+		# ne s'apaise jamais tant qu'il en tombe.
+		quake["time_left"] = ability.quake_duration
+		quake_started.emit(ability.quake_duration, ability)
+		return
+	_quakes.append({
+		"ability": ability, "time_left": ability.quake_duration, "tick": 0.0,
+	})
+	quake_started.emit(ability.quake_duration, ability)
 
 
 func _update_meteors(delta: float, context: CombatContext) -> void:
@@ -749,6 +854,10 @@ func _update_meteors(delta: float, context: CombatContext) -> void:
 		_meteors.remove_at(i)
 		var source: Ability = meteor["ability"]
 		var cell: Vector2i = meteor["cell"]
+		# LA PREMIÈRE QUI TOUCHE OUVRE LE SÉISME. Les onze suivantes retombent
+		# sur un sol déjà en train de trembler.
+		if source.rain_hunts:
+			_start_quake(source)
 		# Chaque météore est une petite explosion à part entière : mêmes règles
 		# de rayon que n'importe quel sort de zone, avec ses propres chiffres.
 		var strike := Ability.make({
@@ -761,7 +870,148 @@ func _update_meteors(delta: float, context: CombatContext) -> void:
 		_apply_area(strike, cell, context)
 
 
+## LES QUATRE SCEAUX du Sorcier Suprême, dans l'ordre où ils se posent.
+##
+## L'élément est ATTACHÉ à la direction, et il ne change jamais : c'est ce qui
+## rend le sort jouable. Un joueur qui a appris que le feu part à droite pose ses
+## sceaux en sachant lequel gardera quel couloir ; des éléments tirés au hasard
+## en feraient une loterie décorative.
+const SEAL_ORDER := [
+	{"step": Vector2i.RIGHT, "element": Element.Kind.FIRE},
+	{"step": Vector2i.DOWN, "element": Element.Kind.WATER},
+	{"step": Vector2i.LEFT, "element": Element.Kind.EARTH},
+	{"step": Vector2i.UP, "element": Element.Kind.AIR},
+]
+
+
+## Un sceau, dérivé du sort de base : même durée, même rayon, mais l'effet de SON
+## élément. Les quatre se partagent les dégâts du sort — c'est un contrôle de
+## terrain, pas quatre fois la même zone.
+##
+## Chaque élément garde ici le trait qu'il a partout ailleurs dans le jeu, et
+## c'est la seule règle qui compte : le joueur n'a rien de neuf à apprendre.
+##   FEU    brûle — les dégâts les plus lourds, et ça continue après la sortie
+##   EAU    trempe — ralentit tant qu'on reste dessus
+##   TERRE  ébranle — arrête net, une fois par passage
+##   AIR    bourrasque — le plus large, mais le moins mordant
+func _seal_of(base: Ability, element: Element.Kind) -> Ability:
+	var seal := {
+		"id": base.id + "_seal", "kind": Ability.Kind.ZONE, "element": element,
+		"display_name": base.display_name,
+		"damage": base.damage, "radius": base.radius, "duration": base.duration,
+		# ⚠️ LE STYLE SE RECOPIE. Les quatre sceaux sont fabriqués depuis un
+		# dictionnaire, pas clonés : tout ce qu'on n'écrit pas ici retombe à sa
+		# valeur par défaut. L'oublier a fait poser quatre zones ORDINAIRES —
+		# le dessin du sceau ne sortait pas, et on ne voyait que les anneaux
+		# tracés en code.
+		"zone_style": base.zone_style,
+	}
+	match element:
+		Element.Kind.FIRE:
+			seal["damage"] = int(round(base.damage * 1.35))
+			seal["poison_duration"] = 3.0
+		Element.Kind.WATER:
+			seal["slow_duration"] = 2.0
+			seal["slow_sustained"] = true
+		Element.Kind.EARTH:
+			seal["snare"] = 0.9
+		Element.Kind.AIR:
+			seal["damage"] = int(round(base.damage * 0.7))
+			seal["radius"] = base.radius * 1.35
+	return Ability.make(seal)
+
+
+## Écart minimal entre deux sceaux, en cases.
+##
+## C'est le DIAMÈTRE d'un sceau plus une marge. Deux cercles qui se touchent se
+## lisent comme une seule flaque, et tout l'intérêt du sort — savoir quel élément
+## garde quel passage — disparaît avec eux.
+const SEAL_SPACING := 3
+## Au-delà de deux voisins libres, le mage n'est plus dans un couloir.
+const SEAL_OPEN_SIDES := 3
+
+
+## Où tombe un sceau autour du mage : la case libre la plus LOIN dans sa
+## direction, sans dépasser l'anneau demandé. `player_cell` si tout est bouché,
+## ce que l'appelant écarte.
+func _seal_cell(origin: Vector2i, step: Vector2i, ring: int) -> Vector2i:
+	var cell := origin
+	for _i in maxi(1, ring):
+		var next: Vector2i = cell + step
+		if not grid.is_floor_v(next):
+			break
+		cell = next
+	return cell
+
+
+## LE CARREFOUR : un sceau par point cardinal, en couronne.
+##
+## Une direction bouchée est ABANDONNÉE plutôt que rabattue sur le mage : un
+## sceau replié sur la case centrale chevaucherait les trois autres, et on
+## perdrait la lecture qu'on cherche justement à obtenir.
+func _seal_ring_cells(ability: Ability, context: CombatContext) -> Array:
+	var out: Array = []
+	for entry in SEAL_ORDER:
+		var cell := _seal_cell(context.player_cell, entry["step"], ability.seal_ring)
+		out.append(cell if cell != context.player_cell else null)
+	return out
+
+
+## LE COULOIR : les quatre sceaux en enfilade DEVANT le mage, espacés.
+##
+## Dans un couloir d'une case — c'est-à-dire presque partout dans ce labyrinthe —
+## deux des quatre directions sont des haies, et la couronne s'effondrait sur
+## elle-même. Le sort devient alors un BALAYAGE : il grave le passage sur toute
+## sa longueur, ce qui est exactement ce qu'on veut d'un sort de terrain dans un
+## couloir.
+##
+## Le chemin suit les VIRAGES (`_corridor_ahead`), donc le balayage tourne avec
+## le couloir au lieu de s'arrêter au premier coude. Et s'il n'y a pas assez de
+## place devant, il se poursuit DERRIÈRE : le mage se retrouve encadré plutôt que
+## de perdre la moitié de son sort.
+func _seal_sweep_cells(_ability: Ability, context: CombatContext) -> Array:
+	var reach := SEAL_SPACING * SEAL_ORDER.size()
+	var out: Array = []
+	for facing in [context.player_facing, -context.player_facing]:
+		if facing == Vector2i.ZERO:
+			continue
+		var path := _corridor_ahead(context.player_cell, facing, reach)
+		var index := 1
+		while out.size() < SEAL_ORDER.size() and index < path.size():
+			out.append(path[index])
+			index += SEAL_SPACING
+	while out.size() < SEAL_ORDER.size():
+		out.append(null)
+	return out
+
+
+func _cast_seals(ability: Ability, context: CombatContext) -> bool:
+	seals_cast.emit(context.player_cell)
+	var sides := 0
+	for entry in SEAL_ORDER:
+		if grid.is_floor_v(context.player_cell + entry["step"]):
+			sides += 1
+	var cells: Array = _seal_ring_cells(ability, context) if sides >= SEAL_OPEN_SIDES \
+		else _seal_sweep_cells(ability, context)
+
+	var planted := 0
+	for rank in SEAL_ORDER.size():
+		var cell: Variant = cells[rank] if rank < cells.size() else null
+		if cell == null:
+			continue
+		var id := _next_zone_id
+		_next_zone_id += 1
+		var seal := _seal_of(ability, SEAL_ORDER[rank]["element"])
+		_zones.append({"id": id, "ability": seal, "cell": cell,
+			"time_left": seal.duration, "tick": 0.0})
+		zone_created.emit(id, seal, cell)
+		planted += 1
+	return planted > 0
+
+
 func _cast_zone(ability: Ability, context: CombatContext) -> bool:
+	if ability.seal_ring > 0:
+		return _cast_seals(ability, context)
 	var id := _next_zone_id
 	_next_zone_id += 1
 	var zone := {
@@ -1574,6 +1824,22 @@ func _update_summons(delta: float, context: CombatContext) -> void:
 		_advance_summon(summon, stats, target, delta, context)
 
 
+func _update_summon_projectiles(delta: float, context: CombatContext) -> void:
+	for i in range(_summon_projectiles.size() - 1, -1, -1):
+		var shot: Dictionary = _summon_projectiles[i]
+		shot["time_left"] = float(shot["time_left"]) - delta
+		if float(shot["time_left"]) > 0.0:
+			continue
+		_summon_projectiles.remove_at(i)
+		var target := int(shot["target"])
+		if target < 0 or not context.enemy_alive(target):
+			continue
+		var ability: Ability = shot["ability"]
+		summon_projectile_hit.emit(int(shot["id"]), target,
+			context.enemy_cells[target], ability)
+		_apply_damage(target, ability, context, false)
+
+
 ## La proie : l'ennemi vivant le plus proche. À VOL D'OISEAU pour le dragon qui
 ## vole, en distance de couloir pour les marcheurs — chacun sa géométrie.
 func _nearest_prey(summon: Dictionary, context: CombatContext) -> int:
@@ -1594,12 +1860,36 @@ func _try_strike(summon: Dictionary, stats: Dictionary, target: int,
 		context: CombatContext) -> bool:
 	var reach := float(stats["reach"])
 	var position: Vector2 = summon["position"]
-	if position.distance_to(Vector2(context.enemy_cells[target])) > reach:
+	var distance := position.distance_to(Vector2(context.enemy_cells[target]))
+	var min_reach := float(stats.get("min_reach", 0.0))
+	if distance > reach or distance < min_reach:
 		return false
 	if float(summon["strike_in"]) > 0.0:
 		return true
 	summon["strike_in"] = float(stats["period"])
+	if summon["kind"] == "dragon":
+		var aim := Vector2(context.enemy_cells[target]) - position
+		if absf(aim.x) > absf(aim.y):
+			summon["facing"] = Vector2i.RIGHT if aim.x > 0.0 else Vector2i.LEFT
+		else:
+			summon["facing"] = Vector2i.DOWN if aim.y > 0.0 else Vector2i.UP
+		summon_moved.emit(int(summon["id"]), position, summon["facing"])
 	summon_struck.emit(int(summon["id"]), target)
+	if summon["kind"] == "dragon":
+		var ability := Ability.make({
+			"id": "dragon_fire_breath", "display_name": "Souffle du dragon",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.FIRE,
+			"damage": int(stats["damage"]), "projectile_speed": float(stats["projectile_speed"]),
+			"projectile_scale": 1.65, "trail_density": 0.9, "flames": 1.15,
+			"pierces_walls": true,
+		})
+		var speed := PROJECTILE_SPEED * float(stats["projectile_speed"])
+		var duration := maxf(0.12, distance / speed)
+		_summon_projectiles.append({"id": int(summon["id"]), "target": target,
+			"time_left": duration, "ability": ability})
+		summon_projectile_launched.emit(int(summon["id"]), target, position,
+			Vector2(context.enemy_cells[target]), duration, ability)
+		return true
 	# Les coups d'une créature ne déclenchent PAS de trait élémentaire : le
 	# trait est la signature du mage, pas celle de ses bêtes — et un dragon qui
 	# répandrait la brûlure du Feu brouillerait la lecture des personnages.
@@ -1624,9 +1914,12 @@ func _advance_summon(summon: Dictionary, stats: Dictionary, target: int,
 	var position: Vector2 = summon["position"]
 	var step := Vector2.ZERO
 	if bool(stats["flies"]):
-		# Le dragon ignore les murs : droit sur la proie.
+		# Le dragon ignore les murs : droit sur la proie, meme en diagonale.
 		if target >= 0:
 			step = (Vector2(context.enemy_cells[target]) - position)
+			if float(stats.get("min_reach", 0.0)) > 0.0 and \
+				position.distance_to(Vector2(context.enemy_cells[target])) < float(stats["min_reach"]):
+				step = -step
 	else:
 		# Les marcheurs descendent le champ des proies, couloir par couloir.
 		var cell := Vector2i(int(round(position.x)), int(round(position.y)))

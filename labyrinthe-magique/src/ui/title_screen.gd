@@ -1,32 +1,47 @@
 class_name TitleScreen
 extends Control
 
-## Écran d'accueil : la COUVERTURE dessinée, avec des zones tactiles posées
-## exactement sur ses trois boutons peints.
+## Écran d'accueil : la COUVERTURE en paysage, et trois boutons dessinés par le
+## jeu par-dessus.
 ##
-## Pourquoi ne pas redessiner les boutons par-dessus ? Parce que l'illustration
-## contient déjà les siens, cadre doré et icône compris. Superposer des boutons
-## Godot donnerait deux boutons l'un sur l'autre. On garde donc de vrais Button
-## (pour le focus clavier, la manette et l'accessibilité) mais TRANSPARENTS, et
-## on les positionne en coordonnées normalisées : ils suivent l'image quelle que
-## soit la résolution, en portrait comme en paysage.
+## ⚠️ CE N'ÉTAIT PAS LE CAS AVANT, et le changement vaut d'être expliqué.
+## L'ancienne couverture était un PORTRAIT 2:3 dont les trois boutons étaient
+## PEINTS dans l'image ; le jeu posait des `Button` transparents dessus, à des
+## rectangles relevés à la main. Deux défauts, tous deux mesurés :
 ##
-## L'image est en 2:3. Sur un écran large elle est CONTENUE et non recadrée :
-## recadrer sur du 16/9 couperait le haut et le bas, donc le titre et les trois
-## boutons — c'est-à-dire tout l'écran.
+##   · en paysage — la façon dont ce jeu se joue — l'illustration contenue dans
+##     l'écran n'occupait que le TIERS CENTRAL, le reste étant rempli par
+##     elle-même agrandie et assombrie. Deux tiers de l'écran pour un flou ;
+##   · le texte des boutons était de la peinture. Il ne pouvait ni changer ni
+##     rester net quand on l'agrandissait, et chaque nouvelle image obligeait à
+##     re-mesurer trois rectangles à la main.
+##
+## La nouvelle image est en 16:9 et ne contient AUCUN bouton : son tiers
+## inférieur central est laissé calme et sombre exprès. Le jeu y pose ses trois
+## boutons avec `MenuStyle`, comme tous les autres menus — texte net à toute
+## taille, libellés modifiables sans repasser par une image, et plus un seul
+## rectangle à relever.
 
 signal start_requested
 signal journey_requested
 signal select_requested
 
-const COVER := preload("res://assets/peso&cover/interface/couverture.png")
+const COVER := preload("res://assets/peso&cover/interface/couverture_paysage.png")
 
-## Rectangles des boutons peints, en fraction de l'image (x0, y0, x1, y1).
-const HOTSPOTS := {
-	"StartButton": Rect2(0.242, 0.7075, 0.531, 0.0515),
-	"JourneyButton": Rect2(0.242, 0.7985, 0.531, 0.0515),
-	"SelectButton": Rect2(0.242, 0.8745, 0.531, 0.0515),
-}
+## Les trois boutons, de haut en bas, avec leur libellé et leur teinte.
+const ENTRIES := [
+	["StartButton", "JOUER", "#ffd479", 1.0],
+	["JourneyButton", "AVENTURE", "#9fe8b4", 0.88],
+	["SelectButton", "CHOISIR SON MAGE", "#b9c8ff", 0.88],
+]
+## Les boutons sont en RANGÉE, tout en bas, et non en colonne au centre.
+##
+## ⚠️ Le prompt demandait un tiers inférieur calme ; l'illustration livrée met
+## ses huit mages sur toute cette hauteur. Une colonne centrée en couvrait
+## quatre — et ce sont eux qu'on est venu regarder. Une rangée basse ne mange
+## qu'un bandeau, et les huit restent visibles.
+const BUTTONS_TOP := 0.845
+const BUTTON_HEIGHT := 0.082
 ## Teinte des bords, quand l'image ne remplit pas l'écran.
 const LETTERBOX := Color(0.035, 0.045, 0.085)
 
@@ -43,9 +58,10 @@ var _fill_rect := Rect2()
 
 func _ready() -> void:
 	debug_hotspots = "--debug" in OS.get_cmdline_user_args()
-	for name in HOTSPOTS:
-		var button: Button = get_node("Buttons/" + name)
-		_make_transparent(button)
+	for entry in ENTRIES:
+		var button: Button = get_node("Buttons/" + str(entry[0]))
+		button.text = str(entry[1])
+		MenuStyle.apply(button, Color(str(entry[2])), 22)
 	$Buttons/StartButton.pressed.connect(func() -> void: start_requested.emit())
 	$Buttons/JourneyButton.pressed.connect(func() -> void: journey_requested.emit())
 	$Buttons/SelectButton.pressed.connect(func() -> void: select_requested.emit())
@@ -53,21 +69,6 @@ func _ready() -> void:
 	resized.connect(_layout)
 	_layout()
 	set_character(character_id)
-
-
-## Le bouton existe pour le clavier et la manette, pas pour être vu : c'est
-## l'illustration qui le dessine. On garde seulement un voile au survol, sinon
-## rien ne répondrait au doigt ni à la souris.
-func _make_transparent(button: Button) -> void:
-	var empty := StyleBoxEmpty.new()
-	for state in ["normal", "disabled"]:
-		button.add_theme_stylebox_override(state, empty)
-	for state in ["hover", "pressed", "focus"]:
-		var veil := StyleBoxFlat.new()
-		veil.bg_color = Color(1, 1, 1, 0.10 if state == "hover" else 0.18)
-		veil.set_corner_radius_all(8)
-		button.add_theme_stylebox_override(state, veil)
-	button.text = ""
 
 
 func set_character(id: String) -> void:
@@ -89,11 +90,30 @@ func _layout() -> void:
 	var filled := texture_size * cover_factor
 	_fill_rect = Rect2((size - filled) * 0.5, filled)
 
-	for name in HOTSPOTS:
-		var spot: Rect2 = HOTSPOTS[name]
-		var button: Button = get_node("Buttons/" + name)
-		button.position = _cover_rect.position + Vector2(spot.position.x, spot.position.y) * drawn
-		button.size = Vector2(spot.size.x, spot.size.y) * drawn
+	# LES BOUTONS SUIVENT L'IMAGE, pas l'écran : ils se posent dans le bandeau
+	# que l'illustration leur laisse, et ils y restent quelle que soit la forme
+	# du viewport. Calés sur l'écran, ils remontaient dans les mages dès que le
+	# rapport changeait.
+	var height := drawn.y * BUTTON_HEIGHT
+	var gap := drawn.x * 0.018
+	# TROIS BOUTONS DE MÊME LARGEUR. Les dimensionner à leur importance était
+	# joli et faux : c'est « CHOISIR SON MAGE », le plus long libellé, qui se
+	# retrouvait dans le plus étroit. Une rangée régulière se lit mieux, et rien
+	# ne risque de déborder quand un libellé change.
+	var span := drawn.x * 0.235
+	var widths: Array[float] = []
+	for entry in ENTRIES:
+		widths.append(span)
+	var total: float = span * float(ENTRIES.size()) + gap * float(ENTRIES.size() - 1)
+	var x := _cover_rect.position.x + (drawn.x - total) * 0.5
+	var top := _cover_rect.position.y + drawn.y * BUTTONS_TOP
+	for i in ENTRIES.size():
+		var button: Button = get_node("Buttons/" + str(ENTRIES[i][0]))
+		button.size = Vector2(widths[i], height)
+		button.position = Vector2(x, top)
+		button.add_theme_font_size_override("font_size",
+			int(clampf(height * 0.36, 11.0, 23.0)))
+		x += widths[i] + gap
 
 	# Le nom du personnage courant se pose TOUT EN BAS, sur un bandeau sombre.
 	# Les cinq mages sont déjà peints au milieu de l'illustration : y superposer
@@ -115,12 +135,23 @@ func _draw() -> void:
 		draw_texture_rect(COVER, _fill_rect, false, Color(0.30, 0.32, 0.42, 1.0))
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.04, 0.09, 0.55))
 	draw_texture_rect(COVER, _cover_rect, false)
+	# VOILE SOUS LA RANGÉE. Les boutons sont translucides pour laisser voir le
+	# décor ; posés sur un dallage éclairé par huit auras, ils s'y noyaient. Un
+	# dégradé sombre les rattache au bas de l'image sans cacher les mages.
+	var band_top := _cover_rect.position.y + _cover_rect.size.y * (BUTTONS_TOP - 0.035)
+	var band_height := _cover_rect.size.y * (1.0 - BUTTONS_TOP + 0.035)
+	for i in 8:
+		var slice := band_height / 8.0
+		draw_rect(Rect2(_cover_rect.position.x, band_top + slice * float(i),
+			_cover_rect.size.x, slice + 1.0),
+			Color(0.02, 0.03, 0.07, 0.10 + 0.07 * float(i)))
+
 	# Bandeau derrière le nom : sur un fond de feuillage, un texte nu ne se lit pas.
 	var band := Rect2(character_label.position - Vector2(0.0, 3.0),
 		character_label.size + Vector2(0.0, 6.0))
 	draw_rect(band, Color(0.03, 0.04, 0.08, 0.72))
 	if not debug_hotspots:
 		return
-	for name in HOTSPOTS:
-		var button: Button = get_node("Buttons/" + name)
+	for entry in ENTRIES:
+		var button: Button = get_node("Buttons/" + str(entry[0]))
 		draw_rect(Rect2(button.position, button.size), Color(0, 1, 0, 0.9), false, 2.0)

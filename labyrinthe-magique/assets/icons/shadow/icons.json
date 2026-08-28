@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "shadow_orb",
+    "shadow_rune",
+    "shadow_blink",
+    "shadow_burst",
+    "shadow_step",
+    "shadow_rift"
+  ],
+  "size": 256
+}

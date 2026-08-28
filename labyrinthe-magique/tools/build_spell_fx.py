@@ -226,6 +226,25 @@ def strip(frames: list) -> tuple:
     return band, (cell_w, cell_h)
 
 
+
+## ⚠️ NE PAS ÉCRASER UNE ORBE COMMANDÉE.
+##
+## Depuis `tools/build_orbs.py`, les huit projectiles viennent de planches
+## dessinées EXPRÈS pour eux — quatre images qui vont de la naissance du tir à
+## sa pleine puissance. L'orbe découpée d'une planche de personnage n'est qu'un
+## repli : elle est fixe, souvent minuscule, et la remettre en place effacerait
+## le travail sans un message d'erreur.
+##
+## On reconnaît une orbe commandée à son `"mode": "grow"`.
+def orbe_commandee(out_dir) -> bool:
+    meta = out_dir / "orb.json"
+    if not meta.exists():
+        return False
+    try:
+        return json.loads(meta.read_text(encoding="utf-8")).get("mode") == "grow"
+    except Exception:
+        return False
+
 def main() -> None:
     for cid, sheet_name in SHEETS.items():
         path = SOURCE / sheet_name
@@ -249,7 +268,9 @@ def main() -> None:
         else:
             frames = [f for f in (shapes.cut(box, points, True) for box in boxes) if f is not None]
         report = []
-        if frames:
+        if frames and orbe_commandee(out_dir):
+            report.append("orbe COMMANDÉE, laissée en place")
+        elif frames:
             band, cell = strip(frames)
             band.save(out_dir / "orb.png")
             (out_dir / "orb.json").write_text(json.dumps(

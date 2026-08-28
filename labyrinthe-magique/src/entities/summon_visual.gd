@@ -36,7 +36,7 @@ const CATALOGUE_PATH := ALLIES_PATH + "allies.json"
 ## descend cinquante pixels plus bas que sa fumée au repos. À hauteur de case
 ## égale, elle paraissait donc plus PETITE que la gargouille alors qu'elle est
 ## réglée plus haut. Ces nombres sont des hauteurs de CASE, pas de créature.
-const HEIGHTS := {"imp": 44.0, "gargouille": 52.0, "dragon": 88.0, "ombre": 93.0}
+const HEIGHTS := {"imp": 58.0, "gargouille": 52.0, "dragon": 120.0, "ombre": 93.0}
 ## Créature dont on emprunte les bandes tant que la planche d'une nouvelle n'est
 ## pas découpée, avec sa teinte de remplacement.
 ##
@@ -150,6 +150,8 @@ func _process(delta: float) -> void:
 	_time += delta
 	_strike_left = maxf(0.0, _strike_left - delta)
 	_bob += delta * BOB_SPEED
+	if kind_id == "dragon":
+		queue_redraw()
 	if _sprite == null:
 		return
 	_sprite.position.y = -sin(_bob) * BOB_HEIGHT
@@ -194,16 +196,47 @@ func _apply_frame() -> void:
 
 	var factor: float = HEIGHTS.get(kind_id, 44.0) / _cell.y
 	_sprite.scale = Vector2(factor, factor)
-	# L'origine du nœud est l'OMBRE AU SOL, et c'est le BAS DE LA CASE qui s'y
-	# pose. Les marcheurs y ont leurs pieds — la case les y cale au découpage ;
-	# le dragon, centré dans la sienne, plane au-dessus grâce à la marge basse.
-	_sprite.offset = Vector2(0.0, -_cell.y * 0.5)
+	# Le dragon est centre dans sa case par le decoupage : son noeud peut donc
+	# rester sur le centre de la case, sans appliquer le decalage reserve aux
+	# creature ancrees par les pieds.
+	_sprite.offset = Vector2.ZERO if kind_id == "dragon" else Vector2(0.0, -_cell.y * 0.5)
 
 
 func _draw() -> void:
+	if kind_id == "dragon":
+		_draw_flight_effect()
 	# Ombre de contact, comme les acteurs : sans elle, une créature volante ne
 	# se situe plus — on ne sait pas au-dessus de QUELLE case elle est.
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.42))
 	draw_circle(Vector2.ZERO, tile_size * (0.34 if kind_id == "dragon" else 0.24),
 		Color(0.0, 0.0, 0.0, 0.32))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_flight_effect() -> void:
+	# Trainees d'air derriere le dragon : l'effet indique la direction du vol
+	# sans ajouter de feu au sprite, reserve a son projectile d'attaque.
+	var direction := Vector2(_facing)
+	if direction == Vector2.ZERO:
+		direction = Vector2.DOWN
+	var behind := -direction.normalized()
+	var side := Vector2(-behind.y, behind.x)
+	var pulse := 0.5 + 0.5 * sin(_bob)
+	# Le dragon est centre dans sa grande case puis decale au-dessus de son ombre.
+	# Les trainee doivent suivre son corps, pas rester au niveau du sol.
+	var centre := Vector2(0.0, -_cell.y * 0.5 * HEIGHTS["dragon"] / _cell.y)
+	var tint := Color(0.48, 0.78, 1.0, 0.30)
+	for i in 3:
+		var distance := tile_size * (0.48 + float(i) * 0.30 + pulse * 0.10)
+		var width := tile_size * (0.25 + float(i) * 0.08)
+		var at := centre + behind * distance
+		draw_arc(at, width, side.angle() - 0.75, side.angle() + 0.75,
+			12, Color(tint.r, tint.g, tint.b, tint.a * (1.0 - float(i) * 0.22)),
+			2.0)
+	for i in 4:
+		var phase := _time * 2.8 + float(i) * 1.7
+		var distance := tile_size * (0.35 + fmod(phase, 1.25))
+		var lateral := sin(phase) * tile_size * 0.34
+		var at := centre + behind * distance + side * lateral
+		var radius := tile_size * (0.035 + 0.018 * pulse)
+		draw_circle(at, radius, Color(0.70, 0.90, 1.0, 0.32))

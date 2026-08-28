@@ -28,9 +28,26 @@ var _trail: Array[Vector2] = []
 var tint: Color = TINT
 var _drawn := false
 var _frames := 1
+## La bande va de la naissance du tir à sa pleine puissance : on la joue UNE
+## fois et on tient la dernière image, au lieu de la répéter.
+var _grows := false
 var _plume: CPUParticles2D = null
 ## Cadence du flip-book, en images par seconde.
-const FLIP_FPS := 12.0
+var _fps := 12.0
+## Nombre de frames de CHARGEMENT au point de départ. Au-delà, la bande passe à
+## sa dernière image — le projectile — et c'est elle seule qui voyage.
+var _charge_frames := 0
+## Part maximale du vol que la charge a le droit de prendre.
+##
+## La durée totale est fixée par le CombatSystem : elle décide de l'instant de
+## l'impact, et on n'y touche pas. Une charge de 7 images à 8 img/s dure 0,875 s,
+## ce qui dépasse le vol entier quand la cible est à deux cases. Sans ce
+## plafond, le projectile partait après avoir déjà touché.
+const CHARGE_SHARE := 0.45
+## Temps que met une bande de PROGRESSION à se dérouler entièrement, en
+## secondes. Court : le tir doit atteindre sa pleine puissance bien avant de
+## toucher, sinon on ne voit jamais que sa naissance.
+const GROW_TIME := 0.22
 
 
 ## `p_texture` : le projectile DESSINÉ du mage, découpé de sa planche. Sans lui
@@ -47,7 +64,11 @@ const FLIP_FPS := 12.0
 ## d'émetteurs, le coût est nul et le risque de rendu divergent disparaît.
 func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
 		p_tint: Color = TINT, p_texture: Texture2D = null, p_frames: int = 1,
-		p_scale: float = 1.0, p_trail: float = 0.0, p_flames: float = 0.0) -> void:
+		p_scale: float = 1.0, p_trail: float = 0.0, p_flames: float = 0.0,
+		p_grows: bool = false, p_fps: float = 12.0, p_charge_frames: int = 0) -> void:
+	_grows = p_grows
+	_fps = p_fps
+	_charge_frames = p_charge_frames
 	tile_size = p_tile_size
 	tint = p_tint
 	_drawn = p_texture != null
@@ -73,6 +94,9 @@ func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
 	self.material = material
 	if _points.size() > 0:
 		position = _points[0]
+		# Orientation initiale basée sur le premier segment de vol.
+		if _points.size() >= 2:
+			sprite.rotation = (_points[1] - _points[0]).angle()
 
 
 ## Le PANACHE : un cône de flammes derrière la boule, qui pointe toujours à
@@ -144,12 +168,24 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 
-	var t := clampf(_elapsed / _duration, 0.0, 1.0)
-	position = _sample(t)
+	# DEUX TEMPS : on charge sur place, puis on part. Le vol se déroule sur ce
+	# qui RESTE de la durée, jamais sur la durée entière — sinon le projectile
+	# arrive une charge trop tard, c'est-à-dire après son propre impact.
+	var charge_time := minf(float(_charge_frames) / _fps, _duration * CHARGE_SHARE)
+	if _charge_frames > 0 and _elapsed < charge_time:
+		position = _points[0]
+	else:
+		var flight := maxf(0.05, _duration - charge_time)
+		var t := clampf((_elapsed - charge_time) / flight, 0.0, 1.0)
+		position = _sample(t)
 
-	_trail.push_front(position)
-	while _trail.size() > TRAIL_LENGTH:
-		_trail.pop_back()
+	# Pendant la charge l'orbe ne bouge pas : mémoriser sa position remplirait la
+	# traînée de points identiques, et le panache s'allumerait sur place comme
+	# une flaque. On n'enregistre donc la trace qu'une fois parti.
+	if _charge_frames == 0 or _elapsed >= charge_time:
+		_trail.push_front(position)
+		while _trail.size() > TRAIL_LENGTH:
+			_trail.pop_back()
 
 	# Un dessin s'ORIENTE le long du vol — une comète qui tournoie sur
 	# elle-même se lit comme un débris, pas comme un tir. La bille générique,
@@ -158,8 +194,29 @@ func _process(delta: float) -> void:
 		sprite.rotation = (_trail[0] - _trail[1]).angle()
 	elif not _drawn:
 		sprite.rotation += delta * 6.0
+		
 	if _frames > 1:
-		sprite.frame = int(_elapsed * FLIP_FPS) % _frames
+		if _charge_frames > 0:
+			# La charge se joue sur son propre temps — écrasé quand la cible est
+			# proche — puis on TIENT la frame du projectile jusqu'à l'impact.
+			# La rejouer en boucle ferait clignoter la comète en plein vol.
+			if _elapsed < charge_time:
+				# La cadence est FIXE — huit images par seconde, la même à toute
+				# distance. Étirer la charge sur le temps disponible a été
+				# essayé : à deux cases de la cible elle se jouait à 27 img/s,
+				# et les quatre éléments qui s'assemblent devenaient un
+				# clignotement. On préfère jouer MOINS d'images que de les jouer
+				# plus vite : le sort a simplement moins de temps pour se charger.
+				sprite.frame = mini(int(_elapsed * _fps), _charge_frames - 1)
+			else:
+				sprite.frame = mini(_charge_frames, _frames - 1)
+		elif _grows:
+			# Une seule passe, puis la dernière image tient jusqu'à l'impact.
+			sprite.frame = mini(int((_elapsed / GROW_TIME) * float(_frames)),
+				_frames - 1)
+		else:
+			sprite.frame = int(_elapsed * _fps) % _frames
+			
 	# Le panache pointe à l'OPPOSÉ du vol, remis à jour à chaque image : c'est
 	# ce qui le fait pivoter dans les virages du labyrinthe au lieu de traîner
 	# derrière comme une écharpe raide.

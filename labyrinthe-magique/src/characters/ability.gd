@@ -57,6 +57,9 @@ enum Kind {
 @export var projectile_speed: float = 1.0
 ## Densité de la traînée de braises, 0 = aucune.
 @export var trail_density: float = 0.0
+## Habillage dédié d'un projectile. Vide = l'orbe du mage ; une valeur comme
+## `convergence` charge ses sprites propres sans changer l'attaque de base.
+@export var projectile_visual: String = ""
 ## Le bouclier rend INTOUCHABLE au lieu d'absorber (forme SHIELD).
 ##
 ## Une réserve de dégâts et un répit ne se jouent pas pareil : la première se
@@ -76,6 +79,15 @@ enum Kind {
 ##
 ## Une tornade qui ne bouge pas n'est pas une tornade — c'était la quatrième
 ## zone immobile du jeu. Celle-ci remonte le couloir toute seule.
+## LES QUATRE SCEAUX. Distance, en cases, à laquelle un sort de zone plante ses
+## quatre sceaux — un par point cardinal, un par élément. Zéro = zone unique,
+## c'est-à-dire tous les autres sorts de zone du jeu.
+##
+## Un seul sort s'en sert, et c'est voulu : c'est ce qui distingue le Sorcier
+## Suprême. Tous les autres mages posent UNE zone d'UN élément ; lui seul en pose
+## quatre d'un coup, et chacune porte l'effet de son élément.
+@export var seal_ring: int = 0
+
 @export var zone_travel: float = 0.0
 ## Ce qu'elle attrape VOYAGE avec elle au lieu de rester sur place.
 ##
@@ -83,6 +95,17 @@ enum Kind {
 ## parcourir des cases à une créature — le trait de l'élément la pousse de deux
 ## cases, une fois.
 @export var zone_carries: bool = false
+
+## LES GEYSERS : combien de colonnes d'eau jaillissent AU HASARD sur la carte,
+## toutes en même temps. Zéro = aucune.
+##
+## Ils remplacent la colonne unique qui montait sous les pieds du mage : posée
+## là, elle l'EFFAÇAIT une seconde durant, et le joueur perdait son propre
+## personnage. Éparpillés sur le labyrinthe, ils frappent ce qui passe et ne
+## cachent rien d'important.
+@export var geyser_count: int = 0
+@export var geyser_damage: int = 0
+@export var geyser_radius: float = 1.4
 
 ## LE SÉISME : combien de temps le sol tremble, en secondes. Zéro = pas de
 ## séisme. Le tremblement DÉCROÎT tout seul sur cette durée.
@@ -185,6 +208,7 @@ enum Kind {
 ## Portée d'une décharge, en cases de chemin depuis le MAGE : le nuage est
 ## au-dessus de lui et frappe ce qui l'entoure, il ne bombarde pas la carte.
 @export var storm_range: int = 5
+
 
 ## --- Chaîne d'éclairs --------------------------------------------------------
 ## Nombre de RELAIS après la première cible. Le sort touchait une seule créature
@@ -341,6 +365,30 @@ enum Kind {
 @export var rain_duration: float = 2.5
 @export var rain_fall: float = 0.7
 
+## La pluie VISE-t-elle les ennemis, au lieu de tomber au hasard ?
+##
+## Les deux pluies existantes arrosent le labyrinthe : c'est ce qui convient à
+## une éruption ou à une averse. Celle du Suprême est un JUGEMENT — elle cherche
+## ses cibles. Conséquence voulue : le total de météores étant fixe, moins il
+## reste d'ennemis, plus chacun en reçoit.
+@export var rain_hunts: bool = false
+
+## L'ATTENTE AVANT LA PREMIÈRE MÉTÉORE, en secondes.
+##
+## Le temps du GESTE. Un sort qui appelle le ciel a une incantation dessinée —
+## les quatre éléments tournent autour du mage, montent, quittent le cadre — et
+## le ciel ne doit répondre qu'une fois ce départ terminé. Sans cette attente,
+## la première pierre tombait pendant que les éléments montaient encore : les
+## deux moitiés du sort se chevauchaient et aucune ne se lisait.
+##
+## Zéro pour les pluies sans geste : une éruption ne s'annonce pas, c'est tout
+## son intérêt.
+##
+## ⚠️ Ce nombre doit valoir la durée de la planche d'incantation.
+## `tools/build_jugement.py` le vérifie au découpage.
+@export var rain_delay: float = 0.0
+
+
 ## Nombre de lancers d'affilée AVANT la recharge. 1 = comportement classique.
 ##
 ## Un sort de TERRAIN ne se joue pas comme un sort de combat : poser un seul
@@ -433,8 +481,13 @@ func summary() -> String:
 		parts.append("puis brûle %.0f s" % snare_burn)
 	if pierces_walls:
 		parts.append("TRAVERSE LES MURS")
+	if geyser_count > 0:
+		parts.append("%d geysers à %d dégâts" % [geyser_count, geyser_damage])
 	if rain_count > 0:
-		parts.append("%d météores à %d dégâts" % [rain_count, rain_damage])
+		# « Météores » pour le Feu, « gouttes » pour l'Eau : c'est le même
+		# mécanisme, mais le joueur ne lit pas une fiche de code.
+		var nom := "gouttes" if element == Element.Kind.WATER else "météores"
+		parts.append("%d %s à %d dégâts" % [rain_count, nom, rain_damage])
 	if blow_cells > 0:
 		parts.append("projette de %d cases" % blow_cells)
 	if slam_damage > 0:

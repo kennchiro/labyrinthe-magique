@@ -92,16 +92,6 @@ autowrap_mode = 3
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.62, 0.72, 0.92, 1)
 
-[node name="Abilities" type="Label" parent="Card"]
-anchor_right = 1.0
-offset_left = 18.0
-offset_top = 152.0
-offset_right = -18.0
-offset_bottom = 274.0
-grow_horizontal = 2
-theme_override_font_sizes/font_size = 13
-theme_override_colors/font_color = Color(0.86, 0.9, 1, 1)
-
 [node name="Buttons" type="HBoxContainer" parent="."]
 anchor_left = 0.5
 anchor_top = 1.0

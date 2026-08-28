@@ -50,6 +50,7 @@ func _init() -> void:
 	_test_lightning_chain()
 	_test_thunder_field()
 	_test_storm()
+	_test_air_cyclone()
 	_test_sky_judgement()
 	_test_earth_line()
 	_test_earth_aegis()
@@ -57,6 +58,7 @@ func _init() -> void:
 	_test_earth_quake()
 	_test_air_tornado()
 	_test_air_gust()
+	_test_water_geysers()
 
 	print("")
 	if _failures.is_empty():
@@ -607,13 +609,18 @@ func _test_summons() -> void:
 	combat.enemy_killed.connect(func(_i: int) -> void: events["kills"] += 1)
 
 	var imps: Ability = stats.abilities[0]
+	if absf(imps.duration - 30.0) > 0.01:
+		_fail("les diablotins doivent durer 30 s, pas %.1f s" % imps.duration)
+	var gargoyle: Ability = stats.abilities[1]
+	if absf(gargoyle.duration - 40.0) > 0.01:
+		_fail("la gargouille doit durer 40 s, pas %.1f s" % gargoyle.duration)
 	if not combat.use(imps, context):
 		_fail("l'invocation des diablotins est refusée")
 	if events["spawned"] != imps.summon_count:
 		_fail("%d créatures nées pour %d demandées" % [events["spawned"], imps.summon_count])
 
 	# Les diablotins doivent trouver l'ennemi à 6 cases et l'abattre — bien
-	# avant leurs 120 s de vie. 25 s de marge : à 4,6 cases/s, l'aller dure
+	# avant leurs 30 s de vie. 25 s de marge : à 4,6 cases/s, l'aller dure
 	# moins de 2 s, et 60 PV tombent en 6 coups.
 	var elapsed := 0.0
 	while context.enemy_health[0].is_alive() and elapsed < 25.0:
@@ -624,13 +631,13 @@ func _test_summons() -> void:
 	if events["kills"] != 1:
 		_fail("%d kills signalés — les invocations doivent nourrir l'ultime" % events["kills"])
 
-	# L'expiration : à 120 s pile, plus personne.
+	# L'expiration : à 30 s pile, plus personne.
 	var remaining := imps.duration - elapsed + 1.0
 	var steps := int(remaining / DT)
 	for i in steps:
 		combat.update(DT, context)
 	if combat.summon_count() != 0:
-		_fail("%d créature(s) encore en vie après leurs 120 s" % combat.summon_count())
+		_fail("%d créature(s) encore en vie après leurs 30 s" % combat.summon_count())
 	if events["expired"] != imps.summon_count:
 		_fail("%d expirations signalées pour %d créatures" % [
 			events["expired"], imps.summon_count])
@@ -646,7 +653,7 @@ func _test_summons() -> void:
 	if combat.summon_count() != CombatSystem.MAX_SUMMONS:
 		_fail("plafond : %d créatures au lieu de %d" % [
 			combat.summon_count(), CombatSystem.MAX_SUMMONS])
-	print("invocations : naissance, chasse, kill compté, mort à 120 s, plafond à %d : OK"
+	print("invocations : diablotins 30 s, gargouille 40 s, chasse, kill et plafond à %d : OK"
 		% CombatSystem.MAX_SUMMONS)
 
 
@@ -1149,6 +1156,77 @@ func _test_shadow_rift() -> void:
 		_fail("les ombres n'ont blessé personne en 12 s")
 	if poisons["count"] < 1:
 		_fail("le gaz des ombres n'empoisonne pas")
+
+
+## LE CYCLONE DE L'AIR : trois colonnes qui chassent seules.
+##
+## Trois promesses. Elles sont TROIS — une seule se contourne. Elles vont droit
+## sur les poursuivants, haies comprises, ce que rien d'autre chez ce mage ne
+## fait. Et elles tiennent deux minutes, pendant que le mage court aux gemmes.
+##
+## ⚠️ Ce sort a d'abord été écrit comme un phénomène qui SUIT le mage, et jeté :
+## si lentement qu'il le suive, ça reste le nuage d'orage du mage de la Foudre
+## sous un autre dessin. Le test le vérifie encore — il doit être autonome.
+func _test_air_cyclone() -> void:
+	var stats := CharacterCatalog.air()
+	var cyclone: Ability = stats.ultimate
+	if cyclone.kind != Ability.Kind.SUMMON:
+		_fail("le Cyclone n'est pas une invocation : il n'a rien d'autonome")
+		return
+	if cyclone.summon_count < 3:
+		_fail("le Cyclone ne lève que %d colonne(s) au lieu de 3" % cyclone.summon_count)
+	if cyclone.duration < 120.0:
+		_fail("les colonnes ne tiennent que %.0f s au lieu de 120" % cyclone.duration)
+	var kind: Dictionary = CombatSystem.SUMMON_KINDS.get(cyclone.summon_id, {})
+	if kind.is_empty():
+		_fail("la créature « %s » n'existe pas" % cyclone.summon_id)
+		return
+	if not bool(kind["flies"]):
+		_fail("le Cyclone ne vole pas : il s'arrête aux haies comme tout le monde")
+	if float(kind["speed"]) >= stats.move_speed:
+		_fail("le Cyclone va à %s cases/s pour un mage à %s : il n'est pas lent"
+			% [kind["speed"], stats.move_speed])
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+
+	# 1. TROIS COLONNES SE LÈVENT, et elles portent bien le bon nom.
+	var born := {"count": 0}
+	combat.summon_spawned.connect(func(_id: int, id_kind: String, _p: Vector2) -> void:
+		born["count"] += 1
+		if id_kind != cyclone.summon_id:
+			_fail("le Cyclone lève un « %s »" % id_kind))
+	if not combat.use(cyclone, context):
+		_fail("le Cyclone est refusé")
+		return
+	if born["count"] != cyclone.summon_count:
+		_fail("%d colonnes levées au lieu de %d" % [born["count"], cyclone.summon_count])
+
+	# 2. ELLES CHASSENT SEULES, et elles vont chercher LOIN — une créature que
+	#    le mage ne poursuit pas, à l'autre bout d'un couloir.
+	var prey := _cell_at(grid, context.player_field, 9)
+	if prey.x < 0:
+		prey = _cell_at(grid, context.player_field, 6)
+	_add_enemy(context, prey, 4000)
+	var hits := {"count": 0}
+	combat.summon_struck.connect(func(_id: int, _target: int) -> void:
+		hits["count"] += 1)
+	for i in int(20.0 / DT):
+		combat.update(DT, context)
+	if hits["count"] < 1:
+		_fail("les colonnes n'ont frappé personne en 20 s : elles ne chassent pas")
+	if context.enemy_health[0].current >= 4000:
+		_fail("la créature poursuivie n'a rien encaissé")
+
+	# 3. ELLES S'ÉTEIGNENT. Deux minutes, pas davantage.
+	var gone := {"count": 0}
+	combat.summon_expired.connect(func(_id: int) -> void: gone["count"] += 1)
+	for i in int(cyclone.duration / DT):
+		combat.update(DT, context)
+	if gone["count"] < cyclone.summon_count:
+		_fail("%d colonnes se sont éteintes sur %d" % [gone["count"], cyclone.summon_count])
 
 ## Les CHARGES : cinq brasiers d'affilée, puis la recharge, puis les cinq
 ## reviennent d'un coup. Trois promesses distinctes, et chacune peut casser
@@ -2413,3 +2491,55 @@ func _test_air_gust() -> void:
 		_fail("la Tornade projette elle aussi : les deux sorts se confondent")
 	if gust.zone_carries:
 		_fail("le Grand souffle emporte lui aussi : c'est la Tornade")
+
+
+## LES GEYSERS DU GEYSER : une SALVE sur le labyrinthe, pas une colonne sous le
+## mage.
+##
+## La colonne unique montait sous ses pieds et l'EFFAÇAIT une seconde durant —
+## le joueur perdait son propre personnage au moment le plus chargé de la
+## partie. Neuf colonnes éparpillées frappent ce qui passe et ne cachent rien.
+func _test_water_geysers() -> void:
+	var stats := CharacterCatalog.water()
+	var geyser := stats.ultimate
+	if geyser.geyser_count <= 0:
+		_fail("le Geyser ne fait jaillir aucune colonne")
+		return
+	if geyser.column_burst:
+		_fail("la colonne sous les pieds du mage est toujours là : elle l'efface")
+
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Des créatures un peu partout : avec neuf colonnes sur la carte, au moins
+	# une doit tomber sur quelqu'un.
+	for pas in [3, 5, 7, 9, 11, 13]:
+		var cell := _cell_at(grid, context.player_field, pas)
+		if cell.x >= 0:
+			_add_enemy(context, cell, 90000)
+
+	var colonnes := {"n": 0, "hors_sol": 0}
+	var horloge := {"t": 0.0}
+	var tardives := {"n": 0}
+	combat.geyser_erupted.connect(func(cell: Vector2i, _a: Ability) -> void:
+		colonnes["n"] += 1
+		if not grid.is_floor_v(cell):
+			colonnes["hors_sol"] += 1
+		# UNE SALVE : tout part au lancement. Une colonne qui sortirait plus
+		# tard ferait doublon avec la pluie, qui est l'autre moitié du sort.
+		if horloge["t"] > 0.0:
+			tardives["n"] += 1)
+
+	combat.use(geyser, context)
+	if colonnes["n"] < geyser.geyser_count - 2:
+		_fail("%d colonnes sur %d ont jailli" % [colonnes["n"], geyser.geyser_count])
+	if colonnes["hors_sol"] > 0:
+		_fail("%d colonnes jaillissent dans un mur" % colonnes["hors_sol"])
+
+	for i in int(2.0 / DT):
+		horloge["t"] = float(i + 1) * DT
+		combat.update(DT, context)
+	if tardives["n"] > 0:
+		_fail("%d colonnes sortent après le lancement : ce n'est plus une salve"
+			% tardives["n"])

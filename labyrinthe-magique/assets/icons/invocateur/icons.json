@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "invoc_bolt",
+    "invoc_imps",
+    "invoc_gargoyle",
+    "invoc_circle",
+    "invoc_step",
+    "invoc_dragon"
+  ],
+  "size": 256
+}

@@ -1,0 +1,10 @@
+{
+  "frames": 8,
+  "fps": 6.0,
+  "elements": [
+    "feu",
+    "eau",
+    "terre",
+    "air"
+  ]
+}

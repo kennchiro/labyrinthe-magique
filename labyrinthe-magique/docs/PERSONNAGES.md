@@ -67,7 +67,7 @@ Trait : **Trempe** — la cible ralentit de 38 % pendant 2.2 s
 | SKILL 2 | **Bouclier d'eau** | bouclier | absorbe 45 · 30 s · 2 charges · recharge 5 s | 5.0 s |
 | SKILL 3 | **Cercle glacé** | zone | 6 dégâts/s · rayon 3 · 10 s · 3 charges · recharge 8 s · englue 4 s à 35 % | 8.0 s |
 | FUITE | **Courant** | translation | saut de 6 cases · recharge 7 s | 7.0 s |
-| EXTRA | **Geyser** | explosion | 70 dégâts · rayon 6 · soigne 3 PV · TRAVERSE LES MURS · 30 météores à 16 dégâts · +10 dégâts 30 s | 1.0 s |
+| EXTRA | **Geyser** | explosion | 70 dégâts · rayon 6 · soigne 3 PV · TRAVERSE LES MURS · 9 geysers à 26 dégâts · 30 gouttes à 16 dégâts · +10 dégâts 30 s | 1.0 s |
 
 - **Jet d'eau** — Un trait d'eau sous pression, régulier mais à mi-portée.
 - **Vague** — Un mur d'eau qui remonte le couloir et emporte tout sur son passage.
@@ -171,14 +171,14 @@ Trait : **Bourrasque** — la cible est repoussée de 2 cases
 | SKILL 2 | **Grand souffle** | explosion | 18 dégâts · rayon 3 · recharge 7 s · projette de 4 cases · +14 contre un mur | 7.0 s |
 | SKILL 3 | **Voile d'air** | bouclier | absorbe 38 · 7 s · recharge 11 s | 11.0 s |
 | FUITE | **Rafale** | translation | saut de 7 cases · recharge 6.5 s | 6.5 s |
-| EXTRA | **Cyclone** | phénomène | 20 dégâts / 1.6 s · rayon 4 · 120 s · suit à 2.5 cases/s · TRAVERSE LES MURS | 1.0 s |
+| EXTRA | **Cyclone** | invocation (cyclone) | 3 créatures · 120 s | 1.0 s |
 
 - **Lame de vent** — Une lame d'air comprimé, la plus longue portée du royaume.
 - **Tornade** — Elle remonte le couloir et emporte ce qu'elle attrape.
 - **Grand souffle** — Il projette tout autour de lui. Ce qui heurte un mur le paie.
 - **Voile d'air** — Une bulle de vent qui dévie les coups.
 - **Rafale** — Une bourrasque l'emporte hors de portée.
-- **Cyclone** — Une colonne de vent et de foudre se lève et le suit. Elle traîne derrière lui deux minutes durant et foudroie ce qui l'entoure, haies comprises.
+- **Cyclone** — Trois colonnes de vent et de foudre se lèvent et partent chasser. Elles vont droit sur les poursuivants, haies comprises, deux minutes durant.
 
 ---
 
@@ -193,8 +193,8 @@ Trait : **Ponction** — le mage récupère 22 % des dégâts en vie
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Trait occulte** | projectile | 12 dégâts · portée 9 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Diablotins** | invocation (imp) | 2 créatures · 120 s · recharge 18 s | 18.0 s |
-| SKILL 2 | **Gargouille** | invocation (gargouille) | 1 créature · 120 s · recharge 22 s | 22.0 s |
+| SKILL 1 | **Diablotins** | invocation (imp) | 2 créatures · 30 s · recharge 18 s | 18.0 s |
+| SKILL 2 | **Gargouille** | invocation (gargouille) | 1 créature · 40 s · recharge 22 s | 22.0 s |
 | SKILL 3 | **Cercle d'invocation** | zone | 10 dégâts/s · rayon 1.8 · 6 s · recharge 10 s | 10.0 s |
 | FUITE | **Pas du néant** | translation | saut de 4 cases · recharge 8 s | 8.0 s |
 | EXTRA | **Dragon ancien** | invocation (dragon) | 1 créature · 120 s | 1.0 s |
@@ -219,15 +219,15 @@ Trait : **Écho** — 40 % des dégâts se répètent 0.6 s plus tard
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Trait élémentaire** | projectile | 20 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Vapeur brûlante** | zone | 11 dégâts/s · rayon 2.8 · 5 s · recharge 9 s | 9.0 s |
-| SKILL 2 | **Coulée de magma** | zone | 14 dégâts/s · rayon 2.2 · 6 s · recharge 11 s | 11.0 s |
+| SKILL 1 | **Convergence élémentaire** | projectile | 56 dégâts · portée 8 · recharge 11 s | 11.0 s |
+| SKILL 2 | **Les Quatre Sceaux** | zone | 9 dégâts/s · rayon 1.1 · 60 s · recharge 12 s | 12.0 s |
 | SKILL 3 | **Renaissance** | soin | rend 2 PV · recharge 16 s | 16.0 s |
 | FUITE | **Glissement** | translation | saut de 6 cases · recharge 6.5 s | 6.5 s |
-| EXTRA | **Prisme des quatre** | explosion | 180 dégâts · rayon 7 | 1.0 s |
+| EXTRA | **Jugement des quatre** | explosion | 150 dégâts · rayon 6 · TRAVERSE LES MURS · 12 météores à 75 dégâts · la terre tremble 1 s · éboulements à 0 dégâts | 1.0 s |
 
 - **Trait élémentaire** — Un trait qui change d'élément à chaque tir.
-- **Vapeur brûlante** — Feu et eau mêlés : une nuée qui aveugle et brûle.
-- **Coulée de magma** — Feu et terre : la roche fond et coule dans le couloir.
+- **Convergence élémentaire** — Feu, eau, terre et air se fondent en un noyau qui explose à l'impact.
+- **Les Quatre Sceaux** — Quatre sceaux se gravent autour de lui : le feu brûle, l'eau ralentit, la terre arrête, l'air balaie.
 - **Renaissance** — Eau et terre : la nature repousse et referme les blessures.
 - **Glissement** — Les quatre éléments le déplacent d'un souffle.
-- **Prisme des quatre** — Les quatre éléments se rejoignent en un seul trait de lumière.
+- **Jugement des quatre** — Le ciel s'ouvre : des météores des quatre éléments tombent sur chaque poursuivant, et la terre tremble.

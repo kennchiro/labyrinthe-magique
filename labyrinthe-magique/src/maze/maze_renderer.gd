@@ -158,10 +158,16 @@ func _draw() -> void:
 		for c in grid.cols:
 			var cell := Vector2i(c, r)
 			var position := Vector2(c * TILE_SIZE, r * TILE_SIZE)
+			# Le SOL D'ABORD, sur toutes les cases — murs compris.
+			#
+			# Une pièce d'autotile ne remplit pas sa case : elle laisse le vide
+			# aux angles arrondis et sur la marge de chaque côté du tronçon. Sans
+			# sol dessous, ce vide montrait le fond de la scène, c'est-à-dire du
+			# NOIR — et le labyrinthe entier paraissait cerné d'un trait épais.
+			# C'était la vraie cause du liseré noir, pas l'atlas.
+			_draw_floor(cell, position)
 			if grid.is_wall(c, r):
 				_draw_hedge(cell, position)
-			else:
-				_draw_floor(cell, position)
 
 	if show_spawn_markers:
 		_draw_spawn_markers()
@@ -174,8 +180,10 @@ func _draw_floor(cell: Vector2i, position: Vector2) -> void:
 	var tint := _jitter(noise, 0.07) * FLOOR_SHADE
 	_draw_sheet_cell(floor_sheet, cell, position, tint)
 
-	# Ombre projetée par la haie située juste au-dessus.
-	if grid.is_wall(cell.x, cell.y - 1):
+	# Ombre projetée par la haie située juste au-dessus. Réservée au terrain de
+	# REPLI : un mur dessiné n'en veut pas — c'est une bande sombre de plus le
+	# long de chaque haie, et c'est exactement ce qu'on cherche à supprimer.
+	if wall_atlas == null and grid.is_wall(cell.x, cell.y - 1):
 		draw_texture_rect(hedge_shadow,
 			Rect2(position, Vector2(TILE_SIZE + OVERLAP, hedge_shadow.get_height())), false)
 

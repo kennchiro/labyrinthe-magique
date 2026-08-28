@@ -454,14 +454,25 @@ def build_touch_stick() -> tuple:
     return crop.size, (knob.shape[1], knob.shape[0])
 
 
+ICON_SHEET = Path("assets/peso&cover/interface/icone.png")
+
+
 def build_app_icon(size: int = 1024) -> Image.Image:
-    """Icône de l'application, composée à partir des assets du jeu plutôt que
-    dessinée à part : le mage sur la texture de haie, une gemme à ses pieds.
+    """Icône de l'application. La planche COMMANDÉE prime (`ICON_SHEET`, prompt
+    dans `docs/prompts/interface/icone_app.md`) ; la composition à partir des
+    assets du jeu n'est plus qu'un repli, gardé pour que le fichier existe même
+    sans planche.
+
+    Elle ne pouvait pas faire mieux : `player.png` fait 64 px et occupe ici les
+    deux tiers d'une image de 1024, donc l'icône était floue par construction.
 
     Carrée et SANS transparence — iOS refuse un canal alpha sur l'icône de
     l'App Store et applique lui-même son masque arrondi. Les bords sont
     assombris en vignette pour que la silhouette reste lisible une fois
     l'icône réduite à 60 px sur l'écran d'accueil."""
+    if ICON_SHEET.exists():
+        return _flatten_icon(Image.open(ICON_SHEET), size)
+
     hedge = Image.open(TILES / "hedge_sheet.png").convert("RGB")
     icon = hedge.resize((size, size), Image.LANCZOS).filter(
         __import__("PIL.ImageFilter", fromlist=["ImageFilter"]).GaussianBlur(size / 90))
@@ -484,6 +495,24 @@ def build_app_icon(size: int = 1024) -> Image.Image:
     mage = mage.resize((int(mage.width * scale), int(mage.height * scale)), Image.LANCZOS)
     icon.paste(mage, (int(size * 0.40) - mage.width // 2, int(size * 0.14)), mage)
     return icon
+
+
+def _flatten_icon(sheet: Image.Image, size: int) -> Image.Image:
+    """Rend une planche commandée conforme : carrée, opaque, à la bonne taille.
+
+    L'alpha est APLATI sur le bleu nuit du jeu, jamais conservé : l'export iOS
+    accepte l'icône transparente sans broncher et c'est la SOUMISSION à l'App
+    Store qui la refuse, des heures plus tard. Le recadrage est CENTRÉ — les
+    modèles rendent parfois 1024x1536, et rogner par le bas coucherait la gemme
+    hors du centre."""
+    if sheet.mode != "RGB":
+        flat = Image.new("RGB", sheet.size, (11, 23, 48))
+        flat.paste(sheet.convert("RGBA"), (0, 0), sheet.convert("RGBA"))
+        sheet = flat
+    side = min(sheet.size)
+    left = (sheet.width - side) // 2
+    top = (sheet.height - side) // 2
+    return sheet.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
 
 
 def build_orb(size: int = 48) -> Image.Image:

@@ -56,6 +56,7 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | la Rune du Sorcier des Ténèbres | [sorts/shadow_rune](prompts/sorts/shadow_rune.md) |
 | l'Ombre maléfique de la Faille (+ son souffle) | [sorts/ombre_malefique](prompts/sorts/ombre_malefique.md) |
 | le Cyclone du Mage de l'Air | [sorts/air_cyclone](prompts/sorts/air_cyclone.md) |
+| les icônes de sorts du Suprême | [sorts/icones_supreme](prompts/sorts/icones_supreme.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol
@@ -108,6 +109,23 @@ celles dont l'oubli casse le rendu :
    tient la dernière image (`"mode": "grow"` dans `orb.json`) ; une bande pensée
    en boucle ferait retomber le projectile à son étincelle de départ en plein
    vol.
+
+## L'interface
+
+| sujet | prompt | planche à déposer |
+|---|---|---|
+| l'icône de l'application | [interface/icone_app](prompts/interface/icone_app.md) | `interface/icone.png` |
+| le cadre et le fond de « Choisis ton mage » | [menu/](prompts/menu/) *(générés par `build_prompts_menu.py`)* | `interface/` |
+
+L'icône est le seul dessin du jeu qu'on regarde à **60 pixels** : elle se juge
+réduite, jamais à 1024. Le sujet n'est donc pas un personnage mais le PLAN du
+labyrinthe avec sa gemme allumée au centre — une forme, pas une scène.
+
+## Interface
+
+| sujet | prompt |
+|---|---|
+| la couverture de l'écran-titre, en PAYSAGE | [interface/couverture_paysage](prompts/interface/couverture_paysage.md) |
 
 ## Ce que dix planches ont appris
 

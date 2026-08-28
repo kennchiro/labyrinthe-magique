@@ -22,6 +22,7 @@ var _drawn: Texture2D = null
 var _brazier := false
 ## Flamme SOMBRE : la rune des Ténèbres. Voir `_build_dark_flames`.
 var _rune := false
+var _seal := false
 ## Portail POSÉ AU SOL — le passage du mage, laissé derrière lui.
 var _portal := false
 ## Flaque d'ombre résiduelle : elle ASSOMBRIT le sol au lieu de l'éclairer.
@@ -52,6 +53,12 @@ func setup(p_tile_size: int, p_tint: Color, p_radius: float, duration: float,
 		p_drawn: Texture2D = null, p_flames: float = 0.0,
 		p_style: String = "nappe", p_bites: bool = false) -> void:
 	_drawn = p_drawn
+	# LE SCEAU EST DESSINÉ EN GRIS, exprès. C'est la seule zone du jeu dont le
+	# dessin ne porte pas sa propre couleur : le Suprême en pose QUATRE d'un
+	# coup, une par élément, et les quatre sortent de la MÊME image. C'est donc
+	# ici qu'ils prennent leur teinte — sans quoi on aurait quatre sceaux
+	# identiques, et le joueur ne saurait pas lequel garde quel couloir.
+	_seal = p_style == "sceau"
 	_brazier = p_style == "brasier"
 	_rune = p_style == "rune"
 	_portal = p_style == "portail"
@@ -67,8 +74,13 @@ func setup(p_tile_size: int, p_tint: Color, p_radius: float, duration: float,
 	# flamme SOMBRE, non. Elle est donc la seule à se composer normalement,
 	# c'est-à-dire à pouvoir ASSOMBRIR le sol qu'elle consume.
 	var material := CanvasItemMaterial.new()
+	# LE SCEAU SE COMPOSE NORMALEMENT, comme la rune et la flaque d'ombre. En
+	# additif, une gravure GRISE teintée n'ajoute que de la lumière : sur l'herbe
+	# claire de la Forêt les quatre sceaux se délavaient en un halo blanchâtre, et
+	# leur couleur — la seule chose qui dit quel élément garde quel couloir —
+	# disparaissait. Composé normalement, l'or reste de l'or et le rouge du rouge.
 	material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX if _rune or _gloom \
-		else CanvasItemMaterial.BLEND_MODE_ADD
+		or _seal else CanvasItemMaterial.BLEND_MODE_ADD
 	self.material = material
 	if p_style == "champ":
 		_build_field(p_tint)
@@ -297,12 +309,28 @@ func _draw() -> void:
 		# dessus. On l'assombrit et on l'écrase : au sol, un passage est une
 		# ellipse basse, pas un soleil.
 		var drawn_alpha := (0.55 + 0.25 * pulse) * life
+		# LE SCEAU EST UNE GRAVURE, pas une lueur. Composé normalement, il lui
+		# faut de l'opacité pour se lire sur le sol : à 0,55 il restait un
+		# fantôme. Il pâlit quand même avec le temps qui reste, comme toute
+		# zone — c'est le seul indice qui dit combien de temps elle tient encore.
+		if _seal:
+			drawn_alpha = (0.88 + 0.12 * pulse) * life
 		if _portal:
 			drawn_alpha = (0.26 + 0.10 * pulse) * life * _open
 		draw_texture(_drawn, -Vector2(_drawn.get_width(), _drawn.get_height()) * 0.5,
-			Color(0.80, 0.62, 1.0, drawn_alpha) if _portal else Color(1, 1, 1, drawn_alpha))
+			Color(0.80, 0.62, 1.0, drawn_alpha) if _portal
+			else (Color(tint.r, tint.g, tint.b, drawn_alpha) if _seal
+			else Color(1, 1, 1, drawn_alpha)))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if _bites:
+	# PAS D'ANNEAU DE MORSURE SUR UN SCEAU, même quand il englue.
+	#
+	# L'anneau à crocs tournants est une bonne information de jeu — il dit où le
+	# piège se referme — mais il n'est dessiné que sur les zones qui ENGLUENT, et
+	# des quatre sceaux du Suprême, seul celui de la TERRE englue. Il se
+	# retrouvait donc cerné d'un anneau qui tourne quand les trois autres n'en
+	# avaient pas : les quatre ne se lisaient plus comme un même sort à quatre
+	# couleurs. Chaque sceau annonce déjà son effet par sa propre animation.
+	if _bites and not _seal:
 		_draw_bite_ring(radius, life, pulse)
 	if _portal:
 		_draw_portal(radius, life, pulse)

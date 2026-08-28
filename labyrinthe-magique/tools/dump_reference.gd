@@ -146,6 +146,15 @@ func _kind_label(kind: Ability.Kind) -> String:
 		Ability.Kind.WALL: return "mur"
 		Ability.Kind.BLINK: return "translation"
 		Ability.Kind.SUMMON: return "invocation"
+		Ability.Kind.STORM: return "phénomène"
+		Ability.Kind.CHAIN: return "chaîne"
+		Ability.Kind.WAVE: return "vague"
+		Ability.Kind.LINE: return "ligne"
+		Ability.Kind.TURRET: return "tourelle"
+	# ⚠️ Un « ? » dans une fiche GÉNÉRÉE est un trou que personne ne remarque :
+	# la ligne reste lisible, le tableau reste droit, et le type du sort a
+	# simplement disparu. Trois familles manquaient ici depuis leur création.
+	push_warning("Type de sort sans nom dans la fiche : %d" % kind)
 	return "?"
 
 

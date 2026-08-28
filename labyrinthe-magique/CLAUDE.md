@@ -41,6 +41,7 @@ tools/.venv/bin/python tools/build_stage_art.py     # vignettes des dix stages
 tools/.venv/bin/python tools/build_bestiary.py      # les neuf créatures restantes
 tools/.venv/bin/python tools/build_stage_tiles.py   # terrain TEINTÉ (repli des stages sans planche)
 tools/.venv/bin/python tools/build_terrain.py       # terrain DESSINÉ — À LANCER APRÈS le précédent
+tools/.venv/bin/python tools/build_menu.py          # portraits, cadre et fond de l'écran de sélection
 tools/.venv/bin/python tools/build_warps.py         # les colonnes de téléportation
 tools/.venv/bin/python tools/build_stage_props.py   # décor + monument de chaque stage
 tools/.venv/bin/python tools/build_spell_fx.py      # orbe, impact, zone par mage
@@ -48,6 +49,7 @@ tools/.venv/bin/python tools/build_skill_icons.py   # icônes des sorts (fond ma
 tools/.venv/bin/python tools/build_invocateur.py    # l'Invocateur, ses créatures, ses effets
 tools/.venv/bin/python tools/build_ombre.py        # l'Ombre maléfique de la Faille + son gaz
 tools/.venv/bin/python tools/build_prompts.py      # les 30 prompts de terrain + leurs références
+tools/.venv/bin/python tools/build_prompts_menu.py # les prompts de l'écran « Choisis ton mage »
 tools/.venv/bin/python tools/check_characters.py    # vérifie le découpage + le gobelin
 tools/.venv/bin/python tools/check_profiles.py      # tous les left.png regardent-ils à GAUCHE ?
 godot --headless --path . --import      # OBLIGATOIRE après tout nouveau PNG
@@ -334,6 +336,26 @@ l'Air.
   bord à bord sur un fond opaque et texturé.
   ⚠️ Un monument se détoure par CLÉ DE FOND depuis les bords, pas par contraste :
   son masque de contraste revient plein et rend un rectangle opaque.
+- **L'écran « Choisis ton mage » montre des PORTRAITS, pas les sprites de jeu**
+  (2026-08-26). La vignette affichait la première pose de marche de face : un
+  dessin vu de DESSUS, où l'on ne voit pas le visage, haut de 112 px dans une
+  case de 142. Aucun réglage d'échelle n'y pouvait rien — c'est le point de vue
+  qui était faux. Découpage par `tools/build_menu.py`, prompts dans
+  `docs/prompts/menu/` (`tools/build_prompts_menu.py`).
+  Le partage est la clé : le **modèle** dessine ce qui CHANGE (huit portraits, le
+  fond), le **moteur** dessine ce qui SE RÉPÈTE (le cadre, la gemme, la lueur de
+  sélection). Un seul cadre pour les huit — huit cadres générés séparément
+  n'auraient jamais la même épaisseur ni la même gemme, et les cartes sont côte
+  à côte à l'écran. Même leçon que les seize pièces de mur.
+  Le **nom reste du texte**, jamais une image : lisible à toute taille, et il
+  changerait de langue avant l'image.
+  ⚠️ `cadre.json` porte la fenêtre et le sertissage en FRACTIONS, mesurés sur la
+  planche : deux constantes écrites dans le moteur deviendraient fausses au
+  premier cadre redessiné.
+  ⚠️ Trois indices cumulés désignent la carte choisie (halo débordant tracé avec
+  le cadre agrandi, cartes voisines assombries, teinte de l'élément par-dessus) :
+  un seul ne suffisait pas, huit cartes également lumineuses ne se distinguaient
+  pas. Repli prévu : un mage sans portrait garde l'ancien rendu.
 - **Le terrain DESSINÉ prime sur le terrain teinté** (2026-08-25). Les dix stages
   ont désormais leurs planches dans `assets/peso&cover/terrain/` — sol, mur,
   décor — découpées par `tools/build_terrain.py`, qui s'exécute APRÈS
@@ -356,6 +378,11 @@ l'Air.
   couleur du fond, un cristal non — et on n'efface que ce qui touche le bord.
   ⚠️ `HEDGE_SHADE` ne s'applique QU'À la tuile de repli : appliquée à un mur
   dessiné elle repeint le dessin et défait l'écart de luminance imposé.
+  ⚠️ Le SOL se dessine sur TOUTES les cases, murs compris, et la pièce de mur se
+  pose dessus. Une pièce d'autotile ne remplit pas sa case ; sans sol dessous,
+  ses angles arrondis montrent le fond de scène et tout le labyrinthe paraît
+  cerné d'un trait NOIR. Même raison côté outil : la couleur est prolongée hors
+  de la silhouette avant réduction, sinon le rééchantillonnage ramène du noir.
 - **Chaque stage a son terrain**, teinté d'après sa planche d'ambiance
   (`assets/tiles/stage_<N>/`, chargé par `MazeRenderer.set_stage`). Ce ne sont pas
   des tuiles découpées : essayé, ça donne de la bouillie — un mur d'une case de
@@ -428,6 +455,10 @@ l'Air.
 - **Le générateur d'images NE RESPECTE PAS l'ordre du prompt.** La table de
   `build_skill_icons.py` relève ce que chaque case MONTRE, jamais ce qui a été
   demandé — vérifier la planche avant de découper.
+- **Le dégorgement ne corrige la COULEUR qu'au bord**, jamais à l'intérieur : la
+  « magenta-ité » est aussi la signature du violet, et c'est elle qui avait
+  obligé à écrire un détoureur séparé pour la Rune. L'atténuation d'ALPHA, elle,
+  reste globale — c'est elle qui efface le fond vu à travers un dôme de verre.
 - **Le dégorgement se mesure en « magenta-ité »** (ce qu'un pixel a de rouge ET
   de bleu en plus de son vert), jamais par un réglage propre à un élément : une
   règle taillée pour le feu virait l'eau au turquoise. Elle sert aussi à rendre
@@ -440,6 +471,16 @@ l'Air.
 - **`Ability.Kind.STORM`** : un nuage qui SUIT le mage et frappe tout seul. La
   seule chose du jeu qui accompagne le joueur au lieu de l'attendre quelque part.
   Relancer le remet à neuf — deux nuages doubleraient la cadence en silence.
+- **Un ultime peut CHASSER au lieu de frapper.** Le Cyclone de l'Air lève trois
+  colonnes autonomes sur la machinerie des invocations (`SUMMON_KINDS`), la
+  Faille des ténèbres six ombres : ça chasse pendant que le mage fait autre
+  chose, et ça vit dans le CombatSystem, donc `test_balance` peut le simuler.
+  ⚠️ Un phénomène qui SUIT le mage a été essayé pour le Cyclone et jeté : si
+  lentement qu'il suive, ça reste l'Orage du mage de la Foudre sous un autre
+  dessin. C'est l'AUTONOMIE qui distingue, pas la vitesse de suivi.
+  ⚠️ Ce qui chasse n'est pas forcément une créature : le cyclone n'a ni faces ni
+  pose de coup, donc pas d'entrée dans `allies.json` et pas de `SummonVisual` —
+  il a son propre nœud, et on ne lui donne pas de direction.
 - **`Ability.Kind.CHAIN`** : un arc qui rebondit d'ennemi en ennemi en
   s'épuisant. Le parcours est calculé au lancement puis joué relais par relais —
   le recalculer à chaque saut laisserait la chaîne changer d'avis en vol.
@@ -521,6 +562,17 @@ l'Air.
   ponction, arc, bourrasque, écho — `CombatSystem`, bloc TRAITS) : c'est ce qui
   fait sept mages et non sept teintes. Les zones n'en déclenchent aucun, et les
   traits ne se composent jamais entre eux.
+- **Une animation image par image se cale sur une ANCRE, pas sur sa case.**
+  `build_spike_anim.py` : l'onde du Grand souffle sur le centre de son anneau,
+  le cône sur sa pointe — parce que c'est ainsi que le moteur les pose (sprite
+  centré sur le mage / décentré pour que son bord gauche tombe sur lui). La
+  boîte est bâtie AUTOUR de l'ancre et doit être SYMÉTRIQUE, sinon l'ancre n'est
+  pas au milieu de l'image et le sprite centré ne l'est pas sur le mage.
+  ⚠️ Une planche d'animation n'est pas forcément sur sa grille : celle du Grand
+  souffle grandit d'image en image et le générateur les a resserrées vers la
+  gauche (35 à 72 px). On découpe sur les gouttières — mais ici c'est leur
+  LARGEUR qui tranche et non la régularité, les images n'étant pas également
+  espacées.
 - **Les effets d'un mage sont ses dessins** : `assets/characters/<id>/{orb,impact,zone}.png`
   découpés des planches. La règle de découpe : la boîte relevée à la main ne fait
   que DÉSIGNER, les formes sont prises entières — jamais coupées. Deux règles
@@ -587,6 +639,10 @@ l'Air.
 - **En coordonnées écran, l'axe Y descend** : un arc qui monte a un sinus
   NÉGATIF (angles entre 180° et 360°). Une erreur de signe envoie les boutons
   hors de l'écran.
+- ⚠️ **Une planche déposée à la RACINE de `peso&cover/` part dans l'app.** Le
+  filtre exclut des dossiers (`mages/`, `sorts/`, `creatures/`…) : ce qui n'est
+  rangé nulle part n'est couvert par rien. Mesuré le 2026-08-28 : 22,9 Mo de
+  planches que le jeu n'ouvre jamais. Ranger, ou ajouter un motif.
 - **`exclude_filter` compare le chemin COMPLET** (`res://assets/...`) : un motif
   `assets/raw/*` ne mord jamais, il faut `*/assets/raw/*`. Sans ça, les planches
   sources partent dans l'app — 30 Mo pour des fichiers que le jeu n'ouvre jamais.

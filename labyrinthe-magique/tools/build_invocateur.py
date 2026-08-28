@@ -48,7 +48,10 @@ from PIL import Image
 from scipy import ndimage
 from build_characters import (CELL_PADDING, FRAME_HEIGHT, POSES, SOURCE, anchor)
 
-SHEET = SOURCE / "mages/mage_invocateur.png"
+SHEET = Path("assets/peso&cover/mages/mage_invocateur.png")
+DRAGON_SHEET = Path("assets/peso&cover/mage_invocateur_dragon_complete.png")
+DRAGON_NO_FIRE_SHEET = Path("assets/peso&cover/mage_invocateur_dragon_no_fire.png")
+KNIGHT_SHEET = Path("assets/peso&cover/mage_invocateur_chevalier_spectral.png")
 OUT_MAGE = Path("assets/characters/invocateur")
 OUT_ALLIES = Path("assets/allies")
 
@@ -153,17 +156,17 @@ ALLIES = {
         "directions": {
             # Vues de dessus, dos visible, tête EN HAUT : ce sont les poses de
             # montée. Deux battements d'ailes, le plus ouvert pour le coup.
-            "up": {"idle": [(1131, 661, 1317, 792)],
-                   "strike": [(701, 610, 939, 775)]},
+                 "up": {"idle": [(26, 82, 448, 413)],
+                     "strike": [(472, 2, 1002, 416)]},
             # Les deux seules silhouettes tête en bas de la planche, ailes
             # rabattues : le dragon qui pique vers le bas de l'écran.
-            "down": {"idle": [(1047, 930, 1310, 1018)],
-                     "strike": [(827, 941, 1054, 1018)]},
+            "down": {"idle": [(1084, 12, 1459, 352)],
+                     "strike": [(1564, 3, 2086, 426)]},
             # Le profil est dessiné vers la DROITE, souffle compris.
-            "right": {"idle": [(1262, 780, 1527, 960)],
-                      "strike": [(6, 602, 342, 774)]},
-            "left": {"idle": [{"box": (1262, 780, 1527, 960), "mirror": True}],
-                     "strike": [{"box": (6, 602, 342, 774), "mirror": True}]},
+            "right": {"idle": [(1089, 443, 1484, 685)],
+                      "strike": [(1564, 439, 2086, 681)]},
+            "left": {"idle": [(42, 434, 431, 685)],
+                     "strike": [(472, 444, 1002, 686)]},
         },
     },
 }
@@ -227,6 +230,36 @@ def crop_clean(image: Image.Image, box, mirror: bool = False) -> Image.Image:
         raise SystemExit(f"boîte vidée par le nettoyage : {box}")
     out = out.crop(bbox)
     return out.transpose(Image.FLIP_LEFT_RIGHT) if mirror else out
+
+
+def dragon_grid_poses(image: Image.Image) -> dict:
+    """Lit la planche 8 x 4 : vol puis ouverture de bouche par direction."""
+    cell_w, cell_h = image.width // 8, image.height // 4
+    directions = ("up", "down", "left", "right")
+    poses = {}
+    for row, direction in enumerate(directions):
+        frames = []
+        for column in range(8):
+            box = (column * cell_w, row * cell_h,
+                   (column + 1) * cell_w, (row + 1) * cell_h)
+            frames.append(crop_clean(image, box))
+        poses[direction] = {"idle": frames[:4], "strike": frames[4:]}
+    return poses
+
+
+def knight_grid_poses(image: Image.Image) -> dict:
+    """Lit la planche 8 x 4 du chevalier : marche puis attaque."""
+    cell_w, cell_h = image.width // 8, image.height // 4
+    directions = ("down", "up", "left", "right")
+    poses = {}
+    for row, direction in enumerate(directions):
+        frames = []
+        for column in range(8):
+            box = (column * cell_w, row * cell_h,
+                   (column + 1) * cell_w, (row + 1) * cell_h)
+            frames.append(crop_clean(image, box))
+        poses[direction] = {"idle": frames[:4], "strike": frames[4:]}
+    return poses
 
 
 ## ⚠️ LE MAGE N'EST PLUS DÉCOUPÉ ICI depuis la refonte du 2026-08-25.
@@ -316,7 +349,8 @@ def _place(frames: list, cell: tuple, mode: str) -> Image.Image:
     return band
 
 
-def build_allies(image: Image.Image) -> None:
+def build_allies(image: Image.Image, dragon_image: Image.Image,
+    knight_image: Image.Image) -> None:
     """Une bande par créature et par direction, plus le descripteur commun."""
     OUT_ALLIES.mkdir(parents=True, exist_ok=True)
     for name in STALE_ALLIES:
@@ -324,12 +358,37 @@ def build_allies(image: Image.Image) -> None:
             if path.exists():
                 path.unlink()
 
+    # ⚠️ ON FUSIONNE, ON NE REMPLACE PAS.
+    #
+    # `allies.json` est le catalogue de TOUTES les créatures alliées du jeu, et
+    # deux outils y écrivent : celui-ci pour les trois bêtes de l'Invocateur,
+    # `build_ombre.py` pour l'Ombre maléfique du Sorcier des Ténèbres. Repartir
+    # d'un dictionnaire vide effaçait l'entrée « ombre » à chaque passage —
+    # l'ultime des Ténèbres invoquait alors une créature inconnue et le jeu
+    # remplissait la console de « Invocation inconnue dans allies.json ».
+    #
+    # Le fichier est un bien COMMUN : chaque outil ne touche qu'à ses clés.
     catalogue = {}
+    manifest = OUT_ALLIES / "allies.json"
+    if manifest.exists():
+        try:
+            catalogue = json.loads(manifest.read_text(encoding="utf-8"))
+        except Exception:
+            catalogue = {}
     for name, entry in ALLIES.items():
-        cut = {}
-        for direction, poses in entry["directions"].items():
-            cut[direction] = {key: [crop_clean(image, box) for box in poses[key]]
-                              for key in ("idle", "strike")}
+        # Le dragon dispose de sa planche dédiée ; les deux autres invocations
+        # restent découpées depuis la planche Invocateur historique.
+        source_image = (dragon_image if name == "dragon"
+                else knight_image if name == "imp" else image)
+        if name == "imp" and source_image.width == 1536 and source_image.height == 1024:
+            cut = knight_grid_poses(source_image)
+        elif name == "dragon" and dragon_image.width == 2048 and dragon_image.height == 768:
+            cut = dragon_grid_poses(dragon_image)
+        else:
+            cut = {}
+            for direction, poses in entry["directions"].items():
+                cut[direction] = {key: [crop_clean(source_image, box) for box in poses[key]]
+                                  for key in ("idle", "strike")}
         # La case est commune à TOUTES les directions d'une créature : le dragon
         # qui pique est plus plat que celui qui monte, et c'est ce rapport-là
         # qu'il faut garder — une case par direction le gommerait.
@@ -349,16 +408,41 @@ def build_allies(image: Image.Image) -> None:
         print(f"{name:11s} case {cell[0]}x{cell[1]} · "
               + " · ".join(f"{d} x{v['idle']}+{v['strike']}"
                            for d, v in directions.items()))
-    (OUT_ALLIES / "allies.json").write_text(
-        json.dumps(catalogue, indent=2), encoding="utf-8")
+    manifest.write_text(json.dumps(catalogue, indent=2), encoding="utf-8")
 
+
+
+## ⚠️ NE PAS ÉCRASER UNE ORBE COMMANDÉE.
+##
+## Depuis `tools/build_orbs.py`, les huit projectiles viennent de planches
+## dessinées EXPRÈS pour eux — quatre images qui vont de la naissance du tir à
+## sa pleine puissance. L'orbe découpée d'une planche de personnage n'est qu'un
+## repli : elle est fixe, souvent minuscule, et la remettre en place effacerait
+## le travail sans un message d'erreur.
+##
+## On reconnaît une orbe commandée à son `"mode": "grow"`.
+def orbe_commandee(out_dir) -> bool:
+    meta = out_dir / "orb.json"
+    if not meta.exists():
+        return False
+    try:
+        return json.loads(meta.read_text(encoding="utf-8")).get("mode") == "grow"
+    except Exception:
+        return False
 
 def build_fx(image: Image.Image) -> None:
     frames = [crop_clean(image, box) for box in ORB_FRAMES]
     cell = (max(f.width for f in frames), max(f.height for f in frames))
-    _place(frames, cell, "centre").save(OUT_MAGE / "orb.png")
-    (OUT_MAGE / "orb.json").write_text(
-        json.dumps({"frames": len(frames), "cell": list(cell)}), encoding="utf-8")
+    # ⚠️ NE PAS ÉCRASER UNE ORBE COMMANDÉE — celles de `tools/build_orbs.py`
+    # viennent de planches dessinées exprès, quatre images de la naissance du
+    # tir à sa pleine puissance. On les reconnaît à leur `"mode": "grow"`.
+    if orbe_commandee(OUT_MAGE):
+        print("effets : orbe COMMANDÉE, laissée en place")
+    else:
+        _place(frames, cell, "centre").save(OUT_MAGE / "orb.png")
+        (OUT_MAGE / "orb.json").write_text(
+            json.dumps({"frames": len(frames), "cell": list(cell)}),
+            encoding="utf-8")
     for name, box in SPELL_FX.items():
         crop_clean(image, box).save(OUT_MAGE / name)
     print(f"effets : orbe x{len(frames)} {cell} · "
@@ -371,7 +455,10 @@ def main() -> None:
     # par la table commune de `build_characters.py`. L'appeler ici écraserait
     # sans un mot la bande qui vient d'y être découpée — voir la note au-dessus
     # de la fonction.
-    build_allies(image)
+    dragon_source = DRAGON_NO_FIRE_SHEET if DRAGON_NO_FIRE_SHEET.exists() else DRAGON_SHEET
+    dragon_image = Image.open(dragon_source).convert("RGBA")
+    knight_image = Image.open(KNIGHT_SHEET).convert("RGBA")
+    build_allies(image, dragon_image, knight_image)
     build_fx(image)
 
 

@@ -19,11 +19,19 @@ signal back_requested
 @onready var element_label: Label = $Card/Element
 @onready var description_label: Label = $Card/Description
 @onready var stats_label: Label = $Card/Stats
-@onready var abilities_label: Label = $Card/Abilities
+## Les lignes de sorts, construites en code : leur nombre change d'un mage à
+## l'autre, et chacune porte une icône, deux libellés et une description.
+var _rows: VBoxContainer = null
+var _ability_rows: Array[AbilityRow] = []
+## Le TRAIT n'est pas un bouton : c'est une propriété du personnage, et il vit
+## donc avec sa vie et sa vitesse plutôt qu'au milieu de ses sorts. Rangé parmi
+## eux, il se lisait comme un septième sort qu'on cherchait en vain sur la barre.
+var _trait_label: Label = null
 
 var character_id := CharacterCatalog.default_id()
 
 var _portraits: Array[CharacterPortrait] = []
+var _selected_preview: CharacterPortrait
 
 
 func _ready() -> void:
@@ -36,12 +44,33 @@ func _ready() -> void:
 		portrait.gui_input.connect(_on_portrait_input.bind(character.id))
 		_portraits.append(portrait)
 
+	# La fiche laisse voir le décor derrière elle. Opaque, elle posait une dalle
+	# grise sur les deux tiers de l'écran et le fond peint ne servait plus à rien.
+	var sheet := StyleBoxFlat.new()
+	sheet.bg_color = Color(0.04, 0.05, 0.10, 0.74)
+	sheet.border_color = Color(0.45, 0.52, 0.72, 0.55)
+	sheet.set_border_width_all(1)
+	sheet.set_corner_radius_all(10)
+	sheet.set_content_margin_all(4)
+	$Card.add_theme_stylebox_override("panel", sheet)
+
 	MenuStyle.apply($Buttons/PlayButton, Color("#ffd479"), 22)
 	MenuStyle.apply($Buttons/DemoButton, Color("#9fe8b4"), 20)
 	MenuStyle.apply($Buttons/BackButton)
 	$Buttons/PlayButton.pressed.connect(func() -> void: play_requested.emit(character_id))
 	$Buttons/DemoButton.pressed.connect(func() -> void: demo_requested.emit(character_id))
 	$Buttons/BackButton.pressed.connect(func() -> void: back_requested.emit())
+	_trait_label = Label.new()
+	_trait_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	$Card.add_child(_trait_label)
+	_rows = VBoxContainer.new()
+	_rows.add_theme_constant_override("separation", 2)
+	_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Card.add_child(_rows)
+
+	_selected_preview = CharacterPortrait.new()
+	_selected_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Card.add_child(_selected_preview)
 	resized.connect(_layout)
 	_layout()
 	select(character_id)
@@ -68,6 +97,8 @@ var card_room := 0.0
 func select(id: String) -> void:
 	character_id = id
 	var stats := CharacterCatalog.by_id(id)
+	_selected_preview.setup(stats)
+	_selected_preview.set_selected(true)
 	for portrait in _portraits:
 		portrait.set_selected(portrait.stats.id == id)
 
@@ -83,39 +114,36 @@ func select(id: String) -> void:
 	stats_label.text = "Vie %d   ·   Vitesse %.1f   ·   Extra Power à %d kills" % [
 		stats.base_health, stats.move_speed, stats.ultimate_required_kills]
 
-	# La fiche COMPLÈTE : le trait, les six emplacements de la barre d'action,
-	# et le seuil de l'ultime. Il manquait la FUITE — pourtant l'un des six
-	# boutons — et le nombre de kills, qui varie d'un personnage à l'autre
-	# depuis qu'il suit la constitution.
-	var lines: Array[String] = []
-	var owners: Array = [null]        # le TRAIT n'a pas de compétence associée
-	lines.append("TRAIT     %s — %s" % [Element.trait_name(stats.element),
-		Element.trait_hint(stats.element)])
-	lines.append("ATTAQUE   %s — %s" % [stats.attack.display_name, stats.attack.summary()])
-	owners.append(stats.attack)
-	for i in stats.abilities.size():
-		var ability: Ability = stats.abilities[i]
-		lines.append("SKILL %d   %s — %s" % [i + 1, ability.display_name, ability.summary()])
-		owners.append(ability)
-	if stats.escape != null:
-		lines.append("FUITE     %s — %s" % [stats.escape.display_name, stats.escape.summary()])
-		owners.append(stats.escape)
-	lines.append("EXTRA     %s — %s  (à %d kills)" % [stats.ultimate.display_name,
-		stats.ultimate.summary(), stats.ultimate_required_kills])
-	owners.append(stats.ultimate)
+	_trait_label.text = "%s — %s" % [Element.trait_name(stats.element),
+		Element.trait_hint(stats.element)]
+	_trait_label.add_theme_color_override("font_color",
+		Color(stats.color().r, stats.color().g, stats.color().b, 0.9))
 
-	# Les DESCRIPTIONS sous chaque sort, quand la fiche est assez haute. Sur un
-	# téléphone en paysage il n'y a pas la place ; ailleurs, c'est ce qui dit à
-	# quoi SERT un sort, là où les chiffres ne disent que ce qu'il vaut.
-	if card_room > 300.0:
-		var detailed: Array[String] = []
-		for i in lines.size():
-			detailed.append(lines[i])
-			var owner: Ability = owners[i] if i < owners.size() else null
-			if owner != null and not owner.description.is_empty():
-				detailed.append("          %s" % owner.description)
-		lines = detailed
-	abilities_label.text = "\n".join(lines)
+	# LA FICHE COMPLÈTE, une ligne par bouton de la barre d'action — attaque,
+	# les trois sorts, la fuite, l'ultime. Il manquait la FUITE dans la première
+	# version, pourtant l'un des six boutons.
+	var slots: Array = [["ATTAQUE", stats.attack]]
+	for i in stats.abilities.size():
+		slots.append(["SORT %d" % (i + 1), stats.abilities[i]])
+	if stats.escape != null:
+		slots.append(["FUITE", stats.escape])
+	slots.append(["EXTRA", stats.ultimate])
+
+	# Les lignes sont RECYCLÉES d'un mage à l'autre : les reconstruire à chaque
+	# clic sur une vignette faisait clignoter la fiche entière.
+	while _ability_rows.size() < slots.size():
+		var row := AbilityRow.new()
+		_rows.add_child(row)
+		_ability_rows.append(row)
+	for i in _ability_rows.size():
+		var row: AbilityRow = _ability_rows[i]
+		row.visible = i < slots.size()
+		if not row.visible:
+			continue
+		row.fill(str(slots[i][0]), slots[i][1] as Ability, id, stats.color())
+		if i == slots.size() - 1:
+			row.mark_ultimate(stats.ultimate_required_kills)
+	_layout()
 
 
 ## Les cinq vignettes doivent tenir sur la largeur DISPONIBLE. En portrait sur
@@ -142,12 +170,20 @@ func _layout() -> void:
 	# La rangée prend un bon tiers, la fiche le reste : plus bas les vignettes
 	# deviennent illisibles, plus haut la fiche ne tient plus.
 	var roster_height: float = clampf(free_height * 0.36, 78.0, 168.0)
-	var width: float = clampf((size.x - margin * 2.0 - 6.0 * 8.0) / 7.0, 48.0, roster_height * 0.86)
+	# La carte est au rapport 3:4, celui des portraits dessinés. C'était 0,86 du
+	# temps où la vignette montrait un sprite carré : le portrait y serait rogné
+	# sur les côtés jusqu'à manger les bras.
+	# Et le partage se fait sur le NOMBRE DE MAGES, pas sur sept en dur — il y en
+	# a huit depuis l'Invocateur, et la rangée débordait d'une vignette.
+	var count := maxf(1.0, float(_portraits.size()))
+	var width: float = clampf(
+		(size.x - margin * 2.0 - 6.0 * (count - 1.0)) / count, 48.0, roster_height * 0.75)
 	for portrait in _portraits:
 		portrait.custom_minimum_size = Vector2(width, roster_height)
 		portrait.size = portrait.custom_minimum_size
 	roster.position = Vector2(margin, heading.position.y + heading_height + margin * 0.5)
 	roster.size = Vector2(size.x - margin * 2.0, roster_height)
+	roster.queue_sort()
 
 	card.position = Vector2(margin, roster.position.y + roster_height + margin * 0.6)
 	card.size = Vector2(size.x - margin * 2.0,
@@ -163,7 +199,11 @@ func _layout() -> void:
 ## description se retire pour laisser la place aux compétences, qui sont
 ## l'information qui décide du choix.
 func _layout_card(card: Panel) -> void:
-	var inner := card.size.x - 36.0
+	var preview_width := clampf(card.size.x * 0.24, 78.0, 230.0)
+	var preview_gap := 14.0
+	var inner := card.size.x - 36.0 - preview_width - preview_gap
+	_selected_preview.position = Vector2(card.size.x - preview_width - 18.0, 14.0)
+	_selected_preview.size = Vector2(preview_width, maxf(80.0, card.size.y - 28.0))
 	var compact := card.size.y < 210.0
 	var y := 8.0
 	for entry in [[name_label, 30.0, 24], [element_label, 22.0, 15],
@@ -175,6 +215,28 @@ func _layout_card(card: Panel) -> void:
 		label.add_theme_font_size_override("font_size", int(entry[2]))
 		y += float(entry[1]) + 2.0
 	description_label.visible = card.size.y > 170.0
-	abilities_label.position = Vector2(18.0, y + 2.0)
-	abilities_label.size = Vector2(inner, maxf(60.0, card.size.y - y - 12.0))
-	abilities_label.add_theme_font_size_override("font_size", 12 if compact else 13)
+
+	# LE TRAIT tient sur la ligne des caractéristiques : c'est une propriété du
+	# personnage, pas un bouton.
+	_trait_label.position = Vector2(18.0, y)
+	_trait_label.size = Vector2(inner, 20.0)
+	_trait_label.add_theme_font_size_override("font_size", 12 if compact else 13)
+	y += 24.0
+
+	# LA HAUTEUR DE LIGNE SE CALCULE, elle ne se choisit pas. Six sorts dans une
+	# fiche de téléphone en paysage n'ont pas la place d'en dire autant que dans
+	# une fiche de bureau : on répartit ce qu'il y a, et la DESCRIPTION est ce
+	# qui s'efface en premier — elle dit à quoi sert un sort, ce qui est précieux
+	# mais moins pressant que ce qu'il vaut.
+	var visible_rows := 0
+	for row in _ability_rows:
+		if row.visible:
+			visible_rows += 1
+	var room := maxf(48.0, card.size.y - y - 12.0)
+	var line := room / maxf(1.0, float(visible_rows))
+	var detailed := line >= 34.0
+	var body := 13 if line >= 30.0 else (12 if line >= 24.0 else 11)
+	for row in _ability_rows:
+		row.fit(clampf(line, 18.0, 46.0), body, detailed)
+	_rows.position = Vector2(18.0, y)
+	_rows.size = Vector2(inner, room)

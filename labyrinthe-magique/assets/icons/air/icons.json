@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "air_blade",
+    "air_tornado",
+    "air_gust",
+    "air_veil",
+    "air_gale",
+    "air_cyclone"
+  ],
+  "size": 256
+}

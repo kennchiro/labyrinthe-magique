@@ -477,43 +477,44 @@ def shape_mask(mask: int, side: int) -> np.ndarray:
 
 
 def sculpted(shape: np.ndarray, skin: Image.Image) -> Image.Image:
-    """La matière posée dans la silhouette, avec son relief et son ombre.
+    """La matière posée dans la silhouette, avec juste ce qu'il faut de relief.
 
-    Trois choses qu'une découpe ne donnait pas et qu'on peut calculer exactement :
-    un BISEAU sombre le long du bord (une haie a une épaisseur), une ARÊTE
-    éclairée sur son côté haut (le soleil est au zénith, comme dans toutes les
-    planches), et une OMBRE PORTÉE décalée vers le bas. C'est ce trio qui donne
-    la silhouette — le défaut numéro un du terrain d'avant."""
+    ⚠️ AUCUN NOIR. Une première version cernait chaque mur d'une bordure noire
+    bien visible en jeu, et elle avait TROIS causes cumulées, toutes évitables :
+
+      1. une OMBRE PORTÉE peinte en noir pur sous la pièce. Supprimée : le
+         contraste de luminance imposé entre sol et mur (52) sépare déjà les
+         deux, une ombre n'ajoutait que de la crasse ;
+      2. un BISEAU qui tombait à 34 % de la luminance au ras du bord, soit un
+         liseré presque noir tout autour. Il ne descend plus qu'à 84 % : on
+         devine l'épaisseur, on ne voit plus de trait ;
+      3. la plus sournoise — hors de la forme, le RGB restait à ZÉRO. Invisible
+         en pleine résolution, puisque l'alpha y est nul ; mais la réduction à la
+         taille de l'atlas MÉLANGE les couleurs voisines sans tenir compte de
+         l'alpha, et ramène donc du noir sur tout le pourtour. D'où le
+         DÉBORDEMENT ci-dessous : la couleur est prolongée vers l'extérieur avant
+         toute réduction, pour qu'il n'y ait jamais de noir à ramener."""
     side = shape.shape[0]
     rgb = np.asarray(skin.convert("RGB")).astype(np.float32)
     depth = ndimage.distance_transform_edt(shape)
     bevel = max(2.0, side * 0.10)
     lit = np.clip(depth / bevel, 0.0, 1.0)
 
-    # Le biseau descend à 34 % au ras du bord et remonte à 1 vers le cœur. Plus
-    # haut, le mur redevient un autocollant sans épaisseur.
-    shade = 0.34 + 0.66 * lit
-    # L'arête du haut prend la lumière : seulement là où le bord regarde en haut,
-    # c'est-à-dire là où la matière s'arrête juste au-dessus.
+    shade = 0.84 + 0.16 * lit
+    # L'arête du haut prend la lumière : le soleil est au zénith sur toutes les
+    # planches. C'est ce qui reste pour dire l'épaisseur, maintenant que le bord
+    # ne s'assombrit presque plus.
     above = np.roll(shape, int(bevel * 0.9), axis=0) & shape
-    crest = np.clip((1.0 - lit) * above, 0.0, 1.0)
-    shade = shade + crest * 0.30
+    shade = shade + np.clip((1.0 - lit) * above, 0.0, 1.0) * 0.22
 
+    painted = np.clip(rgb * shade[..., None], 0, 255)
+    # DÉBORDEMENT : chaque pixel du vide reprend la couleur de la matière la plus
+    # proche. L'alpha reste nul, donc rien ne se voit — mais la réduction ne
+    # trouve plus de noir à mélanger au bord.
+    _, (row, column) = ndimage.distance_transform_edt(~shape, return_indices=True)
     out = np.zeros((side, side, 4), np.float32)
-    out[..., :3] = np.clip(rgb * shade[..., None], 0, 255)
+    out[..., :3] = painted[row, column]
     out[..., 3] = np.where(shape, 255.0, 0.0)
-
-    # OMBRE PORTÉE : la silhouette décalée vers le bas, adoucie, et seulement là
-    # où il n'y a pas de matière. Sans elle le mur est un autocollant.
-    drop = int(side * 0.07)
-    cast = ndimage.gaussian_filter(
-        np.roll(shape.astype(np.float32), drop, axis=0), side * 0.035)
-    # 0,38 et 110 : à 0,55 et 150 — les valeurs d'abord essayées — l'ombre se
-    # lit en jeu comme un CONTOUR NOIR épais autour de chaque mur, et le
-    # labyrinthe redevient un dessin au trait. Elle doit se deviner, pas se voir.
-    cast = np.clip(cast * 0.38, 0.0, 1.0) * (~shape)
-    out[..., 3] = np.maximum(out[..., 3], cast * 110.0)
-    out[..., :3] = np.where(shape[..., None], out[..., :3], 0.0)
     return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 

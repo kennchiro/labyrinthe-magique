@@ -23,6 +23,8 @@ const IMPLOSION_SCENE := preload("res://scenes/fx/implosion.tscn")
 ## deux ombres — voir `_on_rift_opened`.
 const RIFT_SHOW := 2.4
 const GAS_PUFF_SCENE := preload("res://scenes/fx/gas_puff.tscn")
+const CYCLONE_SCENE := preload("res://scenes/fx/cyclone_column.tscn")
+const BOLT_SCENE := preload("res://scenes/fx/bolt_strike.tscn")
 const WARP_TRAIL_SCENE := preload("res://scenes/fx/warp_trail.tscn")
 const METEOR_SCENE := preload("res://scenes/fx/meteor.tscn")
 const COLUMN_SCENE := preload("res://scenes/fx/pressure_column.tscn")
@@ -39,6 +41,7 @@ const THROWN_SCENE := preload("res://scenes/fx/thrown_stone.tscn")
 const BURST_SCENE := preload("res://scenes/fx/spike_burst.tscn")
 const SLIDE_SCENE := preload("res://scenes/fx/rock_slide.tscn")
 const TORNADO_SCENE := preload("res://scenes/fx/tornado.tscn")
+const DRAWN_BURST_SCENE := preload("res://scenes/fx/drawn_burst.tscn")
 const DAMAGE_NUMBER_SCENE := preload("res://scenes/entities/damage_number.tscn")
 const TILE_SIZE := MazeRenderer.TILE_SIZE
 ## Nombre de cases visibles sur le PLUS PETIT côté de l'écran, en poursuite.
@@ -125,7 +128,67 @@ var lairs: Array[EnemyLair] = []
 ## le relais, comme avant.
 var _orb_texture: Texture2D = null
 var _orb_frames := 1
+## Convergence élémentaire est le seul projectile du Suprême qui n'emploie pas
+## l'orbe de son attaque de base : ses huit états racontent la fusion en vol.
+var _convergence_orb_texture: Texture2D = null
+var _convergence_orb_frames := 1
+var _convergence_orb_grows := false
+## Combien des frames de la bande sont du CHARGEMENT, et à quelle cadence la
+## bande se joue. Lus dans `convergence_orb.json` : rallonger la charge d'une
+## image ne doit demander qu'un dessin de plus, jamais une retouche du moteur.
+var _convergence_charge_frames := 0
+## Le SCEAU des Quatre Sceaux : un seul dessin, en gris, que `ZoneEffect` teinte
+## à l'élément de chaque sceau. Voir `tools/build_sceaux.py`.
+var _seal_texture: Texture2D = null
+## L'incantation des Quatre Sceaux : la bande de charge et sa cadence, lues dans
+## `sceaux_charge.json` — jamais codées ici, comme pour Convergence.
+var _seal_charge_texture: Texture2D = null
+var _seal_charge_frames := 0
+var _seal_charge_fps := 8.0
+## Les quatre boucles élémentaires, par nom d'élément. Chacune se joue par-dessus
+## la gravure pendant toute la vie du sceau : c'est elle qui dit, sans lire la
+## couleur, lequel des quatre garde ce passage.
+var _seal_fx := {}
+var _seal_fx_frames := 0
+var _seal_fx_fps := 6.0
+## L'ultime du Suprême : la météore aux quatre éléments et l'incantation qui
+## l'annonce. Lues dans leurs descripteurs, jamais codées ici.
+var _judgement_meteor: Texture2D = null
+var _judgement_meteor_frames := 1
+var _judgement_meteor_fps := 18.0
+## L'ÉCLAT au but de chaque météore. C'est la planche livrée pour l'incantation :
+## une explosion vue de dessus, qui ne racontait rien superposée au mage et qui
+## est exactement ce qu'il fallait posée sur l'ennemi qu'on vient de frapper.
+var _judgement_impact: Array[Texture2D] = []
+## LE GESTE qui appelle le ciel : les quatre éléments orbitent autour du mage,
+## décollent et quittent le cadre par le haut. Il se joue en entier AVANT que la
+## première météore ne parte — l'attente vit dans `rain_delay`, côté combat, et
+## la cadence ici : les deux se rencontrent dans `tools/build_jugement.py`, qui
+## refuse de les laisser diverger.
+var _judgement_charge: Texture2D = null
+var _judgement_charge_frames := 0
+var _judgement_charge_fps := 11.0
+var _convergence_fps := 12.0
+var _convergence_impact_texture: Texture2D = null
+## Les 9 frames de l'explosion prismatique, chargées depuis convergence_0..8.png.
+## Quand elles existent, _spawn_impact les joue en séquence plutôt que d'afficher
+## l'image statique — l'effet est beaucoup plus spectaculaire.
+var _convergence_impact_frames: Array[Texture2D] = []
+var _fire_orb_texture: Texture2D = null
+var _fire_orb_frames := 1
+var _fire_orb_grows := false
+## La bande est une PROGRESSION et non une boucle : voir `orb.json`.
+var _orb_grows := false
 var _impact_texture: Texture2D = null
+var _impact_frames: Array[Texture2D] = []
+var _impact_anchor := Vector2.ZERO
+var _geyser_frames: Array[Texture2D] = []
+var _geyser_anchor := Vector2.ZERO
+var _splash_frames: Array[Texture2D] = []
+var _splash_anchor := Vector2.ZERO
+## Ancre du dernier chargement : `_load_burst` la dépose ici. Un tableau et une
+## ancre vont toujours ensemble, mais GDScript ne rend pas deux valeurs.
+var _burst_anchor := Vector2.ZERO
 var _zone_texture: Texture2D = null
 ## Le portail du mage. Il servait à la seule translation ; la Rune des Ténèbres
 ## le pose désormais AU SOL, ce qui lie visuellement les deux sorts d'un même
@@ -150,6 +213,9 @@ var _curl_texture: Texture2D = null
 var _cone_frames: Array[Texture2D] = []
 var _wave_frames: Array[Texture2D] = []
 var _tornado_frames: Array[Texture2D] = []
+## La colonne du Cyclone et sa décharge, quand le mage en a les dessins.
+var _cyclone_frames: Array[Texture2D] = []
+var _bolt_frames: Array[Texture2D] = []
 var _shard_texture: Texture2D = null
 var _boulder_texture: Texture2D = null
 var _gem_texture: Texture2D = null
@@ -185,6 +251,7 @@ var _objective_cell := Vector2i(-1, -1)
 var _ai_timer := 0.0
 var _potion_timer := 0.0
 var _orbs := {}          # index d'ennemi -> MagicOrb en vol
+var _summon_orbs := {}   # id d'invocation -> MagicOrb en vol
 var _zone_nodes := {}    # id de zone -> ZoneEffect affiché
 ## index d'ennemi -> secondes avant que la vague suivante ne le ramène.
 var _respawns := {}
@@ -253,6 +320,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.blast_fired.connect(_on_blast_fired)
 	combat.wave_launched.connect(_on_wave_launched)
 	combat.zone_created.connect(_on_zone_created)
+	combat.seals_cast.connect(_on_seals_cast)
 	combat.zone_expired.connect(_on_zone_expired)
 	combat.wall_raised.connect(_on_wall_changed)
 	combat.wall_fell.connect(_on_wall_changed)
@@ -260,6 +328,8 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.summon_spawned.connect(_on_summon_spawned)
 	combat.summon_moved.connect(_on_summon_moved)
 	combat.summon_struck.connect(_on_summon_struck)
+	combat.summon_projectile_launched.connect(_on_summon_projectile_launched)
+	combat.summon_projectile_hit.connect(_on_summon_projectile_hit)
 	combat.summon_expired.connect(_on_summon_expired)
 	combat.enemy_damaged.connect(_on_enemy_damaged)
 	combat.enemy_killed.connect(_on_enemy_killed)
@@ -278,12 +348,14 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.sky_cloud_faded.connect(_on_sky_cloud_faded)
 	combat.sky_bolt.connect(_on_sky_bolt)
 	combat.meteor_incoming.connect(_on_meteor_incoming)
+	combat.incantation_cast.connect(_on_incantation_cast)
 	combat.meteor_landed.connect(_on_meteor_landed)
 	combat.player_empowered.connect(_on_player_empowered)
 	combat.player_calmed.connect(_on_player_calmed)
 	combat.player_shielded.connect(_on_player_shielded)
 	combat.enemy_slammed.connect(_on_enemy_slammed)
 	combat.zone_moved.connect(_on_zone_moved)
+	combat.geyser_erupted.connect(_on_geyser_erupted)
 	combat.quake_started.connect(_on_quake_started)
 	combat.quake_slide.connect(_on_quake_slide)
 	combat.turret_planted.connect(_on_turret_planted)
@@ -702,7 +774,83 @@ func _release_enemy(index: int, cell: Vector2i) -> void:
 func _load_character_fx() -> void:
 	var folder := "res://assets/characters/%s/" % character.id
 	_orb_texture = _texture_or_null(folder + "orb.png")
+	_seal_texture = _texture_or_null(folder + "sceaux_seal.png")
+	_seal_fx.clear()
+	_seal_fx_frames = 0
+	var fx_meta := FileAccess.get_file_as_string(folder + "sceaux_fx.json")
+	var fx_parsed: Variant = JSON.parse_string(fx_meta)
+	if fx_parsed is Dictionary:
+		_seal_fx_frames = maxi(0, int(fx_parsed.get("frames", 0)))
+		_seal_fx_fps = maxf(1.0, float(fx_parsed.get("fps", 6.0)))
+		for name in (fx_parsed.get("elements", []) as Array):
+			var fx := _texture_or_null(folder + "sceaux_fx_%s.png" % str(name))
+			if fx != null:
+				_seal_fx[str(name)] = fx
+	_judgement_meteor = _texture_or_null(folder + "jugement_meteore.png")
+	_judgement_meteor_frames = 1
+	var jm: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(folder + "jugement_meteore.json"))
+	if jm is Dictionary:
+		_judgement_meteor_frames = maxi(1, int(jm.get("frames", 1)))
+		_judgement_meteor_fps = maxf(1.0, float(jm.get("fps", 18.0)))
+	_judgement_impact.clear()
+	var jc: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(folder + "jugement_impact.json"))
+	if jc is Dictionary:
+		for rank in maxi(0, int(jc.get("frames", 0))):
+			var one := _texture_or_null(folder + "jugement_impact_%d.png" % rank)
+			if one != null:
+				_judgement_impact.append(one)
+	_judgement_charge = _texture_or_null(folder + "jugement_incantation.png")
+	_judgement_charge_frames = 0
+	var ji: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(folder + "jugement_incantation.json"))
+	if ji is Dictionary:
+		_judgement_charge_frames = maxi(0, int(ji.get("frames", 0)))
+		_judgement_charge_fps = maxf(1.0, float(ji.get("fps", 11.0)))
+	_seal_charge_texture = _texture_or_null(folder + "sceaux_charge.png")
+	_seal_charge_frames = 0
+	var seal_meta := FileAccess.get_file_as_string(folder + "sceaux_charge.json")
+	var seal_parsed: Variant = JSON.parse_string(seal_meta)
+	if seal_parsed is Dictionary:
+		_seal_charge_frames = maxi(0, int(seal_parsed.get("frames", 0)))
+		_seal_charge_fps = maxf(1.0, float(seal_parsed.get("fps", 8.0)))
+	_convergence_orb_texture = _texture_or_null(folder + "convergence_orb.png")
+	_convergence_impact_texture = _texture_or_null(folder + "convergence_impact.png")
+	_convergence_impact_frames.clear()
+	# Les 9 frames d'explosion prismatique (convergence_0 → convergence_8).
+	# On les charge si elles existent, sans crasher si elles sont absentes.
+	for i in 9:
+		var frame := _texture_or_null("%sconvergence_%d.png" % [folder, i])
+		if frame != null:
+			_convergence_impact_frames.append(frame)
+	_convergence_orb_frames = 1
+	_convergence_orb_grows = false
+	var convergence_meta := FileAccess.get_file_as_string(folder + "convergence_orb.json")
+	var convergence_parsed: Variant = JSON.parse_string(convergence_meta)
+	if convergence_parsed is Dictionary:
+		_convergence_orb_frames = maxi(1, int(convergence_parsed.get("frames", 1)))
+		_convergence_orb_grows = String(convergence_parsed.get("mode", "loop")) == "grow"
+		_convergence_charge_frames = maxi(0, int(convergence_parsed.get("charge_frames", 0)))
+		_convergence_fps = maxf(1.0, float(convergence_parsed.get("fps", 12.0)))
+	_fire_orb_texture = _texture_or_null("res://assets/characters/fire/orb.png")
+	_fire_orb_frames = 1
+	_fire_orb_grows = false
+	var fire_orb_meta := FileAccess.get_file_as_string("res://assets/characters/fire/orb.json")
+	var fire_orb_parsed: Variant = JSON.parse_string(fire_orb_meta)
+	if fire_orb_parsed is Dictionary:
+		_fire_orb_frames = maxi(1, int(fire_orb_parsed.get("frames", 1)))
+		_fire_orb_grows = String(fire_orb_parsed.get("mode", "loop")) == "grow"
 	_impact_texture = _texture_or_null(folder + "impact.png")
+	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
+	# la frappe au sol, le geyser, l'éclaboussure. Chacun vient avec son ANCRE,
+	# le point du dessin qui doit tomber sur la case.
+	_impact_frames = _load_burst(folder, "impact")
+	_impact_anchor = _burst_anchor
+	_geyser_frames = _load_burst(folder, "geyser")
+	_geyser_anchor = _burst_anchor
+	_splash_frames = _load_burst(folder, "splash")
+	_splash_anchor = _burst_anchor
 	_zone_texture = _texture_or_null(folder + "zone.png")
 	_warp_texture = _texture_or_null(folder + "warp.png")
 	_rune_texture = _texture_or_null(folder + "rune.png")
@@ -735,10 +883,19 @@ func _load_character_fx() -> void:
 		if wave != null:
 			_wave_frames.append(wave)
 	# Le tour complet de la tornade, huit images.
+	_cyclone_frames.clear()
+	_bolt_frames.clear()
 	for i in 8:
 		var turn := _texture_or_null("%stornado_spin_%d.png" % [folder, i])
 		if turn != null:
 			_tornado_frames.append(turn)
+		var spin := _texture_or_null("%scyclone_spin_%d.png" % [folder, i])
+		if spin != null:
+			_cyclone_frames.append(spin)
+	for i in 4:
+		var bolt := _texture_or_null("%scyclonebolt_bolt_%d.png" % [folder, i])
+		if bolt != null:
+			_bolt_frames.append(bolt)
 	_shard_texture = _texture_or_null(folder + "shard.png")
 	_boulder_texture = _texture_or_null(folder + "boulder.png")
 	_gem_texture = _texture_or_null(folder + "gem.png")
@@ -755,10 +912,40 @@ func _load_character_fx() -> void:
 	_rock_texture = _texture_or_null(folder + "rock.png")
 	_spark_texture = _texture_or_null(folder + "spark.png")
 	_orb_frames = 1
+	# Une bande d'orbe se joue de DEUX façons, et le fichier le dit :
+	#   "loop"  — les images se relaient sans fin (une comète qui bat) ;
+	#   "grow"  — la première est la naissance du tir, la dernière sa pleine
+	#             puissance : on les joue UNE fois et on tient la dernière.
+	# Rejouer une progression en boucle ferait sauter le projectile de sa
+	# pleine puissance à son étincelle de départ, en plein vol.
+	_orb_grows = false
 	var meta := FileAccess.get_file_as_string(folder + "orb.json")
 	var parsed: Variant = JSON.parse_string(meta)
 	if parsed != null:
-		_orb_frames = maxi(1, int((parsed as Dictionary).get("frames", 1)))
+		var data := parsed as Dictionary
+		_orb_frames = maxi(1, int(data.get("frames", 1)))
+		_orb_grows = String(data.get("mode", "loop")) == "grow"
+
+
+## Une animation dessinée du personnage : ses images et son ancre. Le tableau
+## est vide quand la planche n'en fournit pas — le jeu retombe alors sur ses
+## effets tracés en code, et rien ne casse.
+func _load_burst(folder: String, name: String) -> Array[Texture2D]:
+	_burst_anchor = Vector2.ZERO
+	var suite: Array[Texture2D] = []
+	var meta := FileAccess.get_file_as_string("%s%s_anim.json" % [folder, name])
+	var parsed: Variant = JSON.parse_string(meta)
+	if parsed == null:
+		return suite
+	var data := parsed as Dictionary
+	for i in int(data.get("frames", 0)):
+		var frame := _texture_or_null("%s%s_%d.png" % [folder, name, i])
+		if frame != null:
+			suite.append(frame)
+	var point: Array = data.get("anchor", [0, 0])
+	if point.size() == 2:
+		_burst_anchor = Vector2(float(point[0]), float(point[1]))
+	return suite
 
 
 func _texture_or_null(path: String) -> Texture2D:
@@ -769,26 +956,43 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
-	# UN ÉCLAIR NE VOYAGE PAS, IL RELIE.
+	# UN ÉCLAIR NE VOYAGE PAS, IL RELIE — MAIS LE DARD, LUI, VOLE.
 	#
-	# L'attaque de base de la Foudre empruntait l'orbe commune aux sept mages :
-	# une bille lumineuse qui traverse le couloir. Pour cet élément, c'est
-	# incohérent — et ça la rendait indistincte de l'attaque du Feu. Elle est
-	# maintenant tracée en TRAITS BRISÉS le long du couloir, comme les relais de
-	# la Chaîne et la fuite : les quatre gestes de foudre se lisent enfin comme
-	# une même famille.
+	# L'attaque de base de la Foudre empruntait l'orbe générique : une bille
+	# lumineuse qui traverse le couloir, incohérente pour cet élément et
+	# indistincte de l'attaque du Feu. Elle est depuis tracée en TRAITS BRISÉS
+	# le long du couloir, comme les relais de la Chaîne et la fuite.
+	#
+	# Les deux se complètent maintenant, et chacun dit une chose que l'autre ne
+	# dit pas : le trait brisé donne la DÉCHARGE — instantanée, elle relie le
+	# mage à sa cible d'un bout à l'autre du couloir — et le dard dessiné donne
+	# le COUP, celui qui met un temps à arriver et qu'on peut voir venir. Sans
+	# le trait, l'élément perd sa signature ; sans le dard, le joueur ne sait
+	# pas à quel instant le coup porte.
 	if ability.bolt:
 		var tint := Element.color(ability.element)
 		for i in points.size() - 1:
 			var arc: LightningArc = ARC_SCENE.instantiate()
 			entities.add_child(arc)
 			arc.setup(points[i], points[i + 1], tint, float(TILE_SIZE) * 0.11)
-		return
 	var orb: MagicOrb = ORB_SCENE.instantiate()
 	entities.add_child(orb)
+	var texture := _orb_texture
+	var frames := _orb_frames
+	var grows := _orb_grows
+	var fps := 12.0
+	var charge := 0
+	if ability.projectile_visual == "convergence":
+		if _convergence_orb_texture != null:
+			texture = _convergence_orb_texture
+			frames = _convergence_orb_frames
+			grows = _convergence_orb_grows
+			fps = _convergence_fps
+			charge = _convergence_charge_frames
+
 	orb.setup(points, duration, TILE_SIZE, Element.color(ability.element),
-		_orb_texture, _orb_frames, ability.projectile_scale, ability.trail_density,
-		ability.flames)
+		texture, frames, ability.projectile_scale, ability.trail_density,
+		ability.flames, grows, fps, charge)
 	_orbs[index] = orb
 
 
@@ -802,8 +1006,24 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 	# le flash tient un dixième de seconde, mais la fumée qui monte derrière est
 	# ce qui fait qu'on y croit. À 0,55 s, tout était fini avant d'être vu.
 	var impact_time := ImpactEffect.DURATION * (2.0 if ability.flames > 0.0 else 1.0)
-	_spawn_impact(cell, ability.element, maxf(0.9, ability.radius),
-		impact_time, _impact_texture, ability.flames)
+	# LA FRAPPE DESSINÉE EST L'ÉTAT FINAL DU TIR.
+	#
+	# Un tir sans rayon — c'est le cas de toutes les attaques de base — posait
+	# son dessin d'impact sur 0,9 case : noyé sous la lueur des particules, on
+	# ne voyait que le dernier état du projectile. Signalé sur la Foudre, dont
+	# la frappe au sol est justement le plus beau dessin d'impact du jeu.
+	#
+	# Et elle NE TOURNE PLUS : une frappe de foudre a un haut et un bas, la
+	# faire pivoter sur elle-même la rendait absurde.
+	if ability.bolt:
+		_spawn_impact(cell, ability.element, 1.7, impact_time,
+			_impact_texture, ability.flames, 0.0)
+	else:
+		var impact_texture := _impact_texture
+		if ability.projectile_visual == "convergence" and _convergence_impact_texture != null:
+			impact_texture = _convergence_impact_texture
+		_spawn_impact(cell, ability.element, maxf(0.9, ability.radius),
+			impact_time, impact_texture, ability.flames)
 	# L'ASPIRATION SE DESSINE AVANT LES TRAÎNÉES. Le nœud est posé ici parce que
 	# `blast_fired` part avant que les créatures ne soient déplacées : l'anneau
 	# est donc déjà à l'écran quand les traînées le rejoignent.
@@ -1023,6 +1243,75 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 		_spawn_shockwave(cell, ability)
 
 
+## UN GEYSER JAILLIT quelque part sur la carte.
+##
+## Il n'y a plus de colonne sous les pieds du mage : elle l'effaçait une seconde
+## durant. Ceux-ci sortent au hasard du labyrinthe, frappent ce qui passe, et
+## laissent le joueur voir son personnage.
+func _on_geyser_erupted(cell: Vector2i, ability: Ability) -> void:
+	if _geyser_frames.is_empty():
+		_spawn_impact(cell, ability.element, ability.geyser_radius, 0.7,
+			_impact_texture)
+		return
+	var geyser: DrawnBurst = DRAWN_BURST_SCENE.instantiate()
+	entities.add_child(geyser)
+	geyser.position = maze_renderer.cell_to_world(cell)
+	# Un peu plus rapide que la seconde entière : neuf colonnes qui traînent
+	# ensemble sur l'écran deviennent un rideau.
+	geyser.setup(TILE_SIZE, 2.0, 0.85, _geyser_frames, _geyser_anchor,
+		false, true)
+
+
+## L'incantation, jouée SUR le mage pendant que ses sceaux se gravent.
+##
+## Elle ne retarde rien : les quatre zones font déjà leur effet. C'est un récit,
+## pas une mécanique — d'où le repli silencieux quand la planche manque.
+## Le nom de fichier d'une boucle, depuis l'élément du sceau. Les quatre sont
+## nommées en français comme les planches livrées — traduire ici plutôt que de
+## renommer les planches garde le lien évident entre le dessin et son sort.
+func _seal_fx_name(element: Element.Kind) -> String:
+	match element:
+		Element.Kind.FIRE:
+			return "feu"
+		Element.Kind.WATER:
+			return "eau"
+		Element.Kind.EARTH:
+			return "terre"
+		Element.Kind.AIR:
+			return "air"
+	return ""
+
+
+func _on_seals_cast(cell: Vector2i) -> void:
+	if _seal_charge_texture == null or _seal_charge_frames <= 0:
+		return
+	var charge := SpellCharge.new()
+	# Au-dessus des zones et des acteurs : c'est le geste du mage, il passe
+	# devant ce qu'il vient de poser.
+	charge.z_index = 14
+	entities.add_child(charge)
+	charge.position = maze_renderer.cell_to_world(cell)
+	charge.setup(_seal_charge_texture, _seal_charge_frames, _seal_charge_fps,
+		TILE_SIZE)
+
+
+## L'incantation d'une pluie : le geste du mage, joué une fois, pendant que le
+## ciel se prépare. Il dure exactement l'attente que le CombatSystem a imposée
+## aux météores — les deux ne se parlent pas, ils partagent un nombre.
+func _on_incantation_cast(cell: Vector2i, _ability: Ability) -> void:
+	if _judgement_charge == null or _judgement_charge_frames <= 0:
+		return
+	var charge := SpellCharge.new()
+	charge.z_index = 14
+	entities.add_child(charge)
+	charge.position = maze_renderer.cell_to_world(cell)
+	# SEPT CASES, contre 4,5 pour un sort courant : c'est l'ultime, l'anneau
+	# doit déborder largement autour du mage pour qu'on lise une orbite et pas
+	# une aura collée à ses épaules.
+	charge.setup(_judgement_charge, _judgement_charge_frames,
+		_judgement_charge_fps, TILE_SIZE, 7.0)
+
+
 func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 	# LES PICS NE SONT PAS UNE NAPPE. Une gerbe de pierre se dresse : elle a une
 	# base au sol et une hauteur, là où le brasier et le cercle glacé s'étalent.
@@ -1076,8 +1365,17 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 		# une absence, et n'importe quel motif lumineux par-dessus la ferait
 		# ressembler à un sort qui s'allume.
 		null if ability.zone_style == "ombre" else
-		(_warp_texture if ability.zone_style == "portail" else _zone_texture),
+		(_warp_texture if ability.zone_style == "portail" else
+		(_seal_texture if ability.zone_style == "sceau" and _seal_texture != null
+		else _zone_texture)),
 		ability.flames, ability.zone_style, ability.snare > 0.0)
+	# LA BOUCLE ÉLÉMENTAIRE par-dessus la gravure. Le sceau tient soixante
+	# secondes : sans mouvement, quatre disques immobiles pendant une minute se
+	# lisent comme du décor, pas comme un piège armé.
+	if ability.zone_style == "sceau" and _seal_fx_frames > 0:
+		var key := _seal_fx_name(ability.element)
+		if _seal_fx.has(key):
+			zone.play_strip(_seal_fx[key], _seal_fx_frames, _seal_fx_fps)
 	if ability.zone_style == "portail" and _rune_texture != null:
 		# 4,5 images par seconde : un tour complet en une seconde et un tiers.
 		# Plus vite, le portail devient une toupie ; plus lentement, le fondu
@@ -1119,6 +1417,18 @@ var _summon_nodes := {}
 
 
 func _on_summon_spawned(id: int, kind_id: String, grid_position: Vector2) -> void:
+	# LE CYCLONE N'EST PAS UNE CRÉATURE. Il chasse comme elles — c'est la même
+	# machinerie, et c'est ce qui le rend autonome — mais il n'a ni faces ni
+	# pose de coup : c'est une colonne qui tourne, posée par son PIED. Il lui
+	# faut donc son propre nœud, et `SummonVisual` n'aurait rien su lire de lui
+	# dans `allies.json`.
+	if kind_id == "cyclone" and not _cyclone_frames.is_empty():
+		var column: CycloneColumn = CYCLONE_SCENE.instantiate()
+		entities.add_child(column)
+		column.position = (grid_position + Vector2(0.5, 0.5)) * float(TILE_SIZE)
+		column.setup(TILE_SIZE, _cyclone_frames, 1e9)
+		_summon_nodes[id] = column
+		return
 	var visual := SummonVisual.new()
 	visual.z_index = 10
 	entities.add_child(visual)
@@ -1129,16 +1439,32 @@ func _on_summon_spawned(id: int, kind_id: String, grid_position: Vector2) -> voi
 
 
 func _on_summon_moved(id: int, grid_position: Vector2, facing: Vector2i) -> void:
-	var visual: SummonVisual = _summon_nodes.get(id)
-	if visual != null and is_instance_valid(visual):
-		visual.position = (grid_position + Vector2(0.5, 0.5)) * float(TILE_SIZE)
-		visual.set_facing(facing)
+	var visual: Node2D = _summon_nodes.get(id)
+	if visual == null or not is_instance_valid(visual):
+		return
+	visual.position = (grid_position + Vector2(0.5, 0.5)) * float(TILE_SIZE)
+	# Une colonne qui tourne n'a pas de direction : la retourner ou la pivoter
+	# lui ferait changer de sens de rotation en pleine course.
+	if visual is SummonVisual:
+		(visual as SummonVisual).set_facing(facing)
 
 
 func _on_summon_struck(id: int, target: int) -> void:
-	var visual: SummonVisual = _summon_nodes.get(id)
-	if visual == null or not is_instance_valid(visual):
+	var node: Node2D = _summon_nodes.get(id)
+	if node == null or not is_instance_valid(node):
 		return
+	# LA DÉCHARGE DU CYCLONE tombe SUR sa victime. La colonne, elle, ne fait
+	# rien de particulier : elle tourne déjà, et un sursaut de plus se lirait
+	# comme un raté d'animation.
+	if node is CycloneColumn:
+		if not _bolt_frames.is_empty() and target >= 0 and target < enemies.size():
+			var bolt: BoltStrike = BOLT_SCENE.instantiate()
+			entities.add_child(bolt)
+			bolt.position = enemies[target].position
+			bolt.setup(TILE_SIZE, _bolt_frames)
+			_spawn_impact(enemies[target].current_cell(), Element.Kind.AIR, 0.9, 0.4)
+		return
+	var visual := node as SummonVisual
 	visual.flash_strike()
 	# LE GAZ SE POSE SUR LA VICTIME, pas sur celui qui souffle. La créature a sa
 	# pose de souffle ; ce qui manque à l'écran est l'endroit où le nuage ARRIVE,
@@ -1153,12 +1479,45 @@ func _on_summon_struck(id: int, target: int) -> void:
 	puff.setup(TILE_SIZE, gas, visual.gas_frames())
 
 
+func _on_summon_projectile_launched(id: int, target: int, from: Vector2,
+		to: Vector2, duration: float, ability: Ability) -> void:
+	if target < 0 or target >= enemies.size():
+		return
+	var orb: MagicOrb = ORB_SCENE.instantiate()
+	entities.add_child(orb)
+	var points := PackedVector2Array([
+		maze_renderer.cell_to_world(Vector2i(from.round())) +
+			(Vector2(to) - Vector2(from)).normalized() * float(TILE_SIZE) * 1.15,
+		maze_renderer.cell_to_world(Vector2i(to.round())),
+	])
+	orb.setup(points, duration, TILE_SIZE, Element.color(ability.element),
+		_fire_orb_texture, _fire_orb_frames, ability.projectile_scale, ability.trail_density,
+		ability.flames, _fire_orb_grows)
+	_summon_orbs[id] = orb
+
+
+func _on_summon_projectile_hit(id: int, target: int, cell: Vector2i,
+		ability: Ability) -> void:
+	if _summon_orbs.has(id):
+		var orb: MagicOrb = _summon_orbs[id]
+		if is_instance_valid(orb):
+			orb.burst()
+		_summon_orbs.erase(id)
+	if target >= 0 and target < enemies.size():
+		_spawn_impact(cell, Element.Kind.FIRE, 1.7, 0.65, null, 1.25)
+
+
 func _on_summon_expired(id: int) -> void:
-	var visual: SummonVisual = _summon_nodes.get(id)
+	var visual: Node2D = _summon_nodes.get(id)
 	if visual != null and is_instance_valid(visual):
 		_spawn_effect(Vector2i((visual.position / float(TILE_SIZE)).round()),
 			Color("#7a5bc4"), 1.2)
-		visual.queue_free()
+		# La colonne RETOMBE au lieu de disparaître : elle a mis une demi-seconde
+		# à se lever, elle ne peut pas s'éteindre en une frame.
+		if visual is CycloneColumn:
+			(visual as CycloneColumn).stop()
+		else:
+			visual.queue_free()
 	_summon_nodes.erase(id)
 
 
@@ -1341,12 +1700,51 @@ func _on_meteor_incoming(cell: Vector2i, delay: float, ability: Ability) -> void
 	var meteor: Meteor = METEOR_SCENE.instantiate()
 	entities.add_child(meteor)
 	meteor.position = maze_renderer.cell_to_world(cell)
-	meteor.setup(TILE_SIZE, delay, _orb_texture, Element.color(ability.element))
+	# CE QUI TOMBE EST CE QUI ÉCLABOUSSE. Quand la planche du mage dessine sa
+	# pluie, la goutte en vol est la PREMIÈRE image de son éclaboussure — celle
+	# où elle est encore en l'air. Sinon, c'est l'orbe du personnage : une
+	# comète qui tombe convient au Feu, pas à l'Eau.
+	var falling := _orb_texture
+	var liquid := not _splash_frames.is_empty()
+	if liquid:
+		falling = _splash_frames[0]
+	# LA MÉTÉORE AUX QUATRE ÉLÉMENTS a sa propre planche, et elle TOURNE en
+	# tombant. Elle passe avant le test de la goutte : le Suprême n'a pas
+	# d'éclaboussure, mais si un jour il en avait une, c'est la boule qui doit
+	# tomber, pas la première image de sa flaque.
+	if ability.rain_hunts and _judgement_meteor != null:
+		meteor.setup(TILE_SIZE, delay, _judgement_meteor,
+			Element.color(ability.element), 2.8, false,
+			_judgement_meteor_frames, _judgement_meteor_fps)
+		return
+	# PLUS PETITE quand c'est une goutte : trente météores à une case et demie
+	# effaceraient le labyrinthe. Une goutte tient dans le tiers d'une case.
+	meteor.setup(TILE_SIZE, delay, falling, Element.color(ability.element),
+		0.55 if liquid else 1.6, liquid)
 
 
 func _on_meteor_landed(cell: Vector2i, ability: Ability) -> void:
-	_spawn_impact(cell, ability.element, ability.rain_radius,
-		ImpactEffect.DURATION * 1.6, _impact_texture, ability.flames)
+	# CHAQUE GOUTTE A SA PROPRE ÉCLABOUSSURE quand le mage en a une : trente
+	# gouttes qui tombent doivent se voir tomber, pas seulement compter des
+	# dégâts. Le reste des mages garde l'éclat générique.
+	# L'ÉCLAT DESSINÉ DU JUGEMENT. Il passe avant l'éclaboussure : le Suprême n'en
+	# a pas, mais la règle doit être lisible — ce qui a une planche à soi la joue.
+	if ability.rain_hunts and not _judgement_impact.is_empty():
+		var strike: DrawnBurst = DRAWN_BURST_SCENE.instantiate()
+		entities.add_child(strike)
+		strike.position = maze_renderer.cell_to_world(cell)
+		strike.setup(TILE_SIZE, maxf(2.4, ability.rain_radius * 1.8), 0.5,
+			_judgement_impact, Vector2(0.5, 0.5))
+		return
+	if not _splash_frames.is_empty():
+		var splash: DrawnBurst = DRAWN_BURST_SCENE.instantiate()
+		entities.add_child(splash)
+		splash.position = maze_renderer.cell_to_world(cell)
+		splash.setup(TILE_SIZE, maxf(1.6, ability.rain_radius * 1.4), 0.55,
+			_splash_frames, _splash_anchor)
+	else:
+		_spawn_impact(cell, ability.element, ability.rain_radius,
+			ImpactEffect.DURATION * 1.6, _impact_texture, ability.flames)
 	_spawn_shockwave(cell, Ability.make({
 		"element": ability.element, "radius": ability.rain_radius * 1.1}))
 
@@ -1394,8 +1792,11 @@ func _on_sky_bolt(cell: Vector2i, index: int, ability: Ability) -> void:
 	entities.add_child(arc)
 	arc.setup(from, enemies[index].position, Element.color(ability.element),
 		float(TILE_SIZE) * 0.16)
-	_spawn_impact(enemies[index].current_cell(), ability.element, 1.1, 0.45,
-		_impact_texture)
+	# La frappe du Jugement est la MÊME que celle de l'attaque de base — même
+	# dessin animé, même échelle : c'est le geste de l'élément, décliné du plus
+	# petit coup au plus grand.
+	_spawn_impact(enemies[index].current_cell(), ability.element, 1.7, 0.55,
+		_impact_texture, 0.0, 0.0)
 
 
 ## Le nuage d'orage, ATTACHÉ au mage : il n'a rien à poursuivre, il est sur lui.
@@ -1644,12 +2045,20 @@ func _spawn_shockwave(cell: Vector2i, ability: Ability) -> void:
 
 func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		duration: float = ImpactEffect.DURATION, drawn: Texture2D = null,
-		flames: float = 0.0) -> void:
+		flames: float = 0.0, spin: float = 1.6) -> void:
 	var impact: ImpactEffect = IMPACT_EFFECT_SCENE.instantiate()
 	entities.add_child(impact)
 	impact.position = maze_renderer.cell_to_world(cell)
+	# TOUS les effets du mage qui demandaient sa frappe dessinée reçoivent la
+	# version ANIMÉE dès qu'elle existe : l'attaque de base, les frappes du
+	# Jugement céleste, les relais de la Chaîne. Le test se fait sur la texture
+	# demandée plutôt qu'au cas par cas — un seul endroit à tenir.
+	var suite: Array[Texture2D] = []
+	if drawn != null and drawn == _impact_texture:
+		suite = _impact_frames
 	impact.setup(TILE_SIZE, element, radius, duration,
-		cell.x * 733 + cell.y * 199 + 1, drawn, flames)
+		cell.x * 733 + cell.y * 199 + 1, drawn, flames, spin,
+		suite, _impact_anchor)
 
 
 func _spawn_effect(cell: Vector2i, tint: Color, size_tiles: float = 1.7) -> void:

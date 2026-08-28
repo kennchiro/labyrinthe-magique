@@ -48,12 +48,34 @@ var _additive := true
 
 
 var _drawn: Texture2D = null
+var _spin := 1.6
+## La frappe ANIMÉE, quand le personnage en a une : six images qui se déroulent
+## sur la vie de l'effet. Elle remplace le dessin fixe.
+var _frames: Array[Texture2D] = []
+## Le point d'impact DANS le dessin, en pixels de la texture. L'éclair tombe du
+## haut de la case et l'éclat se produit en bas : centrer le dessin poserait la
+## frappe une demi-case trop haut. Relevé au découpage sur la dernière image,
+## celle où il ne reste que l'anneau au sol.
+var _anchor := Vector2.ZERO
 
 
+## `p_spin` : vitesse de rotation du dessin central, en tours par seconde.
+##
+## Elle vaut 1,6 par défaut — un vortex parfaitement immobile se lit comme un
+## autocollant posé sur le sol. Mais tous les dessins d'impact n'ont pas la même
+## liberté : une frappe de foudre a un HAUT et un BAS, et la faire pivoter sur
+## elle-même la rend absurde. Ces dessins-là passent zéro.
 func setup(p_tile_size: int, p_element: Element.Kind, p_radius: float,
 		p_duration: float = DURATION, rng_seed: int = 0,
-		p_drawn: Texture2D = null, p_flames: float = 0.0) -> void:
+		p_drawn: Texture2D = null, p_flames: float = 0.0,
+		p_spin: float = 1.6, p_frames: Array = [],
+		p_anchor: Vector2 = Vector2.ZERO) -> void:
 	_drawn = p_drawn
+	_spin = p_spin
+	for frame in p_frames:
+		if frame != null:
+			_frames.append(frame)
+	_anchor = p_anchor
 	tile_size = p_tile_size
 	element = p_element
 	radius_tiles = maxf(0.6, p_radius)
@@ -224,6 +246,21 @@ func _draw() -> void:
 ## puis s'éteint. Une légère rotation la garde vivante — un vortex parfaitement
 ## immobile se lit comme un autocollant posé sur le sol.
 func _draw_centrepiece(t: float) -> void:
+	# LA FRAPPE ANIMÉE PASSE DEVANT. Elle porte sa propre extinction — la
+	# dernière image n'est qu'un anneau mourant — donc on ne lui impose ni
+	# fondu prononcé ni rotation : elle sait ce qu'elle a à faire.
+	if not _frames.is_empty():
+		var index := mini(int(t * float(_frames.size())), _frames.size() - 1)
+		var texture := _frames[index]
+		# Mise à l'échelle sur la LARGEUR : c'est l'anneau au sol qui doit
+		# couvrir la zone touchée. Sur la hauteur, le trait qui tombe du ciel
+		# écraserait l'anneau à rien.
+		var reach := minf(radius_tiles * 1.2, CENTREPIECE_MAX_TILES)
+		var factor := (tile_size * reach) / float(texture.get_width())
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(factor, factor))
+		draw_texture(texture, -_anchor, Color(1, 1, 1, minf(1.0, 1.4 * (1.0 - t))))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	if _drawn == null:
 		return
 	var grow := 0.55 + 0.60 * (1.0 - pow(1.0 - t, 2.4))
@@ -231,7 +268,7 @@ func _draw_centrepiece(t: float) -> void:
 	var extent := maxf(float(_drawn.get_width()), float(_drawn.get_height()))
 	var span := minf(radius_tiles * 1.5, CENTREPIECE_MAX_TILES)
 	var scale_factor := (tile_size * span / extent) * grow
-	draw_set_transform(Vector2.ZERO, t * 1.6, Vector2(scale_factor, scale_factor))
+	draw_set_transform(Vector2.ZERO, t * _spin, Vector2(scale_factor, scale_factor))
 	draw_texture(_drawn, -Vector2(_drawn.get_width(), _drawn.get_height()) * 0.5,
 		Color(1, 1, 1, alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

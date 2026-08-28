@@ -16,6 +16,14 @@ nettement le magenta (~300°) de l'orange et du rouge (~0-40°).
 La grille est RÉGULIÈRE — trois colonnes, deux rangées, cases de 512 — parce que
 c'est ce qui a été commandé. On ne détecte donc rien : on découpe, on détoure, et
 on recadre chaque icône sur son contenu.
+
+⚠️ DEUX PLANCHES ÉCHAPPENT À LA CLÉ DE TEINTE, et il faut savoir pourquoi avant
+d'y toucher : celles des Ténèbres et de l'Invocateur sont DESSINÉES EN VIOLET,
+donc dans la bande de la clé (260-320°, contre 0-40° pour le Feu). Aucun réglage
+de teinte ne les sauve — c'est le même violet des deux côtés. Elles passent par
+`keyed_on_flat()`, qui fait couler le fond depuis le bord de la case : ce qui a
+la couleur du fond mais s'en trouve isolé par un contour reste. Leur seuil est
+écrit dans la table, case par case, et vérifié à l'œil sur la planche.
 """
 
 from pathlib import Path
@@ -57,10 +65,46 @@ SHEETS = {
         "earth_rock", "earth_spikes", "earth_aegis",
         "earth_crystals", "earth_burrow", "earth_quake",
     ]),
+    # Relevé case par case : rose des vents à quatre pointes colorées · quatre
+    # orbes en spirale vers un noyau · anneau doré à quatre sceaux // goutte au
+    # bourgeon · silhouette dorée qui file · météores et onde de choc. Le
+    # générateur a suivi l'ordre demandé sur cette planche — ce qui n'était vrai
+    # ni pour le Feu ni pour l'Eau : on vérifie quand même, à chaque fois.
+    "mage_supreme_skills.png": ("supreme", [
+        "supreme_bolt", "supreme_convergence", "supreme_seals",
+        "supreme_bloom", "supreme_shift", "supreme_judgement",
+    ]),
     "mage_water_skills.png": ("water", [
         "water_jet", "water_wave", "water_geyser",
         "water_shield", "water_circle", "water_current",
     ]),
+    # ⚠️ CES DEUX PLANCHES SONT DESSINÉES DANS LA COULEUR DE LA CLÉ, et c'est
+    # pour ça qu'elles ont leur propre mode. Relevé sur l'histogramme des
+    # teintes : le dessin du Feu vit entre 0 et 40°, à cent lieues du magenta ;
+    # les flammes des Ténèbres et de l'Invocateur vivent entre 260 et 320°,
+    # c'est-à-dire DANS la bande de la clé. Le détourage par teinte leur mangeait
+    # donc le corps et ne laissait que les cernes blancs — six icônes réduites à
+    # un trait, plus les lignes de séparation de la planche.
+    #
+    # Une clé par teinte ne peut PAS s'en sortir : il n'y a pas de seuil qui
+    # sépare un violet de fond d'un violet de flamme quand c'est le même violet.
+    # C'est la CONNEXITÉ qui travaille, comme pour les planches de personnage —
+    # le fond est ce qui coule depuis le bord de la case, et le halo d'une
+    # flamme, si proche du fond soit-il, n'y est relié que par des pixels qui
+    # s'en écartent franchement.
+    "mage_shadow_skills.png": ("shadow", [
+        "shadow_orb", "shadow_rune", "shadow_blink",
+        "shadow_burst", "shadow_step", "shadow_rift",
+    ], {"key": "flat", "flood": 80}),
+    # L'Invocateur demande un seuil PLUS LARGE que les Ténèbres (110 contre 80)
+    # et ce n'est pas un réglage au jugé : son fond est plus sombre
+    # (226, 8, 222 contre 249, 4, 250) et ses halos roses s'en approchent
+    # davantage. À 80, chaque icône traînait un lambeau de fond en forme de
+    # halo ; à 140, la gargouille perdait son casque. Vérifié case par case.
+    "mage_invocateur_skills.png": ("invocateur", [
+        "invoc_bolt", "invoc_imps", "invoc_gargoyle",
+        "invoc_circle", "invoc_step", "invoc_dragon",
+    ], {"key": "flat", "flood": 110, "inset": 0.025}),
 }
 
 COLUMNS = 3
@@ -137,13 +181,81 @@ def keyed(cell: Image.Image) -> Image.Image | None:
     spill = np.clip(
         (np.minimum(rgb[..., 0], rgb[..., 2]) - rgb[..., 1]) / 255.0, 0.0, 1.0)
     data[..., 3] = (data[..., 3].astype(float) * (1.0 - spill)).astype(np.uint8)
-    # Le rouge et le bleu redescendent vers le vert à proportion du dégorgement.
+
+    # ⚠️ LA CORRECTION DE COULEUR NE VAUT QU'AU BORD, et c'est la moitié de la
+    # règle qui manquait. La « magenta-ité » mesure ce qu'un pixel a de rouge ET
+    # de bleu en plus de son vert — mais c'est aussi la signature du VIOLET, du
+    # bleu-violet et du pourpre. Appliquée partout, elle ne dégorgeait pas
+    # seulement les bords : elle délavait l'intérieur des dessins. Mesuré sur la
+    # planche du Suprême, dont les orbes sont violettes : (125, 76, 210) rendu
+    # en (78, 122, 177) — la couleur avait changé de camp.
+    #
+    # L'atténuation d'ALPHA, elle, reste globale : c'est elle qui fait
+    # disparaître le fond vu à travers un dôme de verre, et ce fond-là est bien
+    # à l'intérieur du dessin.
+    rim = ndimage.binary_dilation(background, iterations=3) & ~background
     for channel in (0, 2):
-        data[..., channel] = np.clip(
-            rgb[..., channel] * (1.0 - spill) + rgb[..., 1] * spill, 0, 255
-        ).astype(np.uint8)
+        blended = np.clip(rgb[..., channel] * (1.0 - spill)
+                          + rgb[..., 1] * spill, 0, 255)
+        data[..., channel] = np.where(rim, blended,
+                                      rgb[..., channel]).astype(np.uint8)
+
+    # ÉROSION DU CONTOUR — suppression des franges d'artefacts JPEG.
+    #
+    # La compression JPEG laisse 1-2 pixels contaminés en bordure : ils sont
+    # à moitié magenta, à moitié icône, et forment une frange colorée visible
+    # une fois le fond retiré. On érode le masque d'opacité de 2 pixels :
+    # les pixels de bord entièrement opaques deviennent semi-transparents à
+    # proportion de leur distance au bord, puis les tout-petits sont coupés.
+    alpha_float = data[..., 3].astype(float) / 255.0
+    # Masque binaire de ce qui est « bien opaque » avant érosion
+    opaque = alpha_float > 0.5
+    # Distance à la frontière : chaque pixel « vrai » sait combien de voisins
+    # opaques le séparent du bord — on érode de 2 pixels.
+    dist = ndimage.distance_transform_edt(opaque)
+    ERODE_PX = 2
+    eroded = np.clip(dist / float(ERODE_PX), 0.0, 1.0)
+    data[..., 3] = (alpha_float * eroded * 255.0).astype(np.uint8)
 
     out = Image.fromarray(data, "RGBA")
+    bounds = out.getbbox()
+    return out.crop(bounds) if bounds else None
+
+
+## Détourage sur fond UNI — les deux planches dessinées en violet.
+##
+## Le seuil ne sert qu'à FAIRE COULER le fond depuis le bord de la case : ce qui
+## a la couleur du fond mais s'en trouve isolé par un contour reste. Le fondu
+## n'est appliqué qu'au BORD de ce qui part, jamais à l'intérieur du dessin —
+## même règle que `keyed_on_flat()` dans `build_characters.py`, et même raison.
+FLAT_FADE = 0.5      # début du fondu, en fraction du seuil
+FLAT_FADE_OUT = 1.3  # fin du fondu, au-delà du seuil : le pixel est opaque
+
+
+def keyed_on_flat(cell: Image.Image, flood: int) -> Image.Image | None:
+    rgb = np.asarray(cell.convert("RGB")).astype(int)
+    border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
+    background = np.median(border, axis=0)
+    distance = np.abs(rgb - background).max(axis=2)
+
+    parts, _ = ndimage.label(distance < flood)
+    edges = np.unique(np.concatenate(
+        [parts[0], parts[-1], parts[:, 0], parts[:, -1]]))
+    outside = np.isin(parts, edges[edges > 0])
+
+    alpha = np.full(distance.shape, 255.0)
+    alpha[outside] = 0.0
+    rim = ndimage.binary_dilation(outside, iterations=3) & ~outside
+    fade_in, fade_out = flood * FLAT_FADE, flood * FLAT_FADE_OUT
+    alpha[rim] = np.clip((distance[rim] - fade_in) / (fade_out - fade_in),
+                         0.0, 1.0) * 255.0
+
+    # PAS de dégorgement ici, et c'est tout l'écart avec `keyed()`. La
+    # « magenta-ité » est la signature du fond sur les six autres planches ;
+    # sur celles-ci, c'est la signature du DESSIN. Appliquée, elle rendrait
+    # translucide chaque flamme violette — soit l'icône entière.
+    out = Image.fromarray(
+        np.dstack([rgb.astype(np.uint8), alpha.astype(np.uint8)]), "RGBA")
     bounds = out.getbbox()
     return out.crop(bounds) if bounds else None
 
@@ -167,7 +279,9 @@ def fitted(icon: Image.Image) -> Image.Image:
 
 
 def main() -> None:
-    for sheet_name, (character, names) in SHEETS.items():
+    for sheet_name, entry in SHEETS.items():
+        character, names = entry[0], entry[1]
+        options = entry[2] if len(entry) > 2 else {}
         path = SOURCE / sheet_name
         if not path.exists():
             print(f"  ! {sheet_name} introuvable")
@@ -177,13 +291,23 @@ def main() -> None:
         cell_w = sheet.width // COLUMNS
         cell_h = sheet.height // ROWS
 
+        # MARGE DE DÉCOUPE. La planche de l'Invocateur sépare ses cases par une
+        # LIGNE BLANCHE de six pixels, posée à cheval sur la coupe : chaque
+        # icône en héritait d'un morceau, et c'est ce qui dessinait les équerres
+        # blanches qu'on voyait dans le menu. Une marge de 2,5 % la laisse
+        # dehors — les dessins, eux, ne touchent jamais le bord de leur case.
+        inset = int(round(min(cell_w, cell_h) * options.get("inset", 0.0)))
+
         out_dir = OUT / character
         out_dir.mkdir(parents=True, exist_ok=True)
         written = []
         for index, name in enumerate(names):
             column, row = index % COLUMNS, index // COLUMNS
-            box = (column * cell_w, row * cell_h, (column + 1) * cell_w, (row + 1) * cell_h)
-            cut = keyed(sheet.crop(box))
+            box = (column * cell_w + inset, row * cell_h + inset,
+                   (column + 1) * cell_w - inset, (row + 1) * cell_h - inset)
+            cell = sheet.crop(box)
+            cut = (keyed_on_flat(cell, options["flood"])
+                   if options.get("key") == "flat" else keyed(cell))
             if cut is None:
                 print(f"  ! {name} : rien après détourage")
                 continue
