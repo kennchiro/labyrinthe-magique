@@ -2302,6 +2302,48 @@ nombre.
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
 
+## 2026-08-28 — la barre tactile en éventail régulier
+
+**La fuite et le troisième sort étaient superposés.** Signalé en jeu, confirmé
+au calcul : le troisième sort tombait à 196° + 2 x 37° = **270°**, exactement
+l'angle de la fuite. Leurs centres étaient à 10 px l'un de l'autre pour des
+rayons de 33 et 39 — **62 px de recouvrement**. On visait un sort, on
+déclenchait l'autre.
+
+Le défaut ne pouvait pas se voir en relisant : les trois placements — les sorts
+en arc, la fuite « juste au-dessus de la frappe », l'ultime « à l'écart » —
+étaient écrits séparément et chacun était raisonnable pris seul. Leur commentaire
+affirmait même que les rayons d'arc garantissaient que deux voisins ne se
+touchent pas ; c'était vrai entre les sorts, et faux dès qu'on ajoutait la fuite.
+
+Remplacés par **un seul éventail régulier** : un rayon pour tous les
+secondaires, un pas angulaire constant, et l'ordre qui suit le pouce — la fuite
+ouvre l'éventail à hauteur de main, les trois sorts montent DANS L'ORDRE, et
+l'ultime ferme la marche tout en haut, le plus long à atteindre, ce qui était
+déjà son intention.
+
+Les boutons sont un peu plus gros au passage, comme demandé : 52 -> 56 pour la
+frappe, 33 -> 38 pour les sorts.
+
+### Deux erreurs de plus, attrapées par le test et pas par l'œil
+
+1. **Un rayon d'éventail constant sort de l'écran.** La barre est dessinée en
+   unités d'interface et non en pixels : `Platform.apply_ui_scale` en change le
+   nombre selon l'appareil, et un téléphone en paysage n'en offre qu'environ
+   690 x 330 là où son écran en fait 960 x 460. Les trois boutons du haut y
+   étaient coupés net — et le premier test passait, parce qu'il éprouvait des
+   PIXELS d'écran ;
+2. **rabattre le rayon sans toucher aux boutons les fait se chevaucher**, ce qui
+   est le défaut qu'on répare. Et les rétrécir dans le même rapport rétrécit
+   AUSSI le jeu entre eux : il tombait à 7 px là où la règle en demande 10. Il
+   fallait RÉSOUDRE — la corde disponible est connue, on en déduit le rayon de
+   bouton qui laisse le jeu entier.
+
+`tests/test_pad.gd` vérifie sur cinq tailles d'interface qu'aucun bouton n'en
+chevauche un autre et qu'aucun ne sort de l'écran. C'est la seule chose qui
+empêche le défaut de revenir au prochain réglage : un chevauchement se voit sur
+une capture quand on sait où regarder, et pas autrement.
+
 ## 2026-08-28 — l'écran-titre passe en paysage
 
 La couverture était un PORTRAIT 2:3, et le jeu se joue en paysage. Mesuré en

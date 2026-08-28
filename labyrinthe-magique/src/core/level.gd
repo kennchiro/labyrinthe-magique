@@ -168,6 +168,12 @@ var _judgement_impact: Array[Texture2D] = []
 var _judgement_charge: Texture2D = null
 var _judgement_charge_frames := 0
 var _judgement_charge_fps := 11.0
+## L'AURA DE RENAISSANCE, dessinée : le jaillissement puis la charge. Ses bornes
+## de boucle viennent du descripteur — jamais codées ici, comme partout ailleurs.
+var _rebirth_strip: Texture2D = null
+var _rebirth_frames := 0
+var _rebirth_fps := 9.0
+var _rebirth_loop: Array = []
 var _convergence_fps := 12.0
 var _convergence_impact_texture: Texture2D = null
 ## Les 9 frames de l'explosion prismatique, chargées depuis convergence_0..8.png.
@@ -801,6 +807,15 @@ func _load_character_fx() -> void:
 			var one := _texture_or_null(folder + "jugement_impact_%d.png" % rank)
 			if one != null:
 				_judgement_impact.append(one)
+	_rebirth_strip = _texture_or_null(folder + "renaissance_aura.png")
+	_rebirth_frames = 0
+	_rebirth_loop = []
+	var jr: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(folder + "renaissance_aura.json"))
+	if jr is Dictionary:
+		_rebirth_frames = maxi(0, int(jr.get("frames", 0)))
+		_rebirth_fps = maxf(1.0, float(jr.get("fps", 9.0)))
+		_rebirth_loop = jr.get("loop", []) as Array
 	_judgement_charge = _texture_or_null(folder + "jugement_incantation.png")
 	_judgement_charge_frames = 0
 	var ji: Variant = JSON.parse_string(
@@ -1040,6 +1055,10 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 ## L'aura d'exaltation, ATTACHÉE au mage : elle le suit dans le labyrinthe.
 ## Relancer l'ultime la remet à neuf plutôt que d'en empiler une seconde.
 var _aura: EmpowerAura = null
+## L'aura DESSINÉE, quand le mage en a une planche. Elle double la précédente
+## sans la remplacer : les anneaux calculés restent le repli de ceux qui n'ont
+## pas de dessin, et le fond commun de tous les exaltés.
+var _rebirth: RebirthAura = null
 
 
 func _on_player_empowered(bonus: int, duration: float) -> void:
@@ -1051,6 +1070,23 @@ func _on_player_empowered(bonus: int, duration: float) -> void:
 		_aura = AURA_SCENE.instantiate()
 		player.add_child(_aura)
 		_aura.setup(TILE_SIZE, Element.color(character.element), duration)
+	# L'AURA DESSINÉE, quand le mage en a une.
+	#
+	# Elle est ATTACHÉE au mage — enfant de `player` et non d'`entities` — pour
+	# la même raison que l'égide de pierre : un bonus qui le suit ne peut pas
+	# être posé sur une case. Elle tient tout le temps du bonus, et son
+	# jaillissement ne se rejoue pas quand on relance le sort.
+	#
+	# Le mage qui n'a pas de planche garde les anneaux calculés : le sort marche
+	# exactement pareil, il est seulement moins beau.
+	if _rebirth_strip != null and _rebirth_frames > 0:
+		if _rebirth != null and is_instance_valid(_rebirth):
+			_rebirth.refresh(duration)
+		else:
+			_rebirth = RebirthAura.new()
+			player.add_child(_rebirth)
+			_rebirth.setup(_rebirth_strip, _rebirth_frames, _rebirth_fps,
+				_rebirth_loop, TILE_SIZE, duration)
 	player_empowered.emit(bonus, duration)
 
 
@@ -1065,6 +1101,16 @@ func _on_player_shielded(amount: int, duration: float) -> void:
 	if player == null:
 		return
 	_shield_max = maxi(1, amount)
+	# UN ÉTAT, UN VISUEL. Quand la protection vient d'une exaltation qui porte
+	# déjà son aura dessinée, la coque ne paraît PAS : les deux disent la même
+	# chose, elles se superposent sur le même corps, et la coque — qui se pose
+	# devant lui — noyait le mage sous l'aura qui monte derrière.
+	#
+	# La jauge de l'interface, elle, reste : c'est ELLE qui dit combien de coups
+	# restent absorbés, et c'est la seule chose que l'aura ne sait pas dire.
+	if _rebirth != null and is_instance_valid(_rebirth):
+		player_shielded.emit(amount)
+		return
 	if _bubble != null and is_instance_valid(_bubble):
 		_bubble.refresh(duration)
 	else:
@@ -1174,6 +1220,9 @@ func _on_shield_faded() -> void:
 func _on_player_calmed() -> void:
 	if _aura != null and is_instance_valid(_aura):
 		_aura.stop()
+	if _rebirth != null and is_instance_valid(_rebirth):
+		_rebirth.stop()
+	_rebirth = null
 	player_calmed.emit()
 
 

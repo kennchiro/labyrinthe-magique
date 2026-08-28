@@ -992,10 +992,37 @@ static func supreme() -> CharacterStats:
 			"zone_style": "sceau",
 		}),
 		Ability.make({
+			# RENAISSANCE DEVIENT UNE EXALTATION (2026-08-28).
+			#
+			# Elle ne faisait que rendre 2 points de vie toutes les 16 s. C'est
+			# le sort le plus terne du jeu : on l'appuie sans regarder, rien ne
+			# change à l'écran, et le mot « renaissance » ne raconte rien d'un
+			# pansement. Elle SOULÈVE maintenant le mage — il renaît plus fort,
+			# et ça se voit sur son corps pendant trente secondes.
+			#
+			# Le soin reste, et monte à 3 : c'est ce qui la relie encore à son
+			# nom, et ce qui justifie de la garder quand on est au complet.
+			#
+			# ⚠️ RECHARGE 38 s ET NON 16, et c'est la contrepartie de la durée.
+			# À 16 s de recharge pour 30 s d'effet, l'exaltation ne s'arrête
+			# JAMAIS : ce n'est plus un sort, c'est une statistique de base
+			# qu'on aurait pu écrire dans `c.attack`. À 38 s, il reste huit
+			# secondes nues — assez pour que la relancer soit une décision.
 			"id": "supreme_bloom", "display_name": "Renaissance",
-			"description": "Eau et terre : la nature repousse et referme les blessures.",
-			"kind": Ability.Kind.HEAL, "element": Element.Kind.EARTH,
-			"damage": 2, "duration": 0.0, "cooldown": 16.0,
+			"description": "Il renaît des quatre éléments : +8 à chaque coup et 2 coups absorbés pendant 30 s, et ses blessures se referment.",
+			"kind": Ability.Kind.HEAL, "element": Element.Kind.SUPREME,
+			"damage": 3, "duration": 0.0, "cooldown": 38.0,
+			# +8 et non +10 : l'ultime de l'Eau donne +10, mais il se MÉRITE en
+			# huit kills. Celle-ci est un sort ordinaire, disponible d'entrée.
+			# Sur le trait élémentaire à 20, +8 se sent tout de suite (+40 %)
+			# sans transformer la Convergence à 56 en autre chose.
+			"empower_bonus": 8, "empower_duration": 30.0,
+			# DEUX POINTS ABSORBÉS, soit deux contacts gratuits. Le Suprême a
+			# 4 points de vie : c'est la moitié de sa chair en plus, ce qui est
+			# beaucoup — et c'est pour ça que le chiffre reste à 2. La coque de
+			# l'Eau en absorbe 45, mais c'est LE sort de ce mage, à deux charges
+			# et 5 s de recharge ; ici la défense n'est qu'une moitié du sort.
+			"empower_shield": 2,
 		}),
 	]
 	c.escape = Ability.make({

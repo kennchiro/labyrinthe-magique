@@ -8,6 +8,12 @@ extends Control
 ## aucun téléphone ; une seule fiche à la fois tient partout, et laisse la place
 ## d'écrire ce qui compte vraiment : ce que fait chaque sort.
 
+## LA GRILLE DES SORTS — trois colonnes, deux rangées, six cases. Le nombre est
+## FIXE et ce n'est pas une limite d'affichage : un mage a toujours exactement
+## six créneaux (attaque, trois sorts, fuite, ultime), c'est une règle du jeu.
+const GRID_COLUMNS := 3
+const GRID_ROWS := 2
+
 signal play_requested(character_id: String)
 ## Le terrain d'essai : mêmes sorts, rien d'enjeu. C'est ici qu'un joueur
 ## découvre ce que fait « Ébranlement » avant de choisir pour de bon.
@@ -19,10 +25,16 @@ signal back_requested
 @onready var element_label: Label = $Card/Element
 @onready var description_label: Label = $Card/Description
 @onready var stats_label: Label = $Card/Stats
-## Les lignes de sorts, construites en code : leur nombre change d'un mage à
-## l'autre, et chacune porte une icône, deux libellés et une description.
-var _rows: VBoxContainer = null
-var _ability_rows: Array[AbilityRow] = []
+## LES SIX SORTS EN GRILLE 3 x 2 (maquette du 2026-08-28), et non plus en six
+## lignes pleine largeur. La ligne posait le nom à gauche et ses chiffres contre
+## le bord droit : le regard traversait l'écran une fois par sort. La grille les
+## empile dans une colonne étroite, et les six cartes se comparent d'un coup.
+##
+## Le conteneur est un `Control` NU, pas un `GridContainer` : c'est nous qui
+## calculons la boîte de chaque carte, comme partout ailleurs dans cet écran.
+## Un conteneur de Godot répartit à sa façon et se battrait avec `fit()`.
+var _grid: Control = null
+var _ability_cards: Array[AbilityCard] = []
 ## Le TRAIT n'est pas un bouton : c'est une propriété du personnage, et il vit
 ## donc avec sa vie et sa vitesse plutôt qu'au milieu de ses sorts. Rangé parmi
 ## eux, il se lisait comme un septième sort qu'on cherchait en vain sur la barre.
@@ -63,10 +75,9 @@ func _ready() -> void:
 	_trait_label = Label.new()
 	_trait_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	$Card.add_child(_trait_label)
-	_rows = VBoxContainer.new()
-	_rows.add_theme_constant_override("separation", 2)
-	_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	$Card.add_child(_rows)
+	_grid = Control.new()
+	_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Card.add_child(_grid)
 
 	_selected_preview = CharacterPortrait.new()
 	_selected_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -129,20 +140,20 @@ func select(id: String) -> void:
 		slots.append(["FUITE", stats.escape])
 	slots.append(["EXTRA", stats.ultimate])
 
-	# Les lignes sont RECYCLÉES d'un mage à l'autre : les reconstruire à chaque
+	# Les cartes sont RECYCLÉES d'un mage à l'autre : les reconstruire à chaque
 	# clic sur une vignette faisait clignoter la fiche entière.
-	while _ability_rows.size() < slots.size():
-		var row := AbilityRow.new()
-		_rows.add_child(row)
-		_ability_rows.append(row)
-	for i in _ability_rows.size():
-		var row: AbilityRow = _ability_rows[i]
-		row.visible = i < slots.size()
-		if not row.visible:
+	while _ability_cards.size() < slots.size():
+		var card := AbilityCard.new()
+		_grid.add_child(card)
+		_ability_cards.append(card)
+	for i in _ability_cards.size():
+		var card: AbilityCard = _ability_cards[i]
+		card.visible = i < slots.size()
+		if not card.visible:
 			continue
-		row.fill(str(slots[i][0]), slots[i][1] as Ability, id, stats.color())
+		card.fill(str(slots[i][0]), slots[i][1] as Ability, id, stats.color())
 		if i == slots.size() - 1:
-			row.mark_ultimate(stats.ultimate_required_kills)
+			card.mark_ultimate(stats.ultimate_required_kills)
 	_layout()
 
 
@@ -205,38 +216,60 @@ func _layout_card(card: Panel) -> void:
 	_selected_preview.position = Vector2(card.size.x - preview_width - 18.0, 14.0)
 	_selected_preview.size = Vector2(preview_width, maxf(80.0, card.size.y - 28.0))
 	var compact := card.size.y < 210.0
-	var y := 8.0
-	for entry in [[name_label, 30.0, 24], [element_label, 22.0, 15],
-			[description_label, 20.0 if compact else 34.0, 13],
-			[stats_label, 22.0, 13]]:
+	var y := 6.0
+
+	# L'ÉLÉMENT MONTE SUR LA LIGNE DU NOM, à sa droite. Il tenait une ligne à lui
+	# seul pour deux mots et cinq étoiles, et cette ligne-là coûtait vingt-deux
+	# unités prises sur la grille des sorts — c'est-à-dire une ligne de
+	# description dans chacune des six cartes. Un en-tête ne mérite pas ça.
+	name_label.position = Vector2(18.0, y)
+	name_label.size = Vector2(inner * 0.58, 30.0)
+	name_label.add_theme_font_size_override("font_size", 24)
+	element_label.position = Vector2(18.0 + inner * 0.60, y + 8.0)
+	element_label.size = Vector2(inner * 0.40, 22.0)
+	element_label.add_theme_font_size_override("font_size", 15)
+	y += 32.0
+
+	for entry in [[description_label, 18.0 if compact else 22.0, 13],
+			[stats_label, 20.0, 13]]:
 		var label: Label = entry[0]
 		label.position = Vector2(18.0, y)
 		label.size = Vector2(inner, float(entry[1]))
 		label.add_theme_font_size_override("font_size", int(entry[2]))
-		y += float(entry[1]) + 2.0
+		y += float(entry[1]) + 1.0
 	description_label.visible = card.size.y > 170.0
 
 	# LE TRAIT tient sur la ligne des caractéristiques : c'est une propriété du
 	# personnage, pas un bouton.
 	_trait_label.position = Vector2(18.0, y)
-	_trait_label.size = Vector2(inner, 20.0)
+	_trait_label.size = Vector2(inner, 18.0)
 	_trait_label.add_theme_font_size_override("font_size", 12 if compact else 13)
-	y += 24.0
+	y += 21.0
 
-	# LA HAUTEUR DE LIGNE SE CALCULE, elle ne se choisit pas. Six sorts dans une
-	# fiche de téléphone en paysage n'ont pas la place d'en dire autant que dans
-	# une fiche de bureau : on répartit ce qu'il y a, et la DESCRIPTION est ce
-	# qui s'efface en premier — elle dit à quoi sert un sort, ce qui est précieux
-	# mais moins pressant que ce qu'il vaut.
-	var visible_rows := 0
-	for row in _ability_rows:
-		if row.visible:
-			visible_rows += 1
-	var room := maxf(48.0, card.size.y - y - 12.0)
-	var line := room / maxf(1.0, float(visible_rows))
-	var detailed := line >= 34.0
-	var body := 13 if line >= 30.0 else (12 if line >= 24.0 else 11)
-	for row in _ability_rows:
-		row.fit(clampf(line, 18.0, 46.0), body, detailed)
-	_rows.position = Vector2(18.0, y)
-	_rows.size = Vector2(inner, room)
+	# LA GRILLE SE CALCULE, elle ne se choisit pas. Trois colonnes, deux rangées,
+	# gouttière à 4 % de la largeur disponible — les proportions de la maquette,
+	# reportées en POURCENTAGE et non en pixels : la même grille doit tenir dans
+	# une fiche de tablette (~1210 x 410) et de téléphone en paysage (~900 x 230).
+	#
+	# Les six cartes sont TOUJOURS toutes affichées. C'est le sens même de la
+	# grille : on ne compare pas huit mages en faisant défiler leurs sorts.
+	var room := maxf(60.0, card.size.y - y - 12.0)
+	var gutter := clampf(inner * 0.02, 4.0, 16.0)
+	var cell := Vector2((inner - gutter * float(GRID_COLUMNS - 1)) / float(GRID_COLUMNS),
+		(room - gutter * float(GRID_ROWS - 1)) / float(GRID_ROWS))
+
+	# LE CORPS DU TEXTE SUIT LA CARTE, pas l'écran. Une carte de 180 unités de
+	# haut loge treize points ; à 100, il en faut dix, sinon le nom mange à lui
+	# seul les deux tiers de la carte et les chiffres passent à la trappe.
+	var body := 13 if cell.y >= 150.0 else (12 if cell.y >= 120.0 else
+		(11 if cell.y >= 96.0 else 10))
+	for i in _ability_cards.size():
+		var slot_card: AbilityCard = _ability_cards[i]
+		if not slot_card.visible:
+			continue
+		slot_card.position = Vector2(
+			float(i % GRID_COLUMNS) * (cell.x + gutter),
+			float(i / GRID_COLUMNS) * (cell.y + gutter))
+		slot_card.fit(cell, body)
+	_grid.position = Vector2(18.0, y)
+	_grid.size = Vector2(inner, room)

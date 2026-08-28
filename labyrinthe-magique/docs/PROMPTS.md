@@ -116,6 +116,7 @@ celles dont l'oubli casse le rendu :
 |---|---|---|
 | l'icône de l'application | [interface/icone_app](prompts/interface/icone_app.md) | `interface/icone.png` |
 | le cadre et le fond de « Choisis ton mage » | [menu/](prompts/menu/) *(générés par `build_prompts_menu.py`)* | `interface/` |
+| la DISPOSITION des six sorts sur la fiche | [menu/disposition_sorts](prompts/menu/disposition_sorts.md) | *maquette, rien à déposer* |
 
 L'icône est le seul dessin du jeu qu'on regarde à **60 pixels** : elle se juge
 réduite, jamais à 1024. Le sujet n'est donc pas un personnage mais le PLAN du

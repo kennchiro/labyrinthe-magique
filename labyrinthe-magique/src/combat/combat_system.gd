@@ -440,7 +440,18 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 				"id": ability.id, "kind": ability.kind, "element": ability.element,
 				"damage": int(round(ability.damage * ZONE_TICK)), "radius": ability.radius,
 			})
-			_apply_area(slice, zone["cell"], context, ability)
+			# NI TRAIT NI EXALTATION, exactement comme un tic de brûlure : une
+			# nappe qui ronge n'est pas un coup porté par le mage. C'est une
+			# usure, posée une fois et qui travaille toute seule.
+			#
+			# ⚠️ CE N'EST PAS UN DÉTAIL DE COHÉRENCE, c'est ce qui rend une
+			# exaltation dosable. Une zone tique deux fois par seconde : le
+			# bonus s'y ajoutait à CHAQUE tic, si bien que +10 valait +20 par
+			# seconde et par zone. Les Quatre Sceaux en posent quatre à la
+			# fois — l'exaltation y aurait valu +80/s, contre +10 sur un trait
+			# élémentaire. Le même bonus ne peut pas valoir huit fois plus
+			# selon le sort qui le reçoit.
+			_apply_area(slice, zone["cell"], context, ability, true, false)
 			if ability.snare > 0.0:
 				_apply_snare(ability, zone["cell"], context)
 			if ability.slow_duration > 0.0 and not ability.slow_sustained:
@@ -623,6 +634,33 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.SUMMON:
 			fired = _cast_summon(ability, context)
 
+	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
+	#
+	# Ce bloc vivait DANS `_cast_blast`, ce qui marchait tant que le seul sort
+	# exaltant du jeu était l'ultime de l'Eau — un souffle. Renaissance est un
+	# SOIN : elle portait `empower_bonus: 8` et ne l'a jamais accordé, parce
+	# qu'un soin ne passe pas par le souffle. Le sort partait, le soin tombait,
+	# et il ne se passait rien d'autre — pas de bonus, donc pas d'aura.
+	#
+	# `empower_bonus` est une propriété de la COMPÉTENCE. N'importe laquelle
+	# peut donc en porter une, et c'est ici, au tronc commun, qu'on la lit.
+	if fired and ability.empower_bonus > 0 and ability.empower_duration > 0.0:
+		# Relancer l'exaltation la REMET à neuf plutôt que de l'additionner :
+		# deux lancers coup sur coup ne doivent pas donner +16.
+		_empower_bonus = ability.empower_bonus
+		_empower_left = ability.empower_duration
+		player_empowered.emit(_empower_bonus, _empower_left)
+		# LA DÉFENSE VIENT AVEC, quand le sort en porte une. Elle emprunte la
+		# coque existante plutôt que d'inventer une seconde mécanique : c'est
+		# déjà la façon dont ce jeu dit « il encaisse mieux », l'interface sait
+		# l'afficher, et `add_shield` la REMET à neuf au lieu de l'empiler.
+		#
+		# Elle dure exactement le temps du bonus de dégâts : une exaltation est
+		# UN état, pas deux qui s'éteindraient l'un après l'autre.
+		if ability.empower_shield > 0:
+			health.add_shield(ability.empower_shield)
+			_shield_left = ability.empower_duration
+			player_shielded.emit(ability.empower_shield, ability.empower_duration)
 	if not fired:
 		return false
 	if not free_use:
@@ -768,12 +806,6 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 		var gained := health.heal(ability.heal_self)
 		if gained > 0:
 			player_healed.emit(gained)
-	if ability.empower_bonus > 0 and ability.empower_duration > 0.0:
-		# Relancer l'exaltation la REMET à neuf plutôt que de l'additionner :
-		# deux ultimes coup sur coup ne doivent pas donner +20.
-		_empower_bonus = ability.empower_bonus
-		_empower_left = ability.empower_duration
-		player_empowered.emit(_empower_bonus, _empower_left)
 	return true
 
 
@@ -2271,7 +2303,8 @@ func _update_echoes(delta: float, context: CombatContext) -> void:
 ## la pierre se comptait de travers. Même raison que la Chaîne d'éclairs, qui ne
 ## déclenche pas l'arc de la Foudre.
 func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
-		reported: Ability = null, with_trait: bool = true) -> void:
+		reported: Ability = null, with_trait: bool = true,
+		empowered: bool = true) -> void:
 	# UN ULTIME PASSE LES MURS. Ailleurs le rayon se mesure en distance de
 	# chemin — une explosion ne doit pas traverser une haie. Ici on mesure à vol
 	# d'oiseau : le souffle balaye le labyrinthe sans se soucier des couloirs.
@@ -2281,7 +2314,7 @@ func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
 				continue
 			if Vector2(context.enemy_cells[i] - centre).length() > ability.radius:
 				continue
-			_apply_damage(i, ability, context, with_trait)
+			_apply_damage(i, ability, context, with_trait, empowered)
 			if reported != null and context.enemy_alive(i):
 				enemy_damaged.emit(i, 0, reported)
 		return
@@ -2295,7 +2328,7 @@ func _apply_area(ability: Ability, centre: Vector2i, context: CombatContext,
 			continue
 		if not _within_arc(ability, centre, context.enemy_cells[i], context):
 			continue
-		_apply_damage(i, ability, context, with_trait)
+		_apply_damage(i, ability, context, with_trait, empowered)
 		if reported != null and context.enemy_alive(i):
 			# La zone rapporte la compétence D'ORIGINE et non sa tranche : c'est
 			# elle que l'interface et les effets doivent nommer.

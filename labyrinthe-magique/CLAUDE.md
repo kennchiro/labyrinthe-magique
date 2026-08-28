@@ -27,7 +27,7 @@ godot --path . -- --character fire --kills 4 --fx   # mage joué, kills simulés
 
 # Tests (headless, aucun affichage requis)
 godot --headless --path . --script res://tests/test_maze.gd
-#   … test_portals, test_grid_mover, test_combat, test_victory
+#   … test_portals, test_grid_mover, test_combat, test_victory, test_pad
 godot --headless --path . --script res://tests/test_balance.gd   # LENT (minutes)
 
 # Fiches de référence des personnages et du bestiaire — RÉGÉNÉRER après tout
@@ -109,6 +109,21 @@ gauche, les cinq boutons de combat à droite, le labyrinthe entre les deux.
 L'échelle de l'interface est CALCULÉE (`Platform.apply_ui_scale`) pour qu'une
 touche fasse 62 points quelle que soit la forme de l'écran — une constante ne
 peut pas marcher, l'étirement varie du simple au triple entre portrait et paysage.
+
+⚠️ **La géométrie de la barre de combat se DÉDUIT, elle ne se pose pas.** Les
+six boutons sont en éventail régulier autour du pouce, et `CombatPad._fan()`
+enchaîne trois conséquences : la corde entre deux voisins impose un rayon
+d'éventail minimal, l'écran en impose un maximal, et quand le second est plus
+petit que le premier ce sont les BOUTONS qui rétrécissent — jamais l'écart.
+Deux défauts sont nés d'un placement écrit à la main : la fuite et le troisième
+sort posés au MÊME angle (62 px de recouvrement, on visait l'un et on
+déclenchait l'autre), puis un rayon constant qui sortait par le haut sur
+téléphone. `tests/test_pad.gd` vérifie l'absence de chevauchement et la
+présence à l'écran sur cinq tailles d'interface.
+⚠️ Ces tailles sont des unités de MISE EN PAGE et non des pixels : un téléphone
+en paysage n'offre qu'environ 690 x 330 unités là où son écran en fait 960 x 460.
+Éprouvé sur les pixels bruts, le test passait pendant que trois boutons sortaient
+de l'écran.
 
 Le manche (`TouchStick`) est à **position fixe**, pas flottant : c'est le flottant
 qui avait été abandonné, parce que sans repère à l'écran le pouce devait deviner
@@ -356,6 +371,33 @@ l'Air.
   le cadre agrandi, cartes voisines assombries, teinte de l'élément par-dessus) :
   un seul ne suffisait pas, huit cartes également lumineuses ne se distinguaient
   pas. Repli prévu : un mage sans portrait garde l'ancien rendu.
+- **Les six sorts de la fiche sont une GRILLE 3 x 2, pas une liste** (2026-08-28,
+  maquette `docs/prompts/menu/disposition_sorts.md`, variante 2). La liste posait
+  le nom à gauche et ses chiffres contre le bord droit, à presque mille pixels de
+  là : six allers-retours du regard par mage, sur un écran qui sert à en COMPARER
+  huit. Chaque sort est maintenant une carte, et `AbilityRow` a disparu au profit
+  d'`AbilityCard`.
+  La carte est HORIZONTALE : l'icône à gauche sur toute la hauteur, le texte à
+  droite en lignes ferrées à gauche. L'icône a d'abord été posée AU-DESSUS d'un
+  texte centré ; elle n'y faisait qu'un tiers de la hauteur et se lisait comme
+  une vignette de liste. Elle n'a plus ni disque ni bordure — la pastille ronde
+  rappelait le bouton du pad, mais sur une icône pleine hauteur elle ne cerclait
+  plus rien et lui volait le quart de sa surface.
+  ⚠️ Le débordement de l'icône (`ICON_BLEED`) est BORNÉ et la carte ROGNE. Les
+  icônes sont inscrites dans 70 % de leur image pour les boutons ronds du pad :
+  sans débordement elles paraissent petites, avec trop elles s'impriment sur la
+  carte voisine. Mesuré : à 0,19 le dessin arrivait à un pixel du bord.
+  ⚠️ Ce qui dimensionne la carte n'est PAS le nom mais la LIGNE DE CHIFFRES :
+  jusqu'à 90 caractères sur la Rune des Ténèbres, contre 23 pour le plus long des
+  noms. Toute mise en page qui la suppose courte déborde sur ce mage-là seul.
+  ⚠️ `AbilityCard.fit()` CHERCHE son réglage au lieu de poser puis rogner. Une
+  passe unique qui retirait ce qui dépasse effaçait les chiffres de la Rune et de
+  l'Implosion — les deux sorts qui en ont le plus à dire. L'ordre des sacrifices
+  est écrit dans le code : la description, puis le disque de l'icône, puis le
+  corps du texte ; le nom et les chiffres ne partent jamais.
+  L'élément est monté sur la ligne du NOM du mage : sa ligne à lui seul coûtait
+  vingt-deux unités prises sur la grille, soit une ligne de description dans
+  chacune des six cartes.
 - **Le terrain DESSINÉ prime sur le terrain teinté** (2026-08-25). Les dix stages
   ont désormais leurs planches dans `assets/peso&cover/terrain/` — sol, mur,
   décor — découpées par `tools/build_terrain.py`, qui s'exécute APRÈS

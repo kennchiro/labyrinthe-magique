@@ -221,13 +221,13 @@ Trait : **Écho** — 40 % des dégâts se répètent 0.6 s plus tard
 | ATTAQUE | **Trait élémentaire** | projectile | 20 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
 | SKILL 1 | **Convergence élémentaire** | projectile | 56 dégâts · portée 8 · recharge 11 s | 11.0 s |
 | SKILL 2 | **Les Quatre Sceaux** | zone | 9 dégâts/s · rayon 1.1 · 60 s · recharge 12 s | 12.0 s |
-| SKILL 3 | **Renaissance** | soin | rend 2 PV · recharge 16 s | 16.0 s |
+| SKILL 3 | **Renaissance** | soin | rend 3 PV · recharge 38 s · +8 dégâts 30 s | 38.0 s |
 | FUITE | **Glissement** | translation | saut de 6 cases · recharge 6.5 s | 6.5 s |
 | EXTRA | **Jugement des quatre** | explosion | 150 dégâts · rayon 6 · TRAVERSE LES MURS · 12 météores à 75 dégâts · la terre tremble 1 s · éboulements à 0 dégâts | 1.0 s |
 
 - **Trait élémentaire** — Un trait qui change d'élément à chaque tir.
 - **Convergence élémentaire** — Feu, eau, terre et air se fondent en un noyau qui explose à l'impact.
 - **Les Quatre Sceaux** — Quatre sceaux se gravent autour de lui : le feu brûle, l'eau ralentit, la terre arrête, l'air balaie.
-- **Renaissance** — Eau et terre : la nature repousse et referme les blessures.
+- **Renaissance** — Il renaît des quatre éléments : +8 à chaque coup pendant 30 s, et ses blessures se referment.
 - **Glissement** — Les quatre éléments le déplacent d'un souffle.
 - **Jugement des quatre** — Le ciel s'ouvre : des météores des quatre éléments tombent sur chaque poursuivant, et la terre tremble.

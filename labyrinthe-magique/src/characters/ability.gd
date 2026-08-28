@@ -389,6 +389,23 @@ enum Kind {
 @export var rain_delay: float = 0.0
 
 
+## Points absorbés par l'exaltation, sur toute sa durée. 0 = aucune protection.
+##
+## LA DÉFENSE DE CE JEU EST UNE ABSORPTION, PAS UN POURCENTAGE, et ce n'est pas
+## un choix d'implémentation : tout coup porté au mage coûte exactement UN point
+## de vie, quelle que soit l'espèce qui le touche (voir
+## `GameManager.on_player_caught`). Il n'y a donc rien à réduire — un tiers de
+## dégâts en moins sur un dégât de 1 est soit 1, soit 0. Ce qui se règle, c'est
+## le NOMBRE de coups qu'on encaisse avant de perdre un point.
+##
+## Le compte se lit donc en coups : 2 points absorbés, ce sont deux contacts
+## gratuits. Sur un mage à 4 points de vie, c'est la moitié de sa chair en plus.
+##
+## Comme le bonus de dégâts, il est REMIS à neuf et non empilé : relancer le
+## sort ne fabrique pas une réserve infinie.
+@export var empower_shield: int = 0
+
+
 ## Nombre de lancers d'affilée AVANT la recharge. 1 = comportement classique.
 ##
 ## Un sort de TERRAIN ne se joue pas comme un sort de combat : poser un seul
