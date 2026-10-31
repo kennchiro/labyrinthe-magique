@@ -274,23 +274,21 @@ place de son corps. Le pied ROUGE est la jambe la plus proche de nous, le pied B
 la plus éloignée. Le mannequin et ses couleurs ne doivent PAS apparaître : c'est le
 personnage de la première image, avec ses vraies bottes, qui prend ces poses.
 
-LES 8 COLONNES de chaque rangée sont UN CYCLE DE MARCHE, et les 8 images sont TOUTES
-différentes. Sur la rangée de profil :
-1. le pied proche est loin DEVANT, posé. Le pied éloigné est loin DERRIÈRE
-2. le pied proche recule, à plat. Le pied éloigné quitte le sol
-3. PASSAGE : les deux pieds sont l'un sur l'autre, JOINTS, le pied éloigné levé
-4. le pied proche continue vers l'arrière. Le pied éloigné passe DEVANT, levé
-5. l'INVERSE de l'image 1 : le pied éloigné est loin DEVANT, le pied proche loin DERRIÈRE
-6. le pied éloigné recule, à plat. Le pied proche quitte le sol
-7. PASSAGE : les deux pieds sont JOINTS, le pied proche levé
-8. le pied proche passe DEVANT, levé. L'image enchaîne sur la première
+LES 8 COLONNES de chaque rangée sont UN CYCLE DE MARCHE tranquille, à pas MOYENS :
+1. le pied proche est devant, le pied éloigné derrière, les deux posés
+2. le pied proche recule, le pied éloigné se lève à peine
+3. PASSAGE : les pieds se croisent, le pied éloigné levé
+4. le pied éloigné passe devant, le pied proche recule
+5. l'INVERSE de l'image 1 : le pied éloigné devant, le pied proche derrière
+6. le pied éloigné recule, le pied proche se lève à peine
+7. PASSAGE : les pieds se croisent, le pied proche levé
+8. le pied proche passe devant : l'image enchaîne sur la première
 
-⚠️ DÉFAUT À NE PAS REPRODUIRE, livré sur toutes les planches précédentes : les jambes
-restent écartées presque tout le cycle, et c'est toujours le même pied qui est devant.
-Les deux pieds doivent ÉCHANGER leur place : celui qui est devant à l'image 1 est
-derrière à l'image 5. Aux images 3 et 7, on ne voit plus d'écart entre les pieds.
-Aux images 1 et 5, l'écart vaut au moins la MOITIÉ DE LA HAUTEUR du personnage. La
-robe s'ouvre autant qu'il le faut pour que les bottes restent visibles.
+⚠️ RÈGLE BLOQUANTE — NI GRAND ÉCART NI PIEDS COLLÉS. De profil, aux images 1 et 5, l'écart
+entre les pieds vaut environ UN TIERS DE LA HAUTEUR du personnage, jamais plus. Les deux
+pieds échangent leur place : celui qui est devant à l'image 1 est derrière à l'image 5.
+De face et de dos, les pieds restent sous le corps, sans s'écarter vers les côtés : l'un
+puis l'autre se lève. Pas de jambes en compas, et pas de saut à pieds joints.
 
 {COMMON_RULES}
 
@@ -351,8 +349,8 @@ restent à plat pendant tout le geste, à la même place.
 ## Position des pieds sur les 8 images : (avancée, hauteur), en part de la hauteur du
 ## mannequin. Le pied éloigné joue le même cycle, décalé de quatre images. C'est ce
 ## décalage qui fait échanger les pieds.
-FOOT_PATH = [(0.28, 0.0), (0.14, 0.0), (0.0, 0.0), (-0.14, 0.0),
-             (-0.28, 0.0), (-0.12, 0.09), (0.0, 0.13), (0.16, 0.08)]
+FOOT_PATH = [(0.17, 0.0), (0.09, 0.0), (0.0, 0.0), (-0.09, 0.0),
+             (-0.17, 0.0), (-0.07, 0.06), (0.0, 0.09), (0.10, 0.05)]
 
 
 def draw_guide() -> None:
@@ -377,10 +375,9 @@ def draw_guide() -> None:
                     step = 22
                 else:
                     # De face et de dos, le pied ne change pas de côté : il se lève.
-                    side = 16 if colour == near else -16
+                    side = 14 if colour == near else -14
                     foot_x = x0 + side
-                    lift = lift + max(0.0, -ahead) * 0.22 if row == 1 else lift + max(0.0, ahead) * 0.22
-                    step = 12
+                    step = 8
                 foot_y = floor - lift * height
                 pen.line((x0, hip, foot_x, foot_y - 8), fill=colour, width=14)
                 pen.rounded_rectangle((foot_x - 16, foot_y - 14, foot_x + step + 8, foot_y),

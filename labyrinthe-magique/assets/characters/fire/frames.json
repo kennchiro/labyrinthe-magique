@@ -1,10 +1,10 @@
 {
   "cell": [
-    181,
+    177,
     112
   ],
   "feet_y": 107.7,
-  "foot_travel": 0.2459,
+  "foot_travel": 0.1816,
   "body_height": 103.3,
   "poses": [
     "idle",

@@ -120,8 +120,11 @@ MAGES = {
             "out": MAGES_OUT, "walks": True, "align_rows": True},
     "invocateur": {"id": "invocateur", "name": "Invocateur", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True},
+    # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
+    # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,
-            "out": MAGES_OUT, "walks": True, "align_rows": True},
+                "out": MAGES_OUT, "walks": True, "align_rows": True,
+                "walk_sheet": "supreme_marche_ancien.png"},
 }
 
 
@@ -747,6 +750,12 @@ def union(*tables) -> tuple | None:
     return None if right <= left else (left, top, right, bottom)
 
 
+## Les images de marche jouées par les mages. LE JOUEUR VEUT DES PAS MOYENS : les images
+## 1, 4, 5 et 8 sont de grandes enjambées, rejetées en jeu. Mais ne garder que les pieds
+## joints (3 et 7) a été rejeté aussi : le mage semble sauter. Le cycle part des pieds
+## joints, qui servent de pose d'arrêt, et s'ouvre sur les images 2 et 6.
+SMALL_STEP_FRAMES = [3, 2, 2, 3, 7, 6, 6, 7]
+
 ## Marge ajoutée autour d'une case avant d'agrandir l'attaque, pour que le sort ne
 ## soit pas coupé par le bord.
 STEADY_MARGIN = 64
@@ -835,7 +844,7 @@ def steadied(walk_line: list, strike_line: list) -> tuple:
 
 def build(source_name: str, entry: dict) -> str:
     source_folder = entry.get("source", SOURCE)
-    walk_path = source_folder / f"{source_name}_marche.png"
+    walk_path = source_folder / entry.get("walk_sheet", f"{source_name}_marche.png")
     strike_path = source_folder / f"{source_name}_attaque.png"
     walks = entry.get("walks", Bestiary_walks(entry["id"]))
     missing = [p.name for p in (walk_path, strike_path) if not p.exists()]
@@ -858,6 +867,7 @@ def build(source_name: str, entry: dict) -> str:
     if entry.get("align_rows"):
         for row in ROWS:
             walk[row], strike[row] = steadied(walk[row], strike[row])
+            walk[row] = [walk[row][number - 1] for number in SMALL_STEP_FRAMES]
 
     # On DÉCOUPE QUAND MÊME après cette plainte : elle porte sur le dessin, pas
     # sur le format, donc les bandes produites restent regardables. Mais elle

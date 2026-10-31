@@ -809,12 +809,13 @@ l'Air.
   plus petite. `steadied` les recale (dernière image d'attaque contre la marche), et
   `check_animated` le vérifie. Les huit mages passent par `build_enemies.py`, plus par
   `build_characters.py`, qui ne reste que la mesure de largeur et les anciennes planches.
-- ⚠️ **Pour une marche, le texte ne suffit pas : joindre `guide_marche.png`.** Sans ce
-  mannequin, aucune des huit planches ne faisait de vrais pas : les jambes restaient
-  écartées et les pieds n'avançaient presque pas (foulée 0,045 à 0,16). Avec lui, 0,14 à
-  0,31. Aucun contrôle ne l'a vu : c'est le joueur qui l'a remarqué en jeu. Regarder le
-  profil image par image, agrandi, pas seulement la foulée mesurée : le bâton touche le
-  sol et compte comme un pied (l'Air semblait rater un pas sur deux, à tort).
+- ⚠️ **LE JOUEUR VEUT DES PAS MOYENS, dans toutes les directions.** Des enjambées d'une
+  demi-hauteur ont été rejetées en jeu (« catastrophe »), et les deux pieds collés aussi
+  (« on dirait qu'il saute »). Ne pas réviser ce choix pour réduire le glissement.
+  `SMALL_STEP_FRAMES` ne joue que les images moyennes des planches actuelles, et
+  `guide_marche.png` impose un écart d'un tiers de hauteur. Le texte seul ne suffit pas au
+  générateur : joindre le guide. Juger image par image, agrandi : le bâton touche le
+  sol et compte comme un pied dans les mesures (l'Air semblait rater un pas, à tort).
 
 ## État actuel
 

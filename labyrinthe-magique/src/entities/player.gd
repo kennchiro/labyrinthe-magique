@@ -30,7 +30,7 @@ const ATTACK_DURATION := 0.32
 const WALK_REFERENCE_SPEED := 5.0
 ## Le dessin de marche bouge peu d'une pose à l'autre : ce léger rebond, deux fois
 ## par cycle comme les appuis, donne le poids que les poses seules n'ont pas.
-const WALK_BOB := 2.2
+const WALK_BOB := 1.0
 ## Hauteur de la case à l'écran pour une planche à six poses.
 const DEFAULT_TARGET_HEIGHT := 58.0
 ## Hauteur du CORPS à l'écran pour une planche animée : la même que les six poses.
