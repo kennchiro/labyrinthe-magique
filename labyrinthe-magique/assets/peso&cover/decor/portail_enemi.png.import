@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cxs68r2gx4k58"
-path="res://.godot/imported/orange.png-68958206541a8eded03150cf388507d2.ctex"
+uid="uid://bakpl608i5db5"
+path="res://.godot/imported/portail_enemi.png-17cd5202e21e655e5985a63b526a4073.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/portals/orange.png"
-dest_files=["res://.godot/imported/orange.png-68958206541a8eded03150cf388507d2.ctex"]
+source_file="res://assets/peso&cover/decor/portail_enemi.png"
+dest_files=["res://.godot/imported/portail_enemi.png-17cd5202e21e655e5985a63b526a4073.ctex"]
 
 [params]
 

@@ -127,6 +127,7 @@ labyrinthe avec sa gemme allumée au centre — une forme, pas une scène.
 | sujet | prompt |
 |---|---|
 | la couverture de l'écran-titre, en PAYSAGE | [interface/couverture_paysage](prompts/interface/couverture_paysage.md) |
+| le portail de téléportation, couleur unique | [interface/portail_teleportation](prompts/interface/portail_teleportation.md) |
 
 ## Ce que dix planches ont appris
 

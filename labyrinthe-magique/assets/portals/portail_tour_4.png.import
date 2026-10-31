@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b2cg0ruw1rboq"
-path="res://.godot/imported/rouge.png-9802658cfd19e8222ecf93f70d341501.ctex"
+uid="uid://l487bsfhbk6m"
+path="res://.godot/imported/portail_tour_4.png-07071e11d6e9e173901c41e011406352.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/portals/rouge.png"
-dest_files=["res://.godot/imported/rouge.png-9802658cfd19e8222ecf93f70d341501.ctex"]
+source_file="res://assets/portals/portail_tour_4.png"
+dest_files=["res://.godot/imported/portail_tour_4.png-07071e11d6e9e173901c41e011406352.ctex"]
 
 [params]
 

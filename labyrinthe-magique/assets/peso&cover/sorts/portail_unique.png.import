@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bwlcc1b8kmkde"
-path="res://.godot/imported/rose.png-729919494aef7499f0afe2fbb44f1363.ctex"
+uid="uid://bbxkkc0atqbvg"
+path="res://.godot/imported/portail_unique.png-1d64c250535525b9236f3ab22bd66ab0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/portals/rose.png"
-dest_files=["res://.godot/imported/rose.png-729919494aef7499f0afe2fbb44f1363.ctex"]
+source_file="res://assets/peso&cover/sorts/portail_unique.png"
+dest_files=["res://.godot/imported/portail_unique.png-1d64c250535525b9236f3ab22bd66ab0.ctex"]
 
 [params]
 

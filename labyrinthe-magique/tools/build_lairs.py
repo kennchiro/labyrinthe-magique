@@ -25,7 +25,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-SOURCE = Path("assets/portail/portail_enemi.png")
+SOURCE = Path("assets/peso&cover/decor/portail_enemi.png")
 OUT = Path("assets/lairs")
 
 COLORS = ["rouge", "violet", "vert", "cyan"]

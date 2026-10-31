@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cv35wj200bham"
-path="res://.godot/imported/portail_teleportation.png-3d2edb75a697b5a4fd720c51bc84fbae.ctex"
+path="res://.godot/imported/portail_teleportation.png-c15d30ae216fdbeacba9108dd43b8d11.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/dossier sans titre/portail_teleportation.png"
-dest_files=["res://.godot/imported/portail_teleportation.png-3d2edb75a697b5a4fd720c51bc84fbae.ctex"]
+source_file="res://assets/peso&cover/decor/portail_teleportation.png"
+dest_files=["res://.godot/imported/portail_teleportation.png-c15d30ae216fdbeacba9108dd43b8d11.ctex"]
 
 [params]
 

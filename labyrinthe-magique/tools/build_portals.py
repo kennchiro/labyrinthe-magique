@@ -1,4 +1,19 @@
-"""Découpe la planche des portails de téléportation.
+"""⚠️ OUTIL RETIRÉ DU SERVICE LE 2026-08-28 — conservé pour mémoire.
+
+Il découpait HUIT portails de six états chacun, une couleur par portail. Le jeu
+n'en utilise plus qu'UN, en cyan, sur une boucle de huit images : voir
+`tools/build_spike_anim.py` (entrée `portail_unique.png`) et `src/portals/portal.gd`.
+
+Ses sorties — `assets/portals/<couleur>.png` et `frames.json` — ont été
+supprimées : plus rien ne les ouvrait, et elles partaient dans l'app.
+
+Sa planche source a été rangée dans `assets/peso&cover/decor/` avec celle des
+repaires — elles traînaient toutes deux dans un dossier nommé « dossier sans
+titre », où `build_lairs.py` ne les trouvait plus non plus. Le chemin ci-dessous
+est donc juste, mais l'outil reste hors service : pour revenir aux huit couleurs
+il faudrait de toute façon refaire `Portal`.
+
+Découpe la planche des portails de téléportation.
 
     tools/.venv/bin/python tools/build_portals.py
 
@@ -26,7 +41,7 @@ import json
 import numpy as np
 from PIL import Image
 
-SOURCE = Path("assets/portail/portail_teleportation.png")
+SOURCE = Path("assets/peso&cover/decor/portail_teleportation.png")
 OUT = Path("assets/portals")
 
 ## Les huit couleurs, dans l'ordre des rangées de la planche.

@@ -66,6 +66,20 @@ SHEETS = [
     ("assets/peso&cover/sorts/cyclone_bolt.png", "air", 4,
      ["bolt"], "cyclonebolt", 256,
      {"gutters": True, "anchor": {"bolt": "base"}}),
+    # LE PORTAIL DU LABYRINTHE : huit images d'un tour, une seule couleur.
+    #
+    # Il remplace huit planches de six ÉTATS dessinés — repos, ouverture,
+    # ouvert, actif, saut, fermeture — soit quarante-huit images pour huit. Les
+    # états sont maintenant des réglages de cette boucle unique (vitesse,
+    # taille, éclat) : c'est ce qui les rend enfin cohérents entre eux.
+    #
+    # Ancré sur son CENTRE : le moteur pose ce sprite centré sur la case du
+    # labyrinthe, donc ce qui n'est pas au milieu de l'image n'est pas au milieu
+    # de la case.
+    ("assets/peso&cover/sorts/portail_unique.png", "", 4,
+     ["tour"], "portail", 192,
+     {"racine": "assets/portals", "rangees_par_matiere": 2,
+      "anchor": {"tour": "centre"}}),
 ]
 
 ## Détourage : même clé de teinte que les vignettes de sorts. Le magenta
@@ -173,7 +187,10 @@ def cut(source: str, folder: str, columns: int, rows: list, prefix: str,
         return f"  ! {source} introuvable"
     with Image.open(path) as raw:
         sheet = raw.convert("RGBA")
-    out = Path("assets/characters") / folder
+    # La racine par défaut est `assets/characters/` — ces animations
+    # appartiennent à un mage. Le portail du labyrinthe, lui, n'appartient à
+    # personne : il vit dans `assets/portals/`.
+    out = Path((options or {}).get("racine", "assets/characters")) / folder
     out.mkdir(parents=True, exist_ok=True)
     cell_h = sheet.height // len(rows)
 
@@ -221,8 +238,11 @@ def cut(source: str, folder: str, columns: int, rows: list, prefix: str,
                 out / f"{prefix}_{matter}_{index}.png")
         report.append(f"{matter} x{columns} {size}")
 
+    # ⚠️ LE NOMBRE D'IMAGES, PAS LE NOMBRE DE COLONNES. Une matière peut
+    # s'étaler sur plusieurs rangées : le portail en a huit sur deux lignes de
+    # quatre, et le descripteur annonçait fièrement « 4 ».
     (out / f"{prefix}_anim.json").write_text(json.dumps({
-        "frames": columns, "matters": rows, "height": height,
+        "frames": columns * stack, "matters": rows, "height": height,
     }), encoding="utf-8")
     return f"{folder}/{prefix}  " + " · ".join(report)
 
