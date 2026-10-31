@@ -71,7 +71,17 @@ LES TROIS RANGÉES, de haut en bas :
 - rangée 3 : la créature vue DE PROFIL, TOURNÉE VERS LA DROITE, elle avance vers
   la droite de l'image
 
-LES 8 COLONNES de chaque rangée, lues de gauche à droite, sont une MARCHE PESANTE ET RAPIDE, LA HACHE EN MAIN : les épaules roulent, la tête descend et remonte, les sabots frappent le sol, la buée sort des naseaux par à-coups, et le fer de la hache oscille au rythme du pas. La 8e image doit enchaîner sur la première sans à-coup.
+LES 8 COLONNES de chaque rangée, lues de gauche à droite, sont une MARCHE PESANTE ET RAPIDE, LA HACHE EN MAIN : les épaules roulent, la tête descend et remonte, les sabots frappent le sol, la buée sort des naseaux par à-coups, et le fer de la hache oscille au rythme du pas. Ce cycle, et voici ce que chacune doit montrer :
+1. APPUI AVANT : jambe droite loin devant, talon qui touche le sol, jambe gauche loin derrière, orteils qui poussent. Les deux pieds sont ÉCARTÉS AU MAXIMUM — plus large que ses épaules
+2. la jambe arrière quitte le sol et remonte
+3. PASSAGE : les deux jambes se croisent au milieu, presque jointes
+4. la jambe gauche part vers l'avant, la droite reste en arrière
+5. APPUI AVANT INVERSE : jambe gauche loin devant, talon au sol, jambe droite loin derrière. Écartement maximal, comme à l'image 1 mais jambes échangées
+6. la jambe arrière quitte le sol et remonte
+7. PASSAGE : les deux jambes se croisent au milieu, presque jointes
+8. la jambe droite repart vers l'avant : on revient à l'image 1
+
+La 8e image enchaîne sur la première sans à-coup.
 
 ⚠️ RÈGLE BLOQUANTE — LA CRÉATURE EST DESSINÉE DANS LES 24 CASES, sans une seule
 exception. Son coup, son souffle, sa rafale ou son projectile s'ajoutent à elle,

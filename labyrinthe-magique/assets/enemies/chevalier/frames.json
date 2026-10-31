@@ -1,33 +1,34 @@
 {
   "cell": [
-    240,
+    112,
     112
   ],
-  "feet_y": 109.6,
+  "feet_y": 108.6,
+  "foot_travel": 0.3405,
   "poses": [
     "idle",
     "walk_1",
     "walk_2",
     "walk_3",
     "walk_4",
-    "attack"
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
   ],
   "directions": [
     "down",
     "up",
-    "right",
-    "left"
+    "left",
+    "right"
   ],
-  "source": "enemi_9.png",
-  "grid": {
-    "dx": 148,
-    "dy": 156,
-    "ox": 30,
-    "oy": 12,
-    "rows": {
-      "down": 0,
-      "up": 1,
-      "right": 2
-    }
-  }
+  "source": "chevalier_noir_marche.png + chevalier_noir_attaque.png"
 }

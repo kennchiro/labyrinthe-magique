@@ -1,33 +1,34 @@
 {
   "cell": [
-    240,
+    112,
     112
   ],
-  "feet_y": 109.7,
+  "feet_y": 105.1,
+  "foot_travel": 0.4891,
   "poses": [
     "idle",
     "walk_1",
     "walk_2",
     "walk_3",
     "walk_4",
-    "attack"
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
   ],
   "directions": [
     "down",
     "up",
-    "right",
-    "left"
+    "left",
+    "right"
   ],
-  "source": "enemi_6.png",
-  "grid": {
-    "dx": 176,
-    "dy": 178,
-    "ox": 27,
-    "oy": 24,
-    "rows": {
-      "down": 0,
-      "up": 1,
-      "right": 2
-    }
-  }
+  "source": "archer_os_marche.png + archer_os_attaque.png"
 }

@@ -483,8 +483,23 @@ GLIDE_ROW = """| La créature glisse au lieu de marcher | **défaut bloquant** :
 """
 
 
+LEG_BEATS = [
+    "APPUI AVANT : jambe droite loin devant, talon qui touche le sol, jambe"
+    " gauche loin derrière, orteils qui poussent. Les deux pieds sont ÉCARTÉS AU"
+    " MAXIMUM — plus large que ses épaules",
+    "la jambe arrière quitte le sol et remonte",
+    "PASSAGE : les deux jambes se croisent au milieu, presque jointes",
+    "la jambe gauche part vers l'avant, la droite reste en arrière",
+    "APPUI AVANT INVERSE : jambe gauche loin devant, talon au sol, jambe droite"
+    " loin derrière. Écartement maximal, comme à l'image 1 mais jambes échangées",
+    "la jambe arrière quitte le sol et remonte",
+    "PASSAGE : les deux jambes se croisent au milieu, presque jointes",
+    "la jambe droite repart vers l'avant : on revient à l'image 1",
+]
+
+
 def fiche(beast: dict) -> str:
-    walk_rows ="""LES TROIS RANGÉES, de haut en bas :
+    walk_rows = """LES TROIS RANGÉES, de haut en bas :
 - rangée 1 : la créature vue DE FACE, elle avance vers le bas de l'image
 - rangée 2 : la créature vue DE DOS, elle s'éloigne vers le haut de l'image
 - rangée 3 : la créature vue DE PROFIL, TOURNÉE VERS LA DROITE, elle avance vers
@@ -503,11 +518,17 @@ def fiche(beast: dict) -> str:
     # trois planches de gobelin livrées de suite ont donné des jambes qui
     # frémissent, parce que rien ne disait ce que doit contenir un cycle. Les
     # huit temps le disent.
-    if beast.get("walk_beats"):
+    #
+    # ⚠️ Toutes les bêtes à jambes les reçoivent : la marche de l'Archer d'Os,
+    # commandée sur sa seule phrase, a donné huit fois la même foulée figée
+    # (0,03 de course du pied, contre 0,50 pour le gobelin).
+    walk_beats = beast.get("walk_beats") or (LEG_BEATS if beast.get("legs", True)
+                                             else None)
+    if walk_beats:
         steps = "\n".join(f"{i + 1}. {beat}"
-                           for i, beat in enumerate(beast["walk_beats"]))
-        walk_block = (f"LES {COLUMNS} COLONNES de chaque rangée sont UN CYCLE DE "
-                      f"MARCHE COMPLET, lu de gauche à droite, et voici ce que "
+                           for i, beat in enumerate(walk_beats))
+        walk_block = (f"LES {COLUMNS} COLONNES de chaque rangée, lues de gauche "
+                      f"à droite, sont {beast['walk']}. Ce cycle, et voici ce que "
                       f"chacune doit montrer :\n{steps}\n\nLa {COLUMNS}e image "
                       f"enchaîne sur la première sans à-coup.")
     else:

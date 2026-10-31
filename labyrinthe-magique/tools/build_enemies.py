@@ -92,7 +92,8 @@ HERD = {
     "dragonnet": {"id": "dragonnet", "name": "Dragonnet de Feu"},
     "golem_lave": {"id": "golem", "name": "Golem de Lave"},
     "archer_os": {"id": "archer", "name": "Archer d'Os"},
-    "demon_cristal": {"id": "cristal", "name": "Démon de Cristal"},
+    "demon_cristal": {"id": "cristal", "name": "Démon de Cristal",
+                      "keep_enclosed": True},
     "minotaure": {"id": "minotaure", "name": "Minotaure"},
     "chevalier_noir": {"id": "chevalier", "name": "Chevalier Noir"},
     "golem_givre": {"id": "givre", "name": "Golem de Givre"},
@@ -110,9 +111,15 @@ KEY_DISTANCE = 70.0
 ## Au-delà de cette distance, un pixel magenta est de la MATIÈRE et on n'y
 ## touche pas. Entre les deux, c'est la frange d'anticrénelage du découpage.
 FRINGE_DISTANCE = 140.0
+## Une zone enclavée s'écartant en moyenne de plus que ça du fond est de la
+## MATIÈRE couleur de fond, pas un trou. Mesuré sur le Démon de Cristal : les vrais
+## trous valent 14 à 21, le cœur 30 à 45.
+ENCLOSED_MATTER = 25.0
+## Marge autour de cette matière, à l'abri du dégorgement de la frange.
+ENCLOSED_MARGIN = 4
 
 
-def keyed(cell: Image.Image) -> Image.Image:
+def keyed(cell: Image.Image, keep_enclosed: bool = False) -> Image.Image:
     """La case détourée, fond magenta retiré où qu'il soit.
 
     ⚠️ CE DÉTOURAGE A ÉTÉ REFAIT, et la raison mérite d'être écrite.
@@ -135,6 +142,11 @@ def keyed(cell: Image.Image) -> Image.Image:
     magenta assombri est à 196 du fond — aussi loin que de la matière — et rien
     ne les distingue. C'est pourquoi les prompts l'interdisent : ce défaut-là se
     corrige au dessin, jamais au découpage.
+
+    ⚠️ `keep_enclosed`, pour la bête qui porte le magenta du fond sur elle : le
+    cœur du Démon de Cristal partait au détourage et lui laissait un trou dans la
+    poitrine. Réservé à ceux qui le déclarent dans `HERD` : le seuil est réglé sur
+    ce cœur-là, et ailleurs il reboucherait de vrais trous.
     """
     pixels = np.asarray(cell.convert("RGB")).astype(np.float32)
     height, width = pixels.shape[:2]
@@ -160,8 +172,20 @@ def keyed(cell: Image.Image) -> Image.Image:
         0.0, 1.0)
     fringe = (away >= KEY_DISTANCE) & (away < FRINGE_DISTANCE)
     spill = np.where(fringe, magentaness, 0.0)
+    kept = np.zeros_like(fringe)
+    if keep_enclosed:
+        labels, count = ndimage.label(away < KEY_DISTANCE)
+        outside = np.unique(np.concatenate(
+            [labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+        for piece in range(1, count + 1):
+            mask = labels == piece
+            if piece not in outside and away[mask].mean() >= ENCLOSED_MATTER:
+                kept |= mask
+        spill = np.where(ndimage.binary_dilation(kept, iterations=ENCLOSED_MARGIN),
+                         0.0, spill)
     data[..., 3] = (data[..., 3].astype(np.float32)
                     * (1.0 - spill)).astype(np.uint8)
+    data[..., 3] = np.where(kept, 255, data[..., 3])
     return Image.fromarray(data, "RGBA")
 
 
@@ -170,10 +194,10 @@ def keyed(cell: Image.Image) -> Image.Image:
 ## il arrive quand même : une massue levée trop haut dépasse dans la rangée
 ## voisine, et sa pointe reste accrochée en haut de la case d'à côté.
 ##
-## On ne nettoie QUE le haut. Le bas porte de la poussière et des éclats
+## On ne nettoie ici QUE le haut. Le bas porte de la poussière et des éclats
 ## légitimes, les côtés portent les traînées de coup — y toucher coûterait du
-## dessin. Le haut, lui, doit être vide : la consigne veut la créature centrée
-## sur 80 % de la case.
+## dessin, sauf preuve de débordement : voir `without_side_bleed`. Le haut, lui,
+## doit être vide : la consigne veut la créature centrée sur 80 % de la case.
 ##
 ## Sous cette part de bruit, un morceau est de la poussière de détourage.
 SPECK_SHARE = 0.0005
@@ -203,6 +227,69 @@ def deblorded(cell: Image.Image) -> Image.Image:
     data = np.array(cell)
     data[..., 3] = np.where(doomed, 0, data[..., 3])
     return Image.fromarray(data, "RGBA")
+
+
+## Écart toléré, en pixels, entre les deux moitiés d'une forme coupée par la
+## frontière de deux cases : le rabot de `BORDER_TRIM` en a retiré une tranche.
+BLEED_ROW_SLACK = 3
+
+
+def without_side_bleed(line: list) -> list:
+    """La rangée débarrassée de ce qui a débordé des voisines de GAUCHE et de DROITE.
+
+    ⚠️ Un morceau détaché au bord de la case ne suffit pas à le condamner : la
+    boule du Golem de Lave en est un, et elle est légitime. Ce qui le condamne,
+    c'est que la matière CONTINUE de l'autre côté de la frontière. La flamme du
+    Dragonnet laissait ainsi une tranche dans la case suivante, et ses ailes
+    ouvertes une pointe de chaque côté.
+
+    ⚠️ Une flèche en plein vol, elle, n'appartient au corps d'aucune des deux
+    cases. La condamner des deux côtés la ferait disparaître : on garde alors sa
+    plus grande moitié.
+    """
+    alphas = [np.asarray(cell)[..., 3] > 24 for cell in line]
+    parts = []
+    for alpha in alphas:
+        labels, count = ndimage.label(alpha)
+        sizes = ndimage.sum(alpha, labels, range(1, count + 1)) if count else []
+        parts.append((labels, count, np.asarray(sizes),
+                      int(np.argmax(sizes)) + 1 if count else 0))
+
+    def belongs_across(own_edge, own_size, other) -> bool:
+        """Ce bord continue-t-il dans une forme qui a plus de droits que lui ?"""
+        if not own_edge[0].any():
+            return False
+        reach = ndimage.binary_dilation(own_edge[0], iterations=BLEED_ROW_SLACK)
+        labels, _, sizes, biggest = other
+        for found in np.unique(labels[:, own_edge[1]][reach]):
+            if found and (found == biggest or sizes[found - 1] > own_size):
+                return True
+        return False
+
+    cleaned = []
+    for index, cell in enumerate(line):
+        alpha = alphas[index]
+        labels, count, sizes, biggest = parts[index]
+        if count <= 1:
+            cleaned.append(cell)
+            continue
+        doomed = np.zeros_like(alpha)
+        for piece in range(1, count + 1):
+            if piece == biggest:
+                continue
+            mask = labels == piece
+            size = sizes[piece - 1]
+            if ((index > 0
+                 and belongs_across((mask[:, 0], -1), size, parts[index - 1]))
+                    or (index + 1 < len(line)
+                        and belongs_across((mask[:, -1], 0), size, parts[index + 1]))):
+                doomed |= mask
+        if doomed.any():
+            data = np.array(cell)
+            data[..., 3] = np.where(doomed, 0, data[..., 3])
+            cell = Image.fromarray(data, "RGBA")
+        cleaned.append(cell)
+    return cleaned
 
 
 def bounds(cell: Image.Image):
@@ -324,7 +411,7 @@ def without_grid(sheet: Image.Image) -> Image.Image:
     return Image.fromarray(out, "RGB")
 
 
-def cells_of(path: Path, rows: int) -> dict:
+def cells_of(path: Path, rows: int, keep_enclosed: bool = False) -> dict:
     """Découpe une planche en cases détourées, rangée par rangée."""
     with Image.open(path) as image:
         sheet = without_grid(image.convert("RGB"))
@@ -338,8 +425,9 @@ def cells_of(path: Path, rows: int) -> dict:
                    int(row * cell_h) + BORDER_TRIM,
                    int((column + 1) * cell_w) - BORDER_TRIM,
                    int((row + 1) * cell_h) - BORDER_TRIM)
-            line.append(deblorded(keyed(sheet.crop(box))))
-        out[ROWS[row]] = mend(line, f"{path.stem} rangée {row + 1}")
+            line.append(deblorded(keyed(sheet.crop(box), keep_enclosed)))
+        out[ROWS[row]] = mend(without_side_bleed(line),
+                              f"{path.stem} rangée {row + 1}")
     return out
 
 
@@ -651,8 +739,8 @@ def build(source_name: str, entry: dict) -> str:
         if complaint:
             return f"{entry['id']} REFUSÉ : {complaint}"
 
-    walk = cells_of(walk_path, len(ROWS))
-    strike = cells_of(strike_path, len(ROWS))
+    walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False))
+    strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False))
 
     # On DÉCOUPE QUAND MÊME après cette plainte : elle porte sur le dessin, pas
     # sur le format, donc les bandes produites restent regardables. Mais elle

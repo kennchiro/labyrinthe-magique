@@ -68,7 +68,7 @@ LES TROIS RANGÉES, de haut en bas :
 - rangée 3 : la créature vue DE PROFIL, TOURNÉE VERS LA DROITE, elle avance vers
   la droite de l'image
 
-LES 8 COLONNES de chaque rangée sont UN CYCLE DE MARCHE COMPLET, lu de gauche à droite, et voici ce que chacune doit montrer :
+LES 8 COLONNES de chaque rangée, lues de gauche à droite, sont une COURSE VIVE : grandes enjambées, les épaules qui roulent, les oreilles qui battent, la massue qui rebondit sur l'épaule. Ce cycle, et voici ce que chacune doit montrer :
 1. APPUI AVANT : jambe droite loin devant, talon qui touche le sol, jambe gauche loin derrière, orteils qui poussent. Les deux pieds sont ÉCARTÉS AU MAXIMUM — plus large que ses épaules
 2. la jambe arrière quitte le sol et remonte, le corps s'abaisse
 3. PASSAGE : les deux jambes se croisent au milieu, presque jointes, le corps est au plus bas
