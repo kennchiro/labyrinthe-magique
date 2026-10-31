@@ -116,6 +116,8 @@ signal ability_refused(reason: String)
 @onready var compass: Compass = $Compass
 @onready var camera: Camera2D = $Camera2D
 
+## La vue en volume, si le GameManager l'a demandée. Nulle : le jeu 2D, inchangé.
+var world_stage: WorldStage = null
 var grid: MazeGrid = null
 var config: LevelConfig = null
 var player: Player = null
@@ -289,9 +291,12 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	# L'AMBIANCE prend l'air du stage : vignette teintée, halo du mage, poussière.
 	if _ambience == null:
 		_ambience = Ambience.new()
-		add_child(_ambience)
+		# Sur un calque d'écran : dans la texture du sol, elle serait couchée avec lui.
+		(world_stage if world_stage != null else self).add_child(_ambience)
 	_ambience.set_stage_tint(maze_renderer.air_tint())
 	maze_renderer.set_grid(grid)
+	if world_stage != null:
+		world_stage.build(grid, config.stage)
 	# Le décor dérive de la même graine que le labyrinthe : rejouer une graine
 	# redonne exactement la même forêt, props compris.
 	var decor_seed := rng_seed if rng_seed != 0 else grid.cols * 7919 + grid.portals.size()
@@ -459,7 +464,7 @@ func _process(delta: float) -> void:
 	# C'est le Level qui fait la conversion — lui seul connaît les deux mondes.
 	if _ambience != null and player != null:
 		var view := Vector2(get_viewport().get_visible_rect().size)
-		var at := get_canvas_transform() * player.position
+		var at := to_screen(player.position)
 		_ambience.set_focus(Vector2(at.x / maxf(1.0, view.x), at.y / maxf(1.0, view.y)))
 	_update_camera(false)
 	if teleport_system != null:
@@ -1574,6 +1579,8 @@ func _on_zone_expired(zone_id: int) -> void:
 ## droit à travers la pierre qui vient d'apparaître.
 func _on_wall_changed(_cell: Vector2i) -> void:
 	maze_renderer.set_grid(grid)
+	if world_stage != null:
+		world_stage.rebuild_walls()
 	_refresh_ai()
 
 
@@ -2191,10 +2198,17 @@ func _walk_player_out_of_house() -> void:
 ## Rend faux si le tap ne désigne rien de praticable — mur, hors grille, ou
 ## case coupée du mage (un mur de pierre peut isoler un couloir) : donner un
 ## ordre inexécutable en silence se lirait comme une entrée perdue.
+## Pixels du monde -> coordonnées de l'interface, en 2D comme en volume.
+func to_screen(world: Vector2) -> Vector2:
+	return world_stage.world_to_screen(world) if world_stage != null \
+		else get_canvas_transform() * world
+
+
 func order_player_walk(screen_point: Vector2) -> bool:
 	if player == null or grid == null:
 		return false
-	var world := get_canvas_transform().affine_inverse() * screen_point
+	var world := world_stage.screen_to_world(screen_point) if world_stage != null \
+		else get_canvas_transform().affine_inverse() * screen_point
 	var cell := maze_renderer.world_to_cell(world)
 	if not grid.in_bounds(cell.x, cell.y) or not grid.is_floor_v(cell):
 		return false
@@ -2552,6 +2566,11 @@ func _update_camera(snap: bool) -> void:
 	if grid == null:
 		return
 	var maze_px := maze_renderer.maze_pixel_size()
+	if world_stage != null:
+		var mage := player.position if player != null else maze_px * 0.5
+		world_stage.aim(mage, maze_px, overview or player == null, snap,
+			_shake_offset(get_process_delta_time()))
+		return
 	var view := Vector2(get_viewport_rect().size)
 
 	if overview or player == null:

@@ -172,6 +172,35 @@ sur la case, `--pause` capture l'écran de pause.
 **5. Rien ne se vérifie « à l'œil » sans capture.** Utiliser `--screenshot` plutôt que
 demander à l'utilisateur de regarder son écran.
 
+## La vue en volume (`--25d`)
+
+Le sol et les haies sont en 3D (`src/world/`), tout le reste est le `Level` 2D, dessiné
+dans une SubViewport puis couché sur le sol (`WorldStage`). Personnages, sorts et ordre
+d'affichage gardent donc leur code : un nouvel effet 2D marche sans rien ajouter ici.
+Encore derrière l'option, tant que la fluidité n'est pas mesurée sur iPhone.
+
+```bash
+godot --path . -- --25d --menu                         # jouer, depuis l'écran-titre
+godot --path . -- --25d --stage 3 --screenshot /tmp/x.png --frames 40
+godot --path . --resolution 2532x1170 -- --25d --auto-walk --cast --bench 10
+```
+
+- **La caméra ne tourne jamais** : le haut de l'écran reste le nord, les commandes ne
+  changent pas. `CameraRules` déduit tout, `tests/test_world.gd` vérifie qu'on voit au
+  moins autant qu'en 2D, que la texture tombe sur sa case et qu'un tap retrouve la sienne.
+- **Les entités sont redressées** par `CameraRules.stand_scale()` : couchées sur le sol,
+  la vue inclinée les écraserait de 17 %. Seuls les enfants d'`Entities` le sont.
+- **L'éclairage se déduit de la planche** : `StageMood` écrit la luminosité voulue,
+  `MazeView3D` mesure le dessin et en tire sa teinte. Les planches vont de 0,16 à 0,95.
+- ⚠️ Ce qui doit rester en espace écran (`Ambience`) ne peut PAS être un enfant du
+  `Level` : un CanvasLayer dessinerait dans la texture du sol.
+- ⚠️ Passer par `Level.to_screen()` et non `get_canvas_transform()` : ce dernier répond
+  dans la texture, plus à l'écran.
+- ⚠️ La texture est à alpha PRÉMULTIPLIÉ (`blend_premul_alpha`) : c'est ce qui garde
+  visibles les effets additifs sur un fond transparent.
+- ⚠️ Pour mesurer, ne pas lire `delta` : le moteur le lisse sur des multiples de 1/120 s.
+  `--bench` prend une vraie horloge, et c'est le p99 qui compte.
+
 ## Les huit mages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·

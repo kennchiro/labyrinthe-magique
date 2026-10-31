@@ -27,10 +27,14 @@ extends Node
 ##   --cast             attaque dès qu'une cible est à portée
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
+##   --bench S          mesure S secondes sans limite d'images, écrit BENCH et quitte
+##   --25d              la vue en volume (voir WorldStage)
 ##   --screenshot PATH  capture un PNG puis quitte
 ##   --frames N         laisse tourner N frames avant la capture
 ##
 ## Touches : TAB vue d'ensemble · F1 heatmap · F3 infos de debug · F5 / F6 / F7 stage
+
+const BENCH_WARMUP_FRAMES := 60
 
 @onready var game: GameManager = get_parent()
 
@@ -180,12 +184,43 @@ func apply_command_line() -> void:
 		_pending_tap = Vector2i(int(args[tap_arg + 1]), int(args[tap_arg + 2]))
 		_tap_countdown = 3
 
+	var bench_arg := args.find("--bench")
+	if bench_arg >= 0 and bench_arg + 1 < args.size():
+		_run_bench(float(args[bench_arg + 1]))
+		return
 	if "--screenshot" in args:
 		# L'issue est déclenchée APRÈS l'attente de frames, pour que l'écran de
 		# fin affiche un temps de partie réaliste et non 0,0 s.
 		_capture_and_quit(args)
 	else:
 		_apply_outcome(args)
+
+
+## La fluidité en chiffres. La moyenne cache les à-coups, seuls ressentis en jouant :
+## c'est le 99e centile qu'il faut lire.
+func _run_bench(seconds: float) -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = 0
+	for i in BENCH_WARMUP_FRAMES:
+		await get_tree().process_frame
+	var times: Array[float] = []
+	var total := 0.0
+	# Une vraie horloge : `delta` est lissé par le moteur et retombe sur des multiples
+	# de 1/120 s, ce qui efface justement les à-coups qu'on vient mesurer.
+	var last := Time.get_ticks_usec()
+	while total < seconds:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		var spent := (now - last) / 1000000.0
+		last = now
+		times.append(spent)
+		total += spent
+	times.sort()
+	print("BENCH images=%d %.0f img/s p50=%.2fms p99=%.2fms pire=%.2fms appels=%d" % [
+		times.size(), times.size() / total, times[times.size() / 2] * 1000.0,
+		times[int(times.size() * 0.99)] * 1000.0, times[-1] * 1000.0,
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
+	get_tree().quit()
 
 
 ## Pose un ennemi À QUELQUES CASES du joueur, dans un couloir droit, et non
@@ -248,8 +283,8 @@ func _process(delta: float) -> void:
 	if _pending_tap.x >= 0:
 		_tap_countdown -= 1
 		if _tap_countdown <= 0 and game.level.player != null:
-			var screen: Vector2 = game.level.get_canvas_transform() * \
-				game.level.maze_renderer.cell_to_world(_pending_tap)
+			var screen: Vector2 = game.level.to_screen(
+				game.level.maze_renderer.cell_to_world(_pending_tap))
 			if not game.level.order_player_walk(screen):
 				push_warning("--tap %s : case injouable" % _pending_tap)
 			_pending_tap = Vector2i(-1, -1)

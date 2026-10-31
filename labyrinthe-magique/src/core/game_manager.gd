@@ -65,6 +65,12 @@ func _ready() -> void:
 	# c'est ce qui permet à la pause et aux écrans de fin de rester réactifs.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
+	if WorldStage.requested():
+		var world := WorldStage.new()
+		add_child(world)
+		world.adopt(level)
+		level.world_stage = world
+
 	if demo:
 		# Progression FICTIVE, tout ouvert — et incapable d'écrire sur le
 		# disque : un essai ne doit jamais toucher la partie du joueur.
