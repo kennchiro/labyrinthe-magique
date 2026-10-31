@@ -5,10 +5,11 @@ extends Actor
 ## manette) en une direction cardinale sur la grille, et joue la planche
 ## d'animation de SON personnage.
 ##
-## Les sept mages ont chacun leurs quatre bandes — down, up, left, right — de six
-## poses : IDLE, WALK 1 à 4, ATTACK. Rien n'est écrit en dur ici : le dossier et
-## le descripteur viennent du personnage choisi, et redécouper une planche ne
-## demande aucune modification de ce fichier.
+## Les mages ont chacun leurs quatre bandes — down, up, left, right. Elles portent
+## six poses (IDLE, WALK 1 à 4, ATTACK) ou dix-sept sur les planches animées (IDLE,
+## 8 pas, 8 images d'attaque) : les rôles se lisent dans le NOM des poses, comme
+## pour `Enemy`. Le dossier et le descripteur viennent du personnage choisi, et
+## redécouper une planche ne demande aucune modification de ce fichier.
 ##
 ## Contrairement à l'ancienne planche unique, la gauche n'est PLUS un miroir de
 ## la droite : l'illustrateur a dessiné les deux, et un mage dont la cape se
@@ -16,9 +17,11 @@ extends Actor
 
 const CHARACTERS_PATH := "res://assets/characters/"
 const INPUT_THRESHOLD := 0.25
-## Poses par seconde pendant la marche. Quatre poses par cycle : à 9, une foulée
-## dure un peu moins d'une demi-seconde, ce qui colle à 5 cases/s sans patiner.
-const WALK_FPS := 9.0
+## Poses par seconde pendant la marche, pour un cycle de quatre poses. À 11, un cycle
+## dure 0,36 s à 5 cases/s. Le sol défile encore environ 3 fois plus vite que le pied
+## dessiné (0,6 case par cycle sur le Feu), mais le coller demanderait plus de 60 images
+## par seconde : au-delà de 24, l'œil lit un tremblement.
+const WALK_FPS := 11.0
 ## Durée de la pose d'attaque. C'est un GESTE, pas un cycle : elle se joue une
 ## fois puis rend la main à la marche.
 const ATTACK_DURATION := 0.32
@@ -28,6 +31,11 @@ const WALK_REFERENCE_SPEED := 5.0
 ## Le dessin de marche bouge peu d'une pose à l'autre : ce léger rebond, deux fois
 ## par cycle comme les appuis, donne le poids que les poses seules n'ont pas.
 const WALK_BOB := 2.2
+## Hauteur de la case à l'écran pour une planche à six poses.
+const DEFAULT_TARGET_HEIGHT := 58.0
+## Hauteur du CORPS à l'écran pour une planche animée : la même que les six poses.
+## Sa case grandit avec le sort, c'est donc le corps qu'il faut fixer.
+const BODY_SCREEN_HEIGHT := 38.0
 ## Élan du geste de sort : le corps s'étire au départ puis retombe.
 const CAST_PUNCH := Vector2(0.12, -0.08)
 ## Le répit qui suit un coup encaissé : un éclair rouge, puis un clignotement qui
@@ -60,6 +68,10 @@ var _poses: Array = ["idle", "walk_1", "walk_2", "walk_3", "walk_4", "attack"]
 ## Dernière direction non nulle : le mage garde sa pose quand il s'arrête.
 var _facing: Vector2i = Vector2i.DOWN
 var _walk_phase := 0.0
+## Poses rangées par rôle, remplies au chargement.
+var _walk_poses: Array[int] = [1, 2, 3, 4]
+var _attack_poses: Array[int] = [5]
+var _display_height := DEFAULT_TARGET_HEIGHT
 var _attack_left := 0.0
 ## Vers où part le sort en cours. La pose ne suit donc pas la course : un mage qui
 ## fuit vers le bas et tire sur ce qui le suit doit se retourner pour le faire.
@@ -79,7 +91,7 @@ func _ready() -> void:
 		_load_character()
 	# Le mage occupe environ deux cases de haut : assez pour qu'on lise le
 	# dessin, pas au point de masquer le couloir devant lui.
-	target_height = 58.0
+	target_height = _display_height
 	# Les pieds tombent sur l'origine : l'ombre se pose donc là, et non plus
 	# sous le ventre comme pour les ennemis.
 	shadow_offset = 0.02
@@ -141,6 +153,18 @@ func _load_character() -> void:
 	_cell = Vector2(float(cell[0]), float(cell[1]))
 	_feet_y = float(data["feet_y"])
 	_poses = data["poses"]
+	_display_height = DEFAULT_TARGET_HEIGHT
+	if data.has("body_height"):
+		_display_height = BODY_SCREEN_HEIGHT * _cell.y / float(data["body_height"])
+	target_height = _display_height
+	_walk_poses.clear()
+	_attack_poses.clear()
+	for i in _poses.size():
+		var pose := str(_poses[i])
+		if pose.begins_with("walk"):
+			_walk_poses.append(i)
+		elif pose.begins_with("attack"):
+			_attack_poses.append(i)
 
 	_textures.clear()
 	for direction in data["directions"]:
@@ -188,13 +212,15 @@ func _apply_frame() -> void:
 		return
 	if sprite.texture != texture:
 		sprite.texture = texture
-	var index := _poses.find("attack") if _attack_left > 0.0 else -1
-	if index < 0:
-		if mover != null and mover.is_moving():
-			# Quatre poses de marche, en boucle.
-			index = 1 + (int(_walk_phase) % maxi(1, _poses.size() - 2))
-		else:
-			index = 0
+	var index := 0
+	if _attack_left > 0.0 and not _attack_poses.is_empty():
+		# Le geste se déroule UNE fois sur sa durée. Il faut garder l'image du tir
+		# tôt dans la bande : le projectile part à la pression de la touche.
+		var done := 1.0 - _attack_left / ATTACK_DURATION
+		index = _attack_poses[mini(int(done * float(_attack_poses.size())),
+			_attack_poses.size() - 1)]
+	elif mover != null and mover.is_moving() and not _walk_poses.is_empty():
+		index = _walk_poses[int(_walk_phase) % _walk_poses.size()]
 	sprite.frame = clampi(index, 0, _poses.size() - 1)
 
 
@@ -223,7 +249,7 @@ func _animate(delta: float) -> void:
 
 	if mover.direction != Vector2i.ZERO:
 		_facing = mover.direction
-		_walk_phase += delta * WALK_FPS * mover.speed / WALK_REFERENCE_SPEED
+		_walk_phase += delta * _walk_cadence()
 	else:
 		# À l'arrêt, on revient à la pose de repos plutôt que de figer un pas en
 		# l'air : un personnage immobile jambe levée se remarque immédiatement.
@@ -232,14 +258,24 @@ func _animate(delta: float) -> void:
 	_animate_body(delta)
 
 
+## Poses par seconde : le même nombre de foulées, quel que soit le nombre de poses.
+##
+## ⚠️ Pas de `foot_travel` ici, contrairement à `Enemy` : sous une robe, la mesure
+## voit l'ourlet et non le pied. Mesuré à 0,07 sur le Feu, elle l'aurait fait
+## pédaler à trois cycles par seconde.
+func _walk_cadence() -> float:
+	return WALK_FPS * float(_walk_poses.size()) / 4.0 * mover.speed / WALK_REFERENCE_SPEED
+
+
 ## Ce que le dessin ne donne pas : le rebond des appuis, la respiration, l'élan du
 ## sort. Purement visuel, l'origine du nœud et donc les collisions n'en savent rien.
 func _animate_body(delta: float) -> void:
 	sprite.position.y = 0.0
 	if mover.is_moving():
 		sprite.scale = _sprite_scale
-		# Quatre poses par cycle, donc deux appuis : un rebond toutes les deux poses.
-		sprite.position.y = -absf(sin(_walk_phase * PI * 0.5)) * WALK_BOB
+		# Deux appuis par cycle, donc deux rebonds.
+		var cycle := _walk_phase / float(maxi(1, _walk_poses.size()))
+		sprite.position.y = -absf(sin(cycle * TAU)) * WALK_BOB
 	else:
 		_breathe(delta)
 	if _attack_left > 0.0:

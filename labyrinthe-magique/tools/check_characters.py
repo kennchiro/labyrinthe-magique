@@ -44,7 +44,7 @@ from scipy import ndimage
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_characters import (SOURCE, OUT, OUT_ENEMIES, SHEETS, detect_grid, cell_box,
+from build_characters import (MAGES_ANIMES, SOURCE, OUT, OUT_ENEMIES, SHEETS, detect_grid, cell_box,
                               ALPHA_THRESHOLD, POSES, DIRECTIONS, keyed_on_flat)
 
 ## Écart admis entre une case calculée et la rangée réellement mesurée. Au-delà,
@@ -156,7 +156,12 @@ def _spread_between_mages() -> tuple:
         meta = folder / "frames.json"
         if not meta.exists():
             continue
-        cell_w, cell_h = json.loads(meta.read_text(encoding="utf-8"))["cell"]
+        descriptor = json.loads(meta.read_text(encoding="utf-8"))
+        # Un mage animé porte la hauteur de son corps : le jeu en déduit sa taille à
+        # l'écran. Son remplissage de case ne dit donc plus rien de cette taille.
+        if "body_height" in descriptor:
+            continue
+        cell_w, cell_h = descriptor["cell"]
         band = np.array(Image.open(folder / "down.png"))[..., 3] > ALPHA_THRESHOLD
         hauteurs = []
         for index in range(band.shape[1] // cell_w):
@@ -350,7 +355,45 @@ def check_written_strips() -> list:
 
 
 ## L'Invocateur fait monter son cercle sous ses pieds : son sort n'a pas de sens.
-ATTACK_SIDE_EXEMPT = {"invocateur"}
+## La Terre frappe le sol juste devant elle : son manteau déborde derrière autant que
+## son geste devant, et la mesure ne les sépare pas. Vérifiée à l'œil sur ses planches.
+ATTACK_SIDE_EXEMPT = {"invocateur", "earth"}
+
+
+## Écarts tolérés sur un mage animé, entre la marche et la dernière image d'attaque.
+ANIMATED_MAX_SCALE_GAP = 0.10
+ANIMATED_MAX_FEET_GAP = 3
+
+
+def check_animated(mage: str) -> list:
+    """Le corps garde-t-il sa taille et ses pieds, de la marche à l'attaque ?"""
+    folder = OUT / mage
+    meta = json.loads((folder / "frames.json").read_text(encoding="utf-8"))
+    cell_w, _ = meta["cell"]
+    walks = [i for i, pose in enumerate(meta["poses"]) if pose.startswith("walk")]
+    attacks = [i for i, pose in enumerate(meta["poses"]) if pose.startswith("attack")]
+    problems = []
+    if len(walks) != 8 or len(attacks) != 8 or "body_height" not in meta:
+        return [f"{len(walks)} pas et {len(attacks)} attaques : le format animé en attend 8 et 8"]
+    for direction in meta["directions"]:
+        with Image.open(folder / f"{direction}.png") as image:
+            alpha = np.asarray(image.convert("RGBA"))[..., 3] > ALPHA_THRESHOLD
+
+        def rows_of(index: int) -> tuple:
+            rows = np.nonzero(alpha[:, index * cell_w:(index + 1) * cell_w].any(axis=1))[0]
+            return (int(rows[0]), int(rows[-1])) if rows.size else (0, 0)
+
+        if any(rows_of(i) == (0, 0) for i in walks + attacks):
+            problems.append(f"{direction} : une case est vide")
+            continue
+        height = float(np.median([rows_of(i)[1] - rows_of(i)[0] for i in walks]))
+        feet = float(np.median([rows_of(i)[1] for i in walks]))
+        top, bottom = rows_of(attacks[-1])
+        if abs((bottom - top) / height - 1.0) > ANIMATED_MAX_SCALE_GAP:
+            problems.append(f"{direction} : attaque x{(bottom - top) / height:.2f} par rapport à la marche")
+        if abs(bottom - feet) > ANIMATED_MAX_FEET_GAP:
+            problems.append(f"{direction} : pieds à {bottom} en attaque, {feet:.0f} en marche")
+    return problems
 
 
 def check_attack_sides() -> list:
@@ -366,11 +409,12 @@ def check_attack_sides() -> list:
             continue
         meta = json.loads(descriptor.read_text())
         cell_w, _ = meta["cell"]
-        index = meta["poses"].index("attack")
+        attacks = [i for i, pose in enumerate(meta["poses"]) if pose.startswith("attack")]
         for direction, sign in (("left", -1), ("right", 1)):
             with Image.open(folder / f"{direction}.png") as image:
                 alpha = np.asarray(image.convert("RGBA"))[..., 3] > 40
-            columns = np.where(alpha[:, index * cell_w:(index + 1) * cell_w].any(0))[0]
+            cells = [alpha[:, i * cell_w:(i + 1) * cell_w] for i in attacks]
+            columns = np.where(np.any(cells, axis=0).any(0))[0]
             before = cell_w / 2 - columns[0]
             after = columns[-1] - cell_w / 2
             if (after - before) * sign <= 0:
@@ -399,6 +443,17 @@ def main() -> None:
         # géométrie (clé « mode ») : elles ne se vérifient pas comme une grille
         # de mage.
         if "mode" in config:
+            continue
+        if config["id"] in MAGES_ANIMES:
+            checked += 1
+            problems = check_animated(config["id"])
+            if problems:
+                failures += 1
+                print(f"❌  {config['id']} (planches animées)")
+                for trouble in problems:
+                    print(f"      {trouble}")
+            else:
+                print(f"✅  {config['id']:11s} 8 pas, 8 attaques, corps et pieds constants")
             continue
         if "grid" in config and "row0" not in config:
             path = SOURCE / name

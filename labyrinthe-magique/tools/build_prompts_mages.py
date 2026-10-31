@@ -21,7 +21,11 @@ touche et le geste dure 0,32 s : plus tard, le tir partirait avant la main.
 from pathlib import Path
 from textwrap import fill
 
+from PIL import Image, ImageDraw
+
 OUT = Path("docs/prompts/mages_animes")
+## Le guide de marche joint au générateur, en plus de l'image du personnage.
+GUIDE = OUT / "guide_marche.png"
 
 COLUMNS, ROWS, CELL = 8, 3, 256
 
@@ -237,7 +241,8 @@ def fiche(mage: dict) -> str:
     demain        4 orientations · 8 pas · 8 images d'attaque
 
 **Avant de lancer :** joindre l'image `assets/peso&cover/refonte/{mage['reference']}`
-au générateur, pour qu'il garde le même personnage.
+au générateur, pour qu'il garde le même personnage. Pour la marche, joindre AUSSI
+`docs/prompts/mages_animes/guide_marche.png`, qui impose la position des pieds.
 
 **Déposer les deux résultats ici :**
 
@@ -263,19 +268,29 @@ LES TROIS RANGÉES, de haut en bas :
 {legs}
 {hold}
 
-LES 8 COLONNES de chaque rangée, de gauche à droite, sont UN CYCLE DE MARCHE vive :
-1. APPUI : pied droit loin devant, talon au sol, pied gauche loin derrière
-2. le pied arrière quitte le sol et remonte
-3. PASSAGE : les deux pieds se croisent au milieu, presque joints
-4. le pied gauche part vers l'avant
-5. APPUI INVERSE : pied gauche loin devant, talon au sol, pied droit loin derrière
-6. le pied arrière quitte le sol et remonte
-7. PASSAGE : les deux pieds se croisent au milieu, presque joints
-8. le pied droit repart vers l'avant : l'image enchaîne sur la première
+⚠️ LA DEUXIÈME IMAGE JOINTE EST UN GUIDE DE POSE. Elle a la même grille que la planche
+à produire. Dans chaque case, recopie EXACTEMENT la position de ses deux pieds et la
+place de son corps. Le pied ROUGE est la jambe la plus proche de nous, le pied BLEU
+la plus éloignée. Le mannequin et ses couleurs ne doivent PAS apparaître : c'est le
+personnage de la première image, avec ses vraies bottes, qui prend ces poses.
 
-⚠️ CHIFFRE À TENIR : aux images d'APPUI, l'écart entre le talon avant et les orteils
-arrière vaut au moins LA MOITIÉ DE LA HAUTEUR du personnage. Un pied qui ne fait que
-frémir donne un mage qui GLISSE sur le sol au lieu de marcher.
+LES 8 COLONNES de chaque rangée sont UN CYCLE DE MARCHE, et les 8 images sont TOUTES
+différentes. Sur la rangée de profil :
+1. le pied proche est loin DEVANT, posé. Le pied éloigné est loin DERRIÈRE
+2. le pied proche recule, à plat. Le pied éloigné quitte le sol
+3. PASSAGE : les deux pieds sont l'un sur l'autre, JOINTS, le pied éloigné levé
+4. le pied proche continue vers l'arrière. Le pied éloigné passe DEVANT, levé
+5. l'INVERSE de l'image 1 : le pied éloigné est loin DEVANT, le pied proche loin DERRIÈRE
+6. le pied éloigné recule, à plat. Le pied proche quitte le sol
+7. PASSAGE : les deux pieds sont JOINTS, le pied proche levé
+8. le pied proche passe DEVANT, levé. L'image enchaîne sur la première
+
+⚠️ DÉFAUT À NE PAS REPRODUIRE, livré sur toutes les planches précédentes : les jambes
+restent écartées presque tout le cycle, et c'est toujours le même pied qui est devant.
+Les deux pieds doivent ÉCHANGER leur place : celui qui est devant à l'image 1 est
+derrière à l'image 5. Aux images 3 et 7, on ne voit plus d'écart entre les pieds.
+Aux images 1 et 5, l'écart vaut au moins la MOITIÉ DE LA HAUTEUR du personnage. La
+robe s'ouvre autant qu'il le faut pour que les bottes restent visibles.
 
 {COMMON_RULES}
 
@@ -333,8 +348,49 @@ restent à plat pendant tout le geste, à la même place.
 """
 
 
+## Position des pieds sur les 8 images : (avancée, hauteur), en part de la hauteur du
+## mannequin. Le pied éloigné joue le même cycle, décalé de quatre images. C'est ce
+## décalage qui fait échanger les pieds.
+FOOT_PATH = [(0.28, 0.0), (0.14, 0.0), (0.0, 0.0), (-0.14, 0.0),
+             (-0.28, 0.0), (-0.12, 0.09), (0.0, 0.13), (0.16, 0.08)]
+
+
+def draw_guide() -> None:
+    """Le mannequin de marche : un dessin dit ce que le texte n'a pas réussi à obtenir."""
+    guide = Image.new("RGB", (COLUMNS * CELL, ROWS * CELL), (255, 0, 255))
+    pen = ImageDraw.Draw(guide)
+    body = (70, 70, 70)
+    near, far = (230, 40, 30), (40, 90, 230)
+    height = CELL * 0.80
+    for row in range(ROWS):
+        for column in range(COLUMNS):
+            x0, y0 = column * CELL + CELL // 2, row * CELL
+            floor = y0 + CELL * 0.90
+            hip = floor - height * 0.34
+            top = floor - height
+            pen.ellipse((x0 - 36, top, x0 + 36, top + 72), fill=body)
+            pen.rectangle((x0 - 28, top + 64, x0 + 28, hip), fill=body)
+            for colour, shift in ((far, 4), (near, 0)):
+                ahead, lift = FOOT_PATH[(column + shift) % COLUMNS]
+                if row == 2:
+                    foot_x = x0 + ahead * height
+                    step = 22
+                else:
+                    # De face et de dos, le pied ne change pas de côté : il se lève.
+                    side = 16 if colour == near else -16
+                    foot_x = x0 + side
+                    lift = lift + max(0.0, -ahead) * 0.22 if row == 1 else lift + max(0.0, ahead) * 0.22
+                    step = 12
+                foot_y = floor - lift * height
+                pen.line((x0, hip, foot_x, foot_y - 8), fill=colour, width=14)
+                pen.rounded_rectangle((foot_x - 16, foot_y - 14, foot_x + step + 8, foot_y),
+                                      radius=5, fill=colour)
+    guide.save(GUIDE)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
+    draw_guide()
     for mage in MAGES:
         (OUT / f"{mage['file']}.md").write_text(fiche(mage), encoding="utf-8")
         print(f"  {mage['file']}.md")

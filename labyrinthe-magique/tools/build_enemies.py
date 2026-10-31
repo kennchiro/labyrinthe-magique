@@ -101,6 +101,30 @@ HERD = {
 }
 
 
+## Les mages ANIMÉS passent par le même découpage : même gabarit, mêmes contrôles.
+## Ajouter un mage ici le retire de `build_characters.py` (`MAGES_ANIMES`).
+MAGES_SOURCE = Path("assets/peso&cover/mages")
+MAGES_OUT = Path("assets/characters")
+MAGES = {
+    "feu": {"id": "fire", "name": "Mage du Feu", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "eau": {"id": "water", "name": "Mage de l'Eau", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "terre": {"id": "earth", "name": "Mage de la Terre", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "foudre": {"id": "thunder", "name": "Mage de la Foudre", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "air": {"id": "air", "name": "Mage de l'Air", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "tenebres": {"id": "shadow", "name": "Sorcier des Ténèbres", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "invocateur": {"id": "invocateur", "name": "Invocateur", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
+}
+
+
 ## Distance au fond MESURÉ en deçà de laquelle un pixel est du fond.
 ##
 ## 70, et c'est mesuré, pas choisi : sur les planches livrées le fond occupe la
@@ -723,9 +747,97 @@ def union(*tables) -> tuple | None:
     return None if right <= left else (left, top, right, bottom)
 
 
+## Marge ajoutée autour d'une case avant d'agrandir l'attaque, pour que le sort ne
+## soit pas coupé par le bord.
+STEADY_MARGIN = 64
+## Le corps ne peut pas dériver de plus que ça d'une image à l'autre, en pixels de
+## planche. Au-delà, la mesure s'est accrochée au sort.
+STEADY_REACH = 48
+## Part haute du corps qui sert de repère : la tête et les épaules. Les bras, les
+## pieds et le sort bougent, elles non.
+STEADY_BAND = 0.45
+## Une miette : moins de 5 % du corps, toute entière dans le dernier huitième de case.
+CRUMB_SIZE_SHARE = 0.05
+CRUMB_EDGE_SHARE = 0.125
+## Agrandissement maximal de l'attaque. Au-delà, c'est la planche qui est à refaire.
+STEADY_MAX_SCALE = 1.3
+
+
+def _moved(cell: Image.Image, dx: float, dy: float) -> Image.Image:
+    return cell.transform(cell.size, Image.AFFINE, (1, 0, -dx, 0, 1, -dy), Image.BICUBIC)
+
+
+def _best_dx(reference: np.ndarray, cell: Image.Image, band: tuple) -> int:
+    """Le décalage horizontal qui superpose le mieux le haut du corps à la référence."""
+    alpha = np.asarray(cell)[band[0]:band[1], :, 3] > 24
+    return max(range(-STEADY_REACH, STEADY_REACH + 1),
+               key=lambda dx: (int((reference & np.roll(alpha, dx, axis=1)).sum()), -abs(dx)))
+
+
+def without_edge_crumbs(cell: Image.Image) -> Image.Image:
+    """La case sans les miettes collées à son bord gauche ou droit.
+
+    Le bout d'un éclair qui dépasse de la case voisine y laisse une tache isolée, trop
+    petite pour que `without_side_bleed` reconnaisse sa forme de l'autre côté. Vue
+    une seule image, elle clignote à l'écran. Une étincelle légitime, elle, reste
+    près du sort et loin du bord.
+    """
+    alpha = np.asarray(cell)[..., 3] > 24
+    labels, count = ndimage.label(alpha)
+    if count <= 1:
+        return cell
+    sizes = ndimage.sum(alpha, labels, range(1, count + 1))
+    biggest = float(np.max(sizes))
+    data = np.array(cell)
+    margin = int(cell.width * CRUMB_EDGE_SHARE)
+    for piece, slices in enumerate(ndimage.find_objects(labels)):
+        near_edge = slices[1].stop <= margin or slices[1].start >= cell.width - margin
+        if near_edge and sizes[piece] < biggest * CRUMB_SIZE_SHARE:
+            data[..., 3][labels == piece + 1] = 0
+    return Image.fromarray(data, "RGBA")
+
+
+def steadied(walk_line: list, strike_line: list) -> tuple:
+    """La rangée dont le corps ne bouge plus, de la marche à la fin de l'attaque.
+
+    Le prompt l'exige et le générateur ne le tient pas : mesuré sur les huit mages,
+    le corps dérive jusqu'à 32 px en marchant, et l'attaque est dessinée jusqu'à 18 %
+    plus petite, ses pieds 12 px plus haut. Le repère de l'attaque est sa DERNIÈRE
+    image, qui rejoint la pose de marche : ni geste accroupi ni sort pour la fausser.
+    """
+    def padded(cell: Image.Image) -> Image.Image:
+        out = Image.new("RGBA", (cell.width + 2 * STEADY_MARGIN,
+                                 cell.height + 2 * STEADY_MARGIN), (0, 0, 0, 0))
+        out.paste(cell, (STEADY_MARGIN, STEADY_MARGIN))
+        return out
+
+    walk_line = [padded(cell) for cell in walk_line]
+    strike_line = [padded(without_edge_crumbs(cell)) for cell in strike_line]
+    first = bounds(walk_line[0])
+    band = (first[1], first[1] + int((first[3] - first[1]) * STEADY_BAND))
+    reference = np.asarray(walk_line[0])[band[0]:band[1], :, 3] > 24
+    walk_line = [_moved(cell, _best_dx(reference, cell, band), 0) for cell in walk_line]
+
+    heights = [bounds(cell)[3] - bounds(cell)[1] for cell in walk_line]
+    feet = float(np.median([bounds(cell)[3] for cell in walk_line]))
+    neutral = bounds(strike_line[-1])
+    scale = float(np.clip(np.median(heights) / max(1, neutral[3] - neutral[1]),
+                          1.0, STEADY_MAX_SCALE))
+    # L'agrandissement se fait autour des pieds, qui descendent ensuite à leur ligne.
+    centre_x, floor = (neutral[0] + neutral[2]) / 2.0, float(neutral[3])
+    grown = [cell.transform(cell.size, Image.AFFINE,
+                            (1 / scale, 0, centre_x - centre_x / scale,
+                             0, 1 / scale, floor - floor / scale - (feet - floor) / scale),
+                            Image.BICUBIC) for cell in strike_line]
+    strike_line = [_moved(cell, _best_dx(reference, cell, band), 0) for cell in grown]
+    return walk_line, strike_line
+
+
 def build(source_name: str, entry: dict) -> str:
-    walk_path = SOURCE / f"{source_name}_marche.png"
-    strike_path = SOURCE / f"{source_name}_attaque.png"
+    source_folder = entry.get("source", SOURCE)
+    walk_path = source_folder / f"{source_name}_marche.png"
+    strike_path = source_folder / f"{source_name}_attaque.png"
+    walks = entry.get("walks", Bestiary_walks(entry["id"]))
     missing = [p.name for p in (walk_path, strike_path) if not p.exists()]
     if missing:
         return f"{entry['id']} : {' et '.join(missing)} introuvable(s)"
@@ -741,6 +853,11 @@ def build(source_name: str, entry: dict) -> str:
 
     walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False))
     strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False))
+    # La foulée se juge sur la case d'origine : `steadied` l'élargit.
+    original_profile = walk["right"]
+    if entry.get("align_rows"):
+        for row in ROWS:
+            walk[row], strike[row] = steadied(walk[row], strike[row])
 
     # On DÉCOUPE QUAND MÊME après cette plainte : elle porte sur le dessin, pas
     # sur le format, donc les bandes produites restent regardables. Mais elle
@@ -766,8 +883,8 @@ def build(source_name: str, entry: dict) -> str:
     # ombre glisse : leur « pied avant » ne veut rien dire, et le contrôle les
     # accusait toutes les trois. La liste est celle du bestiaire, qui déclare
     # déjà une `stride` pour les bêtes qui marchent — une seule source.
-    if Bestiary_walks(entry["id"]):
-        strideless = stride_complaint(walk["right"], f"{walk_path.stem} profil")
+    if walks:
+        strideless = stride_complaint(original_profile, f"{walk_path.stem} profil")
         if strideless:
             print(f"   ⚠️  À FAIRE REDESSINER — {strideless}")
     for table, source in ((walk, walk_path), (strike, strike_path)):
@@ -790,6 +907,25 @@ def build(source_name: str, entry: dict) -> str:
     if walk_box is None or full_box is None:
         return f"{entry['id']} : planches vides"
 
+    # ⚠️ LE GÉNÉRATEUR NE POSE PAS SES RANGÉES À LA MÊME HAUTEUR. Mesuré sur le Feu :
+    # les pieds tombent à 108 de face, 100 de dos et 93 de profil. Une seule ligne de
+    # sol le fait flotter au-dessus de son ombre dès qu'il tourne. Chaque rangée est
+    # donc recalée sur sa propre MARCHE, avec son attaque, du même décalage.
+    #
+    # Verticalement seulement : le centre de boîte d'un profil dépend de ce qui
+    # traîne derrière lui, et centrer dessus décalait le corps vers l'avant.
+    shifts = {row: 0 for row in ROWS}
+    if entry.get("align_rows"):
+        for row in ROWS:
+            box = union({row: walk[row]})
+            shifts[row] = walk_box[3] - box[3]
+        boxes = []
+        for row in ROWS:
+            box = union({row: walk[row]}, {row: strike[row]})
+            boxes.append((box[0], box[1] + shifts[row], box[2], box[3] + shifts[row]))
+        full_box = (min(b[0] for b in boxes), min(b[1] for b in boxes),
+                    max(b[2] for b in boxes), max(b[3] for b in boxes))
+
     # Horizontalement, la case est SYMÉTRIQUE autour du corps : on prend le
     # débordement le plus grand des deux côtés et on l'applique aux deux. La
     # créature reste donc au centre, et rien n'est coupé.
@@ -802,7 +938,7 @@ def build(source_name: str, entry: dict) -> str:
     span_h = bottom - top + CELL_PADDING * 2
     scale = FRAME_HEIGHT / span_h
     cell_w = int(round(span_w * scale))
-    folder = OUT / entry["id"]
+    folder = entry.get("out", OUT) / entry["id"]
     folder.mkdir(parents=True, exist_ok=True)
 
     poses = ["idle"] + [f"walk_{i + 1}" for i in range(COLUMNS)] \
@@ -818,8 +954,9 @@ def build(source_name: str, entry: dict) -> str:
         strip = Image.new("RGBA", (cell_w * len(poses), FRAME_HEIGHT),
                           (0, 0, 0, 0))
         for number, cell in enumerate(line):
-            piece = cell.crop((left - CELL_PADDING, top - CELL_PADDING,
-                               right + CELL_PADDING, bottom + CELL_PADDING))
+            shift = shifts[read]
+            piece = cell.crop((left - CELL_PADDING, top - CELL_PADDING - shift,
+                               right + CELL_PADDING, bottom + CELL_PADDING - shift))
             piece = piece.resize((cell_w, FRAME_HEIGHT), Image.LANCZOS)
             if flip:
                 piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
@@ -836,11 +973,15 @@ def build(source_name: str, entry: dict) -> str:
     # ⚠️ Zéro pour ce qui n'a pas de jambes : `Enemy` lie la cadence à la distance
     # dès que ce nombre est positif, et un battement d'ailes mesuré comme un pied
     # priverait le Dragonnet de la cadence en secondes qu'il doit garder.
-    travel = foot_travel(walk["right"]) if Bestiary_walks(entry["id"]) else 0.0
+    travel = foot_travel(walk["right"]) if walks else 0.0
     (folder / "frames.json").write_text(json.dumps({
         "cell": [cell_w, FRAME_HEIGHT],
         "feet_y": round(feet_y, 1),
         "foot_travel": round(travel, 4),
+        # La hauteur du CORPS dans la case. Le sort agrandit la case et donc réduit
+        # le corps : le jeu en a besoin pour garder la taille à l'écran.
+        "body_height": round(max(union({row: walk[row]})[3] - union({row: walk[row]})[1]
+                                 for row in ROWS) * scale, 1),
         "poses": poses,
         "directions": ["down", "up", "left", "right"],
         "source": f"{source_name}_marche.png + {source_name}_attaque.png",
@@ -851,7 +992,7 @@ def build(source_name: str, entry: dict) -> str:
 
 def main() -> None:
     wanted = sys.argv[1:]
-    for name, entry in HERD.items():
+    for name, entry in (HERD | MAGES).items():
         if wanted and name not in wanted:
             continue
         print(build(name, entry))

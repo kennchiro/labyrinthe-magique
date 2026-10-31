@@ -16,8 +16,8 @@ l'outil refuse en silence tout ce que le prompt n'a pas exigé.
 par `tools/build_prompts_mages.py`. Même gabarit que le bestiaire. Déposer les
 planches dans `assets/peso&cover/mages/<mage>_{marche,attaque}.png`.
 
-⚠️ Le découpage et le moteur restent à brancher quand les planches arriveront :
-`Player` ne sait jouer aujourd'hui que six poses.
+Découpage : `tools/build_enemies.py <mage>`, après l'avoir ajouté à `MAGES` dans cet
+outil et à `MAGES_ANIMES` dans `build_characters.py`. **Les huit sont branchés.**
 
 ## Refonte des huit mages — uniformiser les tailles
 

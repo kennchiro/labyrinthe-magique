@@ -31,7 +31,10 @@ extends SceneTree
 const ITERATIONS := 12
 const DT := 1.0 / 60.0
 const AI_REFRESH := 0.3
-const CATCH_DISTANCE := 0.6
+## La même distance que `Level.CATCH_DISTANCE`, avec le même refus du dernier pas.
+## Avec un contact à 0,6 et des ennemis qui marchent sur le mage, la simulation
+## faisait rater les coups croisés de face, que le jeu, lui, porte.
+const CATCH_DISTANCE := 1.05
 const PICKUP_DISTANCE := 0.7
 const REFERENCE_SPEED := 5.0
 const MAX_FRAMES := 240 * 60
@@ -408,6 +411,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					mover.speed = base_speeds[i] * float(
 						soak_factors.get(i, CombatSystem.SOAK_FACTOR))
 			mover.desired_direction = brains[i].decide(grid, mover.decision_cell(), mover.direction, player_field, DT)
+			if mover.decision_cell() + mover.desired_direction == player.nearest_cell():
+				mover.desired_direction = Vector2i.ZERO
 			var species_tuning := Bestiary.of(config.species_at(i))
 			var ranged_only := bool(species_tuning.get("ranged_only", false))
 			if ranged_only and ThrowSystem.in_line(grid, mover.decision_cell(),

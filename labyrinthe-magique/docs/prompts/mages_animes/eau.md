@@ -4,7 +4,8 @@
     demain        4 orientations · 8 pas · 8 images d'attaque
 
 **Avant de lancer :** joindre l'image `assets/peso&cover/refonte/eau.png`
-au générateur, pour qu'il garde le même personnage.
+au générateur, pour qu'il garde le même personnage. Pour la marche, joindre AUSSI
+`docs/prompts/mages_animes/guide_marche.png`, qui impose la position des pieds.
 
 **Déposer les deux résultats ici :**
 
@@ -48,19 +49,29 @@ chaque pas.
 SES MAINS : le bâton reste dans sa main droite, tenu droit, et l'écharpe flotte
 derrière lui.
 
-LES 8 COLONNES de chaque rangée, de gauche à droite, sont UN CYCLE DE MARCHE vive :
-1. APPUI : pied droit loin devant, talon au sol, pied gauche loin derrière
-2. le pied arrière quitte le sol et remonte
-3. PASSAGE : les deux pieds se croisent au milieu, presque joints
-4. le pied gauche part vers l'avant
-5. APPUI INVERSE : pied gauche loin devant, talon au sol, pied droit loin derrière
-6. le pied arrière quitte le sol et remonte
-7. PASSAGE : les deux pieds se croisent au milieu, presque joints
-8. le pied droit repart vers l'avant : l'image enchaîne sur la première
+⚠️ LA DEUXIÈME IMAGE JOINTE EST UN GUIDE DE POSE. Elle a la même grille que la planche
+à produire. Dans chaque case, recopie EXACTEMENT la position de ses deux pieds et la
+place de son corps. Le pied ROUGE est la jambe la plus proche de nous, le pied BLEU
+la plus éloignée. Le mannequin et ses couleurs ne doivent PAS apparaître : c'est le
+personnage de la première image, avec ses vraies bottes, qui prend ces poses.
 
-⚠️ CHIFFRE À TENIR : aux images d'APPUI, l'écart entre le talon avant et les orteils
-arrière vaut au moins LA MOITIÉ DE LA HAUTEUR du personnage. Un pied qui ne fait que
-frémir donne un mage qui GLISSE sur le sol au lieu de marcher.
+LES 8 COLONNES de chaque rangée sont UN CYCLE DE MARCHE, et les 8 images sont TOUTES
+différentes. Sur la rangée de profil :
+1. le pied proche est loin DEVANT, posé. Le pied éloigné est loin DERRIÈRE
+2. le pied proche recule, à plat. Le pied éloigné quitte le sol
+3. PASSAGE : les deux pieds sont l'un sur l'autre, JOINTS, le pied éloigné levé
+4. le pied proche continue vers l'arrière. Le pied éloigné passe DEVANT, levé
+5. l'INVERSE de l'image 1 : le pied éloigné est loin DEVANT, le pied proche loin DERRIÈRE
+6. le pied éloigné recule, à plat. Le pied proche quitte le sol
+7. PASSAGE : les deux pieds sont JOINTS, le pied proche levé
+8. le pied proche passe DEVANT, levé. L'image enchaîne sur la première
+
+⚠️ DÉFAUT À NE PAS REPRODUIRE, livré sur toutes les planches précédentes : les jambes
+restent écartées presque tout le cycle, et c'est toujours le même pied qui est devant.
+Les deux pieds doivent ÉCHANGER leur place : celui qui est devant à l'image 1 est
+derrière à l'image 5. Aux images 3 et 7, on ne voit plus d'écart entre les pieds.
+Aux images 1 et 5, l'écart vaut au moins la MOITIÉ DE LA HAUTEUR du personnage. La
+robe s'ouvre autant qu'il le faut pour que les bottes restent visibles.
 
 ⚠️ RÈGLE BLOQUANTE — LE PERSONNAGE EST DESSINÉ DANS LES 24 CASES, sans exception.
 

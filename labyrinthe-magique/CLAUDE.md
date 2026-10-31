@@ -792,6 +792,30 @@ l'Air.
 - **Les retours visuels d'un coup se testent dans `tests/test_animation.gd`** : les
   vrais nœuds, frame par frame. Une capture ne tombe jamais sur le bon instant.
 
+- ⚠️ **Le coup au contact touche à l'IMPACT, pas au départ** (`MeleeSwing`, partagé par
+  le `Level` et `test_balance`). `Bestiary.windup` donne l'armement, `impact_pose`
+  l'image où l'arme arrive, et `Enemy` cale sa bande dessus. Le mage sorti de portée
+  pendant l'armement a esquivé. Mesuré avec le contact du jeu : 7 % de coups portés
+  en moins, mêmes taux de mort en passe rapide. Un contact différent dans la simulation fausse
+  cette mesure : `test_balance` doit garder `CATCH_DISTANCE` et le refus du dernier pas du jeu.
+
+- ⚠️ **Le générateur ne pose pas ses rangées à la même hauteur** : pieds à 108 de face et
+  93 de profil sur le Feu, et le mage flotte au-dessus de son ombre. `align_rows` de
+  `build_enemies.py` recale chaque rangée sur sa marche. Seuls les mages l'ont : les
+  ennemis ont le même défaut (jusqu'à 15 px à l'écran), mais l'activer change leur case
+  et donc leur taille. Un mage animé porte `body_height`, et `Player` en déduit sa taille.
+- ⚠️ **Le générateur ne tient pas la consigne « même corps » entre deux planches** :
+  mesuré sur les mages, le corps dérive jusqu'à 32 px en marche, et l'attaque est 18 %
+  plus petite. `steadied` les recale (dernière image d'attaque contre la marche), et
+  `check_animated` le vérifie. Les huit mages passent par `build_enemies.py`, plus par
+  `build_characters.py`, qui ne reste que la mesure de largeur et les anciennes planches.
+- ⚠️ **Pour une marche, le texte ne suffit pas : joindre `guide_marche.png`.** Sans ce
+  mannequin, aucune des huit planches ne faisait de vrais pas : les jambes restaient
+  écartées et les pieds n'avançaient presque pas (foulée 0,045 à 0,16). Avec lui, 0,14 à
+  0,31. Aucun contrôle ne l'a vu : c'est le joueur qui l'a remarqué en jeu. Regarder le
+  profil image par image, agrandi, pas seulement la foulée mesurée : le bâton touche le
+  sol et compte comme un pied (l'Air semblait rater un pas sur deux, à tort).
+
 ## État actuel
 
 Voir `docs/REFONTE.md` pour l'avancement de la refonte action/RPG en cours.

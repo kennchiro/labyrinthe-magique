@@ -139,6 +139,10 @@ SHEETS = {
     },
 }
 
+## Les mages passés aux planches de 8 pas et 8 attaques : `build_enemies.py` écrit
+## leurs bandes. Comme le gobelin, ils restent mesurés pour la largeur commune.
+MAGES_ANIMES = {"fire", "water", "earth", "thunder", "air", "shadow", "invocateur", "supreme"}
+
 ## Une forme connexe plus petite que ça est une poussière du rendu, pas un sprite.
 MIN_SHAPE_PIXELS = 300
 
@@ -773,7 +777,7 @@ def main() -> None:
         # ⚠️ Le gobelin et le spectre restent MESURÉS, car ils fixent la largeur de
         # case commune, mais leurs bandes viennent désormais de `build_enemies.py`.
         # Les réécrire ici les ramènerait à six poses sans aucune erreur.
-        if config.get("out") is OUT_ENEMIES:
+        if config.get("out") is OUT_ENEMIES or config["id"] in MAGES_ANIMES:
             continue
         meta = write(config, entry, cell_width)
         grid = meta.get("grid")

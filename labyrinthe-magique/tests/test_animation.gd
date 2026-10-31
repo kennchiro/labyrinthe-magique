@@ -34,6 +34,7 @@ func _run() -> void:
 	_test_body_keeps_its_scale(grid)
 	await _test_death_fade(grid)
 	_test_swing_timing()
+	_test_animated_mage(grid)
 	_test_impact_pose(grid)
 
 	print("")
@@ -203,6 +204,49 @@ func _test_death_fade(grid: MazeGrid) -> void:
 	if is_instance_valid(fade):
 		_fail("la dépouille ne disparaît pas")
 	print("mort : la dépouille s'efface et libère son nœud")
+
+
+## La planche animée du Feu : le geste déroule ses huit images, la marche ses huit
+## pas, et le corps garde à l'écran la hauteur des mages à six poses.
+func _test_animated_mage(grid: MazeGrid) -> void:
+	var player: Player = PLAYER_SCENE.instantiate()
+	player.set_character(CharacterCatalog.fire())
+	root.add_child(player)
+	player.setup(grid, Vector2i(4, 4), 5.0, TILE)
+	if player._walk_poses.size() != 8 or player._attack_poses.size() != 8:
+		_fail("le Feu n'a pas ses 8 pas et ses 8 attaques")
+	var sheet: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://assets/characters/fire/frames.json"))
+	var body: float = player.target_height * float(sheet["body_height"]) / player._cell.y
+	if absf(body - Player.BODY_SCREEN_HEIGHT) > 1.0:
+		_fail("corps du Feu à %.1f px au lieu de %.0f" % [body, Player.BODY_SCREEN_HEIGHT])
+	if absf(player.sprite.scale.y * 112.0 - player.target_height) > 0.5:
+		_fail("le sprite n'est pas à la hauteur demandée")
+	player.play_cast()
+	var seen := {}
+	while player._attack_left > 0.0:
+		player._process(FRAME)
+		seen[player.sprite.frame] = true
+	if seen.size() < 7:
+		_fail("le geste ne montre que %d images" % seen.size())
+	for frame: int in seen:
+		if not player._attack_poses.has(frame) and frame != 0:
+			_fail("image %d hors du geste" % frame)
+	player._process(FRAME)
+	if player.sprite.frame != 0:
+		_fail("le mage ne revient pas au repos après le sort")
+	player.mover.desired_direction = Vector2i.RIGHT
+	seen.clear()
+	for i in 60:
+		player._animate(FRAME)
+		player.mover.direction = Vector2i.RIGHT
+		player.mover.next_cell = Vector2i(5, 4)
+		player.mover.progress = 0.5
+		seen[player.sprite.frame] = true
+	if seen.size() < 8:
+		_fail("la marche ne montre que %d images" % seen.size())
+	player.free()
+	print("feu : %d images de marche jouées, geste complet, taille conservée" % seen.size())
 
 
 ## Le coup ne touche qu'à l'impact, et seulement si le mage est encore à portée.
