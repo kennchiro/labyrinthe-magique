@@ -36,6 +36,9 @@ const SLANT_TILES := 22.0
 
 @onready var rock: Sprite2D = $Rock
 
+var _painted := false
+var _tail: CPUParticles2D = null
+
 const DROP := preload("res://assets/shaders/water_drop.gdshader")
 
 var tile_size: int = 32
@@ -96,6 +99,28 @@ func setup(p_tile_size: int, delay: float, texture: Texture2D, tint: Color,
 	tail.initial_velocity_max = float(tile_size) * 1.4
 	rock.add_child(tail)
 	tail.emitting = true
+	_tail = tail
+
+
+## La météore du Feu, peinte comme sa Boule : sa pointe suit la chute au lieu de
+## tourner, et sa chevelure est dans le dessin, qui remplace le panache de particules.
+func paint(visual: String, size_tiles: float) -> void:
+	var look: Dictionary = MagicOrb.PAINTED[visual]
+	_painted = true
+	rock.texture = MagicOrb.painted_quad()
+	rock.hframes = 1
+	rock.offset = Vector2(-float(look["lead"]), 0.0)
+	rock.material = MagicOrb.painted_material(visual,
+		float(Time.get_ticks_usec() % 1000) * 0.001)
+	rock.scale = Vector2(float(look["length"]), float(look["height"])) \
+		* float(tile_size) * size_tiles
+	rock.rotation = Vector2(SLANT_TILES, FALL_TILES).angle()
+	if _tail != null:
+		_tail.queue_free()
+		_tail = null
+	# Une goutte ne tournoie pas et n'a pas de reflet à entretenir.
+	_liquid = false
+	_shimmer = null
 
 
 func _process(delta: float) -> void:
@@ -124,7 +149,7 @@ func _process(delta: float) -> void:
 	if _liquid:
 		if _shimmer != null:
 			_shimmer.set_shader_parameter("phase", _life)
-	else:
+	elif not _painted:
 		rock.rotation += delta * 3.0
 	queue_redraw()
 	if _life >= _fall:

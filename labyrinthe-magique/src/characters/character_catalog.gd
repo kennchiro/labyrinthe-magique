@@ -72,21 +72,18 @@ static func shadow() -> CharacterStats:
 		"description": "Une bille d'ombre qui remonte les couloirs jusqu'à sa cible.",
 		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SHADOW,
 		"damage": 16, "range": 10, "cooldown": 0.45,
+		"projectile_visual": "orbe_ombre",
 	})
 	c.abilities = [
 		Ability.make({
 			"id": "shadow_rune", "display_name": "Rune",
 			"description": "Un passage laissé au sol. Qui marche dessus rampe et perd 10 PV par seconde tant qu'il n'en est pas sorti.",
 			"kind": Ability.Kind.ZONE, "element": Element.Kind.SHADOW,
-			# LE PORTAIL DU MAGE, POSÉ AU SOL. Il reprend le dessin de sa
-			# translation — le même passage, ouvert pour soi ou laissé derrière
-			# soi — au lieu du disque générique des zones.
-			#
 			# TROIS CHARGES rendues d'un coup après 8 s : on ne pose pas un
 			# passage, on installe un DISPOSITIF. Trois recharges séparées
 			# donneraient un sort qu'on lance sans y penser ; une seule qui rend
 			# tout oblige à choisir le moment où l'on ouvre les trois.
-			"zone_style": "portail", "charges": 3,
+			"zone_style": "rune_peinte", "charges": 3,
 			# La rune ne punit ni l'attente ni le passage : elle punit d'être
 			# DEDANS. L'englu est SOUTENU : il tient tant que la créature est dans la
 			# rune et ne s'épuise qu'une demi-seconde après sa sortie. À 18 %
@@ -204,6 +201,7 @@ static func fire() -> CharacterStats:
 		"damage": 19, "range": 8, "cooldown": 0.5,
 		# Petite et VIVE : c'est le geste de tous les jours, il doit filer.
 		"projectile_scale": 0.85, "projectile_speed": 1.15,
+		"projectile_visual": "trait_peint",
 	})
 	c.abilities = [
 		# BOULE DE FEU — refondue après essai. Elle ressemblait trait pour trait
@@ -226,6 +224,7 @@ static func fire() -> CharacterStats:
 			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.FIRE,
 			"damage": 42, "radius": 2.6, "range": 7, "cooldown": 5.0,
 			"projectile_scale": 2.1, "projectile_speed": 0.5,
+			"projectile_visual": "boule_peinte",
 			"trail_density": 1.0, "shockwave": true,
 			# Les mêmes flammes que le brasier, mais en PANACHE triangulaire
 			# derrière la boule — et en explosion de feu à l'arrivée.
@@ -242,7 +241,7 @@ static func fire() -> CharacterStats:
 			# Brève et large : la nappe qu'on jette sous les pieds d'un
 			# poursuivant. Elle ne retient RIEN — c'est ce qui la distingue
 			# désormais du brasier, au-delà de ses chiffres.
-			"flames": 0.6, "zone_style": "nappe",
+			"flames": 0.6, "zone_style": "nappe_peinte",
 		}),
 		# AURA ARDENTE — refondue en BRASIER PIÈGE.
 		#
@@ -265,7 +264,7 @@ static func fire() -> CharacterStats:
 			"description": "Cinq brasiers. Chacun tient 30 s ; ce qui entre est cloué 5 s, puis brûle.",
 			"kind": Ability.Kind.ZONE, "element": Element.Kind.FIRE,
 			"damage": 6, "radius": 1.7, "duration": 30.0, "cooldown": 7.0,
-			"snare": 5.0, "snare_burn": 3.0, "flames": 1.0, "zone_style": "brasier",
+			"snare": 5.0, "snare_burn": 3.0, "flames": 1.0, "zone_style": "brasier_peint",
 			# CINQ brasiers d'affilée, puis la recharge. Un seul par recharge
 			# faisait décider une fois par demi-minute ; cinq permettent
 			# d'installer un dispositif — fermer un couloir, couvrir une sortie
@@ -328,6 +327,7 @@ static func water() -> CharacterStats:
 		"id": "water_jet", "display_name": "Jet d'eau",
 		"description": "Un trait d'eau sous pression, régulier mais à mi-portée.",
 		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.WATER,
+		"projectile_visual": "jet_eau",
 		# Portée ramenée de 11 à 9 après mesure. À 11, le Mage de l'Eau gagnait
 		# 83 % des parties SANS ÊTRE TOUCHÉ UNE SEULE FOIS : il abattait ses
 		# poursuivants avant qu'ils n'arrivent, et aucun réglage défensif ne
@@ -401,7 +401,7 @@ static func water() -> CharacterStats:
 			# exaltation de 30 s, givre qui tient le terrain). Des recharges
 			# longues l'auraient obligé à choisir lequel entretenir, alors que
 			# son fantasme est de tout tenir à la fois.
-			"zone_style": "nappe",
+			"zone_style": "mare_peinte",
 		}),
 	]
 	c.escape = Ability.make({
@@ -625,6 +625,7 @@ static func thunder() -> CharacterStats:
 		"id": "thunder_bolt", "display_name": "Éclair",
 		"description": "Un trait de foudre, presque instantané. Il porte peu et frappe faible.",
 		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.THUNDER,
+		"projectile_visual": "dard_foudre",
 		# La cadence la plus rapide du jeu : c'est SA signature. Elle se PAIE en
 		# dégâts et en portée — mesuré : à 15 dégâts et 10 cases, la Foudre
 		# dominait STRICTEMENT les Ténèbres (mêmes PV, même portée, plus rapide
@@ -883,6 +884,7 @@ static func invocateur() -> CharacterStats:
 		"description": "Une aiguille d'énergie violette, faible mais rapide.",
 		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SHADOW,
 		"damage": 12, "range": 9, "cooldown": 0.5,
+		"projectile_visual": "aiguille_occulte",
 	})
 	c.abilities = [
 		Ability.make({
@@ -903,6 +905,7 @@ static func invocateur() -> CharacterStats:
 			"id": "invoc_circle", "display_name": "Cercle d'invocation",
 			"description": "Un cercle gravé au sol qui ronge quiconque le traverse.",
 			"kind": Ability.Kind.ZONE, "element": Element.Kind.SHADOW,
+			"zone_style": "cercle_peint",
 			"damage": 10, "radius": 1.8, "duration": 6.0, "cooldown": 10.0, "mana_cost": 3,
 		}),
 	]
@@ -939,6 +942,7 @@ static func supreme() -> CharacterStats:
 		"id": "supreme_bolt", "display_name": "Trait élémentaire",
 		"description": "Un trait qui change d'élément à chaque tir.",
 		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SUPREME,
+		"projectile_visual": "trait_prisme",
 		# Les dégâts les plus lourds, mais une portée courte et le pas le plus
 		# lent des mages agiles : sa puissance se paie en prise de risque.
 		"damage": 20, "range": 8, "cooldown": 0.45,
@@ -959,7 +963,7 @@ static func supreme() -> CharacterStats:
 			# franchir huit cases — c'est le coup le plus lourd du Suprême, il a
 			# le droit de se voir venir.
 			"projectile_scale": 2.6, "projectile_speed": 0.22,
-			"projectile_visual": "convergence", "shockwave": true,
+			"projectile_visual": "convergence_peinte", "shockwave": true,
 		}),
 		Ability.make({
 			# LES QUATRE SCEAUX remplacent la Coulée de magma (2026-08-26).

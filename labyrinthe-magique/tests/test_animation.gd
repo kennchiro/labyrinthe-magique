@@ -36,6 +36,7 @@ func _run() -> void:
 	_test_swing_timing()
 	_test_animated_mage(grid)
 	_test_impact_pose(grid)
+	_test_painted_fire()
 
 	print("")
 	if _failures.is_empty():
@@ -49,6 +50,79 @@ func _run() -> void:
 
 func _fail(msg: String) -> void:
 	_failures.append(msg)
+
+
+## LE TRAIT ET LA BOULE DU FEU SONT PEINTS, ET LE RESTE NE L'EST PAS. Une clé mal
+## écrite dans le catalogue retomberait sans bruit sur l'ancienne image.
+func _test_painted_fire() -> void:
+	var fire := CharacterCatalog.fire()
+	for ability: Ability in [fire.attack, fire.abilities[0]]:
+		if not MagicOrb.PAINTED.has(ability.projectile_visual):
+			_fail("%s n'est pas peint : « %s »" % [ability.id, ability.projectile_visual])
+			continue
+		var orb: MagicOrb = load("res://scenes/entities/magic_orb.tscn").instantiate()
+		root.add_child(orb)
+		var path := PackedVector2Array([Vector2.ZERO, Vector2(320.0, 0.0)])
+		orb.setup(path, 1.0, TILE, Color.ORANGE, null, 1, ability.projectile_scale,
+			ability.trail_density, ability.flames)
+		orb.paint(ability.projectile_visual, ability.projectile_scale)
+		if not orb.sprite.material is ShaderMaterial:
+			_fail("%s garde son matériau d'image" % ability.id)
+		if orb.sprite.material.get_shader_parameter("noise") == null:
+			_fail("%s n'a pas de bruit : il ne dessinerait rien" % ability.id)
+		if orb.sprite.hframes != 1:
+			_fail("%s découpe son quad en images" % ability.id)
+		orb._process(1.0)
+		var full: Vector2 = orb.sprite.scale
+		if full.x <= full.y:
+			_fail("%s n'atteint pas sa taille allongée : %s" % [ability.id, full])
+		if orb.sprite.rotation != 0.0:
+			_fail("%s ne vole pas dans le sens du trajet" % ability.id)
+		orb.free()
+	# Le sol et l'aura : un quad large de deux rayons, sans image ni anneaux tracés.
+	for ability: Ability in [fire.abilities[1], fire.abilities[2]]:
+		if not ZoneEffect.PAINTED_STYLES.has(ability.zone_style):
+			_fail("%s n'est pas peint : « %s »" % [ability.id, ability.zone_style])
+			continue
+		var zone: ZoneEffect = load("res://scenes/entities/zone_effect.tscn").instantiate()
+		root.add_child(zone)
+		zone.setup(TILE, Color.ORANGE, ability.radius, ability.duration, null,
+			ability.flames, ability.zone_style, ability.snare > 0.0)
+		var span := float(TILE) * ability.radius * 2.0
+		if zone._field == null or absf(zone._field.size.x - span) > 0.5:
+			_fail("%s ne s'arrête pas au rayon du sort" % ability.id)
+		zone.free()
+	# CHAQUE SORT PEINT A SON PROPRE DESSIN : deux compétences ne partagent jamais un
+	# même habillage, sinon on retombe sur des teintes au lieu d'éléments.
+	var seen := {}
+	for mage: CharacterStats in CharacterCatalog.all():
+		# La Terre et l'Air gardent leurs dessins, les shaders s'y ajoutent.
+		if Level.PAINTED_MAGES.has(mage.id) == Level.DRAWN_MAGES.has(mage.id):
+			_fail("%s n'a pas le bon rendu" % mage.id)
+		var shown: String = PaintedFx.IMPACT.get(mage.id, "")
+		if not PaintedFx.SHADERS.has(shown):
+			_fail("%s n'a pas d'éclat peint" % mage.id)
+		if seen.has(shown):
+			_fail("%s et %s partagent leur éclat" % [seen[shown], mage.id])
+		seen[shown] = mage.id
+		for ability: Ability in [mage.attack] + mage.abilities:
+			for look: String in [ability.projectile_visual, ability.zone_style]:
+				if not (MagicOrb.PAINTED.has(look) or ZoneEffect.PAINTED_STYLES.has(look)):
+					continue
+				if seen.has(look):
+					_fail("%s et %s partagent le dessin « %s »" % [seen[look], ability.id, look])
+				seen[look] = ability.id
+	# L'explosion ne couvre pas l'écran, quel que soit le rayon du sort.
+	var burst := PaintedBurst.new()
+	root.add_child(burst)
+	burst.setup(TILE, 7.0, 0.5, 0.0, "fire_burst")
+	var drawn: Sprite2D = burst.get_child(0)
+	if drawn.scale.x > float(TILE) * PaintedBurst.MAX_RADIUS_TILES * 2.0 / 0.8 + 0.5:
+		_fail("l'explosion peinte dépasse son plafond : %s" % drawn.scale)
+	burst._process(0.6)
+	if not burst.is_queued_for_deletion():
+		_fail("l'explosion peinte ne disparaît pas")
+	burst.free()
 
 
 func _enemy(grid: MazeGrid, cell: Vector2i, species := "goblin") -> Enemy:

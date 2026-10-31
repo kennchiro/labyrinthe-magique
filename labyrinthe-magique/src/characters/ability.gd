@@ -58,7 +58,8 @@ enum Kind {
 ## Densité de la traînée de braises, 0 = aucune.
 @export var trail_density: float = 0.0
 ## Habillage dédié d'un projectile. Vide = l'orbe du mage ; une valeur comme
-## `convergence` charge ses sprites propres sans changer l'attaque de base.
+## `convergence` charge ses sprites propres sans changer l'attaque de base, et les
+## clés de `MagicOrb.PAINTED` peignent le projectile au shader.
 @export var projectile_visual: String = ""
 ## Le bouclier rend INTOUCHABLE au lieu d'absorber (forme SHIELD).
 ##
@@ -326,7 +327,8 @@ enum Kind {
 ## c'est ce qui distingue un mage de survie d'un mage de dégâts.
 @export var heal_self: int = 0
 
-## Allure de la zone : "nappe", "brasier", "champ", "pics" ou "rune".
+## Allure de la zone : "nappe", "brasier", "champ", "pics" ou "rune", et
+## "nappe_peinte" ou "brasier_peint" pour les zones peintes au shader.
 ##
 ## Deux zones de feu du même mage se ressemblaient trait pour trait — même
 ## anneau orange, mêmes flammes. Or elles ne font pas le même métier, et la

@@ -653,7 +653,9 @@ func use_ability(slot: int) -> bool:
 	# LE BLASON DE L'EXTRA. Il ne paraît que pour l'ultime, et seulement si la
 	# planche du mage en fournit un : déposer un `crest.png` suffit à en donner
 	# un au mage suivant, sans toucher au code.
-	if ability.is_ultimate and _crest_texture != null:
+	if ability.is_ultimate and _crest_texture != null and PAINTED_MAGES.has(character.id):
+		_spawn_painted_burst(player.mover.nearest_cell(), 3.0, 0.9, "thunder_crest")
+	elif ability.is_ultimate and _crest_texture != null:
 		var crest: SpellCrest = CREST_SCENE.instantiate()
 		entities.add_child(crest)
 		crest.position = player.position
@@ -796,7 +798,56 @@ func _release_enemy(index: int, cell: Vector2i) -> void:
 
 # --- Retours visuels du combat ---------------------------------------------------
 
+## Le dernier élément du trait du Suprême et de ses météores : 0 feu, 1 eau, 2 terre, 3 air.
+var _prism_rank := 0
+var _meteor_rank := 0
+
+## Les mages dont les sorts sont peints au shader et non lus dans leur planche.
+##
+## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
+## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
+const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
+	"supreme"]
+const DRAWN_MAGES: Array[String] = ["earth", "air"]
+const EARTH := "earth"
+const AIR := "air"
+## Une météore peinte, à l'échelle de la Boule de feu : quatorze à 2,1 boucheraient
+## le labyrinthe.
+const METEOR_PAINTED_SCALE := 1.3
+
+
+## LES SHADERS PEINTS SONT COMPILÉS AU CHARGEMENT, pas au premier tir.
+##
+## `gl_compatibility` n'a pas de précompilation : un shader se compile la première
+## fois qu'il s'affiche, et le premier sort du joueur saccaderait. La doc de Godot
+## prescrit de l'afficher une image pendant le chargement. Il l'est ici sur quelques
+## pixels presque transparents, à peine une image.
+func _warm_painted_shaders() -> void:
+	if not PaintedFx.IMPACT.has(character.id) or not is_inside_tree():
+		return
+	var materials := PaintedFx.materials_of(character.id)
+	for ability: Ability in [character.attack] + character.abilities:
+		if MagicOrb.PAINTED.has(ability.projectile_visual):
+			materials.append(MagicOrb.painted_material(ability.projectile_visual, 0.0))
+		if ZoneEffect.PAINTED_STYLES.has(ability.zone_style):
+			materials.append(ZoneEffect.painted_material(ability.zone_style, 2.0, 0.0))
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	for shaded in materials:
+		var quad := Sprite2D.new()
+		quad.texture = MagicOrb.painted_quad()
+		quad.material = shaded
+		quad.scale = Vector2(4.0, 4.0)
+		quad.position = Vector2(4.0, 4.0)
+		quad.modulate = Color(1.0, 1.0, 1.0, 1.0 / 255.0)
+		layer.add_child(quad)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	layer.queue_free()
+
+
 func _load_character_fx() -> void:
+	_warm_painted_shaders()
 	var folder := "res://assets/characters/%s/" % character.id
 	_orb_texture = _texture_or_null(folder + "orb.png")
 	_seal_texture = _texture_or_null(folder + "sceaux_seal.png")
@@ -1029,6 +1080,11 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 	orb.setup(points, duration, TILE_SIZE, Element.color(ability.element),
 		texture, frames, ability.projectile_scale, ability.trail_density,
 		ability.flames, grows, fps, charge)
+	orb.paint(ability.projectile_visual, ability.projectile_scale)
+	# LE TRAIT DU SUPRÊME CHANGE DE MATIÈRE À CHAQUE TIR, comme le dit sa fiche.
+	if ability.projectile_visual == "trait_prisme":
+		_prism_rank = (_prism_rank + 1) % 4
+		(orb.sprite.material as ShaderMaterial).set_shader_parameter("kind", _prism_rank)
 	_orbs[index] = orb
 
 
@@ -1059,7 +1115,8 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 		if ability.projectile_visual == "convergence" and _convergence_impact_texture != null:
 			impact_texture = _convergence_impact_texture
 		_spawn_impact(cell, ability.element, maxf(0.9, ability.radius),
-			impact_time, impact_texture, ability.flames)
+			impact_time, impact_texture, ability.flames, 1.6,
+			"convergence_burst" if ability.projectile_visual == "convergence_peinte" else "")
 	# L'ASPIRATION SE DESSINE AVANT LES TRAÎNÉES. Le nœud est posé ici parce que
 	# `blast_fired` part avant que les créatures ne soient déplacées : l'anneau
 	# est donc déjà à l'écran quand les traînées le rejoignent.
@@ -1108,6 +1165,8 @@ func _on_player_empowered(bonus: int, duration: float) -> void:
 			player.add_child(_rebirth)
 			_rebirth.setup(_rebirth_strip, _rebirth_frames, _rebirth_fps,
 				_rebirth_loop, TILE_SIZE, duration)
+			PaintedFx.cover(_rebirth, "rebirth_aura", Vector2(3.0, 3.6) * TILE_SIZE,
+				Vector2(0.0, -1.1) * TILE_SIZE)
 	player_empowered.emit(bonus, duration)
 
 
@@ -1138,6 +1197,10 @@ func _on_player_shielded(amount: int, duration: float) -> void:
 		_bubble = BUBBLE_SCENE.instantiate()
 		player.add_child(_bubble)
 		_bubble.setup(TILE_SIZE, Element.color(character.element), duration)
+		if character.id == AIR:
+			PaintedFx.add(_bubble, "air_veil", Vector2(2.6, 2.6) * TILE_SIZE)
+		else:
+			PaintedFx.cover(_bubble, "water_bubble", Vector2(2.6, 2.6) * TILE_SIZE)
 	player_shielded.emit(amount)
 
 
@@ -1172,6 +1235,8 @@ func _on_turret_planted(id: int, ability: Ability, cell: Vector2i) -> void:
 	entities.add_child(turret)
 	turret.position = maze_renderer.cell_to_world(cell)
 	turret.setup(TILE_SIZE, ability.duration, _crystal_texture)
+	if character.id == EARTH:
+		_spawn_painted_burst(cell, 1.2, 0.5, "earth_crack")
 	_turret_nodes[id] = turret
 	# La terre remuée, comme pour les Pics : ce qui perce le sol doit en
 	# soulever.
@@ -1223,6 +1288,8 @@ func _on_player_made_immune(duration: float) -> void:
 	player.add_child(_aegis)
 	_aegis.setup(TILE_SIZE, duration, _aegis_texture, _rock_texture,
 		_spark_texture)
+	if character.id == EARTH:
+		_spawn_painted_burst(player.mover.nearest_cell(), 1.3, 0.5, "earth_crack")
 
 
 func _on_immunity_faded() -> void:
@@ -1281,9 +1348,18 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	# et ses grosses bulles blanches couvraient le cône et l'onde dessinés.
 	# Signalé deux fois ; le sort se suffit.
 	var souffle: bool = ability.blow_cells > 0 and not _cone_frames.is_empty()
-	if not souffle:
+	if souffle and character.id == AIR:
+		var gust := _spawn_painted_burst(cell, ability.radius, 0.55, "air_gust")
+		gust.rotation = Vector2(combat_context.player_facing).angle()
+		gust.get_child(0).scale = Vector2(1.0, 1.4) * ability.radius * 2.0 * TILE_SIZE
+		gust.get_child(0).position = Vector2(ability.radius * TILE_SIZE, 0.0)
+		gust.z_index = 11
+	elif not souffle:
+		# L'Extra du Suprême a son propre coup : son étoile de tous les jours, étirée sur
+		# un tel rayon, n'était plus qu'un aplat violet.
 		_spawn_impact(cell, ability.element, ability.radius, 0.75, eclat,
-			ability.flames)
+			ability.flames, 1.6,
+			"judgement_burst" if ability.is_ultimate and character.id == "supreme" else "")
 	# LE CÔNE DEVANT, L'ONDE AUTOUR. Deux animations dessinées — la première
 	# version traçait ses anneaux en code, ce qui donnait un rond pâle qui ne
 	# disait ni la direction ni la force.
@@ -1292,7 +1368,7 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	# fonctions se terminent par le même « if ability.shockwave », et j'ai
 	# ancré dessus. Le Grand souffle n'est pas un projectile, donc rien ne
 	# s'affichait — et rien ne criait non plus, puisque le code était valide.
-	if souffle:
+	if souffle and not PAINTED_MAGES.has(character.id):
 		var blast := WindBlast.new()
 		entities.add_child(blast)
 		blast.position = maze_renderer.cell_to_world(cell)
@@ -1319,6 +1395,12 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 ## durant. Ceux-ci sortent au hasard du labyrinthe, frappent ce qui passe, et
 ## laissent le joueur voir son personnage.
 func _on_geyser_erupted(cell: Vector2i, ability: Ability) -> void:
+	if PAINTED_MAGES.has(character.id):
+		var column := _spawn_painted_burst(cell, 1.5, 0.85, "water_geyser")
+		column.get_child(0).scale = Vector2(2.2, 4.4) * TILE_SIZE
+		column.get_child(0).position = Vector2(0.0, -1.9) * TILE_SIZE
+		column.z_index = 11
+		return
 	if _geyser_frames.is_empty():
 		_spawn_impact(cell, ability.element, ability.geyser_radius, 0.7,
 			_impact_texture)
@@ -1353,6 +1435,9 @@ func _seal_fx_name(element: Element.Kind) -> String:
 
 
 func _on_seals_cast(cell: Vector2i) -> void:
+	if PAINTED_MAGES.has(character.id):
+		_spawn_painted_burst(cell, 1.2, 0.5, "convergence_burst")
+		return
 	if _seal_charge_texture == null or _seal_charge_frames <= 0:
 		return
 	var charge := SpellCharge.new()
@@ -1369,6 +1454,9 @@ func _on_seals_cast(cell: Vector2i) -> void:
 ## ciel se prépare. Il dure exactement l'attente que le CombatSystem a imposée
 ## aux météores — les deux ne se parlent pas, ils partagent un nombre.
 func _on_incantation_cast(cell: Vector2i, _ability: Ability) -> void:
+	if PAINTED_MAGES.has(character.id):
+		_spawn_painted_burst(cell, 2.4, 0.8, "judgement_burst")
+		return
 	if _judgement_charge == null or _judgement_charge_frames <= 0:
 		return
 	var charge := SpellCharge.new()
@@ -1403,6 +1491,8 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 		tornado.position = maze_renderer.cell_to_world(cell)
 		tornado.setup(TILE_SIZE, ability.duration, suite,
 			Element.color(ability.element))
+		if character.id == AIR:
+			_spawn_painted_burst(cell, 1.3, 0.5, "air_streaks")
 		_zone_nodes[zone_id] = tornado
 		return
 	# LA FAILLE joue la planche ANIMÉE : cristal et pierre en alternance selon
@@ -1416,6 +1506,8 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 		entities.add_child(burst)
 		burst.position = maze_renderer.cell_to_world(cell)
 		burst.setup(TILE_SIZE, ability.duration, _burst_frames[matter])
+		if character.id == EARTH:
+			_spawn_painted_burst(cell, 1.0, 0.45, "earth_crack")
 		_zone_nodes[zone_id] = burst
 		return
 	if ability.zone_style == "pics":
@@ -1423,6 +1515,8 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 		entities.add_child(spike)
 		spike.position = maze_renderer.cell_to_world(cell)
 		spike.setup(TILE_SIZE, ability.duration, _spikes_texture, _dust_texture)
+		if character.id == EARTH:
+			_spawn_painted_burst(cell, 1.0, 0.45, "earth_crack")
 		_zone_nodes[zone_id] = spike
 		return
 	var zone: ZoneEffect = ZONE_EFFECT_SCENE.instantiate()
@@ -1434,7 +1528,7 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 		# de leur planche — l'anneau de feu, le cercle de pierres ; celle-ci est
 		# une absence, et n'importe quel motif lumineux par-dessus la ferait
 		# ressembler à un sort qui s'allume.
-		null if ability.zone_style == "ombre" else
+		null if ability.zone_style == "ombre" or ZoneEffect.PAINTED_STYLES.has(ability.zone_style) else
 		(_warp_texture if ability.zone_style == "portail" else
 		(_seal_texture if ability.zone_style == "sceau" and _seal_texture != null
 		else _zone_texture)),
@@ -1442,10 +1536,14 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 	# LA BOUCLE ÉLÉMENTAIRE par-dessus la gravure. Le sceau tient soixante
 	# secondes : sans mouvement, quatre disques immobiles pendant une minute se
 	# lisent comme du décor, pas comme un piège armé.
-	if ability.zone_style == "sceau" and _seal_fx_frames > 0:
-		var key := _seal_fx_name(ability.element)
-		if _seal_fx.has(key):
-			zone.play_strip(_seal_fx[key], _seal_fx_frames, _seal_fx_fps)
+	if ability.zone_style == "sceau":
+		# Le socle tombe sur le rayon du sort et le centre de sa case, la flamme
+		# s'élève au-dessus.
+		var span := ability.radius * 2.0 * TILE_SIZE / 0.68
+		var seal := PaintedFx.cover(zone, "seal_flame", Vector2(span, span),
+			Vector2(0.0, -span * 0.25))
+		(seal.material as ShaderMaterial).set_shader_parameter("kind",
+			PaintedFx.SEAL_KINDS.get(ability.element, 3))
 	if ability.zone_style == "portail" and _rune_texture != null:
 		# 4,5 images par seconde : un tour complet en une seconde et un tiers.
 		# Plus vite, le portail devient une toupie ; plus lentement, le fondu
@@ -1497,6 +1595,8 @@ func _on_summon_spawned(id: int, kind_id: String, grid_position: Vector2) -> voi
 		entities.add_child(column)
 		column.position = (grid_position + Vector2(0.5, 0.5)) * float(TILE_SIZE)
 		column.setup(TILE_SIZE, _cyclone_frames, 1e9)
+		if character.id == AIR:
+			_spawn_painted_burst(Vector2i(grid_position.round()), 1.3, 0.5, "air_streaks")
 		_summon_nodes[id] = column
 		return
 	var visual := SummonVisual.new()
@@ -1607,7 +1707,38 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 	_refresh_ai()
 
 
+## LA FUITE DE CHAQUE MAGE EST LA SIENNE : le Feu se défait en braises qui montent,
+## l'Ombre se dissipe en fumée, l'Invocateur s'efface derrière un sceau.
+func _spawn_painted_escape(cell: Vector2i) -> void:
+	var at := maze_renderer.cell_to_world(cell)
+	var puff: CPUParticles2D = null
+	match character.id:
+		"fire":
+			puff = FxTextures.flame_emitter(26, 0.55, TILE_SIZE * 0.34,
+				Color(1.0, 0.86, 0.3, 0.95), Color(0.85, 0.15, 0.02, 0.0), -TILE_SIZE * 1.6, 180.0)
+			puff.initial_velocity_min = TILE_SIZE * 0.4
+			puff.initial_velocity_max = TILE_SIZE * 2.4
+		"shadow":
+			puff = FxTextures.smoke_emitter(18, 0.7, TILE_SIZE * 0.9, -TILE_SIZE * 0.5)
+			puff.modulate = Color(0.55, 0.3, 0.85)
+		_:
+			_spawn_painted_burst(cell, 1.0, 0.42, str(PaintedFx.ESCAPE[character.id]))
+			return
+	entities.add_child(puff)
+	puff.position = at
+	puff.z_index = 9
+	puff.one_shot = true
+	puff.explosiveness = 0.92
+	puff.emitting = true
+	get_tree().create_timer(puff.lifetime + 0.3).timeout.connect(puff.queue_free)
+
+
 func _spawn_warp(cell: Vector2i, tint: Color, arriving: bool) -> void:
+	if PAINTED_MAGES.has(character.id):
+		_spawn_painted_escape(cell)
+		return
+	if DRAWN_MAGES.has(character.id):
+		_spawn_painted_burst(cell, 1.0, 0.42, str(PaintedFx.ESCAPE[character.id]))
 	var effect: WarpEffect = WARP_SCENE.instantiate()
 	entities.add_child(effect)
 	effect.position = maze_renderer.cell_to_world(cell)
@@ -1786,11 +1917,18 @@ func _on_meteor_incoming(cell: Vector2i, delay: float, ability: Ability) -> void
 		meteor.setup(TILE_SIZE, delay, _judgement_meteor,
 			Element.color(ability.element), 2.8, false,
 			_judgement_meteor_frames, _judgement_meteor_fps)
+		meteor.paint("meteore_jugement", 1.6)
+		_meteor_rank = (_meteor_rank + 1) % 4
+		(meteor.rock.material as ShaderMaterial).set_shader_parameter("kind", _meteor_rank)
 		return
 	# PLUS PETITE quand c'est une goutte : trente météores à une case et demie
 	# effaceraient le labyrinthe. Une goutte tient dans le tiers d'une case.
 	meteor.setup(TILE_SIZE, delay, falling, Element.color(ability.element),
 		0.55 if liquid else 1.6, liquid)
+	if liquid:
+		meteor.paint("goutte", 0.7)
+	elif PAINTED_MAGES.has(character.id):
+		meteor.paint("boule_peinte", METEOR_PAINTED_SCALE)
 
 
 func _on_meteor_landed(cell: Vector2i, ability: Ability) -> void:
@@ -1799,6 +1937,12 @@ func _on_meteor_landed(cell: Vector2i, ability: Ability) -> void:
 	# dégâts. Le reste des mages garde l'éclat générique.
 	# L'ÉCLAT DESSINÉ DU JUGEMENT. Il passe avant l'éclaboussure : le Suprême n'en
 	# a pas, mais la règle doit être lisible — ce qui a une planche à soi la joue.
+	if ability.rain_hunts and PAINTED_MAGES.has(character.id):
+		_spawn_painted_burst(cell, maxf(1.6, ability.rain_radius), 0.55, "judgement_burst")
+		return
+	if not _splash_frames.is_empty() and PAINTED_MAGES.has(character.id):
+		_spawn_painted_burst(cell, ability.rain_radius, 0.5, "water_splash")
+		return
 	if ability.rain_hunts and not _judgement_impact.is_empty():
 		var strike: DrawnBurst = DRAWN_BURST_SCENE.instantiate()
 		entities.add_child(strike)
@@ -1832,6 +1976,8 @@ func _on_sky_cloud_formed(cell: Vector2i, duration: float, _ability: Ability) ->
 	# l'unisson et l'orage se lit comme une seule image répétée.
 	cloud.setup(TILE_SIZE, duration, _cloud_texture, _cloud_lit_texture,
 		float(cell.x * 7 + cell.y * 13) * 0.37)
+	PaintedFx.cover(cloud, "thunder_cloud", Vector2(3.0, 1.9) * TILE_SIZE,
+		Vector2(0.0, -SkyCloud.HEIGHT_TILES) * TILE_SIZE)
 	_sky_clouds[cell] = cloud
 	# Pas d'impact sous le nuage qui se forme : douze dessins de frappe surgis
 	# d'un coup aux quatre coins de la carte, c'était du bruit, et ça annonçait
@@ -2128,7 +2274,17 @@ func _spawn_shockwave(cell: Vector2i, ability: Ability) -> void:
 
 func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		duration: float = ImpactEffect.DURATION, drawn: Texture2D = null,
-		flames: float = 0.0, spin: float = 1.6) -> void:
+		flames: float = 0.0, spin: float = 1.6, painted_key: String = "") -> void:
+	# LE VORTEX ROND DE `impact.png` N'EST PLUS JOUÉ pour un mage peint : son
+	# explosion en shader prend la place, et l'éclat tracé garde le rayon réel.
+	if drawn != null and drawn == _impact_texture and PAINTED_MAGES.has(character.id):
+		drawn = null
+		# Ni flammes ni fumée d'accompagnement : au-dessus du mage, elles le
+		# cachaient, et le dessin peint s'en passe.
+		flames = 0.0
+		_spawn_painted_burst(cell, radius, duration, painted_key)
+	elif drawn != null and drawn == _impact_texture and DRAWN_MAGES.has(character.id):
+		_spawn_painted_burst(cell, radius, duration)
 	var impact: ImpactEffect = IMPACT_EFFECT_SCENE.instantiate()
 	entities.add_child(impact)
 	impact.position = maze_renderer.cell_to_world(cell)
@@ -2142,6 +2298,16 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 	impact.setup(TILE_SIZE, element, radius, duration,
 		cell.x * 733 + cell.y * 199 + 1, drawn, flames, spin,
 		suite, _impact_anchor)
+
+
+func _spawn_painted_burst(cell: Vector2i, radius: float, duration: float,
+		key: String = "") -> PaintedBurst:
+	var burst := PaintedBurst.new()
+	entities.add_child(burst)
+	burst.position = maze_renderer.cell_to_world(cell)
+	burst.setup(TILE_SIZE, radius, duration, float(cell.x * 733 + cell.y * 199) * 0.001,
+		key if key != "" else str(PaintedFx.IMPACT[character.id]))
+	return burst
 
 
 func _spawn_effect(cell: Vector2i, tint: Color, size_tiles: float = 1.7) -> void:
@@ -2350,6 +2516,8 @@ func _on_quake_slide(cell: Vector2i, ability: Ability) -> void:
 	# ET LA PIERRE JAILLIT : c'est le séisme qui la fait sortir. Les gerbes de
 	# la planche animée servent ici comme pour la Faille — une matière ou
 	# l'autre selon la case.
+	if character.id == EARTH:
+		_spawn_painted_burst(cell, ability.quake_radius, 0.7, "earth_quake")
 	if _burst_frames.is_empty():
 		return
 	var matter := "crystal" if (cell.x + cell.y) % 2 == 0 else "stone"

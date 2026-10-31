@@ -2302,6 +2302,61 @@ nombre.
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
 
+## 2026-10-31 — les sorts sont peints au shader, un dessin par sort
+
+Les huit mages passent au shader (`PaintedFx`, `MagicOrb.PAINTED`,
+`ZoneEffect.PAINTED_STYLES`, `PaintedBurst`, `Level.PAINTED_MAGES`). Le vortex rond de
+`impact.png` n'est plus joué. Les dessins du Feu s'inspirent de
+`peso&cover/sorts/mage_fire_skills.png`.
+
+⚠️ **La règle : chaque sort a son dessin, tiré de ce qu'il FAIT.** Une première version
+recolorait les shaders du Feu en violet pour les Ténèbres : jetée le jour même. Une
+palette donne sept teintes, pas sept mages. Le Feu s'ouvre et se déchire, l'Ombre se
+referme sur elle-même, l'Invocateur trace au compas sans aucun bruit.
+`test_animation` échoue si deux sorts partagent un même habillage.
+
+⚠️ **`PaintedFx.cover` éteint les planches sans retirer les nœuds.** Tornade, égide,
+cristal, nuage et les autres gardent leur logique et leurs particules ; `self_modulate`
+masque leurs images et un quad peint prend la place. Les planches restent donc CHARGÉES
+pour rien : à retirer une fois le rendu validé sur téléphone.
+
+⚠️ **Un blanc sur blanc ne se voit pas.** Le vent de l'Air disparaissait sur les stages
+clairs tant qu'il n'avait pas de liseré sombre. Contrôler chaque effet sur un sol clair.
+
+⚠️ **La Terre et l'Air gardent leurs dessins, à la demande du joueur** : rocher, pics,
+égide, cristal, éboulement ; lame, tornade, cône du souffle, cyclone. Leurs shaders s'y
+AJOUTENT seulement : le sol qui se fend, l'onde du séisme, les traits de vent, le voile.
+Ce sont les seules exceptions à la règle ; ne pas les « corriger » (`Level.DRAWN_MAGES`).
+
+Encore dessinées aussi : les créatures invoquées.
+
+**Les Quatre Sceaux partagent une seule flamme, à la demande du joueur** : la traînée de
+la Boule de feu, dressée à la verticale, dans les couleurs de chaque élément
+(`seal_flame.gdshader`). C'est la seule palette voulue du jeu.
+
+**Le Suprême repeint une seconde fois** : sa première version alignait des disques et
+des anneaux colorés, jugés trop simples. `elements.gdshaderinc` peint maintenant la
+MATIÈRE des quatre éléments, et tous ses sorts s'en servent : le feu brûle, l'eau strie,
+la terre se casse en plaques, l'air n'est que filets.
+
+⚠️ **Le bruit ne doit pas pouvoir créer de matière hors de la forme** (`inside`) : il
+rallumait des pixels loin du dessin, qui se découpait en carré sur son quad.
+⚠️ **Une flamme se fait avec un bruit très étiré.** Fin dans les deux sens, il grésille.
+Les effets déjà codés restent tels quels (vague, implosion, champ, chaîne, orage).
+
+⚠️ **Ce n'est pas plus rapide qu'une image, c'est plus cher.** Mesuré sur M1 avec
+`tools/preview_fire.gd --bench`, à 300 projectiles : 0,33 ms en image, 1,24 ms pour le
+trait, 2,72 ms pour la boule. À 30, l'écart n'est pas mesurable. Ce qu'on achète,
+c'est le mouvement, la variété et un sol qui suit exactement le rayon du sort. Le
+téléphone reste à mesurer, surtout avec les cinq auras de 30 s posées ensemble.
+
+⚠️ **`gl_compatibility` ne précompile pas ses shaders** : le premier sort saccaderait.
+`Level._warm_painted_shaders` les affiche au chargement, sur quelques pixels presque
+transparents, comme le prescrit la doc de Godot.
+
+⚠️ **Sans texture, une particule est un carré.** Ça se voyait à peine sur l'ancienne
+orbe additive, et ça sautait aux yeux sur ces aplats. `MagicOrb._round_embers`.
+
 ## 2026-10-31 — les quatre derniers ennemis, et trois pièges de découpe
 
 Dragonnet, Archer d'Os, Démon de Cristal et Chevalier Noir passent au format à

@@ -8,6 +8,15 @@ extends Node2D
 ## reste — sans quoi le joueur verrait ses ennemis fondre sans savoir pourquoi.
 
 const RING_COUNT := 3
+## Les zones peintes au shader : pas de planche, pas d'anneaux tracés.
+const PAINTED_STYLES := {
+	"nappe_peinte": preload("res://assets/shaders/fire_zone.gdshader"),
+	"brasier_peint": preload("res://assets/shaders/fire_zone.gdshader"),
+	"rune_peinte": preload("res://assets/shaders/shadow_rune.gdshader"),
+	"cercle_peint": preload("res://assets/shaders/arcane_circle.gdshader"),
+	"mare_peinte": preload("res://assets/shaders/water_pool.gdshader"),
+}
+const PAINTED_FLAMES := 0.3
 
 var tile_size: int = 32
 var tint: Color = Color.WHITE
@@ -23,6 +32,7 @@ var _brazier := false
 ## Flamme SOMBRE : la rune des Ténèbres. Voir `_build_dark_flames`.
 var _rune := false
 var _seal := false
+var _painted := false
 ## Portail POSÉ AU SOL — le passage du mage, laissé derrière lui.
 var _portal := false
 ## Flaque d'ombre résiduelle : elle ASSOMBRIT le sol au lieu de l'éclairer.
@@ -59,7 +69,8 @@ func setup(p_tile_size: int, p_tint: Color, p_radius: float, duration: float,
 	# ici qu'ils prennent leur teinte — sans quoi on aurait quatre sceaux
 	# identiques, et le joueur ne saurait pas lequel garde quel couloir.
 	_seal = p_style == "sceau"
-	_brazier = p_style == "brasier"
+	_painted = PAINTED_STYLES.has(p_style)
+	_brazier = p_style == "brasier" or p_style == "brasier_peint"
 	_rune = p_style == "rune"
 	_portal = p_style == "portail"
 	_gloom = p_style == "ombre"
@@ -80,8 +91,13 @@ func setup(p_tile_size: int, p_tint: Color, p_radius: float, duration: float,
 	# leur couleur — la seule chose qui dit quel élément garde quel couloir —
 	# disparaissait. Composé normalement, l'or reste de l'or et le rouge du rouge.
 	material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX if _rune or _gloom \
-		or _seal else CanvasItemMaterial.BLEND_MODE_ADD
+		or _seal or _painted else CanvasItemMaterial.BLEND_MODE_ADD
 	self.material = material
+	if _painted:
+		_build_painted(p_style)
+		# Quelques flammes sur le Sol embrasé, aucune ailleurs : leur additif faisait
+		# des taches floues dans l'aura, et le reste ne brûle pas.
+		p_flames = p_flames * PAINTED_FLAMES if p_style == "nappe_peinte" else 0.0
 	if p_style == "champ":
 		_build_field(p_tint)
 	elif _rune and p_flames > 0.0:
@@ -115,6 +131,30 @@ func _build_field(tint: Color) -> void:
 	_field_material.set_shader_parameter("glow_color", tint)
 	_field.material = _field_material
 	add_child(_field)
+
+
+## LE SOL OU L'AURA DU FEU, peints au shader. Même porteur que le champ électrifié :
+## un quad large de deux rayons, pour que le dessin s'arrête où le sort s'arrête.
+func _build_painted(style: String) -> void:
+	var span := tile_size * radius_tiles * 2.0
+	_field = ColorRect.new()
+	_field.size = Vector2(span, span)
+	_field.position = -_field.size * 0.5
+	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_field_material = painted_material(style, radius_tiles,
+		float(Time.get_ticks_usec() % 1000) * 0.001)
+	_field.material = _field_material
+	add_child(_field)
+
+
+static func painted_material(style: String, radius: float, seed_value: float) -> ShaderMaterial:
+	var shaded := ShaderMaterial.new()
+	shaded.shader = PAINTED_STYLES[style]
+	shaded.set_shader_parameter("noise", MagicOrb.PAINTED_NOISE)
+	shaded.set_shader_parameter("aura", 1.0 if style == "brasier_peint" else 0.0)
+	shaded.set_shader_parameter("radius_tiles", radius)
+	shaded.set_shader_parameter("seed", seed_value)
+	return shaded
 
 
 func _build_brazier(density: float) -> void:
@@ -285,6 +325,8 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if _painted:
+		return
 	var life := 1.0 - _time / _duration
 	# La zone PÂLIT en s'épuisant : c'est le seul indice qui dit au joueur
 	# combien de temps il peut encore compter dessus.

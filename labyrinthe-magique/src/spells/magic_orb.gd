@@ -49,6 +49,98 @@ const CHARGE_SHARE := 0.45
 ## toucher, sinon on ne voit jamais que sa naissance.
 const GROW_TIME := 0.22
 
+## LES PROJECTILES PEINTS AU SHADER, par valeur d'`Ability.projectile_visual`.
+##
+## Ils ne lisent aucune planche : deux tirs ne sont jamais identiques, et le dessin
+## vit pendant tout le vol. `lead` recule le quad pour que la POINTE du dessin, et
+## non son milieu, tombe sur la position du projectile. Les tailles sont en cases,
+## avant l'échelle de la compétence.
+const PAINTED := {
+	"trait_peint": {"shader": preload("res://assets/shaders/fire_bolt.gdshader"),
+		"length": 1.6, "height": 0.45, "lead": 0.3, "sparks": 0.4},
+	"boule_peinte": {"shader": preload("res://assets/shaders/fire_ball.gdshader"),
+		"length": 1.5, "height": 0.94, "lead": 0.22, "sparks": 0.0},
+	"orbe_ombre": {"shader": preload("res://assets/shaders/shadow_orb.gdshader"),
+		"length": 1.7, "height": 1.3, "lead": 0.16, "sparks": 0.0},
+	"aiguille_occulte": {"shader": preload("res://assets/shaders/arcane_needle.gdshader"),
+		"length": 1.9, "height": 0.3, "lead": 0.3, "sparks": 0.0},
+	"jet_eau": {"shader": preload("res://assets/shaders/water_jet.gdshader"),
+		"length": 1.9, "height": 0.5, "lead": 0.3, "sparks": 0.0},
+	"dard_foudre": {"shader": preload("res://assets/shaders/thunder_dart.gdshader"),
+		"length": 2.0, "height": 0.62, "lead": 0.42, "sparks": 0.0},
+	"trait_prisme": {"shader": preload("res://assets/shaders/prism_bolt.gdshader"),
+		"length": 2.2, "height": 0.66, "lead": 0.3, "sparks": 0.3},
+	"convergence_peinte": {"shader": preload("res://assets/shaders/convergence.gdshader"),
+		"length": 1.45, "height": 1.45, "lead": 0.0, "sparks": 0.5},
+	"goutte": {"shader": preload("res://assets/shaders/water_drop_fx.gdshader"),
+		"length": 1.0, "height": 0.56, "lead": 0.18, "sparks": 0.0},
+	"meteore_jugement": {"shader": preload("res://assets/shaders/judgement_meteor.gdshader"),
+		"length": 2.6, "height": 1.0, "lead": 0.28, "sparks": 0.0},
+}
+const PAINTED_NOISE := preload("res://assets/shaders/fire_noise.png")
+## Le trait naît petit et atteint sa taille en un éclair, comme la bande qu'il remplace.
+const PAINTED_BIRTH := 0.12
+const PAINTED_BIRTH_SCALE := 0.35
+
+## Taille pleine du quad peint, ou zéro pour un projectile dessiné.
+var _painted_size := Vector2.ZERO
+var _embers: CPUParticles2D = null
+
+
+## Le pixel blanc qui porte un shader peint : c'est le matériau qui dessine tout.
+static func painted_quad() -> Texture2D:
+	var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	image.fill(Color.WHITE)
+	return ImageTexture.create_from_image(image)
+
+
+static func painted_material(visual: String, seed_value: float) -> ShaderMaterial:
+	var shaded := ShaderMaterial.new()
+	shaded.shader = PAINTED[visual]["shader"]
+	shaded.set_shader_parameter("noise", PAINTED_NOISE)
+	shaded.set_shader_parameter("seed", seed_value)
+	return shaded
+
+
+## Remplace le dessin du projectile par son shader. À appeler après `setup`.
+func paint(visual: String, p_scale: float) -> void:
+	if not PAINTED.has(visual):
+		return
+	var look: Dictionary = PAINTED[visual]
+	_drawn = true
+	_frames = 1
+	sprite.hframes = 1
+	sprite.frame = 0
+	sprite.modulate = Color.WHITE
+	sprite.texture = painted_quad()
+	sprite.offset = Vector2(-float(look["lead"]), 0.0)
+	sprite.material = painted_material(visual, float(Time.get_ticks_usec() % 1000) * 0.001)
+	_painted_size = Vector2(float(look["length"]), float(look["height"])) \
+		* float(tile_size) * maxf(0.2, p_scale)
+	sprite.scale = _painted_size * PAINTED_BIRTH_SCALE
+	# La traînée est dans le dessin : le panache de blobs additifs le délaverait.
+	if _plume != null:
+		_plume.queue_free()
+		_plume = null
+	if float(look["sparks"]) > 0.0:
+		_build_trail(float(look["sparks"]), p_scale)
+	_round_embers()
+
+
+## Sans texture, une particule est un CARRÉ : invisible sur un petit trait, mais la
+## boule en sème d'assez gros pour couvrir sa propre flamme. Rondes, plus fines et
+## DERRIÈRE le dessin, ce sont des braises qui s'échappent.
+func _round_embers() -> void:
+	if _embers == null:
+		return
+	var blob := FxTextures.soft_blob()
+	var unit := float(tile_size) / float(blob.get_width())
+	_embers.texture = blob
+	_embers.scale_amount_min = unit * 0.14
+	_embers.scale_amount_max = unit * 0.3
+	_embers.spread = 180.0
+	move_child(_embers, 0)
+
 
 ## `p_texture` : le projectile DESSINÉ du mage, découpé de sa planche. Sans lui
 ## (repli), la bille générique — mais teintée seulement dans ce cas : le trait
@@ -132,6 +224,7 @@ func _build_plume(density: float, scale_hint: float) -> void:
 ## trait de crayon, une traînée qui se disperse ressemble à du feu.
 func _build_trail(density: float, scale_hint: float) -> void:
 	var embers := CPUParticles2D.new()
+	_embers = embers
 	add_child(embers)
 	embers.amount = clampi(int(28.0 * density), 6, 64)
 	embers.lifetime = 0.55
@@ -167,6 +260,9 @@ func _process(delta: float) -> void:
 	if _points.size() < 2:
 		queue_free()
 		return
+	if _painted_size != Vector2.ZERO:
+		var born := minf(1.0, _elapsed / PAINTED_BIRTH)
+		sprite.scale = _painted_size * lerpf(PAINTED_BIRTH_SCALE, 1.0, born)
 
 	# DEUX TEMPS : on charge sur place, puis on part. Le vol se déroule sur ce
 	# qui RESTE de la durée, jamais sur la durée entière — sinon le projectile
@@ -240,6 +336,8 @@ func burst() -> void:
 
 
 func _draw() -> void:
+	if _painted_size != Vector2.ZERO:
+		return
 	for i in _trail.size():
 		var fade := 1.0 - float(i) / float(TRAIL_LENGTH)
 		draw_circle(to_local(_trail[i]), tile_size * 0.16 * fade,
