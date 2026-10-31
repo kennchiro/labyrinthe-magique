@@ -44,6 +44,9 @@ var elapsed := 0.0
 var character_id := CharacterCatalog.default_id()
 var character: CharacterStats = null
 var kills: KillSystem = null
+## Le carnet de quête du niveau en cours. Reconstruit à chaque `start_level` —
+## il ne porte que la config, il n'a donc rien à garder d'un niveau à l'autre.
+var quest: QuestBook = null
 ## Sorts et stages acquis. Chargé une fois, sauvegardé à chaque déblocage.
 var progress: Progress = null
 ## Graine imposée par la ligne de commande (0 = aléatoire). Sert à reproduire
@@ -98,6 +101,7 @@ func _ready() -> void:
 	ui.restart_requested.connect(restart)
 	ui.next_requested.connect(next_level)
 	ui.pause_requested.connect(toggle_pause)
+	ui.quest_requested.connect(toggle_quest)
 	ui.action_requested.connect(use_slot)
 	ui.menu_requested.connect(func() -> void: menu_requested.emit())
 
@@ -125,10 +129,20 @@ func start_level(index: int) -> void:
 	kills.ultimate_ready.connect(_on_ultimate_ready)
 
 	ui.hide_result()
+	# ⚠️ LE CARNET SE FERME AU DÉPART D'UN NIVEAU. Sans ça il reste ouvert sur
+	# la mission du PRÉCÉDENT : mesuré avec `--stage 3 --episode 2`, où DevTools
+	# relance le niveau après le premier départ — la page annonçait encore
+	# « Chapitre 1 · La Forêt » par-dessus les Dunes de Feu.
+	ui.hide_quest()
 	_set_state(State.PLAYING)
 	level.progress = progress
 	level.load_level(config, character, forced_seed)
 	level.player_health.died.connect(_on_player_died)
+
+	# LE CARNET DE QUÊTE du niveau. Reconstruit à chaque départ : il ne porte que
+	# la config, et une config recyclée d'un niveau à l'autre mentirait.
+	quest = QuestBook.new(config)
+	ui.set_quest_available(not config.is_demo)
 
 	ui.set_character(character)
 	ui.set_level(config, level_index + 1)
@@ -144,6 +158,14 @@ func start_level(index: int) -> void:
 			kills.register_kill()
 		ui.set_kills(kills.kills, character.ultimate_required_kills, kills.available())
 		ui.flash("MODE DÉMO — sorts illimités, sans recharge", Color("#9fe8b4"))
+	# LE CARNET S'OUVRE TOUT SEUL LA PREMIÈRE FOIS qu'on entre dans un épisode,
+	# et une seule : un briefing qu'on doit refermer à chaque essai devient un
+	# obstacle entre le joueur et sa partie. Le « déjà vu » vit dans Settings et
+	# non dans Progress — c'est une commodité d'affichage, pas un acquis, et
+	# Progress refuse d'écrire hors d'une sauvegarde chargée.
+	if not config.is_demo and not Settings.quest_seen(config.stage, config.episode):
+		Settings.mark_quest_seen(config.stage, config.episode)
+		toggle_quest()
 	level_started.emit(config, level_index)
 
 
@@ -165,15 +187,36 @@ func next_level() -> void:
 func resume() -> void:
 	if state == State.PAUSED:
 		ui.hide_result()
+		ui.hide_quest()
 		_set_state(State.PLAYING)
 
 
 func toggle_pause() -> void:
+	# Le carnet ouvert, le bouton de pause le REFERME au lieu d'empiler un
+	# second écran par-dessus. Deux panneaux superposés dont un seul répond aux
+	# clics est un bug que le joueur lit comme un jeu figé.
+	if ui.quest_visible():
+		resume()
+		return
 	if state == State.PLAYING:
 		_set_state(State.PAUSED)
 		ui.show_pause(levels[level_index], character)
 	elif state == State.PAUSED:
 		resume()
+
+
+## LE CARNET MET LE JEU EN PAUSE, et ce n'est pas une facilité d'implémentation :
+## lire sa mission pendant qu'un spectre vous court après n'est pas un choix,
+## c'est une punition. Il réutilise l'état PAUSED plutôt que d'en inventer un —
+## un troisième état voudrait dire trois transitions à tenir dans `_set_state`.
+func toggle_quest() -> void:
+	if ui.quest_visible():
+		resume()
+		return
+	if state != State.PLAYING or quest == null:
+		return
+	_set_state(State.PAUSED)
+	ui.show_quest(quest, level.gems_taken, level.lairs_remaining(), level.house_is_open())
 
 
 # --- Règles ---------------------------------------------------------------------

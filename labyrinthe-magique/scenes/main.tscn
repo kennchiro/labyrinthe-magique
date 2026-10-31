@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://src/core/game_manager.gd" id="1_game"]
 [ext_resource type="PackedScene" path="res://scenes/level.tscn" id="2_level"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/result_screen.tscn" id="6_result"]
 [ext_resource type="Script" path="res://src/core/dev_tools.gd" id="7_dev"]
 [ext_resource type="Script" path="res://src/ui/action_bar.gd" id="9_action_bar"]
+[ext_resource type="Script" path="res://src/ui/quest_panel.gd" id="10_quest"]
 
 [node name="Game" type="Node"]
 script = ExtResource("1_game")
@@ -16,6 +17,11 @@ script = ExtResource("1_game")
 [node name="Level" parent="." instance=ExtResource("2_level")]
 
 [node name="UI" type="CanvasLayer" parent="."]
+; L'INTERFACE AU-DESSUS DE L'AMBIANCE. La vignette du labyrinthe vit sur un
+; CanvasLayer 1 ; sans ce numéro explicite, l'UI restait au calque 0 et se
+; faisait assombrir avec le décor — mesuré, le bandeau perdait 44 % de sa
+; luminosité et les libellés devenaient gris.
+layer = 2
 script = ExtResource("3_ui")
 
 [node name="HUD" parent="UI" instance=ExtResource("4_hud")]
@@ -66,6 +72,17 @@ grow_horizontal = 0
 focus_mode = 0
 text = "II"
 
+[node name="QuestButton" type="Button" parent="UI"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -78.0
+offset_top = 84.0
+offset_right = -18.0
+offset_bottom = 144.0
+grow_horizontal = 0
+focus_mode = 0
+text = "📖"
+
 [node name="DemoBar" type="Control" parent="UI"]
 visible = false
 anchor_left = 0.5
@@ -112,6 +129,13 @@ theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.65, 0.95, 0.7, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
+
+[node name="QuestPanel" type="Control" parent="UI"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("10_quest")
 
 [node name="ResultScreen" parent="UI" instance=ExtResource("6_result")]
 

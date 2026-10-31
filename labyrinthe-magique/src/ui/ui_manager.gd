@@ -10,6 +10,9 @@ signal restart_requested
 signal next_requested
 signal pause_requested
 signal menu_requested
+## Le joueur ouvre ou ferme son carnet de quête. L'UIManager ne décide pas de la
+## pause : c'est le GameManager qui arbitre, comme pour le bouton de pause.
+signal quest_requested
 ## Slot demandé : -1 pour le portail, 0 l'attaque, 1 à 3 les sorts, 4 l'ultime.
 signal action_requested(slot: int)
 
@@ -22,6 +25,8 @@ const FLASH_DURATION := 1.4
 @onready var combat_pad: CombatPad = $CombatPad
 @onready var action_bar: ActionBar = $ActionBar
 @onready var pause_button: Button = $PauseButton
+@onready var quest_button: Button = $QuestButton
+@onready var quest_panel: QuestPanel = $QuestPanel
 @onready var result_screen: ResultScreen = $ResultScreen
 @onready var debug_label: Label = $DebugLabel
 ## Barre de visite des décors, en démo seulement (voir `show_demo_bar`).
@@ -51,6 +56,12 @@ func _ready() -> void:
 
 	combat_pad.action_requested.connect(func(slot: int) -> void: action_requested.emit(slot))
 	pause_button.pressed.connect(func() -> void: pause_requested.emit())
+	# Le bouton du carnet est habillé comme les boutons de menu : le bouton gris
+	# par défaut de Godot se perd sur un labyrinthe clair, et celui-ci doit
+	# s'attraper du pouce sans qu'on le cherche.
+	MenuStyle.apply(quest_button, Color("#ffd479"), 22)
+	quest_button.pressed.connect(func() -> void: quest_requested.emit())
+	quest_panel.close_requested.connect(func() -> void: quest_requested.emit())
 	result_screen.resume_requested.connect(func() -> void: resume_requested.emit())
 	result_screen.restart_requested.connect(func() -> void: restart_requested.emit())
 	result_screen.next_requested.connect(func() -> void: next_requested.emit())
@@ -157,6 +168,14 @@ func touch_reserved(point: Vector2) -> bool:
 		return true
 	if pause_button.visible and pause_button.get_global_rect().has_point(point):
 		return true
+	if quest_button.visible and quest_button.get_global_rect().has_point(point):
+		return true
+	# ⚠️ LE CARNET OUVERT RÉSERVE TOUT L'ÉCRAN. Son voile arrête déjà les clics
+	# de l'interface, mais le GameManager, lui, lit les taps SANS passer par les
+	# nœuds : sans cette ligne, un tap sur la page ouverte ferait marcher le mage
+	# derrière elle. C'est le piège déjà payé une fois avec le pad de combat.
+	if quest_panel.visible:
+		return true
 	return false
 
 
@@ -193,6 +212,31 @@ func show_pause(config: LevelConfig, character: CharacterStats) -> void:
 	result_screen.show_result("PAUSE", "%s  —  %s" % [character.display_name, config.level_name],
 		"Ramasse les %d gemmes pour ouvrir la porte." % config.gem_count,
 		Color("#9fb4e8"), true, false)
+
+
+# --- Carnet de quête -------------------------------------------------------------
+
+## Ouvre le carnet sur l'avancement du moment. L'UIManager ne va pas le chercher :
+## le GameManager le lui donne, seul à savoir ce que le Level rapporte.
+func show_quest(book: QuestBook, gems_taken: int, lairs_left: int, house_open: bool) -> void:
+	quest_panel.open(book, gems_taken, lairs_left, house_open)
+
+
+func hide_quest() -> void:
+	quest_panel.hide()
+
+
+func quest_visible() -> bool:
+	return quest_panel.visible
+
+
+## Le carnet n'a rien à dire hors campagne, et le bouton disparaît avec lui : en
+## démo, la « mission » est d'essayer ses sorts, ce que la barre de démo montre
+## déjà. Un bouton qui ouvre une page vide apprend à ne plus l'ouvrir.
+func set_quest_available(available: bool) -> void:
+	quest_button.visible = available
+	if not available:
+		quest_panel.hide()
 
 
 func hide_result() -> void:
