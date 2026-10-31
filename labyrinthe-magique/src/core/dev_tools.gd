@@ -75,7 +75,19 @@ func apply_command_line() -> void:
 		var episode_arg := args.find("--episode")
 		if episode_arg >= 0 and episode_arg + 1 < args.size():
 			ep = int(args[episode_arg + 1])
-		game.start_level(LevelConfig.flat_index(int(args[stage_arg + 1]), ep))
+		# ⚠️ LA DÉMO N'A PAS LA MÊME LISTE QUE LA PARTIE, et l'option l'ignorait.
+		#
+		# En partie, les niveaux sont (stage, épisode) : dix stages de deux
+		# épisodes, vingt entrées, et `flat_index` fait la conversion. En DÉMO,
+		# `GameManager` prépare UN niveau par stage — dix entrées — parce que la
+		# démo sert à regarder un décor, pas à jouer un épisode.
+		#
+		# Passer un index plat dans cette liste-là envoyait `--stage 3` au stage
+		# CINQ, et tout ce qui dépassait 5 au dixième. On cherchait un serpent
+		# dans les Cavernes de Cristal, où il n'y en a pas.
+		var wanted := int(args[stage_arg + 1])
+		var demo := game.levels.size() == LevelConfig.STAGE_COUNT
+		game.start_level(wanted - 1 if demo else LevelConfig.flat_index(wanted, ep))
 
 	if "--debug" in args:
 		game.ui.debug_label.visible = true

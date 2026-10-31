@@ -1,20 +1,33 @@
 {
   "cell": [
-    232,
+    123,
     112
   ],
-  "feet_y": 109.8,
+  "feet_y": 100.9,
   "poses": [
     "idle",
     "walk_1",
     "walk_2",
     "walk_3",
     "walk_4",
-    "attack"
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
   ],
   "directions": [
     "down",
-    "left"
+    "up",
+    "left",
+    "right"
   ],
-  "source": "enemi_1.png"
+  "source": "spectre_marche.png + spectre_attaque.png"
 }

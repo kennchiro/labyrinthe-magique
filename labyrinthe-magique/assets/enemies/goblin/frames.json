@@ -1,16 +1,28 @@
 {
   "cell": [
-    232,
+    112,
     112
   ],
-  "feet_y": 110.2,
+  "feet_y": 106.1,
+  "foot_travel": 0.5035,
   "poses": [
     "idle",
     "walk_1",
     "walk_2",
     "walk_3",
     "walk_4",
-    "attack"
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
   ],
   "directions": [
     "down",
@@ -18,5 +30,5 @@
     "left",
     "right"
   ],
-  "source": "enemi_2.png"
+  "source": "gobelin_marche.png + gobelin_attaque.png"
 }

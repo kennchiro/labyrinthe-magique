@@ -54,6 +54,19 @@ const SOAK_FACTOR := 0.62
 ## on croit à un bug alors qu'il frappe dans le vide. L'élan reste COURT : l'IA
 ## s'arrête à une case, un élan plus long lui ferait retraverser le mage et
 ## annulerait tout le bénéfice de cet arrêt.
+## Cadence de marche maximale, en images par seconde. Voir `_update_desired`.
+##
+## VINGT-QUATRE, et non dix-huit. Le plafond a été relevé une fois que les
+## planches ont eu de vraies foulées : à dix-huit, il BRIDAIT le gobelin, dont
+## la marche redessinée demande 22 img/s pour que le pied colle au sol. Le
+## dessin était bon et c'est le plafond qui faisait glisser — exactement
+## l'inverse du diagnostic de départ.
+##
+## Vingt-quatre est aussi la cadence classique d'une animation dessinée : au-delà
+## l'œil décroche et lit un grésillement, en deçà on voit les images. Les bêtes
+## dont la planche demande plus — le minotaure en réclame 65 — restent bridées,
+## et leur glissement se corrigera au dessin, pas ici.
+const MAX_WALK_FPS := 24.0
 const STRIKE_LUNGE := 0.18
 const TINT_STRIKE := Color(1.9, 0.72, 0.62)
 ## Part de la teinte réellement appliquée. Ces couleurs ont été calibrées sur les
@@ -95,6 +108,13 @@ var _poses: Array = ["idle", "walk_1", "walk_2", "walk_3", "walk_4", "attack"]
 ## Dernière direction non nulle : l'ennemi garde sa pose quand il s'arrête.
 var _facing: Vector2i = Vector2i.DOWN
 var _walk_phase := 0.0
+## Poses rangées par rôle, remplies au chargement par `_index_poses`.
+var _walk_poses: Array[int] = []
+var _attack_poses: Array[int] = []
+var _idle_pose := 0
+## Course du pied sur un cycle, en part de la hauteur — mesurée sur la planche
+## par `tools/build_enemies.py`. Zéro pour les planches qui ne la portent pas.
+var _foot_travel := 0.0
 var _base_speed := 0.0
 var _soak_left := 0.0
 var _soak_factor := SOAK_FACTOR
@@ -130,6 +150,28 @@ func setup_enemy(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size
 func flash_hit() -> void:
 	_flash = HIT_FLASH_DURATION
 	queue_redraw()
+
+
+## Ce monstre jette-t-il de loin, et à quelle portée ? 0 = il frappe au contact.
+func throw_range() -> int:
+	return int(_tuning.get("throw_range", 0))
+
+
+## Durée d'un cycle de coup complet, geste plus repos. C'est le rythme auquel il
+## peut relancer — `ThrowSystem` s'en sert pour recharger ses tireurs.
+func strike_cycle() -> float:
+	return float(_tuning["strike"]) + float(_tuning["repos"])
+
+
+## Sa frappe lointaine BALAIE-t-elle le couloir, au lieu de viser une case ?
+func sweeps() -> bool:
+	return bool(_tuning.get("sweep", false))
+
+
+## Peut-il frapper MAINTENANT ? Le Level le demande avant de chercher une ligne
+## de tir : inutile de calculer une visée pendant le repos qui suit un coup.
+func can_strike() -> bool:
+	return _strike <= 0.0 and _strike_rest <= 0.0
 
 
 ## Frappe le joueur. Ne retire AUCUN point de vie : c'est le Level qui constate
@@ -279,6 +321,8 @@ func _load_sheet(sheet_id: String) -> void:
 	_cell = Vector2(float(cell[0]), float(cell[1]))
 	_feet_y = float(data["feet_y"])
 	_poses = data["poses"]
+	_foot_travel = float(data.get("foot_travel", 0.0))
+	_index_poses()
 
 	_textures.clear()
 	for direction in data["directions"]:
@@ -329,13 +373,48 @@ func _apply_frame() -> void:
 	# La pose de coup prime sur la marche, et dure ce que dure `_strike` : le
 	# même chronomètre porte déjà l'élan en avant et la teinte, tout reste en
 	# phase sans second compteur à tenir.
-	var index := _poses.find("attack") if _strike > 0.0 else -1
-	if index < 0:
-		if mover != null and mover.is_moving():
-			index = 1 + (int(_walk_phase) % maxi(1, _poses.size() - 2))
-		else:
-			index = 0
+	var index := _idle_pose
+	if _strike_rest > 0.0 and not _attack_poses.is_empty():
+		# LE COUP SE DÉROULE SUR TOUT LE GESTE, frappe ET repos.
+		#
+		# Il s'étalait d'abord sur la seule FRAPPE, ce qui semblait juste : le
+		# geste dans le temps exact où il fait mal. À l'usage c'est illisible —
+		# huit images dans les 0,22 s de frappe d'un gobelin font 36 images par
+		# seconde, deux fois la cadence d'une animation dessinée. On voyait un
+		# tressaillement, pas un coup de massue.
+		#
+		# Le REPOS fait partie du geste : c'est le bras qui revient. En comptant
+		# les deux, le gobelin tombe à 16 img/s et le golem à 8. La frappe, elle,
+		# fait toujours mal au même instant — ce sont deux choses différentes, et
+		# les confondre était l'erreur.
+		var span := maxf(0.001, float(_tuning["strike"]) + float(_tuning["repos"]))
+		var done := clampf(1.0 - _strike_rest / span, 0.0, 1.0)
+		index = _attack_poses[mini(int(done * float(_attack_poses.size())),
+			_attack_poses.size() - 1)]
+	elif mover != null and mover.is_moving() and not _walk_poses.is_empty():
+		index = _walk_poses[int(_walk_phase) % _walk_poses.size()]
 	sprite.frame = clampi(index, 0, _poses.size() - 1)
+
+
+## Range les poses par RÔLE, une fois pour toutes au chargement.
+##
+## Le rôle se lit dans le NOM, et c'est ce qui permet aux planches à six poses
+## et à celles à seize de se jouer par le même code : on ne compte plus les
+## cases (« tout sauf la première et la dernière »), on lit ce qu'elles disent
+## être. Une planche qui dessine huit pas et huit poses de coup n'a donc rien à
+## déclarer de plus que ses noms.
+func _index_poses() -> void:
+	_walk_poses.clear()
+	_attack_poses.clear()
+	_idle_pose = 0
+	for i in _poses.size():
+		var name := str(_poses[i])
+		if name.begins_with("walk"):
+			_walk_poses.append(i)
+		elif name.begins_with("attack"):
+			_attack_poses.append(i)
+		elif name == "idle":
+			_idle_pose = i
 
 
 ## Redéfinit l'animation procédurale d'Actor.
@@ -344,7 +423,52 @@ func _animate(delta: float) -> void:
 		return
 	if mover.direction != Vector2i.ZERO:
 		_facing = mover.direction
-		_walk_phase += delta * float(_tuning["walk_fps"])
+		# LA CADENCE VIENT DE LA DISTANCE, quand la bête a des jambes.
+		#
+		# Une cadence en images par seconde ne peut pas suivre : elle est réglée
+		# pour une vitesse et un nombre d'images donnés, et les deux changent.
+		# Le passage de quatre à huit images de marche a doublé la durée d'un
+		# cycle sans toucher au `walk_fps` — le pied se posait donc deux fois
+		# moins souvent pour la même distance, et la créature patinait. Une
+		# créature ralentie par une trempe patinait de la même façon, dans
+		# l'autre sens.
+		#
+		# En liant la phase à la distance PARCOURUE, le pied se pose toujours au
+		# même endroit du sol quelle que soit la vitesse, le ralentissement ou le
+		# nombre d'images de la planche. `stride` dit combien de cases couvre un
+		# cycle complet — une foulée de gobelin n'est pas celle d'un minotaure.
+		#
+		# Ce qui FLOTTE garde sa cadence en secondes : un spectre n'a pas de pied
+		# à poser, son ondulation ne doit rien à la distance.
+		# LA FOULÉE VIENT DU DESSIN, quand la planche la mesure.
+		#
+		# `foot_travel` dit de combien le pied avance sur un cycle, en part de la
+		# hauteur de la bête. Deux fois cette course, converti en cases, donne la
+		# distance qu'un cycle complet doit couvrir pour que le pied reste collé
+		# au sol — c'est de l'arithmétique, pas un réglage.
+		#
+		# Le `stride` du bestiaire reste le repli pour les planches d'avant, qui
+		# ne portent pas la mesure.
+		var stride := float(_tuning.get("stride", 0.0))
+		if _foot_travel > 0.0:
+			stride = 2.0 * _foot_travel * target_height / float(tile_size)
+		if stride > 0.0 and not _walk_poses.is_empty():
+			var cadence := mover.speed * float(_walk_poses.size()) / stride
+			# ⚠️ PLAFONNÉE, et il faut dire pourquoi plutôt que de le cacher.
+			#
+			# La cadence qui collerait vraiment le pied au sol se calcule
+			# exactement — et elle demande 51 images par seconde pour le gobelin,
+			# 65 pour le minotaure. À ce rythme on ne voit plus une démarche mais
+			# un tremblement.
+			#
+			# La cause n'est pas ici : leurs planches ne font avancer le pied que
+			# d'un cinquième de leur hauteur, là où le sol défile de deux fois
+			# plus. Tant que le dessin ne fait pas de plus grands pas, il RESTERA
+			# un glissement — on choisit seulement le moins laid des deux défauts,
+			# glisser un peu plutôt que grésiller.
+			_walk_phase += delta * minf(cadence, MAX_WALK_FPS)
+		else:
+			_walk_phase += delta * float(_tuning["walk_fps"])
 	else:
 		# À l'arrêt, retour à la pose de repos plutôt qu'un pas figé en l'air.
 		_walk_phase = 0.0

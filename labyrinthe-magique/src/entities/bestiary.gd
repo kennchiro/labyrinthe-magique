@@ -22,6 +22,12 @@ extends RefCounted
 ## C'est la lecture qu'un joueur fera de la silhouette ; s'en écarter donnerait
 ## des monstres qui mentent sur ce qu'ils sont.
 
+## `stride` : cases couvertes par un CYCLE DE MARCHE complet.
+##
+## Il remplace `walk_fps` pour tout ce qui a des jambes — voir `Enemy`. Réglé sur
+## la stature : un gobelin trottine à 1,7 case par cycle, un golem en couvre 2,8
+## d'un pas. Les créatures qui FLOTTENT ou RAMPENT n'en ont pas et gardent leur
+## cadence en secondes : une ondulation ne doit rien à la distance.
 const SPECIES := {
 	"hunter": {
 		"name": "Spectre", "toughness": 1.00, "swiftness": 1.00, "height": 52.0,
@@ -30,7 +36,7 @@ const SPECIES := {
 	},
 	"goblin": {
 		"name": "Gobelin", "toughness": 1.37, "swiftness": 1.00, "height": 50.0,
-		"walk_fps": 8.0, "strike": 0.22, "repos": 0.28,
+		"stride": 1.7, "walk_fps": 8.0, "strike": 0.22, "repos": 0.28,
 		"trait": "petit, coriace, frappe vite et souvent",
 	},
 	"serpent": {
@@ -50,32 +56,54 @@ const SPECIES := {
 	},
 	"golem": {
 		"name": "Golem de Lave", "toughness": 1.90, "swiftness": 0.80, "height": 58.0,
-		"walk_fps": 4.5, "strike": 0.50, "repos": 0.55,
-		"trait": "une masse : on ne le sème pas, on l'use",
+		"stride": 2.8, "walk_fps": 4.5, "strike": 0.50, "repos": 0.55,
+		# LE SEUL DU BESTIAIRE QUI FRAPPE DE LOIN.
+		#
+		# Six cases, et en LIGNE DROITE seulement : il jette sa boule de lave
+		# dans un couloir, pas à travers une haie. C'est ce qui en fait une
+		# menace qu'on peut fuir — il suffit de sortir de l'axe — plutôt qu'une
+		# taxe qu'on paie en traversant son stage.
+		#
+		# Il vise la case où le mage se TROUVE au moment du jet, jamais où il
+		# sera : la boule est donc esquivable, et l'esquive est le seul geste
+		# que ce monstre demande d'apprendre.
+		"throw_range": 6,
+		"trait": "une masse : on ne le sème pas, on l'use — et il jette de loin",
 	},
 	"archer": {
 		"name": "Archer d'Os", "toughness": 1.05, "swiftness": 1.00, "height": 50.0,
-		"walk_fps": 6.5, "strike": 0.28, "repos": 0.34,
+		"stride": 2.0, "walk_fps": 6.5, "strike": 0.28, "repos": 0.34,
 		"trait": "sec et rapide du geste, fragile au contact",
 	},
 	"cristal": {
 		"name": "Démon de Cristal", "toughness": 1.70, "swiftness": 0.86, "height": 56.0,
-		"walk_fps": 4.5, "strike": 0.45, "repos": 0.50,
+		"stride": 2.6, "walk_fps": 4.5, "strike": 0.45, "repos": 0.50,
 		"trait": "blindé de cristal, lourd à déplacer",
 	},
 	"minotaure": {
 		"name": "Minotaure", "toughness": 1.60, "swiftness": 1.10, "height": 58.0,
-		"walk_fps": 7.0, "strike": 0.30, "repos": 0.36,
+		"stride": 2.6, "walk_fps": 7.0, "strike": 0.30, "repos": 0.36,
 		"trait": "charge : robuste ET rapide, la pire combinaison",
 	},
 	"chevalier": {
 		"name": "Chevalier Noir", "toughness": 1.45, "swiftness": 1.02, "height": 54.0,
-		"walk_fps": 6.0, "strike": 0.34, "repos": 0.38,
+		"stride": 2.2, "walk_fps": 6.0, "strike": 0.34, "repos": 0.38,
 		"trait": "bouclier et lame, sans faiblesse marquée",
 	},
 	"givre": {
 		"name": "Golem de Givre", "toughness": 2.00, "swiftness": 0.78, "height": 58.0,
-		"walk_fps": 4.2, "strike": 0.52, "repos": 0.58,
+		"stride": 2.8, "walk_fps": 4.2, "strike": 0.52, "repos": 0.58,
+		# LA RAFALE DE CRISTAUX : quatre cases devant lui, pas six.
+		#
+		# Moins loin que la boule du Golem de Lave, et c'est voulu : elle ne
+		# frappe pas UNE case mais TOUTES celles du couloir devant lui. Reculer
+		# ne sauve pas — il faut sortir de l'axe. À six cases, ce serait un
+		# couloir entier interdit ; à quatre, c'est une menace qu'on lit.
+		#
+		# Elle court de case en case au lieu de tomber d'un coup : le joueur voit
+		# les pointes venir vers lui, et celui qui est au bout a le temps de
+		# s'écarter. C'est ce qui la rend juste.
+		"throw_range": 4, "sweep": true,
 		"trait": "le plus dur du bestiaire, et le plus lent",
 	},
 }

@@ -17,7 +17,7 @@ points de vie de chaque espèce s'en déduisent :
 | **Serpent d'Émeraude** | stage 3 | ×0.82 | ×1.16 | 0.30 s | 0.30 s | file dans les couloirs, mais se brise au premier sort |
 | **Ombre Encapuchonnée** | stage 4 | ×1.10 | ×1.12 | 0.45 s | 0.40 s | glisse sans bruit, rattrape en ligne droite |
 | **Dragonnet de Feu** | stage 5 | ×1.20 | ×1.14 | 0.35 s | 0.35 s | vole, donc ne ralentit jamais dans les virages |
-| **Golem de Lave** | stage 6 | ×1.90 | ×0.80 | 0.50 s | 0.55 s | une masse : on ne le sème pas, on l'use |
+| **Golem de Lave** | stage 6 | ×1.90 | ×0.80 | 0.50 s | 0.55 s | une masse : on ne le sème pas, on l'use — et il jette de loin |
 | **Archer d'Os** | stage 7 | ×1.05 | ×1.00 | 0.28 s | 0.34 s | sec et rapide du geste, fragile au contact |
 | **Démon de Cristal** | stage 8 | ×1.70 | ×0.86 | 0.45 s | 0.50 s | blindé de cristal, lourd à déplacer |
 | **Minotaure** | stage 9 | ×1.60 | ×1.10 | 0.30 s | 0.36 s | charge : robuste ET rapide, la pire combinaison |

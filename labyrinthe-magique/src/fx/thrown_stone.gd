@@ -33,7 +33,7 @@ var _grain := 32.0
 
 
 func setup(from: Vector2, to: Vector2, texture: Texture2D, tile_size: int,
-		tint: Color, spin: float) -> void:
+		tint: Color, spin: float, flight: float = 0.0) -> void:
 	_from = from
 	_to = to
 	_tint = tint
@@ -50,7 +50,13 @@ func setup(from: Vector2, to: Vector2, texture: Texture2D, tile_size: int,
 	# La durée vient de la DISTANCE : deux cases se traversent deux fois plus
 	# vite que quatre. Une durée fixe ferait ramper le jet de près et filer le
 	# jet de loin.
-	_flight = maxf(MIN_FLIGHT, (from.distance_to(to) / float(tile_size)) / SPEED_TILES)
+	# LA DURÉE PEUT ÊTRE IMPOSÉE, et elle doit l'être quand une RÈGLE décide de
+	# l'instant de l'impact. Le jet du Golem de Lave est calculé par
+	# `ThrowSystem`, qui dit quand la boule touche ; si le dessin recalculait sa
+	# propre durée, la pierre arriverait après avoir déjà fait mal. Le rocher du
+	# mage, lui, n'a pas d'horloge à respecter : il garde la sienne.
+	_flight = flight if flight > 0.0 else maxf(MIN_FLIGHT,
+		(from.distance_to(to) / float(tile_size)) / SPEED_TILES)
 	var material := ShaderMaterial.new()
 	material.shader = GLOW
 	material.set_shader_parameter("rim_color", tint)

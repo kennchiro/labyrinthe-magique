@@ -1,33 +1,34 @@
 {
   "cell": [
-    240,
+    113,
     112
   ],
-  "feet_y": 109.6,
+  "feet_y": 104.4,
+  "foot_travel": 0.1865,
   "poses": [
     "idle",
     "walk_1",
     "walk_2",
     "walk_3",
     "walk_4",
-    "attack"
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
   ],
   "directions": [
     "down",
     "up",
-    "right",
-    "left"
+    "left",
+    "right"
   ],
-  "source": "enemi_10.png",
-  "grid": {
-    "dx": 158,
-    "dy": 158,
-    "ox": 2,
-    "oy": 8,
-    "rows": {
-      "down": 0,
-      "up": 1,
-      "right": 2
-    }
-  }
+  "source": "golem_givre_marche.png + golem_givre_attaque.png"
 }

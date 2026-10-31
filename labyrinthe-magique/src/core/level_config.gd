@@ -389,6 +389,17 @@ static func demo(stage: int = 1) -> LevelConfig:
 	c.stage = stage
 	c.level_name = STAGE_NAMES[stage - 1]
 	c.species = Bestiary.roster(stage)
+	# LA NOUVEAUTÉ DU CHAPITRE PASSE DEVANT, en démo aussi.
+	#
+	# Le remède existait (`_build_lineup`) mais la démo ne l'appelait pas : elle
+	# piochait dans le roster, qui est cumulatif et rangé par ordre d'apparition.
+	# Avec trois poursuivants seulement, on tombait donc toujours sur les TROIS
+	# PLUS ANCIENS — au stage 4, spectre, gobelin et serpent, jamais l'Ombre.
+	#
+	# C'est exactement le défaut déjà corrigé pour les vrais chapitres, et il
+	# fait ici plus de mal : on ne visite un stage en démo que pour voir sa
+	# nouveauté, et c'était la seule qu'on ne voyait pas.
+	_build_lineup(c, stage)
 	c.is_demo = true
 	c.is_tutorial = true
 	c.room_count = 9

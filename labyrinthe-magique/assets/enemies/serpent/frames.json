@@ -1,33 +1,33 @@
 {
   "cell": [
-    240,
+    115,
     112
   ],
-  "feet_y": 109.3,
+  "feet_y": 102.9,
   "poses": [
     "idle",
     "walk_1",
     "walk_2",
     "walk_3",
     "walk_4",
-    "attack"
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
   ],
   "directions": [
     "down",
     "up",
-    "right",
-    "left"
+    "left",
+    "right"
   ],
-  "source": "enemi_0.png",
-  "grid": {
-    "dx": 119,
-    "dy": 131,
-    "ox": 7,
-    "oy": 44,
-    "rows": {
-      "down": 0,
-      "up": 1,
-      "right": 2
-    }
-  }
+  "source": "serpent_marche.png + serpent_attaque.png"
 }
