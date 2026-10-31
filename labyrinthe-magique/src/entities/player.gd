@@ -22,6 +22,20 @@ const WALK_FPS := 9.0
 ## Durée de la pose d'attaque. C'est un GESTE, pas un cycle : elle se joue une
 ## fois puis rend la main à la marche.
 const ATTACK_DURATION := 0.32
+## Foulée qui correspond à WALK_FPS. La cadence suit la vitesse du mage : du plus
+## lent au plus rapide, 4,5 à 5,3 cases/s, le pied patinerait sinon.
+const WALK_REFERENCE_SPEED := 5.0
+## Le dessin de marche bouge peu d'une pose à l'autre : ce léger rebond, deux fois
+## par cycle comme les appuis, donne le poids que les poses seules n'ont pas.
+const WALK_BOB := 2.2
+## Élan du geste de sort : le corps s'étire au départ puis retombe.
+const CAST_PUNCH := Vector2(0.12, -0.08)
+## Le répit qui suit un coup encaissé : un éclair rouge, puis un clignotement qui
+## dure exactement ce que dure l'invulnérabilité.
+const HURT_FLASH := 0.14
+const HURT_TINT := Color(1.9, 0.55, 0.5)
+const HURT_BLINK_SPEED := 11.0
+const HURT_BLINK_ALPHA := 0.42
 
 ## Rempli chaque frame par le manche tactile (voir TouchStick).
 var touch_direction: Vector2 = Vector2.ZERO
@@ -47,6 +61,11 @@ var _poses: Array = ["idle", "walk_1", "walk_2", "walk_3", "walk_4", "attack"]
 var _facing: Vector2i = Vector2i.DOWN
 var _walk_phase := 0.0
 var _attack_left := 0.0
+## Vers où part le sort en cours. La pose ne suit donc pas la course : un mage qui
+## fuit vers le bas et tire sur ce qui le suit doit se retourner pour le faire.
+var _cast_facing := Vector2i.ZERO
+var _hurt_left := 0.0
+var _hurt_total := 1.0
 
 
 ## Appelée par le Level AVANT setup() : la planche à charger dépend du mage.
@@ -76,8 +95,25 @@ func facing() -> Vector2i:
 
 ## Déclenché par le Level au départ d'un sort. La pose prime sur la marche : on
 ## voit le mage lancer son sort même s'il continue de courir.
-func play_cast() -> void:
+##
+## `target` est la position visée, s'il y en a une. Le profil passe avant la face
+## et le dos dès que la cible est sur le côté : ce sont les poses où le geste se
+## lit, et sur les planches le bras de face part toujours vers la droite.
+func play_cast(target: Variant = null) -> void:
 	_attack_left = ATTACK_DURATION
+	_cast_facing = Vector2i.ZERO
+	if target is Vector2:
+		var toward: Vector2 = target - position
+		if absf(toward.x) >= tile_size * 0.5:
+			_cast_facing = Vector2i(int(signf(toward.x)), 0)
+		elif absf(toward.y) >= tile_size * 0.5:
+			_cast_facing = Vector2i(0, int(signf(toward.y)))
+
+
+## Le coup vient d'être encaissé, et l'invulnérabilité dure `seconds`.
+func play_hurt(seconds: float) -> void:
+	_hurt_total = maxf(0.01, seconds)
+	_hurt_left = _hurt_total
 
 
 ## Réapparition après une translation : le mage revient en fondu plutôt qu'en
@@ -123,7 +159,8 @@ func _apply_visual() -> void:
 	foot_left.visible = false
 	foot_right.visible = false
 	var factor := target_height / _cell.y
-	sprite.scale = Vector2(factor, factor)
+	_sprite_scale = Vector2(factor, factor)
+	sprite.scale = _sprite_scale
 	sprite.region_enabled = false
 	sprite.vframes = 1
 	sprite.hframes = maxi(1, _poses.size())
@@ -135,11 +172,12 @@ func _apply_visual() -> void:
 
 
 func _direction_key() -> String:
-	if _facing == Vector2i.UP:
+	var shown := _cast_facing if _attack_left > 0.0 and _cast_facing != Vector2i.ZERO else _facing
+	if shown == Vector2i.UP:
 		return "up"
-	if _facing == Vector2i.LEFT:
+	if shown == Vector2i.LEFT:
 		return "left"
-	if _facing == Vector2i.RIGHT:
+	if shown == Vector2i.RIGHT:
 		return "right"
 	return "down"
 
@@ -172,17 +210,41 @@ func _animate(delta: float) -> void:
 		var back := 1.0 - _warp_left / WARP_FADE
 		sprite.modulate = Color(1.0 + 1.6 * (1.0 - back), 1.0 + 1.6 * (1.0 - back),
 			1.0 + 1.6 * (1.0 - back), 0.25 + 0.75 * back)
+	elif _hurt_left > 0.0:
+		_hurt_left = maxf(0.0, _hurt_left - delta)
+		var elapsed := _hurt_total - _hurt_left
+		if elapsed < HURT_FLASH:
+			sprite.modulate = HURT_TINT
+		else:
+			var hidden := fmod(elapsed * HURT_BLINK_SPEED, 1.0) < 0.5
+			sprite.modulate = Color(1, 1, 1, HURT_BLINK_ALPHA if hidden else 1.0)
 	elif sprite.modulate != Color(1, 1, 1, 1):
 		sprite.modulate = Color(1, 1, 1, 1)
 
 	if mover.direction != Vector2i.ZERO:
 		_facing = mover.direction
-		_walk_phase += delta * WALK_FPS
+		_walk_phase += delta * WALK_FPS * mover.speed / WALK_REFERENCE_SPEED
 	else:
 		# À l'arrêt, on revient à la pose de repos plutôt que de figer un pas en
 		# l'air : un personnage immobile jambe levée se remarque immédiatement.
 		_walk_phase = 0.0
 	_apply_frame()
+	_animate_body(delta)
+
+
+## Ce que le dessin ne donne pas : le rebond des appuis, la respiration, l'élan du
+## sort. Purement visuel, l'origine du nœud et donc les collisions n'en savent rien.
+func _animate_body(delta: float) -> void:
+	sprite.position.y = 0.0
+	if mover.is_moving():
+		sprite.scale = _sprite_scale
+		# Quatre poses par cycle, donc deux appuis : un rebond toutes les deux poses.
+		sprite.position.y = -absf(sin(_walk_phase * PI * 0.5)) * WALK_BOB
+	else:
+		_breathe(delta)
+	if _attack_left > 0.0:
+		var punch: float = pow(_attack_left / ATTACK_DURATION, 3.0)
+		sprite.scale = _sprite_scale * (Vector2.ONE + CAST_PUNCH * punch)
 
 
 ## Le Level a validé la case (sol, atteignable) : ici on ne fait qu'obéir.

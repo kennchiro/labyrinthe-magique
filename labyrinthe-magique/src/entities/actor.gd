@@ -37,6 +37,9 @@ const FOOT_SWING := 1.8
 ## produisait l'effet de saut.
 const BODY_BOB := 1.0
 const BODY_TILT := 0.035
+## Respiration au repos : à peine plus d'un pixel à l'écran.
+const BREATH_SPEED := 2.6
+const BREATH_DEPTH := 0.016
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var foot_left: Sprite2D = $FootLeft
@@ -55,6 +58,12 @@ var shadow_offset := 0.16
 var shadow_radius := 0.30
 
 var _scale_factor := 1.0
+## Échelle de repos du sprite d'une planche, celle que `_breathe` fait varier.
+var _sprite_scale := Vector2.ONE
+## Horloge de la respiration. Le départ est propre à chaque acteur : une meute
+## qui respire en mesure se voit tout de suite. Pas de `randf()` : ce tirage
+## décalerait le générateur global, donc le rejeu d'une graine.
+var _life_time := 0.0
 var _body_home := Vector2.ZERO
 var _foot_home := Vector2.ZERO
 var _stride := 0.0
@@ -62,6 +71,7 @@ var _stride := 0.0
 
 func setup(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size: int) -> void:
 	tile_size = p_tile_size
+	_life_time = fmod(float(get_instance_id()) * 0.37, TAU)
 	mover = GridMover.new(grid, start_cell, speed)
 	position = _world_position()
 	_apply_visual()
@@ -164,6 +174,15 @@ func _place_foot(foot: Sprite2D, side: float, phase: float) -> void:
 	var lift := maxf(0.0, sin(phase)) * FOOT_LIFT
 	var swing := cos(phase) * FOOT_SWING
 	foot.position = Vector2(side * _foot_home.x / _scale_factor + swing, _foot_home.y / _scale_factor - lift) * _scale_factor
+
+
+## Respiration à l'arrêt. L'origine du nœud est aux pieds : le haut du corps
+## bouge et les pieds restent posés. Un sprite parfaitement immobile se lit comme
+## une image collée sur le décor, pas comme un personnage qui attend.
+func _breathe(delta: float) -> void:
+	_life_time += delta
+	var breath := sin(_life_time * BREATH_SPEED) * BREATH_DEPTH
+	sprite.scale = _sprite_scale * Vector2(1.0 - breath * 0.5, 1.0 + breath)
 
 
 func _world_position() -> Vector2:

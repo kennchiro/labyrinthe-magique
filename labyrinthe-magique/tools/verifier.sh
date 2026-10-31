@@ -39,7 +39,7 @@ verdict() {   # nom, sortie, motif de succès
 }
 
 echo "── Suites"
-for suite in test_combat test_portals test_grid_mover test_victory test_pad test_quest; do
+for suite in test_combat test_portals test_grid_mover test_victory test_pad test_quest test_animation; do
 	[ -f "tests/$suite.gd" ] || continue
 	verdict "$suite" "$(godot --headless --path . --script "res://tests/$suite.gd" 2>&1)" \
 		"TOUS LES TESTS PASSENT"

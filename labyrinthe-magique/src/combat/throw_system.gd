@@ -3,9 +3,9 @@ extends RefCounted
 
 ## LES ENNEMIS QUI FRAPPENT DE LOIN.
 ##
-## Un seul le fait aujourd'hui — le Golem de Lave et sa boule — mais la règle est
-## écrite pour l'espèce, pas pour lui : toute créature dont le bestiaire déclare
-## un `throw_range` tire ici.
+## Le Golem de Lave et sa boule, le Golem de Givre et sa rafale, l'Archer d'Os et
+## sa flèche. La règle est écrite pour l'espèce : toute créature dont le bestiaire
+## déclare un `throw_range` tire ici.
 ##
 ## POURQUOI CE FICHIER EXISTE, ET POURQUOI IL N'EST PAS UN NŒUD
 ##
@@ -38,6 +38,11 @@ extends RefCounted
 ##   · UN POINT DE VIE, comme tout le reste du jeu. Le contact coûte un point
 ##     quelle que soit l'espèce ; un jet ne peut pas coûter plus cher sans faire
 ##     mentir la seule règle de dégâts que le joueur ait apprise.
+##
+##   · UN TIREUR PUR NE VIENT PAS AU CONTACT (`ranged_only`). L'Archer d'Os s'arrête
+##     dès qu'il a sa ligne et ne frappe jamais au corps à corps : un contact
+##     coûterait un point à chaque cycle de coup, et son intervalle de tir ne
+##     voudrait plus rien dire.
 
 ## Cases par seconde de la boule.
 ##
@@ -61,6 +66,9 @@ const MIN_FLIGHT := 0.28
 const HIT_RADIUS := 0.85
 
 var grid: MazeGrid
+## Les cases du dernier `advance` qui ne doivent pas exploser : une flèche se
+## plante, elle ne laisse pas de gerbe de feu.
+var quiet_landings: Array[Vector2i] = []
 
 ## Boules en vol : {cell, time_left}.
 var _flying: Array[Dictionary] = []
@@ -72,9 +80,16 @@ func _init(p_grid: MazeGrid) -> void:
 	grid = p_grid
 
 
+## Le temps entre deux tirs d'une espèce. Lu ici pour que le jeu et la simulation
+## d'équilibrage ne puissent pas tirer à des rythmes différents.
+static func reload_of(tuning: Dictionary) -> float:
+	return float(tuning.get("throw_reload",
+		float(tuning["strike"]) + float(tuning["repos"])))
+
+
 ## Un tour de jeu. `shooters` décrit les créatures capables de lancer :
 ##     {"cell": Vector2i, "range": int, "reload": float}
-## `range` à zéro = frappe au contact, on l'ignore.
+## `range` à zéro = il ne peut pas tirer maintenant, on l'ignore.
 ##
 ## Renvoie les jets OUVERTS ce tour-ci — {from, to, flight} — pour que l'appelant
 ## qui a un écran puisse les dessiner. Celui qui n'en a pas les jette.
@@ -83,15 +98,15 @@ func aim(delta: float, shooters: Array, player_cell: Vector2i) -> Array:
 	for index in shooters.size():
 		var shooter: Dictionary = shooters[index]
 		var reach := int(shooter.get("range", 0))
-		var left := float(_reload.get(index, 0.0)) - delta
-		if reach <= 0:
-			continue
-		if left > 0.0:
-			_reload[index] = left
+		# ⚠️ LE RECHARGEMENT COURT MÊME QUAND IL NE PEUT PAS TIRER. Il était figé
+		# pendant le repos qui suit un coup : le jeu tirait donc deux fois moins
+		# vite que la simulation d'équilibrage, qui n'a pas ce repos.
+		var left := maxf(0.0, float(_reload.get(index, 0.0)) - delta)
+		_reload[index] = left
+		if reach <= 0 or left > 0.0:
 			continue
 		var from: Vector2i = shooter["cell"]
 		if not has_shot(from, player_cell, reach):
-			_reload[index] = 0.0
 			continue
 		if bool(shooter.get("sweep", false)):
 			# LA RAFALE. Elle ne vise pas une case mais BALAIE le couloir devant
@@ -118,8 +133,9 @@ func aim(delta: float, shooters: Array, player_cell: Vector2i) -> Array:
 			continue
 		var flight := maxf(MIN_FLIGHT,
 			(Vector2(player_cell - from).length()) / SPEED_TILES)
-		_flying.append({"cell": player_cell, "time_left": flight})
-		opened.append({"from": from, "to": player_cell, "flight": flight})
+		var arrow := bool(shooter.get("arrow", false))
+		_flying.append({"cell": player_cell, "time_left": flight, "quiet": arrow})
+		opened.append({"from": from, "to": player_cell, "flight": flight, "arrow": arrow})
 		_reload[index] = maxf(0.05, float(shooter.get("reload", 1.0)))
 	return opened
 
@@ -127,11 +143,14 @@ func aim(delta: float, shooters: Array, player_cell: Vector2i) -> Array:
 ## Avance les boules. Renvoie les cases où l'une vient de tomber.
 func advance(delta: float) -> Array[Vector2i]:
 	var landed: Array[Vector2i] = []
+	quiet_landings.clear()
 	for i in range(_flying.size() - 1, -1, -1):
 		_flying[i]["time_left"] = float(_flying[i]["time_left"]) - delta
 		if float(_flying[i]["time_left"]) > 0.0:
 			continue
 		landed.append(_flying[i]["cell"])
+		if bool(_flying[i].get("quiet", false)):
+			quiet_landings.append(_flying[i]["cell"])
 		_flying.remove_at(i)
 	return landed
 
@@ -143,6 +162,11 @@ static func touches(cell: Vector2i, player_position: Vector2) -> bool:
 
 ## Y a-t-il un couloir DROIT et dégagé entre les deux cases, à portée ?
 func has_shot(from: Vector2i, to: Vector2i, reach: int) -> bool:
+	return in_line(grid, from, to, reach)
+
+
+## La même question sans instance : l'ennemi la pose pour savoir s'il s'arrête.
+static func in_line(grid: MazeGrid, from: Vector2i, to: Vector2i, reach: int) -> bool:
 	if from == to:
 		return false
 	var step := Vector2i(signi(to.x - from.x), signi(to.y - from.y))

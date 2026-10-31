@@ -61,6 +61,7 @@ func _init() -> void:
 	_test_air_tornado()
 	_test_air_gust()
 	_test_water_geysers()
+	_test_archer()
 
 	print("")
 	if _failures.is_empty():
@@ -74,6 +75,86 @@ func _init() -> void:
 
 func _fail(message: String) -> void:
 	_failures.append(message)
+
+
+# --- L'Archer d'Os -----------------------------------------------------------------
+
+## IL TIRE DE PRÈS, ET IL RECHARGE. Portée courte, intervalle réel entre deux
+## flèches, et une flèche qui rate celui qui s'est écarté.
+func _test_archer() -> void:
+	var tuning := Bestiary.of("archer")
+	var reach := int(tuning.get("throw_range", 0))
+	if reach <= 0 or reach >= int(Bestiary.of("golem")["throw_range"]):
+		_fail("l'Archer doit tirer, moins loin que le Golem de Lave : portée %d" % reach)
+	if not bool(tuning.get("ranged_only", false)):
+		_fail("l'Archer frappe encore au contact")
+	var reload := ThrowSystem.reload_of(tuning)
+	if reload <= float(tuning["strike"]) + float(tuning["repos"]):
+		_fail("l'Archer n'a pas d'intervalle : il tire dès la fin de son geste")
+
+	# Un couloir droit assez long pour tirer à portée, et une case au-delà.
+	var grid := MazeGenerator.generate(LevelConfig.for_stage(7), 4242)
+	var from := Vector2i(-1, -1)
+	for y in grid.rows:
+		for x in grid.cols:
+			var clear := true
+			for i in reach + 2:
+				clear = clear and grid.is_floor_v(Vector2i(x + i, y))
+			if clear:
+				from = Vector2i(x, y)
+				break
+		if from.x >= 0:
+			break
+	if from.x < 0:
+		_fail("aucun couloir droit pour éprouver l'Archer")
+		return
+	var at_range := from + Vector2i(reach, 0)
+	var too_far := from + Vector2i(reach + 1, 0)
+	var shooter := {"cell": from, "range": reach, "reload": reload, "arrow": true}
+
+	var throws := ThrowSystem.new(grid)
+	if not throws.aim(DT, [shooter], too_far).is_empty():
+		_fail("l'Archer tire au-delà de sa portée")
+
+	# L'intervalle, mesuré entre les deux premiers tirs.
+	var shots: Array[float] = []
+	var elapsed := 0.0
+	while elapsed < reload * 2.5:
+		elapsed += DT
+		if not throws.aim(DT, [shooter], at_range).is_empty():
+			shots.append(elapsed)
+	if shots.size() < 2:
+		_fail("l'Archer ne retire pas : %d tir(s)" % shots.size())
+	elif absf(shots[1] - shots[0] - reload) > DT * 2.0:
+		_fail("intervalle de tir %.2f s au lieu de %.2f s" % [shots[1] - shots[0], reload])
+
+	# ⚠️ Le rechargement court aussi quand il ne peut pas tirer : il se figeait
+	# pendant le repos d'après coup, et le jeu tirait deux fois moins vite.
+	var rested := ThrowSystem.new(grid)
+	rested.aim(DT, [shooter], at_range)
+	var idle := 0.0
+	while idle < reload:
+		idle += DT
+		rested.aim(DT, [{"cell": from, "range": 0}], at_range)
+	if rested.aim(DT, [shooter], at_range).is_empty():
+		_fail("le rechargement se fige quand le tireur ne peut pas tirer")
+
+	# La flèche tombe là où le mage était : un pas de côté suffit.
+	var dodge := ThrowSystem.new(grid)
+	dodge.aim(DT, [shooter], at_range)
+	var landed: Array[Vector2i] = []
+	var flown := 0.0
+	while landed.is_empty() and flown < 2.0:
+		flown += DT
+		landed = dodge.advance(DT)
+	if landed.is_empty() or landed[0] != at_range:
+		_fail("la flèche ne tombe pas sur la case visée")
+	elif not dodge.quiet_landings.has(at_range):
+		_fail("la flèche explose en tombant")
+	elif ThrowSystem.touches(at_range, Vector2(at_range) + Vector2(1.0, 0.0)):
+		_fail("une case d'écart ne sauve pas de la flèche")
+	elif not ThrowSystem.touches(at_range, Vector2(at_range)):
+		_fail("la flèche rate celui qui n'a pas bougé")
 
 
 # --- Points de vie ---------------------------------------------------------------

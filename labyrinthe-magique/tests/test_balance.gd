@@ -81,7 +81,7 @@ func _init() -> void:
 	var reference := CharacterCatalog.shadow()
 	var levels := LevelConfig.all_levels()
 	if quick:
-		var sampled: Array = []
+		var sampled: Array[LevelConfig] = []
 		for i in levels.size():
 			if i % QUICK_EVERY == 0:
 				sampled.append(levels[i])
@@ -145,13 +145,13 @@ func _run_profile(config: LevelConfig, character: CharacterStats, explorer: bool
 			_:
 				timeouts += 1
 
-	var rate := float(wins) / float(ITERATIONS) * 100.0
-	var caught_rate := float(caught) / float(ITERATIONS) * 100.0
+	var rate := float(wins) / float(_runs) * 100.0
+	var caught_rate := float(caught) / float(_runs) * 100.0
 	var mean_time := (float(frames_total) / float(maxi(wins, 1))) * DT
 	print("   %-11s %-14s : %3d%% de victoires · %3d%% mort · %d bloqué · %3.0f s · %.1f gemmes · %.1f kills · %.1f portails%s" % [
 		label, character.display_name, int(round(rate)), int(round(caught_rate)), timeouts,
-		mean_time, float(gems_total) / float(ITERATIONS),
-		float(kills_total) / float(ITERATIONS), float(portals_total) / float(ITERATIONS),
+		mean_time, float(gems_total) / float(_runs),
+		float(kills_total) / float(_runs), float(portals_total) / float(_runs),
 		"" if winnable else "   [repaires à abattre — chiffres non comparables]"])
 
 	# LE CRITÈRE PORTE SUR LA MORT, PAS SUR LA VICTOIRE.
@@ -207,6 +207,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 
 	var movers: Array[GridMover] = []
 	var brains: Array[EnemyAI] = []
+	var swings: Array[MeleeSwing] = []
 	# LES ENNEMIS QUI LANCENT. Le système est le MÊME objet que celui du jeu :
 	# la simulation ne réimplémente pas la règle, elle l'exécute. Sans lui, elle
 	# mesurerait un jeu où le Golem de Lave ne jette jamais — et rendrait un
@@ -220,6 +221,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		base_speeds.append(enemy_speed)
 		movers.append(GridMover.new(grid, grid.enemy_spawns[i], enemy_speed))
 		brains.append(EnemyAI.new(config.enemy_detection_radius, rng_seed * 31 + i + 1))
+		swings.append(MeleeSwing.new())
 		context.enemy_cells.append(grid.enemy_spawns[i])
 		context.enemy_health.append(Health.new(config.enemy_health(config.species_at(i))))
 
@@ -300,6 +302,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			movers[index].teleport_to(spot)
 			context.enemy_health[index].current = context.enemy_health[index].maximum
 			brains[index].state = EnemyAI.State.PATROL
+			swings[index].cancel()
 
 		if ai_timer <= 0.0:
 			ai_timer = AI_REFRESH
@@ -393,6 +396,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				staggered[i] = float(staggered[i]) - DT
 				if float(staggered[i]) <= 0.0:
 					staggered.erase(i)
+				swings[i].cancel()
 				continue
 			var mover: GridMover = movers[i]
 			mover.speed = base_speeds[i]
@@ -404,8 +408,20 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					mover.speed = base_speeds[i] * float(
 						soak_factors.get(i, CombatSystem.SOAK_FACTOR))
 			mover.desired_direction = brains[i].decide(grid, mover.decision_cell(), mover.direction, player_field, DT)
+			var species_tuning := Bestiary.of(config.species_at(i))
+			var ranged_only := bool(species_tuning.get("ranged_only", false))
+			if ranged_only and ThrowSystem.in_line(grid, mover.decision_cell(),
+					player.nearest_cell(), int(species_tuning["throw_range"])):
+				mover.desired_direction = Vector2i.ZERO
 			mover.update(DT)
-			if mover.grid_position().distance_to(position) >= CATCH_DISTANCE or sheltered:
+			if ranged_only:
+				continue
+			# Le même coup qu'en jeu : armé au contact, porté à l'impact.
+			var swing_event: MeleeSwing.Event = swings[i].tick(DT,
+				mover.grid_position().distance_to(position), CATCH_DISTANCE,
+				Bestiary.windup(config.species_at(i)),
+				ThrowSystem.reload_of(species_tuning))
+			if swing_event != MeleeSwing.Event.LANDED or sheltered:
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
 			if not player_health.is_alive():
@@ -423,7 +439,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				continue
 			var tuning := Bestiary.of(config.species_at(i))
 			shooters.append({"cell": movers[i].nearest_cell(), "range": reach,
-				"reload": float(tuning["strike"]) + float(tuning["repos"]),
+				"reload": ThrowSystem.reload_of(tuning),
 				"sweep": bool(tuning.get("sweep", false))})
 		throws.aim(DT, shooters, player.nearest_cell())
 		for cell in throws.advance(DT):

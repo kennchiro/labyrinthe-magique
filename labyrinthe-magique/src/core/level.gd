@@ -238,6 +238,9 @@ var combat_context: CombatContext = null
 ## Personnage joué et ses points de vie. Le Level les PORTE, le GameManager les
 ## interprète : c'est lui qui décide qu'à zéro la partie est perdue.
 var character: CharacterStats = null
+## Où part le sort qu'on est en train de lancer, renseigné par le signal du tir
+## pendant `combat.use`. Reste nul pour un sort qui n'a pas de cible.
+var _cast_target: Variant = null
 var player_health: Health = null
 ## Ce que le joueur a acquis définitivement. Posé par le GameManager avant le
 ## chargement : le Level ne sauvegarde rien lui-même, il ne fait que consulter.
@@ -643,9 +646,10 @@ func use_ability(slot: int) -> bool:
 	if ability == null or combat == null or player == null:
 		return false
 	_refresh_context()
+	_cast_target = null
 	if not combat.use(ability, combat_context):
 		return false
-	player.play_cast()
+	player.play_cast(_cast_target)
 	# LE BLASON DE L'EXTRA. Il ne paraît que pour l'ultime, et seulement si la
 	# planche du mage en fournit un : déposer un `crest.png` suffit à en donner
 	# un au mage suivant, sans toucher au code.
@@ -986,6 +990,8 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
+	if not points.is_empty():
+		_cast_target = points[points.size() - 1]
 	# UN ÉCLAIR NE VOYAGE PAS, IL RELIE — MAIS LE DARD, LUI, VOLE.
 	#
 	# L'attaque de base de la Foudre empruntait l'orbe générique : une bille
@@ -1936,7 +1942,13 @@ func _on_enemy_killed(index: int) -> void:
 		if is_instance_valid(orb):
 			orb.burst()
 		_orbs.erase(index)
-	_spawn_impact(enemy.current_cell(), Element.Kind.SUPREME, 2.0, 0.8)
+	var fade := DeathFade.new()
+	fade.setup(enemy.sprite, enemy.position)
+	entities.add_child(fade)
+	# L'éclat est à la couleur du mage. Il était celui du Suprême pour tout le monde,
+	# et chaque mage finissait ses combats par le même feu d'artifice.
+	_spawn_impact(enemy.current_cell(),
+		character.element if character != null else Element.Kind.SUPREME, 2.0, 0.8)
 	enemy.set_dead(true)
 	_respawns[index] = config.enemy_respawn_delay
 	enemy_killed.emit()
@@ -1984,6 +1996,13 @@ func player_teleport_is_gamble() -> bool:
 func grant_player_invulnerability(seconds: float) -> void:
 	if player != null and teleport_system != null:
 		teleport_system.grant_invulnerability(player.mover, seconds)
+		player.play_hurt(seconds)
+		# Une touche ne coupe pas un séisme en cours.
+		if _shake_left <= 0.0:
+			_shake_total = HIT_SHAKE_TIME
+			_shake_left = HIT_SHAKE_TIME
+			_shake_time = 0.0
+			_shake_power = HIT_SHAKE_POWER
 
 
 func try_teleport_player() -> bool:
@@ -2181,19 +2200,29 @@ func _check_capture() -> void:
 		return
 	var sheltered := teleport_system != null and teleport_system.is_invulnerable(player.mover)
 	var player_position := player.mover.grid_position()
+	var delta := get_process_delta_time()
 	var touched := false
-	for enemy in enemies:
-		if enemy.dead:
+	_swings.resize(enemies.size())
+	for i in enemies.size():
+		var enemy := enemies[i]
+		if _swings[i] == null:
+			_swings[i] = MeleeSwing.new()
+		var swing: MeleeSwing = _swings[i]
+		if enemy.dead or enemy.ranged_only() or enemy.is_staggered():
+			swing.cancel()
 			continue
-		if enemy.mover.grid_position().distance_to(player_position) >= CATCH_DISTANCE:
-			continue
+		var gap := enemy.mover.grid_position().distance_to(player_position)
 		# Le coup part au contact, invulnérabilité ou non. Pendant le répit qui
 		# suit un coup encaissé, le joueur doit VOIR que l'ennemi le frappe encore :
 		# un gobelin collé qui ne fait rien pendant deux secondes se lit comme un
 		# bug, pas comme un sursis. Le sursis, lui, reste entier — c'est `sheltered`
 		# qui décide des dégâts, pas l'animation.
-		enemy.strike()
-		touched = true
+		match swing.tick(delta, gap, CATCH_DISTANCE, Bestiary.windup(enemy.species),
+				enemy.strike_cycle() + SWING_SYNC_MARGIN):
+			MeleeSwing.Event.STARTED:
+				enemy.strike()
+			MeleeSwing.Event.LANDED:
+				touched = true
 	if touched and not sheltered:
 		player_caught.emit()
 	_check_throws(player_position, sheltered)
@@ -2203,6 +2232,11 @@ func _check_capture() -> void:
 ## en RefCounted, pour que la simulation d'équilibrage joue le même jeu que le
 ## joueur. Ici on ne fait que montrer ce qu'elle décide.
 var _throws: ThrowSystem = null
+## Le coup en cours de chaque ennemi, au même index que `enemies`.
+var _swings: Array[MeleeSwing] = []
+## Une image de marge : le prochain coup ne doit pas partir pendant que l'ennemi
+## finit son geste, il ne serait pas animé.
+const SWING_SYNC_MARGIN := 0.02
 
 
 func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
@@ -2215,7 +2249,7 @@ func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
 			continue
 		shooters.append({"cell": enemy.mover.nearest_cell(),
 			"range": enemy.throw_range(), "reload": enemy.strike_cycle(),
-			"sweep": enemy.sweeps()})
+			"sweep": enemy.sweeps(), "arrow": enemy.fires_arrows()})
 	var target := Vector2i(roundi(player_position.x), roundi(player_position.y))
 	for shot in _throws.aim(get_process_delta_time(), shooters, target):
 		# Le geste part sur l'ennemi qui a tiré : c'est lui qu'on doit voir armer.
@@ -2229,6 +2263,11 @@ func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
 			continue
 		var ball: ThrownStone = THROWN_SCENE.instantiate()
 		entities.add_child(ball)
+		if bool(shot.get("arrow", false)):
+			ball.setup_arrow(maze_renderer.cell_to_world(shot["from"]),
+				maze_renderer.cell_to_world(shot["to"]), TILE_SIZE,
+				Color(0.72, 0.4, 1.0), float(shot["flight"]))
+			continue
 		ball.setup(maze_renderer.cell_to_world(shot["from"]),
 			maze_renderer.cell_to_world(shot["to"]), _lava_texture(), TILE_SIZE,
 			Color(1.0, 0.45, 0.12), 0.6, float(shot["flight"]))
@@ -2264,7 +2303,8 @@ func _update_lava(delta: float) -> void:
 	var sheltered := teleport_system != null and player != null \
 		and teleport_system.is_invulnerable(player.mover)
 	for cell in _throws.advance(delta):
-		_spawn_impact(cell, Element.Kind.FIRE, 1.0, 0.55)
+		if not _throws.quiet_landings.has(cell):
+			_spawn_impact(cell, Element.Kind.FIRE, 1.0, 0.55)
 		if player == null or sheltered:
 			continue
 		if ThrowSystem.touches(cell, player.mover.grid_position()):
@@ -2284,12 +2324,18 @@ func _update_lava(delta: float) -> void:
 var _shake_left := 0.0
 var _shake_total := 1.0
 var _shake_time := 0.0
+## 1 pour le séisme. Le même mécanisme sert au coup encaissé, en bien plus bref :
+## à pleine force, chaque touche secouerait l'écran comme un sort de mage de Terre.
+var _shake_power := 1.0
+const HIT_SHAKE_TIME := 0.2
+const HIT_SHAKE_POWER := 0.3
 
 
 func _on_quake_started(duration: float, _ability: Ability) -> void:
 	_shake_total = maxf(0.2, duration)
 	_shake_left = _shake_total
 	_shake_time = 0.0
+	_shake_power = 1.0
 
 
 func _on_quake_slide(cell: Vector2i, ability: Ability) -> void:
@@ -2327,7 +2373,7 @@ func _shake_offset(delta: float) -> Vector2:
 	# Mesuré en capture : à 0,55 case le départ donnait quinze pixels de monde,
 	# soit une secousse honnête mais pas un séisme. On veut que la première
 	# seconde soit désagréable.
-	var amplitude := TILE_SIZE * 0.75 * force * force
+	var amplitude := TILE_SIZE * 0.75 * force * force * _shake_power
 	var speed := 34.0 * (0.35 + 0.65 * force)
 	return Vector2(
 		sin(_shake_time * speed) * amplitude,

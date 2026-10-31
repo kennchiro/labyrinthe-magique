@@ -68,6 +68,9 @@ const SOAK_FACTOR := 0.62
 ## et leur glissement se corrigera au dessin, pas ici.
 const MAX_WALK_FPS := 24.0
 const STRIKE_LUNGE := 0.18
+## Flottement des créatures qui lévitent, en pixels du monde.
+const HOVER_SPEED := 3.4
+const HOVER_DEPTH := 2.0
 const TINT_STRIKE := Color(1.9, 0.72, 0.62)
 ## Part de la teinte réellement appliquée. Ces couleurs ont été calibrées sur les
 ## anciennes poses uniques, sombres et désaturées. À pleine force sur les planches
@@ -97,6 +100,9 @@ var dead := false
 
 var _flash := 0.0
 var _strike := 0.0
+## Vers où part le coup, fixé au moment où il part. Un poursuivant arrêté à une
+## case n'a plus de direction, et un tireur regarde rarement sa cible.
+var _strike_facing := Vector2i.DOWN
 var _strike_rest := 0.0
 ## Cadences de la planche jouée (voir SHEET_TUNING).
 var _tuning: Dictionary = Bestiary.of(Bestiary.FALLBACK)
@@ -157,10 +163,20 @@ func throw_range() -> int:
 	return int(_tuning.get("throw_range", 0))
 
 
-## Durée d'un cycle de coup complet, geste plus repos. C'est le rythme auquel il
-## peut relancer — `ThrowSystem` s'en sert pour recharger ses tireurs.
+## Le temps entre deux tirs — `ThrowSystem` s'en sert pour recharger ses tireurs.
 func strike_cycle() -> float:
-	return float(_tuning["strike"]) + float(_tuning["repos"])
+	return ThrowSystem.reload_of(_tuning)
+
+
+## Tire-t-il des flèches, plutôt que des boules ?
+func fires_arrows() -> bool:
+	return bool(_tuning.get("arrow", false))
+
+
+## Ne frappe-t-il QUE de loin ? Il s'arrête alors dès qu'il a sa ligne de tir, et
+## son contact ne coûte rien.
+func ranged_only() -> bool:
+	return bool(_tuning.get("ranged_only", false))
 
 
 ## Sa frappe lointaine BALAIE-t-elle le couloir, au lieu de viser une case ?
@@ -180,7 +196,27 @@ func strike() -> void:
 	if _strike <= 0.0 and _strike_rest <= 0.0:
 		_strike = float(_tuning["strike"])
 		_strike_rest = _strike + float(_tuning["repos"])
+		_strike_facing = _toward_player()
 	queue_redraw()
+
+
+## La direction cardinale qui regarde le mage, sur l'axe où il est le plus loin.
+func _toward_player() -> Vector2i:
+	var gap := player_cell - mover.nearest_cell()
+	if player_cell.x < 0 or gap == Vector2i.ZERO:
+		return _facing
+	if absi(gap.x) >= absi(gap.y):
+		return Vector2i(signi(gap.x), 0)
+	return Vector2i(0, signi(gap.y))
+
+
+## La pose de coup est-elle à l'écran ? La FRAPPE se joue jusqu'au bout. Le REPOS,
+## lui, cède la place à la marche si la créature repart : sinon elle glisse sur le
+## sol, bras levé, jusqu'à la fin de son geste.
+func _showing_strike() -> bool:
+	if _strike_rest <= 0.0 or _attack_poses.is_empty():
+		return false
+	return _strike > 0.0 or mover == null or not mover.is_moving()
 
 
 ## Statuts élémentaires, appliqués par le Level sur signal du CombatSystem.
@@ -191,6 +227,10 @@ func soak(duration: float, factor: float = SOAK_FACTOR) -> void:
 	if duration >= _soak_left or factor < _soak_factor:
 		_soak_factor = minf(_soak_factor, factor) if _soak_left > 0.0 else factor
 	_soak_left = maxf(_soak_left, duration)
+
+
+func is_staggered() -> bool:
+	return _stagger_left > 0.0
 
 
 func stagger(duration: float) -> void:
@@ -217,12 +257,18 @@ func _update_desired(delta: float) -> void:
 	_stagger_left = maxf(0.0, _stagger_left - delta)
 	_burn_left = maxf(0.0, _burn_left - delta)
 	_poison_left = maxf(0.0, _poison_left - delta)
+	_flash = maxf(0.0, _flash - delta)
 	mover.speed = _base_speed * (_soak_factor if _soak_left > 0.0 else 1.0)
 	if _soak_left <= 0.0:
 		_soak_factor = SOAK_FACTOR
 	if _stagger_left > 0.0:
 		mover.desired_direction = Vector2i.ZERO
-		_show_state(TINT_STAGGER)
+		# L'éclair passe aussi sur une créature ébranlée. Tous les coups du mage de
+		# la Terre ébranlent : sans ça, aucun n'aurait d'éclair.
+		if _flash > 0.0:
+			set_tint(HIT_FLASH)
+		else:
+			_show_state(TINT_STAGGER)
 		return
 	var step := ai.decide(
 		mover.grid, mover.decision_cell(), mover.direction, player_field, delta)
@@ -235,11 +281,16 @@ func _update_desired(delta: float) -> void:
 	# du mage — et ce tiers de seconde suffit à ne plus jamais le rattraper.
 	if step != Vector2i.ZERO and mover.decision_cell() + step == player_cell:
 		step = Vector2i.ZERO
+	# Le tireur pur s'arrête dès qu'il a sa ligne.
+	if ranged_only() and ThrowSystem.in_line(
+			mover.grid, mover.decision_cell(), player_cell, throw_range()):
+		step = Vector2i.ZERO
 	mover.desired_direction = step
 
-	_flash = maxf(0.0, _flash - delta)
+	# L'éclair n'est PAS atténué : TINT_STRENGTH protège le dessin d'une teinte qui
+	# dure, alors que celle-ci ne tient que 0,14 s et doit se voir d'un coup.
 	if _flash > 0.0:
-		_show_state(HIT_FLASH)
+		set_tint(HIT_FLASH)
 		return
 	if _strike > 0.0:
 		_show_state(TINT_STRIKE)
@@ -339,7 +390,8 @@ func _apply_visual() -> void:
 	foot_left.visible = false
 	foot_right.visible = false
 	var factor := target_height / _cell.y
-	sprite.scale = Vector2(factor, factor)
+	_sprite_scale = Vector2(factor, factor)
+	sprite.scale = _sprite_scale
 	sprite.region_enabled = false
 	sprite.vframes = 1
 	sprite.hframes = maxi(1, _poses.size())
@@ -353,11 +405,12 @@ func _apply_visual() -> void:
 
 
 func _direction_key() -> String:
-	if _facing == Vector2i.UP:
+	var shown := _strike_facing if _showing_strike() else _facing
+	if shown == Vector2i.UP:
 		return "up"
-	if _facing == Vector2i.LEFT:
+	if shown == Vector2i.LEFT:
 		return "left"
-	if _facing == Vector2i.RIGHT:
+	if shown == Vector2i.RIGHT:
 		return "right"
 	return "down"
 
@@ -374,7 +427,7 @@ func _apply_frame() -> void:
 	# même chronomètre porte déjà l'élan en avant et la teinte, tout reste en
 	# phase sans second compteur à tenir.
 	var index := _idle_pose
-	if _strike_rest > 0.0 and not _attack_poses.is_empty():
+	if _showing_strike():
 		# LE COUP SE DÉROULE SUR TOUT LE GESTE, frappe ET repos.
 		#
 		# Il s'étalait d'abord sur la seule FRAPPE, ce qui semblait juste : le
@@ -387,10 +440,21 @@ func _apply_frame() -> void:
 		# les deux, le gobelin tombe à 16 img/s et le golem à 8. La frappe, elle,
 		# fait toujours mal au même instant — ce sont deux choses différentes, et
 		# les confondre était l'erreur.
+		#
+		# ET IL ARRIVE À SON IMPACT AU MOMENT OÙ LE COUP TOUCHE : l'armement occupe
+		# les images qui précèdent `impact_pose`, le reste du geste les suivantes.
 		var span := maxf(0.001, float(_tuning["strike"]) + float(_tuning["repos"]))
-		var done := clampf(1.0 - _strike_rest / span, 0.0, 1.0)
-		index = _attack_poses[mini(int(done * float(_attack_poses.size())),
-			_attack_poses.size() - 1)]
+		var elapsed := span - _strike_rest
+		var windup := minf(Bestiary.windup(species), span * 0.9)
+		var count := _attack_poses.size()
+		var impact := clampi(Bestiary.impact_pose(species) - 1, 0, count - 1)
+		var position_in_gesture: float
+		if elapsed < windup:
+			position_in_gesture = elapsed / windup * float(impact)
+		else:
+			position_in_gesture = float(impact) \
+				+ (elapsed - windup) / (span - windup) * float(count - impact)
+		index = _attack_poses[clampi(int(position_in_gesture), 0, count - 1)]
 	elif mover != null and mover.is_moving() and not _walk_poses.is_empty():
 		index = _walk_poses[int(_walk_phase) % _walk_poses.size()]
 	sprite.frame = clampi(index, 0, _poses.size() - 1)
@@ -473,17 +537,39 @@ func _animate(delta: float) -> void:
 		# À l'arrêt, retour à la pose de repos plutôt qu'un pas figé en l'air.
 		_walk_phase = 0.0
 	_apply_frame()
+	_animate_body(delta)
+
+
+## La respiration à l'arrêt, et le flottement de ce qui ne touche pas le sol. Les
+## pieds dessinés restent posés et l'ombre aussi : c'est l'écart entre les deux qui
+## fait lire la lévitation.
+func _animate_body(delta: float) -> void:
+	if mover.is_moving():
+		sprite.scale = _sprite_scale
+		_life_time += delta
+	else:
+		_breathe(delta)
+	sprite.position.y = 0.0
+	if bool(_tuning.get("hover", false)):
+		sprite.position.y = (sin(_life_time * HOVER_SPEED) - 1.0) * HOVER_DEPTH
 
 
 func _process(delta: float) -> void:
 	super(delta)
 	if sprite == null or mover == null:
 		return
-	# Élan du coup : un aller-retour rapide dans la direction du déplacement.
+	# Élan du coup : un aller-retour rapide vers la cible. Pas dans le sens de la
+	# marche : le poursuivant qui frappe est arrêté à une case, sa direction est
+	# nulle, et l'élan n'aurait jamais lieu.
 	if _strike > 0.0:
-		var phase := 1.0 - _strike / maxf(0.01, float(_tuning["strike"]))
+		# Le bout de l'élan tombe sur l'impact : le corps arrive avec l'arme.
+		var total := maxf(0.01, float(_tuning["strike"]))
+		var elapsed := total - _strike
+		var windup := minf(Bestiary.windup(species), total * 0.9)
+		var phase := 0.5 * elapsed / windup if elapsed < windup \
+			else 0.5 + 0.5 * (elapsed - windup) / (total - windup)
 		var lunge := sin(phase * PI) * tile_size * STRIKE_LUNGE
-		position += Vector2(mover.direction) * lunge
+		position += Vector2(_strike_facing) * lunge
 
 
 func _draw() -> void:

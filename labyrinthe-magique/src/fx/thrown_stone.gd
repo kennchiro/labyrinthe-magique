@@ -30,6 +30,7 @@ var _flight := 0.4
 var _spin := 1.0
 var _tint := Color(0.45, 1.0, 0.4)
 var _grain := 32.0
+var _arrow := false
 
 
 func setup(from: Vector2, to: Vector2, texture: Texture2D, tile_size: int,
@@ -65,6 +66,27 @@ func setup(from: Vector2, to: Vector2, texture: Texture2D, tile_size: int,
 	position = Vector2.ZERO
 
 
+## LA FLÈCHE de l'Archer d'Os : même vol, mais dessinée ici et sans rotation.
+##
+## La planche n'en montre en vol qu'une traînée floue, qui ne se lit pas comme une
+## flèche une fois sortie de la case. Elle doit pointer vers où elle va : c'est
+## cette direction qui dit au joueur de quel côté s'écarter.
+func setup_arrow(from: Vector2, to: Vector2, tile_size: int, tint: Color,
+		flight: float) -> void:
+	_from = from
+	_to = to
+	_tint = tint
+	_grain = float(tile_size)
+	_flight = flight
+	_arrow = true
+	body = get_node_or_null("Body")
+	if body == null:
+		queue_free()
+		return
+	body.visible = false
+	position = Vector2.ZERO
+
+
 func _process(delta: float) -> void:
 	_life += delta
 	if _life >= _flight or body == null:
@@ -72,6 +94,9 @@ func _process(delta: float) -> void:
 		return
 	var t := _life / _flight
 	body.position = _from.lerp(_to, t)
+	if _arrow:
+		queue_redraw()
+		return
 	# Elle TOURNE en volant : c'est ce qui la distingue d'une image qu'on
 	# translate, et ce qui lui donne son poids.
 	body.rotation = _spin * t * TAU
@@ -83,6 +108,9 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	if body == null:
+		return
+	if _arrow:
+		_draw_arrow()
 		return
 	var t := clampf(_life / _flight, 0.0, 1.0)
 	var span := _to - _from
@@ -97,3 +125,23 @@ func _draw() -> void:
 		draw_circle(at + side + Vector2(0.0, _grain * 0.05 * float(i) * 0.2),
 			_grain * 0.06 * life,
 			Color(_tint.r, _tint.g, _tint.b, 0.45 * life * (1.0 - t * 0.4)))
+
+
+func _draw_arrow() -> void:
+	var along := (_to - _from).normalized()
+	var across := Vector2(-along.y, along.x)
+	var tip := body.position + along * _grain * 0.34
+	var tail := body.position - along * _grain * 0.34
+	var neck := tip - along * _grain * 0.2
+	var halo := Color(_tint.r, _tint.g, _tint.b, 0.55)
+	draw_line(tail - along * _grain * 0.34, tail, halo, _grain * 0.07)
+	draw_line(tail, neck, Color(_tint.r, _tint.g, _tint.b), _grain * 0.12)
+	draw_line(tail, neck, Color(0.09, 0.07, 0.11), _grain * 0.06)
+	draw_colored_polygon(PackedVector2Array([tip + along * _grain * 0.05,
+		neck + across * _grain * 0.15, neck - across * _grain * 0.15]), _tint)
+	draw_colored_polygon(PackedVector2Array([tip,
+		neck + across * _grain * 0.1, neck - across * _grain * 0.1]),
+		Color(0.09, 0.07, 0.11))
+	for side in [-1.0, 1.0]:
+		draw_line(tail, tail - along * _grain * 0.12 + across * side * _grain * 0.11,
+			Color(0.09, 0.07, 0.11), _grain * 0.05)

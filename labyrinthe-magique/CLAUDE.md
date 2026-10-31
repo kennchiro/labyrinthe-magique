@@ -781,6 +781,16 @@ l'Air.
 - **Un nouveau `class_name` n'est visible qu'après `--import`** : le cache des classes
   globales n'est reconstruit qu'à ce moment-là. Sans ça, « Identifier "X" not declared »
   alors que le fichier est juste là.
+- ⚠️ **`build_characters.py` n'écrit plus le gobelin ni le spectre** : leurs bandes
+  de 17 poses viennent de `build_enemies.py`. Il les MESURE encore, car ils fixent
+  la largeur de case commune. Les réécrire les ramènerait à six poses sans erreur.
+- ⚠️ **Le profil dessiné ne dit pas dans quel sens part le sort.** Six mages sur huit
+  tiraient dans leur dos sur un profil : le générateur lance presque toujours vers
+  la droite. `attack_mirror` reprend la pose du bon profil, `attack_recentre` ramène
+  le corps quand un sort posé au sol fausse le calage sur les pieds (Terre, Air).
+  `check_characters.py` échoue si un sort part du mauvais côté.
+- **Les retours visuels d'un coup se testent dans `tests/test_animation.gd`** : les
+  vrais nœuds, frame par frame. Une capture ne tombe jamais sur le bon instant.
 
 ## État actuel
 

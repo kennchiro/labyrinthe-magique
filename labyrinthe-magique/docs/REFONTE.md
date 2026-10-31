@@ -2302,6 +2302,46 @@ nombre.
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
 
+## 2026-10-31 — les quatre derniers ennemis, et trois pièges de découpe
+
+Dragonnet, Archer d'Os, Démon de Cristal et Chevalier Noir passent au format à
+17 poses.
+
+**L'Archer d'Os devient un tireur pur** : quatre cases en ligne droite, 2,2 s entre
+deux flèches. Il s'arrête dès qu'il a sa ligne et ne frappe jamais au contact.
+Sa flèche est dessinée par le moteur : la planche n'en montre qu'une traînée floue.
+
+⚠️ **Le rechargement de `ThrowSystem` se figeait pendant le repos d'après coup.**
+Le jeu tirait donc à deux fois le cycle de coup, et la simulation à une fois. Il
+court maintenant toujours, et `throw_reload` dit le rythme : 2,1 s pour le Golem
+de Lave et 2,2 s pour celui de Givre, ce qu'ils tiraient déjà en jeu.
+
+⚠️ **`test_balance --quick` n'avait jamais marché.** Un tableau mal typé le faisait
+planter avant `quit()`, et Godot restait ouvert sans rien dire. Une fois réparé, il
+affichait 33 % pour 4 victoires sur 4 : les moyennes divisaient par 12 quel que soit
+le nombre de parties.
+
+⚠️ **Une marche commandée sur une seule phrase ne marche pas.** Celle de l'Archer
+a donné huit fois la même foulée figée (0,03 de course du pied, contre 0,50 pour
+le gobelin, seul à avoir ses huit temps écrits). Toutes les bêtes à jambes
+reçoivent maintenant `LEG_BEATS`, et les autres ne reçoivent plus la règle des
+vrais pas, qui contredisait les pattes repliées du Dragonnet.
+
+⚠️ **Un débordement se prouve.** Un morceau détaché au bord d'une case n'est pas
+forcément à la voisine : la boule du Golem de Lave en est un. Ce qui le condamne,
+c'est que la matière continue de l'autre côté de la frontière
+(`without_side_bleed`). Une flèche en vol, coupée en deux morceaux détachés, garde
+sa plus grande moitié : la première version l'effaçait des deux côtés.
+
+⚠️ **Le cœur du Démon de Cristal est du même magenta que le fond**, et le détourage
+lui laissait un trou dans la poitrine. Les vrais trous enclavés s'écartent de 14 à
+21 du fond, le cœur de 30 à 45 : `keep_enclosed` garde ce qui dépasse 25, pour cette
+seule bête. Le seuil est réglé sur elle et n'est pas une règle générale.
+
+La nouvelle règle de débordement n'a été appliquée qu'à ces quatre bêtes. Un
+nouveau découpage du Spectre, du Golem de Givre, du Golem de Lave ou du Gobelin
+retirerait aussi des morceaux de leurs poses : à recontrôler à ce moment-là.
+
 ## 2026-08-29 — le décor du sol était invisible
 
 Les props semés dans les couloirs — champignons, coquillages, tonneaux, ancres —
