@@ -1,6 +1,6 @@
 # Labyrinthe des Éléments — instructions projet
 
-Jeu 2D top-down en **Godot 4.7.2**, renderer `gl_compatibility` (seul backend couvrant
+Jeu top-down en 2,5D (voir « La vue en volume ») en **Godot 4.7.2**, renderer `gl_compatibility` (seul backend couvrant
 Web + mobile + desktop avec un codebase unique). Cibles : iOS, Android, Web, Desktop.
 
 ## Commandes
@@ -172,17 +172,19 @@ sur la case, `--pause` capture l'écran de pause.
 **5. Rien ne se vérifie « à l'œil » sans capture.** Utiliser `--screenshot` plutôt que
 demander à l'utilisateur de regarder son écran.
 
-## La vue en volume (`--25d`)
+## La vue en volume (par défaut, `--2d` pour l'ancienne)
 
 Le sol et les haies sont en 3D (`src/world/`), tout le reste est le `Level` 2D, dessiné
 dans une SubViewport puis couché sur le sol (`WorldStage`). Personnages, sorts et ordre
 d'affichage gardent donc leur code : un nouvel effet 2D marche sans rien ajouter ici.
-Encore derrière l'option, tant que la fluidité n'est pas mesurée sur iPhone.
+⚠️ Activée par défaut le 2026-11-01 à la demande du joueur, mais sa fluidité n'a encore
+JAMAIS été mesurée sur iPhone : à faire avec `--bench`, sur un téléphone.
 
 ```bash
-godot --path . -- --25d --menu                         # jouer, depuis l'écran-titre
-godot --path . -- --25d --stage 3 --screenshot /tmp/x.png --frames 40
-godot --path . --resolution 2532x1170 -- --25d --auto-walk --cast --bench 10
+godot --path .                                         # jouer, depuis l'écran-titre
+godot --path . -- --stage 3 --screenshot /tmp/x.png --frames 40
+godot --path . -- --2d --stage 3                       # l'ancienne vue, pour comparer
+godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
 ```
 
 - **La caméra ne tourne jamais** : le haut de l'écran reste le nord, les commandes ne

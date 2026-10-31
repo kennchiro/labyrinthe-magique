@@ -6,7 +6,7 @@ extends SceneTree
 ##   godot --headless --path . --script res://tests/test_world.gd
 ##
 ## ⚠️ Ces chiffres se vérifient sans image : ce qui se juge à l'œil reste à capturer
-## avec `--25d --screenshot`.
+## avec `--screenshot`.
 
 const LEVEL_SCENE := preload("res://scenes/level.tscn")
 

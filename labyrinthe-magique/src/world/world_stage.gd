@@ -11,9 +11,9 @@ extends Node3D
 ##   ⚠️ La caméra 2D ne suit PAS le joueur au sens habituel : elle cadre le morceau
 ##   de sol vu par la caméra 3D. Le lissage et la secousse sont ceux de la 3D.
 ##
-## Activée par `--25d` tant que la 2D reste la version livrée.
+## C'est la vue du jeu. `--2d` rend l'ancienne, à plat, pour comparer.
 
-const FLAG := "--25d"
+const FLAT_FLAG := "--2d"
 const CELL_PIXELS := 32.0
 const FOLLOW_SPEED := 8.0
 const PADDING_RATIO := 0.12
@@ -66,7 +66,7 @@ var _fitted_for := Vector3.ZERO
 
 
 static func requested() -> bool:
-	return FLAG in OS.get_cmdline_user_args()
+	return FLAT_FLAG not in OS.get_cmdline_user_args()
 
 
 ## Prend le `Level` en charge. À appeler une fois dans l'arbre, avant le premier niveau.

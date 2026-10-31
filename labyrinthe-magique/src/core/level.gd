@@ -116,7 +116,7 @@ signal ability_refused(reason: String)
 @onready var compass: Compass = $Compass
 @onready var camera: Camera2D = $Camera2D
 
-## La vue en volume, si le GameManager l'a demandée. Nulle : le jeu 2D, inchangé.
+## La vue en volume, posée par le GameManager. Nulle avec `--2d` et dans les tests.
 var world_stage: WorldStage = null
 var grid: MazeGrid = null
 var config: LevelConfig = null

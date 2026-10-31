@@ -28,7 +28,7 @@ extends Node
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
 ##   --bench S          mesure S secondes sans limite d'images, écrit BENCH et quitte
-##   --25d              la vue en volume (voir WorldStage)
+##   --2d               l'ancienne vue à plat, au lieu du volume (voir WorldStage)
 ##   --screenshot PATH  capture un PNG puis quitte
 ##   --frames N         laisse tourner N frames avant la capture
 ##
