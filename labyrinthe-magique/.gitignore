@@ -9,3 +9,6 @@ tools/.venv/
 
 # Sorties d'export (projet Xcode iOS, APK…)
 /build/
+
+# Caches Python des outils
+__pycache__/

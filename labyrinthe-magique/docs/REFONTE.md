@@ -2302,6 +2302,266 @@ nombre.
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
 
+## 2026-08-29 — le décor du sol était invisible
+
+Les props semés dans les couloirs — champignons, coquillages, tonneaux, ancres —
+faisaient **0,42 case, soit treize pixels**, quand le mage en fait cinquante. Ce
+n'est pas discret, c'est invisible : on les prend pour un défaut du sol.
+
+Ils font maintenant 0,62 case, et ce qui brille 0,68.
+
+⚠️ **Le plafond comptait autant que le plancher, et il ne se devinait pas.** Un
+premier réglage à 0,72 / 0,82 rendait les props lumineux **plus gros que la
+GEMME** (0,78) — exactement la confusion que ce fichier redoutait depuis
+toujours : « le joueur ne distingue plus les portails du mobilier ». On agrandit
+le décor, et l'objectif se noie dedans.
+
+La taille est donc **dérivée de celle de la gemme** et non écrite à côté :
+
+    const PROP_TILES := Gem.TARGET_HEIGHT_TILES * 0.80
+    const GLOW_TILES := Gem.TARGET_HEIGHT_TILES * 0.87
+
+Si la gemme grandit un jour, le décor la suit et lui reste inférieur. Ce que le
+joueur doit ramasser est TOUJOURS la plus grosse chose posée au sol — écrit dans
+le code plutôt que dans un commentaire, c'est la seule forme qui tienne.
+
+La DENSITÉ n'a pas bougé (un prop pour douze cases de couloir) : le même
+commentaire prévient qu'au-delà le décor devient du bruit, et cet avertissement
+vaut davantage maintenant que les props ont doublé de taille.
+
+## 2026-08-28 — rendre la vérification faisable
+
+Quatre contrôles ont annoncé un succès sans rien vérifier, en une seule journée :
+un découpage rendu en carrés gris uniformes salué comme parfait, un contrôleur
+qui annonçait « 0 planches bien découpées » et concluait au succès, une barre
+tactile mesurée en pixels d'écran pendant que trois boutons sortaient de
+l'écran, et un test qui plantait sans faire échouer sa suite.
+
+Aucun n'était le même bug. Le point commun est ailleurs : **vérifier ce projet
+demandait sept commandes et la lecture de sept sorties**. Personne ne le fait
+sept fois, donc personne ne le fait.
+
+`tools/verifier.sh` — une commande, un verdict, et elle filtre les
+`SCRIPT ERROR` que les suites ne font pas échouer.
+
+Et `test_balance` a une **passe rapide** (`-- --quick`) : un niveau sur quatre,
+quatre parties au lieu de douze, environ trois minutes contre une demi-heure.
+Elle annonce elle-même ce qu'elle ne prouve pas — « rien de gros n'a dérivé,
+mais c'était la passe rapide ». C'est le seul test qui juge l'équilibrage, et il
+n'avait pas tourné une seule fois pendant que la Rune, l'Implosion, la Faille,
+le Cyclone et l'ordre du roster étaient réécrits. Un test d'une demi-heure ne se
+lance pas au milieu d'une séance ; celui-ci, si.
+
+## 2026-08-28 — trois dettes soldées
+
+### La Ponction ne rend plus immortel
+
+Le trait des Ténèbres rendait « 22 % des dégâts infligés », et c'était un défaut
+d'UNITÉS : `dealt` se compte en points de vie d'ENNEMI — 16 pour une orbe, 110
+pour un ultime — quand le mage en a TROIS. Une orbe rendait donc 4 PV sur un
+maximum de 3 : **le Sorcier des Ténèbres se remettait à fond à chaque coup
+porté**, et sa fiche annonçait « encaisse mal ».
+
+Rien ne pouvait l'attraper. Les deux nombres sont des entiers, l'appel est
+valide, et le soin est plafonné par le maximum du mage : le défaut ne se voit
+qu'en jouant, et il se lit comme de la chance.
+
+Le trait garde son sens mais à l'échelle du mage : **un point de vie, au plus
+toutes les dix secondes**. De quoi se relever d'une erreur, pas de quoi ne plus
+jamais en payer une. Le verrou compte autant que le chiffre — un trait qui rend
+1 PV à chaque coup reste une immortalité, juste plus lente.
+
+⚠️ Le trait est partagé : l'INVOCATEUR est lui aussi de l'élément Ténèbres, et
+il gagnait la même immortalité sans que sa fiche l'annonce nulle part.
+
+### La Translation devient le Passage, et traverse les murs
+
+Le Sorcier des Ténèbres avait DEUX translations : 4 cases toutes les 9 s, et 6
+cases toutes les 6,5 s. Plus courte, plus lente, sur le même geste : la première
+n'avait aucune raison d'exister. Signalé deux fois sans être traité.
+
+Elle FRANCHIT maintenant la haie qu'elle regarde. Le Pas de l'ombre reste la
+fuite — il glisse le long du couloir quand on est rattrapé ; le Passage coupe à
+travers le labyrinthe. C'est un raccourci, pas une échappatoire, et c'est la
+seule chose du jeu qui le fasse — ce qui va au mage des passages, dont rien dans
+le kit n'exploitait la topologie.
+
+⚠️ **Une règle du projet a dû être précisée, et c'est le test qui l'a exigé** :
+« aucun sort hors ultime ne traverse les murs ». Ce qu'elle protège, c'est
+qu'aucun sort ne FRAPPE à travers une haie — c'est ce qui rendrait l'ultime
+ordinaire. Une translation qui franchit un mur ne frappe rien : elle déplace son
+lanceur, ça se voit entièrement, et ça ne retire rien à personne. La règle porte
+désormais sur la PORTÉE et non sur le déplacement, et le test dit lequel des deux
+il garde.
+
+### `build_lairs.py` remarche
+
+Les deux planches de portails traînaient dans un dossier nommé « dossier sans
+titre » ; `build_lairs.py` et `build_portals.py` les cherchaient à
+`assets/portail/`, qui n'existe plus. Le premier produit les repaires d'ennemis,
+que le jeu utilise, et il était **inexécutable**. Les planches sont rangées dans
+`assets/peso&cover/decor/`, les chemins sont réparés, et le dossier sans titre a
+disparu.
+
+### ⚠️ Un test qui plante est compté comme un test qui passe
+
+Trouvé en écrivant le test du Passage : un appel à une méthode inexistante
+interrompt la fonction fautive et REND LA MAIN à l'appelant. La suite continue et
+conclut « TOUS LES TESTS PASSENT » — sur un test qui n'a rien vérifié.
+
+Quatrième défaut de cette famille en une journée, après les huit carrés gris du
+découpage, le contrôleur qui annonçait « 0 planches bien découpées » et la barre
+tactile mesurée en pixels d'écran. Consigné dans `CLAUDE.md` avec la commande qui
+l'attrape — il n'existe aucun moyen de le détecter depuis GDScript.
+
+## 2026-08-28 — la carte respire : vignette, halo, poussière
+
+Le labyrinthe était éclairé **uniformément d'un bord à l'autre**. C'est ce qui le
+faisait lire comme une planche de tuiles et non comme un endroit : rien ne
+séparait le proche du lointain, rien ne bougeait à l'écran sauf les personnages,
+et le sol sous les pieds du mage était exactement celui de vingt cases plus loin.
+
+Trois couches, sur un seul `CanvasLayer` (`src/fx/ambience.gd`) :
+
+- **la VIGNETTE** — l'écran s'assombrit vers ses bords, dans la teinte du stage.
+  Elle prend la couleur MOYENNE du sol du biome, mesurée une fois au chargement
+  sur une grille de 81 points ;
+- **le HALO DU MAGE** — le monde s'éclaire autour de lui, avec un battement de
+  flamme. C'est le signal le plus fort qu'on puisse donner : le décor RÉAGIT au
+  personnage ;
+- **la POUSSIÈRE** — quarante-quatre motes qui dérivent lentement, en
+  `CPUParticles2D` comme tout le reste du jeu, pour que le rendu soit identique
+  sur mobile.
+
+⚠️ **Aucune lecture du tampon d'écran.** Le renderer est `gl_compatibility` : y
+lire coûte une copie de l'écran par passe. Deux nappes en composition ordinaire
+— l'une qui assombrit, l'autre qui éclaire — font le même travail pour rien.
+
+Quatre pièges, dont deux silencieux :
+
+1. **le mode de composition d'un ShaderMaterial se déclare DANS le shader**
+   (`render_mode blend_add`). Poser un `CanvasItemMaterial` en `next_pass`
+   AJOUTE une passe, ça ne change pas la composition de la première : le halo
+   restait en alpha ordinaire et voilait le décor de blanc au lieu de
+   l'éclairer ;
+2. **l'interface se faisait assombrir avec le décor.** L'ambiance vit sur le
+   calque 1 ; l'UI était restée au calque 0 par défaut, donc dessous. Mesuré :
+   le bandeau perdait **44 % de sa luminosité** (86 -> 48) et ses libellés
+   viraient au gris. `main.tscn` donne maintenant le calque 2 à l'UI. Un défaut
+   qu'on regarde sans le voir — on croit que la vignette est un peu forte ;
+3. **une vignette qui reprend la couleur du sol APLATIT au lieu de creuser.**
+   Prise telle quelle elle repeignait le sable en sable ; il faut l'assombrir ET
+   la refroidir — le bleu qui reste dit « ombre » quel que soit le biome ;
+4. **les motes doivent naître PARTOUT.** Émises depuis le bas de l'écran, elles
+   mettaient neuf secondes à monter et l'air restait vide au-dessus du mage,
+   c'est-à-dire là où l'on regarde.
+
+### Le contraste se MESURE, il ne se choisit pas à l'œil
+
+Premier réglage : joli en capture, illisible en jeu. Le rapport de luminosité
+entre le centre de l'écran et ses coins était monté à **x2,3** — les coins
+perdaient la moitié de leur lumière, et avec eux les couloirs et les poursuivants
+qui y arrivaient. Un labyrinthe dont on ne voit plus les bords n'est plus un
+labyrinthe.
+
+Mesuré sur cinq anneaux de rayon croissant autour du mage :
+
+| rayon (px) | 60 | 160 | 260 | 380 | 500 | contraste |
+|---|---:|---:|---:|---:|---:|---:|
+| avant l'ambiance | 190 | 186 | 188 | 177 | 185 | **x1,03** |
+| premier réglage | 219 | 194 | 175 | 130 | 95 | **x2,30** |
+| réglage retenu | 215 | 201 | 192 | 160 | 141 | **x1,52** |
+
+Deux corrections, et la seconde pesait plus lourd que la première :
+
+- **le halo ne s'élève plus au carré.** Élevé au carré il faisait un noyau blanc
+  serré cerclé de nuit : le contraste entre la flaque et son bord se voyait plus
+  que la flaque elle-même. Portée élargie, force ramenée de 0,26 à 0,15 ;
+- **la vignette était le vrai coupable** — densité 0,74 ramenée à 0,40, et son
+  début repoussé vers l'extérieur. C'est elle qui écrasait les coins, pas la
+  lumière du mage.
+
+Vérifié sur un stage CLAIR (le 4, sable) et un stage SOMBRE (le 5, cristal) : ce
+sont les deux extrêmes où une ambiance mal réglée se voit — l'une délave, l'autre
+écrase. Le contraste y vaut **1,52 et 1,54**, ce qui est le point : le même des
+deux côtés.
+
+## 2026-08-28 — le sceau de la maison retiré, il faisait doublon
+
+Un anneau flottait au-dessus du monument central, portant une pastille par gemme
+manquante dans la couleur exacte de la gemme à trouver. Il disait exactement ce
+que le bandeau d'information dit déjà, en haut de l'écran : une pastille par
+gemme du niveau, éteinte quand elle est ramassée.
+
+Deux compteurs de la même chose, dont l'un flottait au milieu du décor. Retiré.
+
+Ce qui reste dit la même chose sans la répéter : la TEINTE froide et bleutée de
+la maison scellée — une maison verrouillée qui reste chaleureuse invite à s'en
+approcher, exactement le contresens à éviter — et l'onde chaude qui s'ouvre au
+moment où la dernière gemme tombe.
+
+`House.set_seal(Array[Color])` devient `set_locked(int)` : depuis que le sceau a
+disparu, les COULEURS des gemmes ne servaient plus à rien ici. Le bandeau les
+affiche ; la maison ne fait que s'ouvrir ou non. Trente lignes de dessin et deux
+champs partent avec — dont `_seal_y`, qui existait pour poser le sceau au sommet
+réel du sprite parce qu'une hauteur fixe le plantait au milieu des îlots
+flottants.
+
+## 2026-08-28 — un seul portail, contenu dans son couloir
+
+Le portail de téléportation avait trois défauts, tous mesurés en capture :
+
+1. **il débordait du couloir.** Réglé à 1,6 case de haut quand un couloir en
+   fait UNE : l'anneau montait sur les haies des deux côtés et l'on ne voyait
+   plus où marcher ;
+2. **il se délavait.** Rendu en ADDITIF, un anneau clair posé sur le sable du
+   stage 3 devenait une tache pâle. L'additif ne sait qu'éclaircir : sur un sol
+   déjà clair, il n'a plus rien à ajouter. C'est l'erreur symétrique de celle
+   de la flaque d'ombre, qui ne pouvait pas peindre du noir en additif ;
+3. **huit couleurs, aucune cohérence.** Huit teintes tirées de huit rangées
+   d'une même planche ne font pas une famille.
+
+Remplacés par **une seule boucle de huit images, en cyan**, posée à plat et
+contenue dans 0,95 case. Composition NORMALE et non additive.
+
+### Les six états ne sont plus dessinés, ils sont joués
+
+C'est le changement qui simplifie tout. Il y avait 8 couleurs x 6 états dessinés
+= **48 images**. Les états — repos, ouverture, ouvert, actif, saut, fermeture —
+sont maintenant des RÉGLAGES de la boucle unique : la vitesse de rotation, la
+taille et l'éclat. Au repos elle tourne à 3,5 images par seconde et sombre, sous
+les pieds du mage à 9 et claire, au saut à 20. **Huit images remplacent
+quarante-huit**, et les états sont enfin cohérents entre eux.
+
+⚠️ La vitesse est un COMPTEUR CONTINU et non un numéro d'image posé : changer de
+cadence ne doit pas faire sauter la rotation en arrière.
+
+⚠️ **On perd le repère de couleur**, et c'était un choix documenté : « le
+portail vert » était mémorisable dans un labyrinthe où l'on revient sur ses pas.
+Ce qui les distingue maintenant est leur DÉPHASAGE — ils sont identiques mais
+pas synchrones, ce qui évite au moins le clignotant d'ambulance.
+
+⚠️ **L'anneau tracé en code a disparu.** Il existait pour dire « c'est CETTE
+case », la lueur d'avant étant large et floue. Le dessin actuel fait exactement
+une case : l'anneau ne disait plus que ce que le portail dit déjà, et deux
+cercles concentriques se lisaient comme un défaut de rendu.
+
+Vérifié sur un stage CLAIR (le 3, sable) et un stage SOMBRE (le 5, cristal) —
+c'est là que les deux erreurs opposées se voient.
+
+### Ménage, et deux outils cassés trouvés en passant
+
+Les huit planches de couleur et leur `frames.json` ont été supprimés : plus rien
+ne les ouvrait et elles partaient dans l'app. `tools/build_portals.py` est marqué
+hors service en tête de fichier plutôt que rafistolé — le rafistoler donnerait
+l'illusion d'un outil vivant, alors que la règle du jeu a changé.
+
+⚠️ **`build_portals.py` ET `build_lairs.py` pointent tous deux vers
+`assets/portail/`, qui n'existe plus** : leurs planches sont dans
+`assets/dossier sans titre/`. Le premier est désormais obsolète ; **le second ne
+l'est pas** — il produit les repaires d'ennemis, que le jeu utilise — et il est
+actuellement inexécutable. À réparer par qui a déplacé les planches.
+
 ## 2026-08-28 — la barre tactile en éventail régulier
 
 **La fuite et le troisième sort étaient superposés.** Signalé en jeu, confirmé

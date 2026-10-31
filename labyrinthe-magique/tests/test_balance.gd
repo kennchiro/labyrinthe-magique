@@ -50,11 +50,43 @@ const DESPERATION_RADIUS := 3
 const CAST_RADIUS := 6
 
 var _failures: Array[String] = []
+## Parties par profil. Réduit en passe rapide — voir `_init`.
+var _runs := ITERATIONS
+
+
+## Passe RAPIDE : un niveau sur quatre, un tiers des parties.
+##
+## ⚠️ ELLE NE REMPLACE PAS LA PASSE COMPLÈTE, et le dire n'est pas une clause de
+## style. Ce test-ci est le seul qui juge l'équilibrage, et il n'a pas tourné
+## une seule fois pendant que cinq sorts majeurs étaient réécrits — parce qu'il
+## prend une demi-heure et que personne n'a une demi-heure au milieu d'une
+## séance. Un test qu'on ne peut pas lancer est un test qu'on ne lance pas.
+##
+## La passe rapide existe pour qu'on le lance QUAND MÊME, et pour attraper la
+## grosse dérive : un mage devenu injouable, un stage devenu impossible. Les
+## écarts de quelques points, eux, demandent la passe complète.
+const QUICK_ITERATIONS := 4
+const QUICK_EVERY := 4
 
 
 func _init() -> void:
+	var quick := "--quick" in OS.get_cmdline_user_args()
+	if quick:
+		print("PASSE RAPIDE — un niveau sur %d, %d parties au lieu de %d." \
+			% [QUICK_EVERY, QUICK_ITERATIONS, ITERATIONS])
+		print("Elle attrape la grosse dérive, PAS les écarts de quelques points.")
+		print("")
+	_runs = QUICK_ITERATIONS if quick else ITERATIONS
+
 	var reference := CharacterCatalog.shadow()
-	for config in LevelConfig.all_levels():
+	var levels := LevelConfig.all_levels()
+	if quick:
+		var sampled: Array = []
+		for i in levels.size():
+			if i % QUICK_EVERY == 0:
+				sampled.append(levels[i])
+		levels = sampled
+	for config in levels:
 		print("── %s   (%s)" % [config.level_name, reference.display_name])
 		_run_profile(config, reference, false)
 		_run_profile(config, reference, true)
@@ -71,7 +103,11 @@ func _init() -> void:
 	print("")
 
 	if _failures.is_empty():
-		print("✅  ÉQUILIBRAGE DANS LES CLOUS")
+		if _runs < ITERATIONS:
+			print("✅  RIEN DE GROS N'A DÉRIVÉ — mais c'était la passe rapide.")
+			print("    La passe complète reste à faire : sans --quick.")
+		else:
+			print("✅  ÉQUILIBRAGE DANS LES CLOUS")
 	else:
 		print("⚠️   %d ALERTE(S) D'ÉQUILIBRAGE :" % _failures.size())
 		for f in _failures:
@@ -95,7 +131,7 @@ func _run_profile(config: LevelConfig, character: CharacterStats, explorer: bool
 	var kills_total := 0
 	var portals_total := 0
 
-	for i in ITERATIONS:
+	for i in _runs:
 		var outcome := _simulate(config, character, 4000 + i, explorer)
 		gems_total += int(outcome["gems"])
 		kills_total += int(outcome["kills"])
@@ -138,6 +174,19 @@ func _run_profile(config: LevelConfig, character: CharacterStats, explorer: bool
 	# Et un explorateur qui ne meurt JAMAIS sur un stage AVANCÉ, c'est un jeu
 	# sans enjeu : la poursuite doit rester une menace réelle. Le stage
 	# d'apprentissage échappe à cette règle — il est fait pour être franchi.
+	# ⚠️ UN PROFIL QUI NE FINIT JAMAIS NE MESURE RIEN, et c'est le trou de ce
+	# test : ses trois seuils portent sur le taux de MORT et sur le taux de
+	# VICTOIRE. Quand l'explorateur se fait bloquer douze fois sur douze, il ne
+	# meurt pas — non parce que le jeu est doux, mais parce qu'il erre jusqu'au
+	# plafond de quatre minutes sans jamais approcher la maison. Ses 0 % de
+	# morts rassurent sur une partie qui n'a pas eu lieu.
+	#
+	# Ce n'est pas une ALERTE — le bot a toujours été maladroit, et faire rougir
+	# la suite noierait les vraies régressions. C'est un AVIS : il dit quelles
+	# lignes du rapport ne veulent rien dire.
+	if explorer and winnable and timeouts * 4 >= _runs * 3:
+		print("      ↑ l'explorateur n'a rien fini ici (%d/%d bloqués) : ses chiffres "
+			% [timeouts, _runs] + "ne disent rien du niveau")
 	if explorer and not config.is_tutorial and caught_rate < 5.0 and rate > 80.0:
 		_failures.append("%s / %s : l'EXPLORATEUR gagne %d%% sans jamais mourir — aucune tension" % [
 			config.level_name, character.display_name, int(rate)])
@@ -158,6 +207,11 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 
 	var movers: Array[GridMover] = []
 	var brains: Array[EnemyAI] = []
+	# LES ENNEMIS QUI LANCENT. Le système est le MÊME objet que celui du jeu :
+	# la simulation ne réimplémente pas la règle, elle l'exécute. Sans lui, elle
+	# mesurerait un jeu où le Golem de Lave ne jette jamais — et rendrait un
+	# verdict rassurant sur une menace qu'elle n'a pas vue.
+	var throws := ThrowSystem.new(grid)
 	# Vitesse PAR ESPÈCE, comme le Level : un golem traîne, un serpent file.
 	# La version à vitesse unique mesurait un autre jeu que celui qu'on joue.
 	var base_speeds: Array[float] = []
@@ -352,6 +406,28 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			mover.desired_direction = brains[i].decide(grid, mover.decision_cell(), mover.direction, player_field, DT)
 			mover.update(DT)
 			if mover.grid_position().distance_to(position) >= CATCH_DISTANCE or sheltered:
+				continue
+			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+			if not player_health.is_alive():
+				return _outcome("caught", frame, grid.gems.size() - remaining.size(),
+					kills.kills, portal_uses)
+			teleports.grant_invulnerability(player, HIT_INVULNERABILITY)
+			sheltered = true
+		# LES JETS, une fois les ennemis déplacés : ils visent où le mage EST à
+		# la fin du tour, comme en jeu.
+		var shooters: Array = []
+		for i in movers.size():
+			var reach := int(Bestiary.of(config.species_at(i)).get("throw_range", 0))
+			if reach <= 0 or not context.enemy_health[i].is_alive():
+				shooters.append({"cell": Vector2i.ZERO, "range": 0})
+				continue
+			var tuning := Bestiary.of(config.species_at(i))
+			shooters.append({"cell": movers[i].nearest_cell(), "range": reach,
+				"reload": float(tuning["strike"]) + float(tuning["repos"]),
+				"sweep": bool(tuning.get("sweep", false))})
+		throws.aim(DT, shooters, player.nearest_cell())
+		for cell in throws.advance(DT):
+			if sheltered or not ThrowSystem.touches(cell, player.grid_position()):
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
 			if not player_health.is_alive():

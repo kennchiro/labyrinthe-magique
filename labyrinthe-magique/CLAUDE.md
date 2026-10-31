@@ -24,11 +24,31 @@ godot --path . -- --stage 2 --episode 2 --seed 77 --overview --debug --touch
 godot --path . -- --stage 3 --episode 2 --at-lair --raze   # repaires : sortie, destruction
 godot --path . -- --auto-walk --potion --cast --screenshot /tmp/x.png --frames 200
 godot --path . -- --character fire --kills 4 --fx   # mage joué, kills simulés, éclats
+godot --path . -- --stage 9 --episode 2 --quest     # ouvre le CARNET DE QUÊTE, pour le capturer
+
+# TOUT VÉRIFIER EN UNE COMMANDE — suites, contrôles de planches, verdict unique.
+# Elle filtre aussi les SCRIPT ERROR, que les suites ne font pas échouer.
+tools/verifier.sh
+tools/verifier.sh --balance     # + la passe rapide d'équilibrage
 
 # Tests (headless, aucun affichage requis)
 godot --headless --path . --script res://tests/test_maze.gd
-#   … test_portals, test_grid_mover, test_combat, test_victory, test_pad
-godot --headless --path . --script res://tests/test_balance.gd   # LENT (minutes)
+#   … test_portals, test_grid_mover, test_combat, test_victory, test_quest, test_pad
+#
+# ⚠️ UN TEST QUI PLANTE EST COMPTÉ COMME UN TEST QUI PASSE. Une erreur GDScript
+# à l'exécution interrompt la fonction fautive et REND LA MAIN à l'appelant : la
+# suite continue et conclut « TOUS LES TESTS PASSENT » sur un test qui n'a rien
+# vérifié. Arrivé le 2026-08-28 sur un appel à une méthode inexistante.
+# Toujours relire la sortie, ou la filtrer :
+#   godot --headless --path . --script res://tests/test_combat.gd 2>&1 \
+#     | grep -q "SCRIPT ERROR" && echo "UN TEST A PLANTÉ"
+godot --headless --path . --script res://tests/test_balance.gd   # LENT (~30 min)
+godot --headless --path . --script res://tests/test_balance.gd -- --quick   # ~3 min
+#   ⚠️ La passe rapide (un niveau sur quatre, 4 parties) attrape la GROSSE
+#   dérive — un mage injouable, un stage impossible — pas les écarts de
+#   quelques points. Elle existe parce qu'un test d'une demi-heure ne se lance
+#   jamais : il n'a pas tourné une seule fois pendant que cinq sorts majeurs
+#   étaient réécrits.
 
 # Fiches de référence des personnages et du bestiaire — RÉGÉNÉRER après tout
 # changement d'équilibrage, elles sont générées et ne doivent jamais diverger.
@@ -278,6 +298,11 @@ avec l'îlot il dessinait un damier de carrés clairs à cheval sur les couloirs
 qu'on prenait pour un autre terrain. Ce qui désigne l'objectif, c'est ce qui est
 POSÉ dessus — l'îlot, son portail allumé, son sceau de gemmes.
 
+⚠️ **Pas de sceau au-dessus du monument.** Il y en a eu un — un anneau portant
+une pastille par gemme manquante — retiré le 2026-08-28 : le bandeau
+d'information affiche DÉJÀ cette collection. Ce qui dit l'état de la porte, ce
+sont la teinte froide de la maison scellée et l'onde chaude de son ouverture.
+
 ⚠️ `House` cadre le monument dans une **boîte à deux bornes** (3,8 × 4,6 cases) et
 non sur sa seule largeur : les anciens monuments étaient larges, ces îlots sont
 hauts (280×460), et une mise à l'échelle sur la largeur en aurait fait six cases
@@ -371,6 +396,32 @@ l'Air.
   le cadre agrandi, cartes voisines assombries, teinte de l'élément par-dessus) :
   un seul ne suffisait pas, huit cartes également lumineuses ne se distinguaient
   pas. Repli prévu : un mage sans portrait garde l'ancien rendu.
+- **Chaque épisode a son CARNET DE QUÊTE** (2026-08-28), ouvert par le livre en
+  haut à droite, sous le bouton de pause — la seule zone libre de ce côté dans
+  les deux schémas de contrôle. Il ne change AUCUNE règle : la mission existait
+  déjà dans `LevelConfig`, il la met en phrases et la suit en direct. Ce qui
+  manquait n'était pas « qu'ai-je d'autre à faire » mais « que suis-je censé
+  faire ici, et où j'en suis » — l'écran affiche des compteurs, jamais une
+  phrase.
+  ⚠️ **Tout est DÉDUIT de la config, rien n'est recopié** (`QuestBook`). C'est la
+  règle des fiches générées appliquée à l'interface : une quête qui annoncerait
+  « 4 gemmes » sur un niveau qui en pose 6 serait un mensonge qu'aucun test
+  n'attrape et qu'aucun joueur ne pardonne. Seule l'AMBIANCE est écrite à la
+  main — dix phrases de chapitre, aucune ne porte de chiffre.
+  `tests/test_quest.gd` relit les vingt épisodes et compare chaque ligne à la
+  config. Il a déjà attrapé une attente fausse de sa propre écriture.
+  ⚠️ Le carnet MET EN PAUSE et réutilise l'état `PAUSED` : lire sa mission
+  pendant qu'un spectre vous court après n'est pas un choix, c'est une punition.
+  Il se ferme au départ d'un niveau — sans ça il restait ouvert sur la mission du
+  précédent quand DevTools relance la partie.
+  ⚠️ Le « déjà vu » vit dans `Settings`, pas dans `Progress` : c'est une
+  commodité d'affichage, pas un acquis, et `Progress` refuse d'écrire hors d'une
+  sauvegarde chargée. Une session de dev ne l'ouvre jamais toute seule ; `--quest`
+  le force pour la capture.
+  ⚠️ La page S'ÉLARGIT avant de rapetisser son texte : sur téléphone en paysage
+  il ne reste que 240 unités sous le bouton, et c'est la HAUTEUR qui manque, pas
+  la largeur. Ordre des sacrifices ensuite : le corps du texte, les provisions,
+  puis l'ambiance. Les objectifs et le bouton de fermeture ne partent jamais.
 - **Les six sorts de la fiche sont une GRILLE 3 x 2, pas une liste** (2026-08-28,
   maquette `docs/prompts/menu/disposition_sorts.md`, variante 2). La liste posait
   le nom à gauche et ses chiffres contre le bord droit, à presque mille pixels de
@@ -597,6 +648,29 @@ l'Air.
   prélève qu'une fois punit le passage, pas la présence — l'ennemi retenu ne
   paie alors plus rien pour le temps qu'il y perd, ce qui est exactement à
   l'envers. Les dégâts restent sur le tick, c'est une usure et non une rafale.
+- **UN SEUL PORTAIL, une seule couleur, une seule boucle.** Ses six états ne
+  sont plus dessinés : ils sont joués sur huit images par la vitesse de
+  rotation, la taille et l'éclat (`Portal`). Huit images au lieu de
+  quarante-huit, et des états enfin cohérents entre eux. Il tient dans 0,95 case
+  — un couloir en fait une — et se compose NORMALEMENT : en additif il se
+  délavait sur les stages clairs, l'additif ne sachant qu'éclaircir.
+  ⚠️ Le repère de couleur est perdu volontairement (« le portail vert » était
+  mémorisable) ; ce qui les distingue est leur déphasage.
+- **L'AMBIANCE DE LA CARTE vit sur un CanvasLayer** (`Ambience`) : vignette
+  teintée par le biome, halo qui suit le mage, poussière en `CPUParticles2D`.
+  Aucune lecture du tampon d'écran — deux nappes en composition ordinaire
+  suffisent, et y lire coûterait une copie de l'écran par passe en
+  `gl_compatibility`.
+  ⚠️ Le mode de composition d'un ShaderMaterial se déclare DANS le shader
+  (`render_mode blend_add`) : un `CanvasItemMaterial` en `next_pass` ajoute une
+  passe sans rien changer à la première.
+  ⚠️ Le contraste centre/bord se MESURE (anneaux de luminosité autour du mage) :
+  il vaut **1,5** et ne doit pas monter. À 2,3 — le premier réglage — les coins
+  perdent la moitié de leur lumière, et avec eux les couloirs et les poursuivants
+  qui y arrivent. Joli en capture, illisible en jeu.
+  ⚠️ L'UI est au calque **2**, l'ambiance au **1**. Sans ce numéro explicite
+  l'interface se faisait assombrir avec le décor — mesuré, 44 % de luminosité
+  perdue sur le bandeau, et ça se regarde sans se voir.
 - **Pas d'addon VFX** : le renderer est `gl_compatibility` (iOS + Web + desktop
   d'un seul code) et la plupart supposent Forward+. Shader + CPUParticles2D
   suffisent — CPU et non GPU, pour un rendu identique sur mobile.
@@ -678,6 +752,15 @@ l'Air.
 - **`rendering/textures/vram_compression/import_etc2_astc=true`** est obligatoire pour
   exporter vers iOS/Android. Sans lui l'export échoue **sans message d'erreur**.
 - **`application/targeted_device_family`** : 0 = iPhone, 1 = iPad, 2 = les deux.
+- **Un `Label` en repli automatique MENT sur sa taille tant qu'il n'a pas eu sa
+  largeur.** Il calcule son minimum d'après la largeur qu'il a DÉJÀ — zéro pour
+  un libellé qu'on vient de créer — et le garde en cache jusqu'à l'image
+  suivante ; `Control` refuse ensuite toute taille inférieure. Mesuré sur le
+  carnet : une ligne d'objectif se voyait imposer 722 px de haut. Elle
+  S'AFFICHAIT bien (le texte se dessine en haut de sa boîte), mais la mise en
+  page avançait de 722 et la moitié de la page partait sous l'écran. Ne jamais
+  relire `label.size.y` après l'avoir posé : mesurer avec la POLICE
+  (`get_multiline_string_size`), qui, elle, ne se trompe jamais.
 - **En coordonnées écran, l'axe Y descend** : un arc qui monte a un sinus
   NÉGATIF (angles entre 180° et 360°). Une erreur de signe envoie les boutons
   hors de l'écran.

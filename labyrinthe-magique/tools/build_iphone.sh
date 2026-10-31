@@ -54,9 +54,20 @@ godot --headless --path . "$MODE" "iOS" "$IPA"
 # On vérifie que le téléphone répond AVANT de tenter le transfert : sans ça,
 # `install` part quand même et échoue une minute plus tard sur un message qui
 # ne dit pas que le Wi-Fi ou l'écran verrouillé sont en cause.
+# ⚠️ ON VÉRIFIE QU'IL EST JOIGNABLE, pas seulement qu'il est CONNU.
+#
+# La première version cherchait l'identifiant dans la liste — or `devicectl`
+# liste aussi les téléphones appairés mais hors de portée, avec la mention
+# « unavailable ». Le contrôle passait donc sur un téléphone éteint, et l'échec
+# arrivait une minute plus tard, au milieu du transfert, sur un message qui ne
+# disait pas que l'écran était verrouillé.
 echo "── Le téléphone répond-il ?"
-if ! xcrun devicectl list devices | grep -q "$DEVICE"; then
-	echo "Téléphone introuvable. Même Wi-Fi ? Écran déverrouillé ?" >&2
+# ⚠️ « unavailable » CONTIENT « available ». On écarte donc la ligne fautive
+# avant de chercher le bon mot — un piège que ce script a payé une fois.
+if ! xcrun devicectl list devices | grep "$DEVICE" | grep -v "unavailable" \
+		| grep -q "available"; then
+	echo "Téléphone injoignable. Même Wi-Fi ? Écran DÉVERROUILLÉ ?" >&2
+	xcrun devicectl list devices | grep "$DEVICE" >&2
 	exit 1
 fi
 
