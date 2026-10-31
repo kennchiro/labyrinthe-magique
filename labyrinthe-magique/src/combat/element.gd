@@ -54,7 +54,7 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.FIRE: return "la cible brûle encore après le coup"
 		Kind.WATER: return "la cible ralentit, trempée"
 		Kind.EARTH: return "la cible s'arrête net un instant"
-		Kind.SHADOW: return "le mage aspire une part des dégâts"
+		Kind.SHADOW: return "le mage reprend un point de vie, de loin en loin"
 		Kind.THUNDER: return "le coup saute à l'ennemi voisin"
 		Kind.AIR: return "la cible est soufflée en arrière"
 		Kind.SUPREME: return "le coup se répète en écho"

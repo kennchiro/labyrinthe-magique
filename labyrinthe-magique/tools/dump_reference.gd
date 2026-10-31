@@ -25,7 +25,7 @@ const TRAIT_TEXT := {
 	Element.Kind.FIRE: "**Brûlure** — %d %% de dégâts en plus, étalés sur %.1f s",
 	Element.Kind.WATER: "**Trempe** — la cible ralentit de %d %% pendant %.1f s",
 	Element.Kind.EARTH: "**Ébranlement** — la cible s'arrête net %.1f s (une fois toutes les %.0f s)",
-	Element.Kind.SHADOW: "**Ponction** — le mage récupère %d %% des dégâts en vie",
+	Element.Kind.SHADOW: "**Ponction** — le mage récupère %d PV, au plus toutes les %.0f s",
 	Element.Kind.THUNDER: "**Arc** — le coup saute à un voisin à %d cases (%d %% des dégâts)",
 	Element.Kind.AIR: "**Bourrasque** — la cible est repoussée de %d cases",
 	Element.Kind.SUPREME: "**Écho** — %d %% des dégâts se répètent %.1f s plus tard",
@@ -94,7 +94,7 @@ func _trait_line(element: Element.Kind) -> String:
 			return TRAIT_TEXT[element] % [CombatSystem.STAGGER_DURATION,
 				CombatSystem.STAGGER_LOCK]
 		Element.Kind.SHADOW:
-			return TRAIT_TEXT[element] % int(CombatSystem.LEECH_RATIO * 100.0)
+			return TRAIT_TEXT[element] % [CombatSystem.LEECH_HEAL, CombatSystem.LEECH_LOCK]
 		Element.Kind.THUNDER:
 			return TRAIT_TEXT[element] % [CombatSystem.CHAIN_RANGE,
 				int(CombatSystem.CHAIN_RATIO * 100.0)]

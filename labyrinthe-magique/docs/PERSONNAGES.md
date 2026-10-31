@@ -14,10 +14,10 @@ comparables d'un personnage à l'autre.
 | **Mage du Feu** | Feu | 3 | 5.0 | 4 kills | **Brûlure** — 30 % de dégâts en plus, étalés sur 1.5 s |
 | **Mage de l'Eau** | Eau | 4 | 4.9 | 2 kills | **Trempe** — la cible ralentit de 38 % pendant 2.2 s |
 | **Mage de la Terre** | Terre | 5 | 4.5 | 6 kills | **Ébranlement** — la cible s'arrête net 0.7 s (une fois toutes les 3 s) |
-| **Sorcier des Ténèbres** | Ténèbres | 3 | 5.1 | 4 kills | **Ponction** — le mage récupère 22 % des dégâts en vie |
+| **Sorcier des Ténèbres** | Ténèbres | 3 | 5.1 | 4 kills | **Ponction** — le mage récupère 1 PV, au plus toutes les 10 s |
 | **Mage de la Foudre** | Foudre | 3 | 5.3 | 4 kills | **Arc** — le coup saute à un voisin à 4 cases (50 % des dégâts) |
 | **Mage de l'Air** | Air | 4 | 4.9 | 5 kills | **Bourrasque** — la cible est repoussée de 2 cases |
-| **Invocateur** | Ténèbres | 3 | 4.9 | 6 kills | **Ponction** — le mage récupère 22 % des dégâts en vie |
+| **Invocateur** | Ténèbres | 3 | 4.9 | 6 kills | **Ponction** — le mage récupère 1 PV, au plus toutes les 10 s |
 | **Sorcier Suprême** | Suprême | 4 | 4.9 | 8 kills | **Écho** — 40 % des dégâts se répètent 0.6 s plus tard |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
@@ -110,20 +110,20 @@ Trait : **Ébranlement** — la cible s'arrête net 0.7 s (une fois toutes les 3
 
 `id: shadow` · puissance affichée 4/5 · vie 3 · vitesse 5.1 · extra à 4 kills
 
-Trait : **Ponction** — le mage récupère 22 % des dégâts en vie
+Trait : **Ponction** — le mage récupère 1 PV, au plus toutes les 10 s
 
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Orbe d'ombre** | projectile | 16 dégâts · portée 10 · recharge 0.5 s | 0.5 s |
 | SKILL 1 | **Rune** | zone | 10 dégâts/s · rayon 1.4 · 8 s · 3 charges · recharge 8 s · englue à 18 % tant qu'on y reste | 8.0 s |
-| SKILL 2 | **Translation** | translation | saut de 4 cases · recharge 9 s | 9.0 s |
+| SKILL 2 | **Passage** | translation | saut de 4 cases · recharge 9 s · TRAVERSE LES MURS | 9.0 s |
 | SKILL 3 | **Implosion d'ombre** | explosion | 34 dégâts · rayon 2.6 · recharge 9 s · aspire à 4.6 cases · laisse une ombre 15 s · empoisonne 15 s à 1 PV/s | 9.0 s |
 | FUITE | **Pas de l'ombre** | translation | saut de 6 cases · recharge 6.5 s | 6.5 s |
 | EXTRA | **Faille des ténèbres** | invocation (ombre) | 3 failles · 2 ombres chacune · 120 s | 1.0 s |
 
 - **Orbe d'ombre** — Une bille d'ombre qui remonte les couloirs jusqu'à sa cible.
 - **Rune** — Un passage laissé au sol. Qui marche dessus rampe et perd 10 PV par seconde tant qu'il n'en est pas sorti.
-- **Translation** — Saut instantané de quelques cases dans la direction regardée.
+- **Passage** — Il franchit la haie qu'il regarde et reparaît de l'autre côté.
 - **Implosion d'ombre** — L'ombre inspire : elle arrache les poursuivants à leur couloir, les rassemble, puis claque — et la flaque qu'elle laisse empoisonne quinze secondes durant.
 - **Pas de l'ombre** — Il se fond dans l'ombre et reparaît plus loin.
 - **Faille des ténèbres** — Le labyrinthe se déchire près de chaque poursuivant. Deux ombres sortent de chaque faille et les traquent deux minutes durant, à coups de gaz violet.
@@ -188,7 +188,7 @@ Trait : **Bourrasque** — la cible est repoussée de 2 cases
 
 `id: invocateur` · puissance affichée 3/5 · vie 3 · vitesse 4.9 · extra à 6 kills
 
-Trait : **Ponction** — le mage récupère 22 % des dégâts en vie
+Trait : **Ponction** — le mage récupère 1 PV, au plus toutes les 10 s
 
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
@@ -228,6 +228,6 @@ Trait : **Écho** — 40 % des dégâts se répètent 0.6 s plus tard
 - **Trait élémentaire** — Un trait qui change d'élément à chaque tir.
 - **Convergence élémentaire** — Feu, eau, terre et air se fondent en un noyau qui explose à l'impact.
 - **Les Quatre Sceaux** — Quatre sceaux se gravent autour de lui : le feu brûle, l'eau ralentit, la terre arrête, l'air balaie.
-- **Renaissance** — Il renaît des quatre éléments : +8 à chaque coup pendant 30 s, et ses blessures se referment.
+- **Renaissance** — Il renaît des quatre éléments : +8 à chaque coup et 2 coups absorbés pendant 30 s, et ses blessures se referment.
 - **Glissement** — Les quatre éléments le déplacent d'un souffle.
 - **Jugement des quatre** — Le ciel s'ouvre : des météores des quatre éléments tombent sur chaque poursuivant, et la terre tremble.

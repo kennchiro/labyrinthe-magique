@@ -32,6 +32,8 @@ func _init() -> void:
 	_test_lair_boss_levels()
 	_test_stage_unlocks()
 	_test_elemental_traits()
+	_test_leech_is_not_immortality()
+	_test_shadow_passage()
 	_test_summons()
 	_test_rosters()
 	_test_flat_index()
@@ -1228,6 +1230,108 @@ func _test_air_cyclone() -> void:
 	if gone["count"] < cyclone.summon_count:
 		_fail("%d colonnes se sont éteintes sur %d" % [gone["count"], cyclone.summon_count])
 
+
+## LE PASSAGE DU SORCIER DES TÉNÈBRES traverse, sa fuite glisse.
+##
+## Deux translations dans le même kit ont besoin de deux comportements, sinon la
+## plus courte n'est qu'une version ratée de l'autre — et c'était le cas : 4
+## cases toutes les 9 s à côté de 6 cases toutes les 6,5 s, sur le même geste.
+func _test_shadow_passage() -> void:
+	var stats := CharacterCatalog.shadow()
+	var passage: Ability = null
+	for ability in stats.abilities:
+		if ability.kind == Ability.Kind.BLINK:
+			passage = ability
+	if passage == null:
+		_fail("le Sorcier des Ténèbres n'a plus de translation")
+		return
+	if not passage.pierces_walls:
+		_fail("le Passage ne traverse pas les murs : il redevient une fuite ratée")
+	if stats.escape != null and stats.escape.pierces_walls:
+		_fail("la FUITE traverse aussi : les deux sorts se confondent de nouveau")
+
+	# Le cas qui fait le sort : une haie devant, du sol derrière.
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var jumped := {"to": Vector2i(-1, -1), "count": 0}
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void:
+		jumped["to"] = to
+		jumped["count"] += 1)
+
+	var found := false
+	for cell in grid.all_floor_cells():
+		for facing in MazeGrid.NEIGHBORS:
+			if grid.is_floor_v(cell + facing):
+				continue          # pas de haie devant : ce n'est pas le cas
+			var beyond: Vector2i = cell + facing * 2
+			if not grid.is_floor_v(beyond):
+				continue          # rien derrière la haie non plus
+			context.player_cell = cell
+			context.player_facing = facing
+			if not combat.use(passage, context):
+				_fail("le Passage est refusé face à une haie qui a du sol derrière")
+				return
+			if jumped["to"] == cell:
+				_fail("le Passage n'a pas bougé le mage")
+			elif not grid.is_floor_v(jumped["to"]):
+				_fail("le Passage dépose le mage DANS un mur : %s" % jumped["to"])
+			found = true
+			break
+		if found:
+			break
+	if not found:
+		print("passage : aucune haie franchissable sur cette graine")
+
+
+## LA PONCTION NE REND PAS IMMORTEL.
+##
+## Elle rendait « 22 % des dégâts infligés », et c'était un défaut d'UNITÉS :
+## `dealt` se compte en points de vie d'ENNEMI — 16 pour une orbe — quand le
+## mage en a TROIS. Chaque coup porté le remettait donc à fond, sur un
+## personnage dont la fiche annonce « encaisse mal ».
+##
+## Rien ne pouvait l'attraper : les deux nombres sont des entiers, l'appel est
+## valide, et le soin est plafonné par le maximum du mage — le défaut ne se voit
+## qu'en jouant, et il se lit comme de la chance.
+func _test_leech_is_not_immortality() -> void:
+	var stats := CharacterCatalog.shadow()
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 100000)
+
+	# Le mage est à un point de la mort, et il frappe.
+	health.take(Damage.new(stats.base_health - 1, Element.Kind.FIRE, "enemy"))
+	if health.current != 1:
+		_fail("le mage ne descend pas à 1 PV : %d" % health.current)
+		return
+
+	# 1. UN SEUL POINT PAR PONCTION, quelle que soit la force du coup.
+	combat.use(stats.attack, context)
+	for i in int(1.5 / DT):
+		combat.update(DT, context)
+	if health.current > 1 + CombatSystem.LEECH_HEAL:
+		_fail("un coup rend %d PV : la Ponction se compte encore en dégâts d'ennemi"
+			% (health.current - 1))
+
+	# 2. ET PAS À CHAQUE COUP. Sur la durée du verrou, un seul soin.
+	var after: int = health.current
+	health.take(Damage.new(after - 1, Element.Kind.FIRE, "enemy"))
+	var shots := 0
+	for i in int((CombatSystem.LEECH_LOCK - 2.0) / DT):
+		combat.update(DT, context)
+		if combat.use(stats.attack, context):
+			shots += 1
+	if shots < 3:
+		_fail("le test n'a tiré que %d fois : il ne prouve rien" % shots)
+	if health.current > 1:
+		_fail("la Ponction resoigne pendant son verrou : %d PV après %d coups"
+			% [health.current, shots])
+
 ## Les CHARGES : cinq brasiers d'affilée, puis la recharge, puis les cinq
 ## reviennent d'un coup. Trois promesses distinctes, et chacune peut casser
 ## seule — d'où trois vérifications.
@@ -1300,11 +1404,20 @@ func _test_volcanic_ultimate() -> void:
 	if ultimate.rain_count <= 0:
 		_fail("l'ultime du Feu ne fait plus pleuvoir de météores")
 
-	# 1. AUCUN autre sort du jeu ne perce les murs. C'est la promesse inverse,
-	#    et c'est elle qui donne son prix à l'ultime.
+	# 1. AUCUN autre sort du jeu N'ATTEINT ce qu'une haie protège. C'est la
+	#    promesse inverse, et c'est elle qui donne son prix à l'ultime.
+	#
+	#    ⚠️ LA RÈGLE PORTE SUR LA PORTÉE, PAS SUR LE DÉPLACEMENT. Elle a été
+	#    précisée le 2026-08-28 : ce qu'elle protège, c'est qu'aucun sort ne
+	#    FRAPPE à travers une haie — c'est ce qui rendrait l'ultime ordinaire.
+	#    Une TRANSLATION qui franchit un mur ne frappe rien : elle déplace son
+	#    lanceur, ça se voit entièrement, et ça ne retire rien à personne. Le
+	#    Passage du Sorcier des Ténèbres en dépend pour exister (voir plus bas).
 	for character in CharacterCatalog.all():
 		for ability in character.action_bar():
 			if ability == null or ability.is_ultimate:
+				continue
+			if ability.kind == Ability.Kind.BLINK:
 				continue
 			if ability.pierces_walls:
 				_fail("%s (%s) traverse les murs sans être un ultime"

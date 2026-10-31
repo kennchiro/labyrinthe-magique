@@ -217,7 +217,20 @@ const STAGGER_DURATION := 0.7
 ## Un même ennemi ne peut être ébranlé qu'une fois toutes les 3 s : sans ce
 ## verrou, le mage de Terre enchaînerait les arrêts et l'ennemi ne jouerait plus.
 const STAGGER_LOCK := 3.0
-const LEECH_RATIO := 0.22
+## LA PONCTION REND UN POINT DE VIE, PAS UNE PART DES DÉGÂTS.
+##
+## ⚠️ Elle rendait `22 % des dégâts infligés`, et c'était un défaut d'UNITÉS :
+## `dealt` se compte en points de vie d'ENNEMI — 16 pour une orbe, 110 pour un
+## ultime — quand le mage en a TROIS. Une orbe à 16 dégâts rendait donc 4 PV sur
+## un maximum de 3 : le Sorcier des Ténèbres se remettait à fond à chaque coup
+## porté, et sa fiche annonçait « encaisse mal ».
+##
+## Le trait garde son sens — il aspire la vie de ce qu'il frappe — mais il le
+## fait à l'échelle du mage : un point, et pas plus souvent que toutes les dix
+## secondes. C'est de quoi se relever d'une erreur, pas de quoi ne plus jamais
+## en payer une.
+const LEECH_HEAL := 1
+const LEECH_LOCK := 10.0
 const CHAIN_RANGE := 4
 const CHAIN_RATIO := 0.5
 const PUSH_CELLS := 2
@@ -254,6 +267,10 @@ var _stagger_locks := {}               # index -> secondes avant le prochain éb
 ## verrou, une créature immobilisée dans les flammes serait re-piégée à chaque
 ## tick et ne repartirait JAMAIS.
 var _snare_locks := {}
+## Temps restant avant que la Ponction puisse rendre un point de vie. Sans ce
+## verrou, un trait qui rend 1 PV à chaque coup reste une immortalité — juste
+## un peu plus lente.
+var _leech_left := 0.0
 var _meteors: Array[Dictionary] = []
 var _rng := RandomNumberGenerator.new()
 var _empower_bonus := 0
@@ -330,6 +347,7 @@ func can_use(ability: Ability) -> bool:
 # --- Boucle ----------------------------------------------------------------------
 
 func update(delta: float, context: CombatContext) -> void:
+	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
 		if left <= 0.0:
@@ -1688,13 +1706,37 @@ func _nearest_in_reach(cell: Vector2i, reach: int, context: CombatContext) -> in
 	return best
 
 
+## LA TRANSLATION GLISSE, LE PASSAGE TRAVERSE.
+##
+## Deux translations dans le même kit avaient besoin de deux comportements —
+## sinon la plus courte n'est qu'une version ratée de l'autre. Le Sorcier des
+## Ténèbres avait exactement ça : une Translation de 4 cases toutes les 9 s à
+## côté d'un Pas de l'ombre de 6 cases toutes les 6,5 s. Plus courte, plus lente,
+## sur le même geste : elle n'avait aucune raison d'exister.
+##
+## `pierces_walls` la sépare pour de bon. Elle FRANCHIT une haie et se pose de
+## l'autre côté, là où le Pas de l'ombre glisse jusqu'au mur et s'arrête. C'est
+## la seule chose du jeu qui coupe à travers le labyrinthe, et ça va au mage des
+## passages — la topologie du labyrinthe est TOUT le jeu, et rien dans son kit
+## ne s'en servait.
+##
+## Elle vise la case la plus LOINTAINE praticable, et non la première :
+## s'arrêter au premier sol franchi la remettrait dans le couloir d'où elle
+## vient dès que le mage est collé à une haie.
 func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	var destination := context.player_cell
-	for step in ability.range:
-		var next: Vector2i = destination + context.player_facing
-		if not grid.is_floor_v(next):
-			break
-		destination = next
+	if ability.pierces_walls:
+		for step in range(ability.range, 0, -1):
+			var far: Vector2i = context.player_cell + context.player_facing * step
+			if grid.is_floor_v(far) and not grid.is_occupied(far):
+				destination = far
+				break
+	else:
+		for step in ability.range:
+			var next: Vector2i = destination + context.player_facing
+			if not grid.is_floor_v(next):
+				break
+			destination = next
 	if destination == context.player_cell:
 		use_refused.emit("mur")
 		return false
@@ -2033,9 +2075,11 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 				_stagger_locks[index] = STAGGER_LOCK
 				enemy_staggered.emit(index, STAGGER_DURATION)
 		Element.Kind.SHADOW:
-			var gained := health.heal(maxi(1, int(round(dealt * LEECH_RATIO))))
-			if gained > 0:
-				player_healed.emit(gained)
+			if _leech_left <= 0.0:
+				var gained := health.heal(LEECH_HEAL)
+				if gained > 0:
+					_leech_left = LEECH_LOCK
+					player_healed.emit(gained)
 		Element.Kind.THUNDER:
 			_chain_to_neighbour(index, dealt, ability, context)
 		Element.Kind.AIR:

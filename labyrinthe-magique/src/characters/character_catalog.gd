@@ -100,10 +100,19 @@ static func shadow() -> CharacterStats:
 			"damage": 10, "radius": 1.4, "duration": 8.0, "cooldown": 8.0,
 		}),
 		Ability.make({
-			"id": "shadow_blink", "display_name": "Translation",
-			"description": "Saut instantané de quelques cases dans la direction regardée.",
+			"id": "shadow_blink", "display_name": "Passage",
+			"description": "Il franchit la haie qu'il regarde et reparaît de l'autre côté.",
 			"kind": Ability.Kind.BLINK, "element": Element.Kind.SHADOW,
-			"range": 4, "cooldown": 9.0,
+			# ⚠️ ELLE TRAVERSE LES MURS, et c'est ce qui lui donne le droit
+			# d'exister. Sans ça elle était un Pas de l'ombre raté : 4 cases
+			# toutes les 9 s à côté de 6 cases toutes les 6,5 s — plus courte,
+			# plus lente, sur le même geste.
+			#
+			# Le Pas de l'ombre reste la FUITE : il glisse le long du couloir,
+			# vite et souvent, quand on est rattrapé. Le Passage, lui, coupe à
+			# travers le labyrinthe — c'est un raccourci, pas une échappatoire,
+			# et c'est la seule chose du jeu qui le fasse.
+			"range": 4, "cooldown": 9.0, "pierces_walls": true,
 		}),
 		Ability.make({
 			"id": "shadow_burst", "display_name": "Implosion d'ombre",
