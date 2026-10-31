@@ -97,19 +97,6 @@ livrés le plus souvent, et aucun des deux ne se rattrape après coup :
   · le TRAIT entre les cases est blanc, donc aussi loin du magenta qu'on peut
     l'être : il survit à tout et devient le bord de chaque sprite.
 
-⚠️ RÈGLE BLOQUANTE — LES JAMBES DOIVENT FAIRE DE VRAIS PAS. Le corps reste en
-place, mais les JAMBES, elles, doivent travailler franchement : sur la rangée de
-profil, on doit voir une jambe partir loin DEVANT pendant que l'autre pousse loin
-DERRIÈRE, puis l'inverse. Deux appuis complets sur les huit images.
-
-⚠️ CHIFFRE À TENIR : aux images d'APPUI, l'écart entre le talon avant et les
-orteils arrière doit valoir au moins LA MOITIÉ DE LA HAUTEUR de la créature. Sur
-les planches livrées jusqu'ici il valait un cinquième — c'est trois fois trop peu,
-et c'est précisément ce qui fait glisser la bête. Des jambes qui ne font que
-frémir donnent une bête qui GLISSE sur le sol au lieu de marcher — c'est le
-défaut le plus désagréable à l'œil, et le seul qu'on ne sache pas nommer quand on
-le voit.
-
 ⚠️ RÈGLE BLOQUANTE — LE CORPS NE BOUGE PAS D'UNE CASE À L'AUTRE. C'est la règle
 la plus souvent ratée, alors voici comment la vérifier toi-même :
 
@@ -218,19 +205,6 @@ livrés le plus souvent, et aucun des deux ne se rattrape après coup :
   · le TRAIT entre les cases est blanc, donc aussi loin du magenta qu'on peut
     l'être : il survit à tout et devient le bord de chaque sprite.
 
-⚠️ RÈGLE BLOQUANTE — LES JAMBES DOIVENT FAIRE DE VRAIS PAS. Le corps reste en
-place, mais les JAMBES, elles, doivent travailler franchement : sur la rangée de
-profil, on doit voir une jambe partir loin DEVANT pendant que l'autre pousse loin
-DERRIÈRE, puis l'inverse. Deux appuis complets sur les huit images.
-
-⚠️ CHIFFRE À TENIR : aux images d'APPUI, l'écart entre le talon avant et les
-orteils arrière doit valoir au moins LA MOITIÉ DE LA HAUTEUR de la créature. Sur
-les planches livrées jusqu'ici il valait un cinquième — c'est trois fois trop peu,
-et c'est précisément ce qui fait glisser la bête. Des jambes qui ne font que
-frémir donnent une bête qui GLISSE sur le sol au lieu de marcher — c'est le
-défaut le plus désagréable à l'œil, et le seul qu'on ne sache pas nommer quand on
-le voit.
-
 ⚠️ RÈGLE BLOQUANTE — LE CORPS NE BOUGE PAS D'UNE CASE À L'AUTRE. C'est la règle
 la plus souvent ratée, alors voici comment la vérifier toi-même :
 
@@ -271,7 +245,6 @@ AUTRES RÈGLES :
 | Une case ne montre que l'effet, sans la créature | **défaut bloquant** : elle disparaîtrait en plein coup. `build_enemies.py` mesure la matière du haut de case et nomme les fautives |
 | Le profil change de côté d'une case à l'autre | **défaut bloquant**, et le plus sournois : vu de loin la planche semble juste. La créature se retournerait la tête quatre fois par cycle. `build_enemies.py` le mesure et nomme les cases fautives |
 | Une ombre portée est dessinée sur le fond | **défaut bloquant** : elle survit à l'effacement du magenta et laisse une salissure grise sous la bête |
-| La créature glisse au lieu de marcher | **défaut bloquant** : ses jambes ne bougent pas assez. Redemander « une jambe loin devant, l'autre loin derrière, deux appuis sur les huit images ». `build_enemies.py` mesure la course du pied avant |
 | La créature dérive dans son cadre d'une case à l'autre | **défaut bloquant**, et le plus fréquent : elle patinerait d'avant en arrière au lieu de marcher. Redemander en insistant sur « le tronc se superpose d'une image à l'autre, seuls les membres bougent ». `build_enemies.py` mesure la dérive en pixels |
 | La créature change de taille d'une case à l'autre | **défaut bloquant** : elle sauterait à l'écran à chaque image |
 | Le bas de la créature bouge d'une case à l'autre | **défaut bloquant** : elle s'enfoncerait dans le sol en marchant |

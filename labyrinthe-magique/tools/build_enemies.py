@@ -744,7 +744,11 @@ def build(source_name: str, entry: dict) -> str:
     # au-dessus de son ombre pendant tout le reste du jeu.
     feet_y = (walk_box[3] - (top - CELL_PADDING)) * scale
     # LA FOULÉE, MESURÉE SUR LE DESSIN. Voir `foot_travel`.
-    travel = foot_travel(walk["right"])
+    #
+    # ⚠️ Zéro pour ce qui n'a pas de jambes : `Enemy` lie la cadence à la distance
+    # dès que ce nombre est positif, et un battement d'ailes mesuré comme un pied
+    # priverait le Dragonnet de la cadence en secondes qu'il doit garder.
+    travel = foot_travel(walk["right"]) if Bestiary_walks(entry["id"]) else 0.0
     (folder / "frames.json").write_text(json.dumps({
         "cell": [cell_w, FRAME_HEIGHT],
         "feet_y": round(feet_y, 1),

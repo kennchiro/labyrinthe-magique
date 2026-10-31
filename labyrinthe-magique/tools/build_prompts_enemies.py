@@ -40,7 +40,7 @@ COLUMNS, ROWS, CELL = 8, 3, 256
 ## deux fois exactement la même description.
 HERD = [
     {
-        "file": "spectre", "id": "hunter", "name": "Spectre Violet",
+        "file": "spectre", "id": "hunter", "name": "Spectre Violet", "legs": False,
         "worst": "Sa planche ne lui donne qu'UNE orientation : il est dessiné de"
                  " face, et sa vue de gauche est cette même image retournée. Il"
                  " n'a ni dos ni profil — il vous regarde en face pendant qu'il"
@@ -68,7 +68,7 @@ HERD = [
                   " rangée 2 de la rangée 1"],
     },
     {
-        "file": "serpent", "id": "serpent", "name": "Serpent d'Émeraude",
+        "file": "serpent", "id": "serpent", "name": "Serpent d'Émeraude", "legs": False,
         "worst": "Il file dans les couloirs plus vite que tout le reste du"
                  " bestiaire, et c'est le mouvement qu'on voit le moins : quatre"
                  " images pour une reptation, ça glisse sans onduler.",
@@ -94,7 +94,7 @@ HERD = [
                   " devant sa gueule"],
     },
     {
-        "file": "ombre", "id": "ombre", "name": "Ombre Encapuchonnée",
+        "file": "ombre", "id": "ombre", "name": "Ombre Encapuchonnée", "legs": False,
         "worst": "Elle glisse sans bruit et rattrape en ligne droite : c'est le"
                  " monstre qu'on découvre dans son dos, donc celui dont la vue"
                  " DE DOS compte le plus.",
@@ -126,7 +126,7 @@ HERD = [
                   " qu'on aura pour les distinguer"],
     },
     {
-        "file": "dragonnet", "id": "dragonnet", "name": "Dragonnet de Feu",
+        "file": "dragonnet", "id": "dragonnet", "name": "Dragonnet de Feu", "legs": False,
         "worst": "Il vole, donc il ne ralentit jamais dans les virages : c'est"
                  " le seul dont le battement d'ailes doit rester lisible à toute"
                  " vitesse.",
@@ -413,7 +413,7 @@ HEADER = """Feuille de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE,
 coloré à contours nets, effets lumineux, même facture que les sprites d'un jeu
 de rôle mobile."""
 
-BLOCKING = """⚠️ RÈGLE BLOQUANTE — LA CRÉATURE EST DESSINÉE DANS LES 24 CASES, sans une seule
+BLOCKING_TOP = """⚠️ RÈGLE BLOQUANTE — LA CRÉATURE EST DESSINÉE DANS LES 24 CASES, sans une seule
 exception. Son coup, son souffle, sa rafale ou son projectile s'ajoutent à elle,
 ils ne la REMPLACENT jamais : pas une case où l'on ne verrait que l'effet. Le jeu
 enchaîne ces images en une seconde — une case sans la bête la fait disparaître au
@@ -437,9 +437,13 @@ livrés le plus souvent, et aucun des deux ne se rattrape après coup :
     pas.
 
   · le TRAIT entre les cases est blanc, donc aussi loin du magenta qu'on peut
-    l'être : il survit à tout et devient le bord de chaque sprite.
+    l'être : il survit à tout et devient le bord de chaque sprite."""
 
-⚠️ RÈGLE BLOQUANTE — LES JAMBES DOIVENT FAIRE DE VRAIS PAS. Le corps reste en
+# ⚠️ POUR LES BÊTES À JAMBES SEULEMENT. Posée sur toutes, cette règle demandait de
+# grandes enjambées au Dragonnet, dont le prompt replie les pattes sous lui : deux
+# consignes contraires dans la même image. Ce qui vole, flotte ou rampe n'a pas de
+# `stride` dans le bestiaire, et porte ici `"legs": False`.
+LEG_RULE = """⚠️ RÈGLE BLOQUANTE — LES JAMBES DOIVENT FAIRE DE VRAIS PAS. Le corps reste en
 place, mais les JAMBES, elles, doivent travailler franchement : sur la rangée de
 profil, on doit voir une jambe partir loin DEVANT pendant que l'autre pousse loin
 DERRIÈRE, puis l'inverse. Deux appuis complets sur les huit images.
@@ -450,9 +454,9 @@ les planches livrées jusqu'ici il valait un cinquième — c'est trois fois tro
 et c'est précisément ce qui fait glisser la bête. Des jambes qui ne font que
 frémir donnent une bête qui GLISSE sur le sol au lieu de marcher — c'est le
 défaut le plus désagréable à l'œil, et le seul qu'on ne sache pas nommer quand on
-le voit.
+le voit."""
 
-⚠️ RÈGLE BLOQUANTE — LE CORPS NE BOUGE PAS D'UNE CASE À L'AUTRE. C'est la règle
+BLOCKING_BOTTOM = """⚠️ RÈGLE BLOQUANTE — LE CORPS NE BOUGE PAS D'UNE CASE À L'AUTRE. C'est la règle
 la plus souvent ratée, alors voici comment la vérifier toi-même :
 
     EMPILE MENTALEMENT LES 8 IMAGES D'UNE RANGÉE.
@@ -475,8 +479,12 @@ la même ligne dans les 24 cases. C'est cette ligne que le jeu pose sur le sol :
 si elle bouge, le monstre s'enfonce et ressort du sol en marchant."""
 
 
+GLIDE_ROW = """| La créature glisse au lieu de marcher | **défaut bloquant** : ses jambes ne bougent pas assez. Redemander « une jambe loin devant, l'autre loin derrière, deux appuis sur les huit images ». `build_enemies.py` mesure la course du pied avant |
+"""
+
+
 def fiche(beast: dict) -> str:
-    walk_rows = """LES TROIS RANGÉES, de haut en bas :
+    walk_rows ="""LES TROIS RANGÉES, de haut en bas :
 - rangée 1 : la créature vue DE FACE, elle avance vers le bas de l'image
 - rangée 2 : la créature vue DE DOS, elle s'éloigne vers le haut de l'image
 - rangée 3 : la créature vue DE PROFIL, TOURNÉE VERS LA DROITE, elle avance vers
@@ -508,6 +516,11 @@ def fiche(beast: dict) -> str:
                       f"enchaîner sur la première sans à-coup.")
     extra = "\n".join(f"- {rule}" for rule in beast.get("extra", []))
     extra = ("\n" + extra) if extra else ""
+
+    has_legs = beast.get("legs", True)
+    blocking = "\n\n".join([BLOCKING_TOP, LEG_RULE, BLOCKING_BOTTOM] if has_legs
+                           else [BLOCKING_TOP, BLOCKING_BOTTOM])
+    glide_row = GLIDE_ROW if has_legs else ""
 
     return f"""# {beast['name']} — planches de marche et d'attaque
 
@@ -558,7 +571,7 @@ Les deux planches vont dans `assets/peso&cover/creatures/`.
 
 {walk_block}
 
-{BLOCKING}
+{blocking}
 
 AUTRES RÈGLES :
 - la MÊME créature dans les 24 cases : mêmes couleurs, même taille
@@ -590,7 +603,7 @@ gauche à droite — ce n'est PAS une boucle :
 directement sur le déplacement : si la créature reste en position de combat à la
 dernière image, elle se remettra à marcher dans cette pose.
 
-{BLOCKING}
+{blocking}
 
 AUTRES RÈGLES :
 - la traînée du coup part DEVANT elle, dans la direction qu'elle frappe — vers le
@@ -608,8 +621,7 @@ AUTRES RÈGLES :
 | Une case ne montre que l'effet, sans la créature | **défaut bloquant** : elle disparaîtrait en plein coup. `build_enemies.py` mesure la matière du haut de case et nomme les fautives |
 | Le profil change de côté d'une case à l'autre | **défaut bloquant**, et le plus sournois : vu de loin la planche semble juste. La créature se retournerait la tête quatre fois par cycle. `build_enemies.py` le mesure et nomme les cases fautives |
 | Une ombre portée est dessinée sur le fond | **défaut bloquant** : elle survit à l'effacement du magenta et laisse une salissure grise sous la bête |
-| La créature glisse au lieu de marcher | **défaut bloquant** : ses jambes ne bougent pas assez. Redemander « une jambe loin devant, l'autre loin derrière, deux appuis sur les huit images ». `build_enemies.py` mesure la course du pied avant |
-| La créature dérive dans son cadre d'une case à l'autre | **défaut bloquant**, et le plus fréquent : elle patinerait d'avant en arrière au lieu de marcher. Redemander en insistant sur « le tronc se superpose d'une image à l'autre, seuls les membres bougent ». `build_enemies.py` mesure la dérive en pixels |
+{glide_row}| La créature dérive dans son cadre d'une case à l'autre | **défaut bloquant**, et le plus fréquent : elle patinerait d'avant en arrière au lieu de marcher. Redemander en insistant sur « le tronc se superpose d'une image à l'autre, seuls les membres bougent ». `build_enemies.py` mesure la dérive en pixels |
 | La créature change de taille d'une case à l'autre | **défaut bloquant** : elle sauterait à l'écran à chaque image |
 | Le bas de la créature bouge d'une case à l'autre | **défaut bloquant** : elle s'enfoncerait dans le sol en marchant |
 | Les deux planches n'ont pas les mêmes couleurs | rappeler « mêmes couleurs, même taille » — sinon clignotement au moment du coup |
