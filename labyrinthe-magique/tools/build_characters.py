@@ -87,13 +87,30 @@ SHEETS = {
     # téléportation de chaque mage à des coordonnées relevées à la main DANS les
     # anciennes planches, qui restent donc en place tant que les planches
     # d'effets de la refonte ne sont pas arrivées.
-    "refonte/feu.png": {"id": "fire", "grid": (256, 256, 0, 0), "gutter": True},
-    "refonte/eau.png": {"id": "water", "grid": (256, 256, 0, 0), "gutter": True},
-    "refonte/terre.png": {"id": "earth", "grid": (256, 256, 0, 0), "gutter": True},
-    "refonte/tenebres.png": {"id": "shadow", "grid": (256, 256, 0, 0), "gutter": True},
-    "refonte/foudre.png": {"id": "thunder", "grid": (256, 256, 0, 0), "gutter": True},
-    "refonte/air.png": {"id": "air", "grid": (256, 256, 0, 0), "gutter": True},
-    "refonte/supreme.png": {"id": "supreme", "grid": (256, 256, 0, 0), "gutter": True},
+    "refonte/feu.png": {"id": "fire", "grid": (256, 256, 0, 0), "gutter": True,
+                         "attack_mirror": {"left": "right"}},
+    "refonte/eau.png": {"id": "water", "grid": (256, 256, 0, 0), "gutter": True,
+                         "attack_mirror": {"left": "right"}},
+    "refonte/terre.png": {"id": "earth", "grid": (256, 256, 0, 0), "gutter": True,
+                         "attack_mirror": {"left": "right"}, "attack_recentre": True},
+    "refonte/tenebres.png": {"id": "shadow", "grid": (256, 256, 0, 0), "gutter": True,
+                         "attack_mirror": {"left": "right"}},
+    "refonte/foudre.png": {"id": "thunder", "grid": (256, 256, 0, 0), "gutter": True,
+                            "attack_mirror": {"right": "left"}},
+    "refonte/air.png": {"id": "air", "grid": (256, 256, 0, 0), "gutter": True,
+                        "attack_recentre": True},
+    "refonte/supreme.png": {"id": "supreme", "grid": (256, 256, 0, 0), "gutter": True,
+                         "attack_mirror": {"left": "right"}},
+    # ⚠️ `attack_mirror` : LE PROFIL DESSINÉ NE DIT PAS DANS QUEL SENS PART LE SORT.
+    # Le générateur centre la pose d'attaque sur le sort et le lance presque
+    # toujours vers la droite : six mages sur huit tiraient dans leur dos sur l'un
+    # de leurs profils. La pose est reprise du profil juste, retournée. Mesurable :
+    # le sort doit déborder du côté regardé (`check_characters.py`).
+    #
+    # ⚠️ `attack_recentre` : le rocher de la Terre et le croissant de l'Air sont
+    # posés AU SOL à côté du mage, et le calage sur les pieds prend l'ensemble pour
+    # le personnage. Le mage sautait d'un quart de case sur le côté à chaque sort.
+    #
     # L'Invocateur rejoint la table commune. Son ancienne planche n'avait aucune
     # grille — ses poses étaient posées librement, d'où `build_invocateur.py` et
     # sa découpe par formes connexes. Celle-ci en a une : le mage revient donc
@@ -653,6 +670,28 @@ def measure(path: Path, config: dict) -> dict:
     }
 
 
+def _attack_recentred(strip: Image.Image, cell_width: int) -> Image.Image:
+    """La pose d'attaque ramenée sur le corps de la pose de repos.
+
+    Le décalage est celui qui superpose le mieux les deux silhouettes. Le haut du
+    corps seul : le bas de l'attaque porte le sort, posé au sol.
+    """
+    alpha = np.asarray(strip)[..., 3] > 120
+    height = int(FRAME_HEIGHT * 0.72)
+    attack_index = POSES.index("attack")
+    idle = alpha[:height, :cell_width]
+    attack = alpha[:height, attack_index * cell_width:(attack_index + 1) * cell_width]
+    limit = cell_width // 4
+    shift = max(range(-limit, limit + 1),
+                key=lambda dx: int((idle & np.roll(attack, dx, axis=1)).sum()))
+    box = (attack_index * cell_width, 0, (attack_index + 1) * cell_width, FRAME_HEIGHT)
+    cell = strip.crop(box)
+    out = strip.copy()
+    out.paste((0, 0, 0, 0), box)
+    out.paste(cell, (box[0] + shift, 0))
+    return out
+
+
 def write(config: dict, measured: dict, cell_width: int) -> dict:
     """Écrit les bandes d'un personnage dans la case commune."""
     scale = measured["scale"]
@@ -672,11 +711,15 @@ def write(config: dict, measured: dict, cell_width: int) -> dict:
         source_direction = mirrors.get(direction, direction)
         strip = Image.new("RGBA", (source[0] * len(POSES), source[1]), (0, 0, 0, 0))
         for pose_index, pose in enumerate(POSES):
+            flipped = direction in mirrors
+            if pose == "attack" and direction in config.get("attack_mirror", {}):
+                source_direction = config["attack_mirror"][direction]
+                flipped = True
             entry = measured["cells"].get((source_direction, pose))
             if entry is None:
                 continue
             crop, (ax, ay) = entry
-            if direction in mirrors:
+            if flipped:
                 # Chaque pose est retournée SÉPARÉMENT, et son ancre avec elle.
                 # Retourner la bande entière inverserait l'ordre des poses, et
                 # oublier l'ancre décalerait le personnage d'un demi-corps.
@@ -686,6 +729,8 @@ def write(config: dict, measured: dict, cell_width: int) -> dict:
             y = int(source[1] - 5 - ay)
             strip.alpha_composite(crop, (x, y))
         strip = strip.resize((cell_width * len(POSES), FRAME_HEIGHT), Image.LANCZOS)
+        if config.get("attack_recentre"):
+            strip = _attack_recentred(strip, cell_width)
         strip.save(out_dir / f"{direction}.png")
 
     meta = {
@@ -725,6 +770,11 @@ def main() -> None:
 
     for name, entry in measured.items():
         config = SHEETS[name]
+        # ⚠️ Le gobelin et le spectre restent MESURÉS, car ils fixent la largeur de
+        # case commune, mais leurs bandes viennent désormais de `build_enemies.py`.
+        # Les réécrire ici les ramènerait à six poses sans aucune erreur.
+        if config.get("out") is OUT_ENEMIES:
+            continue
         meta = write(config, entry, cell_width)
         grid = meta.get("grid")
         detail = f"grille dx={grid['dx']} dy={grid['dy']} ox={grid['ox']} oy={grid['oy']}" \

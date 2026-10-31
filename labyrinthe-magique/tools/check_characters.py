@@ -349,11 +349,45 @@ def check_written_strips() -> list:
     return troubles
 
 
+## L'Invocateur fait monter son cercle sous ses pieds : son sort n'a pas de sens.
+ATTACK_SIDE_EXEMPT = {"invocateur"}
+
+
+def check_attack_sides() -> list:
+    """Sur un profil, le sort part-il du côté que le mage regarde ?
+
+    Chaque fichier existe et a la bonne taille quand il tire dans le dos, comme
+    six mages sur huit l'ont fait : seul le côté où déborde la pose le montre.
+    """
+    troubles = []
+    for folder in sorted(OUT.glob("*/")):
+        descriptor = folder / "frames.json"
+        if not descriptor.exists() or folder.name in ATTACK_SIDE_EXEMPT:
+            continue
+        meta = json.loads(descriptor.read_text())
+        cell_w, _ = meta["cell"]
+        index = meta["poses"].index("attack")
+        for direction, sign in (("left", -1), ("right", 1)):
+            with Image.open(folder / f"{direction}.png") as image:
+                alpha = np.asarray(image.convert("RGBA"))[..., 3] > 40
+            columns = np.where(alpha[:, index * cell_w:(index + 1) * cell_w].any(0))[0]
+            before = cell_w / 2 - columns[0]
+            after = columns[-1] - cell_w / 2
+            if (after - before) * sign <= 0:
+                troubles.append(f"{folder.name}/{direction}.png : le sort part dans le dos")
+    return troubles
+
+
 def main() -> None:
     failures = 0
     checked = 0
 
     troubles = check_written_strips()
+    backwards = check_attack_sides()
+    for trouble in backwards:
+        print(f"❌  {trouble} -> `attack_mirror` dans build_characters.py")
+    if backwards:
+        print("")
     if troubles:
         print("❌  BANDES ÉCRITES INCOHÉRENTES AVEC LEUR DESCRIPTEUR :")
         for trouble in troubles:
@@ -420,7 +454,7 @@ def main() -> None:
     if failures:
         print(f"❌  {failures} planche(s) sur {checked} mal découpée(s)")
         sys.exit(1)
-    if troubles:
+    if troubles or backwards:
         sys.exit(1)
     print(f"✅  LES {checked} PLANCHES DE MAGES SONT BIEN DÉCOUPÉES")
 

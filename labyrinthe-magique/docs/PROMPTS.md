@@ -10,6 +10,15 @@ un outil. Les deux vont ensemble : le prompt impose ce que l'outil sait vérifie
 (grille régulière, marges, une taille unique, un côté de profil annoncé), et
 l'outil refuse en silence tout ce que le prompt n'a pas exigé.
 
+## Mages animés — 8 pas et 8 images d'attaque
+
+`docs/prompts/mages_animes/` : une fiche par mage, deux prompts par fiche, générés
+par `tools/build_prompts_mages.py`. Même gabarit que le bestiaire. Déposer les
+planches dans `assets/peso&cover/mages/<mage>_{marche,attaque}.png`.
+
+⚠️ Le découpage et le moteur restent à brancher quand les planches arriveront :
+`Player` ne sait jouer aujourd'hui que six poses.
+
 ## Refonte des huit mages — uniformiser les tailles
 
 La case est commune à tous, mais chacun l'occupe comme il veut : de **60 %**
