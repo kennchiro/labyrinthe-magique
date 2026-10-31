@@ -248,6 +248,8 @@ var gems_total := 0
 var gems_taken := 0
 
 var _player_field := PackedInt32Array()
+## La couche d'ambiance — vignette, halo, poussière. Créée au premier stage.
+var _ambience: Ambience = null
 ## Champ de distances vers CE QUE LE JOUEUR CHERCHE : la gemme la plus proche,
 ## ou la maison une fois le sac plein. Les portails s'en servent pour décider ce
 ## qui compte comme un gain — sans lui, le jeu annoncerait « le portail te
@@ -281,6 +283,11 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	grid = MazeGenerator.generate(config, rng_seed)
 	_load_character_fx()
 	maze_renderer.set_stage(config.stage)
+	# L'AMBIANCE prend l'air du stage : vignette teintée, halo du mage, poussière.
+	if _ambience == null:
+		_ambience = Ambience.new()
+		add_child(_ambience)
+	_ambience.set_stage_tint(maze_renderer.air_tint())
 	maze_renderer.set_grid(grid)
 	# Le décor dérive de la même graine que le labyrinthe : rejouer une graine
 	# redonne exactement la même forêt, props compris.
@@ -406,7 +413,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	entities.add_child(house)
 	house.position = maze_renderer.cell_to_world(grid.house_center)
 	house.setup(TILE_SIZE, config.stage)
-	house.set_seal(missing_gem_colors())
+	house.set_locked(missing_gem_colors().size())
 
 	player = PLAYER_SCENE.instantiate()
 	# Le personnage est posé AVANT l'entrée dans l'arbre : le _ready du joueur
@@ -444,6 +451,13 @@ func set_overview(value: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	# LE HALO SUIT LE MAGE, en coordonnées d'ÉCRAN : la vignette et la lumière
+	# vivent sur un CanvasLayer, elles ne connaissent ni la caméra ni le zoom.
+	# C'est le Level qui fait la conversion — lui seul connaît les deux mondes.
+	if _ambience != null and player != null:
+		var view := Vector2(get_viewport().get_visible_rect().size)
+		var at := get_canvas_transform() * player.position
+		_ambience.set_focus(Vector2(at.x / maxf(1.0, view.x), at.y / maxf(1.0, view.y)))
 	_update_camera(false)
 	if teleport_system != null:
 		teleport_system.update(delta)
@@ -461,6 +475,7 @@ func _process(delta: float) -> void:
 	_update_orbs()
 	_update_compass()
 	_check_capture()
+	_update_lava(delta)
 
 
 # --- Objectif : gemmes et potions ------------------------------------------------
@@ -535,7 +550,7 @@ func _collect_gem(index: int) -> void:
 	gems_taken += 1
 	_spawn_effect(gem.cell, gem.color())
 	gem.queue_free()
-	house.set_seal(missing_gem_colors())
+	house.set_locked(missing_gem_colors().size())
 	# La cible change à l'instant du ramassage : boussole et portails doivent
 	# viser la suivante tout de suite, pas au prochain rafraîchissement d'IA.
 	_refresh_objective()
@@ -2181,6 +2196,79 @@ func _check_capture() -> void:
 		touched = true
 	if touched and not sheltered:
 		player_caught.emit()
+	_check_throws(player_position, sheltered)
+
+
+## LES BOULES DE LAVE, côté écran. La RÈGLE, elle, vit dans `ThrowSystem` —
+## en RefCounted, pour que la simulation d'équilibrage joue le même jeu que le
+## joueur. Ici on ne fait que montrer ce qu'elle décide.
+var _throws: ThrowSystem = null
+
+
+func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
+	if _throws == null:
+		_throws = ThrowSystem.new(grid)
+	var shooters: Array = []
+	for enemy in enemies:
+		if enemy.dead or enemy.throw_range() <= 0 or not enemy.can_strike():
+			shooters.append({"cell": Vector2i.ZERO, "range": 0})
+			continue
+		shooters.append({"cell": enemy.mover.nearest_cell(),
+			"range": enemy.throw_range(), "reload": enemy.strike_cycle(),
+			"sweep": enemy.sweeps()})
+	var target := Vector2i(roundi(player_position.x), roundi(player_position.y))
+	for shot in _throws.aim(get_process_delta_time(), shooters, target):
+		# Le geste part sur l'ennemi qui a tiré : c'est lui qu'on doit voir armer.
+		for enemy in enemies:
+			if not enemy.dead and enemy.mover.nearest_cell() == shot["from"]:
+				enemy.strike()
+				break
+		# LA RAFALE N'A PAS DE PROJECTILE À DESSINER : ce sont ses impacts, qui
+		# se déclenchent case après case, qui la montrent.
+		if bool(shot.get("sweep", false)):
+			continue
+		var ball: ThrownStone = THROWN_SCENE.instantiate()
+		entities.add_child(ball)
+		ball.setup(maze_renderer.cell_to_world(shot["from"]),
+			maze_renderer.cell_to_world(shot["to"]), _lava_texture(), TILE_SIZE,
+			Color(1.0, 0.45, 0.12), 0.6, float(shot["flight"]))
+		# LA PIERRE ELLE-MÊME PASSE AU ROUGE. La teinte donnée à `setup` ne peint
+		# que le halo du shader : le corps restait le caillou brun du Mage de la
+		# Terre. De loin on lisait « un rocher » là où il faut lire « de la
+		# lave » — et c'est en une fraction de seconde que le joueur décide de
+		# sortir de l'axe.
+		ball.modulate = Color(1.9, 0.85, 0.45)
+
+
+## La pierre de la boule de lave, chargée UNE fois et gardée.
+##
+## ⚠️ ELLE NE VIENT PAS DU MAGE. Le premier jet utilisait `_rock_texture`, qui
+## est lue dans le dossier du personnage CHOISI — et seul le Mage de la Terre en
+## a une. Avec les sept autres, le golem lançait une boule invisible : le joueur
+## perdait un point de vie sans rien voir venir, ce qui est le pire défaut qu'un
+## coup puisse avoir.
+var _lava_ball: Texture2D = null
+
+
+func _lava_texture() -> Texture2D:
+	if _lava_ball == null:
+		_lava_ball = _texture_or_null("res://assets/characters/earth/rock.png")
+	if _lava_ball == null:
+		_lava_ball = FxTextures.soft_blob()
+	return _lava_ball
+
+
+func _update_lava(delta: float) -> void:
+	if _throws == null:
+		return
+	var sheltered := teleport_system != null and player != null \
+		and teleport_system.is_invulnerable(player.mover)
+	for cell in _throws.advance(delta):
+		_spawn_impact(cell, Element.Kind.FIRE, 1.0, 0.55)
+		if player == null or sheltered:
+			continue
+		if ThrowSystem.touches(cell, player.mover.grid_position()):
+			player_caught.emit()
 
 
 ## LE TREMBLEMENT DE TERRE, à l'écran.

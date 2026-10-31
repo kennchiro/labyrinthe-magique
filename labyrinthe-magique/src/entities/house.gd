@@ -4,10 +4,17 @@ extends Node2D
 ## La maison au centre du labyrinthe : l'objectif.
 ##
 ## Sa porte est SCELLÉE tant que toutes les gemmes n'ont pas été ramassées.
-## L'état se lit sans un mot : maison éteinte et bleutée, sceau flottant au-dessus
-## du toit portant une pastille par gemme manquante — dans la couleur exacte de
-## la gemme à trouver. Quand la dernière tombe, le sceau se brise, les fenêtres
-## s'allument et la maison reprend ses couleurs.
+## L'état se lit sans un mot : maison éteinte et bleutée tant qu'il en manque,
+## puis les fenêtres s'allument et elle reprend ses couleurs.
+##
+## ⚠️ IL Y AVAIT UN SCEAU au-dessus du toit — un anneau portant une pastille par
+## gemme manquante, dans la couleur exacte de la gemme à trouver. Retiré : le
+## bandeau d'information affiche DÉJÀ cette collection, une pastille par gemme du
+## niveau, éteinte quand elle est ramassée. Deux compteurs de la même chose, dont
+## l'un flottait au milieu du décor.
+##
+## Ce qui reste dit la même chose sans le répéter : la TEINTE froide de la maison
+## scellée, et l'onde chaude qui s'ouvre quand la dernière gemme tombe.
 
 const TEXTURE := preload("res://assets/sprites/house.png")
 const PROPS_PATH := "res://assets/stages/props/"
@@ -36,11 +43,7 @@ const TINT_OPEN := Color(1.0, 1.0, 1.0)
 var tile_size: int = 32
 var locked := true
 
-## Couleurs des gemmes qui manquent encore, dans l'ordre du niveau.
-var _missing: Array[Color] = []
 var _time := 0.0
-## Hauteur du sceau, mesurée sur le sprite (voir setup).
-var _seal_y := -64.0
 ## Monte de 0 à 1 quand la porte s'ouvre : sert au flash d'ouverture.
 var _unseal := 0.0
 
@@ -64,19 +67,17 @@ func setup(p_tile_size: int, stage: int = 0) -> void:
 		(tile_size * TARGET_HEIGHT_TILES) / float(texture.get_height()))
 	sprite.scale = Vector2(factor, factor)
 	sprite.offset = Vector2(0.0, -texture.get_height() * ANCHOR_LIFT)
-	# Le sceau se pose juste au-dessus du SOMMET RÉEL du sprite, mesuré ici, et
-	# non à une hauteur fixe : les monuments plats et les îlots flottants n'ont
-	# pas la même silhouette, et une constante qui allait aux premiers plantait
-	# le sceau en plein milieu des seconds.
-	_seal_y = (sprite.offset.y - texture.get_height() * 0.5) * factor - tile_size * 0.5
 	sprite.modulate = TINT_LOCKED if locked else TINT_OPEN
 	queue_redraw()
 
 
-## Appelée à chaque gemme ramassée. `missing` est vide -> la porte s'ouvre.
-func set_seal(missing: Array[Color]) -> void:
-	_missing = missing
-	var now_locked := not missing.is_empty()
+## Appelée à chaque gemme ramassée. Zéro manquante -> la porte s'ouvre.
+##
+## Elle ne reçoit plus la LISTE des gemmes mais leur nombre : depuis que le sceau
+## a disparu, leurs couleurs ne servaient plus à rien ici — le bandeau les
+## affiche, la maison ne fait que s'ouvrir ou non.
+func set_locked(missing: int) -> void:
+	var now_locked := missing > 0
 	if locked and not now_locked:
 		_unseal = 1.0     # déclenche l'éclat d'ouverture
 	locked = now_locked
@@ -94,7 +95,6 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var s := float(tile_size)
 	if locked:
-		_draw_seal(s)
 		return
 
 	# Halo chaud des fenêtres, dessiné sous le sprite parce que le _draw du nœud
@@ -107,26 +107,3 @@ func _draw() -> void:
 		var wave := 1.0 - _unseal
 		draw_arc(Vector2.ZERO, s * (0.6 + 3.4 * wave), 0.0, TAU, 48,
 			Color(1.0, 0.86, 0.48, _unseal * 0.85), 3.0 + 5.0 * _unseal)
-
-
-## Sceau : un anneau au-dessus du toit, une pastille par gemme manquante.
-func _draw_seal(s: float) -> void:
-	var centre := Vector2(0.0, _seal_y)
-	var pulse := 0.5 + 0.5 * sin(_time * 2.4)
-	var radius := s * 0.52
-
-	draw_circle(centre, radius * 1.35, Color(0.05, 0.07, 0.14, 0.72))
-	draw_arc(centre, radius * 1.35, 0.0, TAU, 40,
-		Color(0.55, 0.68, 1.0, 0.35 + 0.25 * pulse), 2.0)
-
-	var count := _missing.size()
-	if count == 0:
-		return
-	for i in count:
-		# Une seule gemme manquante : au centre, sinon l'anneau à un point
-		# ressemble à un satellite en orbite autour de rien.
-		var angle := -PI * 0.5 + TAU * float(i) / float(count)
-		var offset := Vector2.ZERO if count == 1 else Vector2(cos(angle), sin(angle)) * radius * 0.72
-		var color: Color = _missing[i]
-		draw_circle(centre + offset, s * (0.15 + 0.02 * pulse), Color(color.r, color.g, color.b, 0.95))
-		draw_circle(centre + offset, s * 0.26, Color(color.r, color.g, color.b, 0.16))

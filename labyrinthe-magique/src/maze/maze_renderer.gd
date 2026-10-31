@@ -79,6 +79,10 @@ var _wall_variants := 1
 ## en dur ; les terrains dessinés sont en 6, et coder la valeur ici aurait fait
 ## lire du sol voisin à la moitié des cases.
 var _floor_period := SHEET_TILES
+## Couleur moyenne du sol du stage. C'est ce qui donne son AIR au biome — voir
+## `Ambience.set_stage_tint`. Mesurée une fois par stage : lire une texture
+## coûte cher, et elle ne change pas en cours de partie.
+var _air := Color(0.5, 0.5, 0.6)
 
 var grid: MazeGrid = null
 var show_distance_field := false
@@ -103,7 +107,33 @@ func set_stage(index: int) -> void:
 	# ici, pour que l'outil puisse en ajouter sans toucher au moteur.
 	_wall_variants = maxi(1, int(wall_atlas.get_height() / (_wall_piece * 4.0))) \
 		if wall_atlas != null else 1
+	_air = _average(floor_sheet)
 	queue_redraw()
+
+
+## L'air du stage : la couleur moyenne de son sol.
+func air_tint() -> Color:
+	return _air
+
+
+## Moyenne d'une texture, prise sur une GRILLE de points et non sur tous les
+## pixels : une planche de tuiles fait quelques centaines de milliers de pixels,
+## et quatre-vingt-un échantillons donnent la même teinte à un pouième près.
+func _average(texture: Texture2D) -> Color:
+	if texture == null:
+		return Color(0.5, 0.5, 0.6)
+	var image := texture.get_image()
+	if image == null or image.get_width() == 0:
+		return Color(0.5, 0.5, 0.6)
+	var total := Color(0.0, 0.0, 0.0)
+	var steps := 9
+	for x in steps:
+		for y in steps:
+			total += image.get_pixel(
+				int(image.get_width() * (float(x) + 0.5) / float(steps)),
+				int(image.get_height() * (float(y) + 0.5) / float(steps)))
+	var count := float(steps * steps)
+	return Color(total.r / count, total.g / count, total.b / count)
 
 
 func _tile_or(path: String, fallback: Texture2D) -> Texture2D:

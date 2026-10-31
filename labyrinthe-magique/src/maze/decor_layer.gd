@@ -43,6 +43,23 @@ const TREES: Array[Texture2D] = [
 	preload("res://assets/sprites/tree_twisted.png"),
 ]
 
+## TAILLE DES PROPS, EXPRIMÉE EN GEMMES et non en cases.
+##
+## ⚠️ Ils faisaient 0,42 case, soit TREIZE PIXELS, quand le mage en fait
+## cinquante : un champignon de treize pixels n'est pas discret, il est
+## invisible — on le prend pour un défaut du sol.
+##
+## Mais le plafond compte autant que le plancher, et il ne se devine pas : la
+## GEMME fait 0,78 case. Un premier réglage à 0,82 rendait les props lumineux
+## PLUS GROS QUE L'OBJECTIF — exactement la confusion que ce fichier redoutait
+## depuis toujours (« le joueur ne distingue plus les portails du mobilier »).
+##
+## D'où une taille dérivée de celle de la gemme et non écrite à côté : si la
+## gemme grandit un jour, le décor la suit et lui reste inférieur. Ce que le
+## joueur doit ramasser est TOUJOURS la plus grosse chose posée au sol.
+const PROP_TILES := Gem.TARGET_HEIGHT_TILES * 0.80
+const GLOW_TILES := Gem.TARGET_HEIGHT_TILES * 0.87
+
 ## Une case de couloir sur douze reçoit un prop. Au-delà, le décor devient du
 ## bruit et le joueur ne distingue plus les portails du mobilier.
 const PROP_CHANCE := 12
@@ -119,7 +136,7 @@ func _scatter_props(grid: MazeGrid, rng: RandomNumberGenerator) -> void:
 		elif not glowing and not _stage_props.is_empty():
 			pool = _stage_props
 		var texture: Texture2D = pool[rng.randi_range(0, pool.size() - 1)]
-		var target := float(tile_size) * (0.5 if glowing else 0.42)
+		var target := float(tile_size) * (GLOW_TILES if glowing else PROP_TILES)
 		var position := Vector2(cell) * tile_size + Vector2(
 			rng.randf_range(0.3, 0.7), rng.randf_range(0.45, 0.75)) * tile_size
 
