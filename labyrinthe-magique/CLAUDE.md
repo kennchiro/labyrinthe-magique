@@ -679,12 +679,13 @@ l'Air.
   prélève qu'une fois punit le passage, pas la présence — l'ennemi retenu ne
   paie alors plus rien pour le temps qu'il y perd, ce qui est exactement à
   l'envers. Les dégâts restent sur le tick, c'est une usure et non une rafale.
-- **UN SEUL PORTAIL, une seule couleur, une seule boucle.** Ses six états ne
-  sont plus dessinés : ils sont joués sur huit images par la vitesse de
-  rotation, la taille et l'éclat (`Portal`). Huit images au lieu de
-  quarante-huit, et des états enfin cohérents entre eux. Il tient dans 0,95 case
-  — un couloir en fait une — et se compose NORMALEMENT : en additif il se
-  délavait sur les stages clairs, l'additif ne sachant qu'éclaircir.
+- **UN SEUL PORTAIL, une seule couleur, peint au shader** (`portal.gdshader`,
+  banc : `tools/preview_portal.gd`). Ses états ne sont pas dessinés : `Portal`
+  les joue par la vitesse de rotation et l'éclat. Il tient dans 0,95 case — un
+  couloir en fait une — et se compose NORMALEMENT : en additif il se délavait
+  sur les stages clairs, l'additif ne sachant qu'éclaircir. Contrairement aux
+  personnages, il reste COUCHÉ sur le sol en 2,5D : `setup` annule le redressement
+  de `WorldStage._stand_up`. Les images `assets/portals/` ne sont plus lues.
   ⚠️ Le repère de couleur est perdu volontairement (« le portail vert » était
   mémorisable) ; ce qui les distingue est leur déphasage.
 - **L'AMBIANCE DE LA CARTE vit sur un CanvasLayer** (`Ambience`) : vignette

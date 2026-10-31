@@ -4,10 +4,9 @@ extends Node2D
 ## Visuel d'un portail. Aucune logique : les destinations sont décidées par
 ## PortalNetwork, l'exécution par TeleportSystem.
 ##
-## UNE SEULE BOUCLE, UNE SEULE COULEUR. Il y avait avant huit planches de six
-## ÉTATS dessinés — repos, ouverture, ouvert, actif, saut, fermeture — soit
-## quarante-huit images, une couleur par portail. Trois défauts, tous mesurés en
-## capture dans le labyrinthe :
+## PEINT AU SHADER (`assets/shaders/portal.gdshader`), comme les sorts. Il était lu
+## dans huit images d'une boucle unique, elles-mêmes venues de quarante-huit images
+## en huit couleurs. Trois défauts mesurés en capture ont fixé ce qu'il doit rester :
 ##
 ##   · il DÉBORDAIT du couloir. Réglé à 1,6 case de haut quand un couloir en
 ##     fait UNE : l'anneau montait sur les haies des deux côtés et l'on ne
@@ -22,25 +21,24 @@ extends Node2D
 ## vert » était mémorisable dans un labyrinthe où l'on revient sur ses pas. La
 ## cohérence a été jugée plus précieuse.
 ##
-## Les états ne sont plus DESSINÉS, ils sont JOUÉS sur la boucle unique : au
-## repos elle tourne lentement et sombre, sous les pieds du mage elle s'anime et
-## s'éclaire, au saut elle s'emballe. C'est ce qui les rend enfin cohérents entre
-## eux — et huit images remplacent quarante-huit.
+## Les états sont JOUÉS sur un seul dessin : au repos il tourne lentement et sombre,
+## sous les pieds du mage il s'anime et s'éclaire, au saut il s'emballe.
 
-const PORTALS_PATH := "res://assets/portals/"
-const ANIM_PATH := PORTALS_PATH + "portail_anim.json"
-const SHEET_PATH := PORTALS_PATH + "portail_tour_%d.png"
-## Hauteur visée, en cases. SOUS la case entière : le portail doit tenir entre
-## deux murs, halo compris — c'était tout l'objet de la refonte.
-const TARGET_HEIGHT_TILES := 0.95
+const SHADER := preload("res://assets/shaders/portal.gdshader")
+const NOISE := preload("res://assets/shaders/fire_noise.png")
+## Envergure, en cases. SOUS la case entière : le portail doit tenir entre deux
+## murs — c'était tout l'objet de la refonte.
+const TARGET_SIZE_TILES := 0.95
 
-## Cadences de rotation, en images par seconde, selon l'état.
-const SPIN_IDLE := 3.5
-const SPIN_READY := 9.0
-const SPIN_FLASH := 20.0
+## Cadences de rotation, en tours de dessin par seconde, selon l'état.
+const SPIN_IDLE := 0.7
+const SPIN_READY := 2.2
+const SPIN_FLASH := 7.0
 ## Durée de l'emballement au saut, et de la retombée quand le mage s'en va.
 const TELEPORT_FLASH := 0.30
 const CLOSE_DURATION := 0.45
+## Vitesse à laquelle l'éclat suit l'état : il monte et descend sans clignoter.
+const ENERGY_RISE := 8.0
 
 @onready var sprite: Sprite2D = $Sprite2D
 
@@ -51,54 +49,33 @@ var highlighted := false
 
 var _time := 0.0
 var _spin := 0.0
-var _frames := 8
-var _base_scale := 1.0
+var _energy := 0.0
 var _flash := 0.0
 var _closing := 0.0
 var _was_highlighted := false
+var _paint: ShaderMaterial
 
 
 func setup(p_cell: Vector2i, p_tile_size: int, phase: float, index: int = 0) -> void:
 	cell = p_cell
 	tile_size = p_tile_size
+	# ⚠️ Le portail est COUCHÉ sur le sol, contrairement aux personnages : la vue 2,5D
+	# vient de le redresser en l'ajoutant aux entités, et un disque debout ne se lit
+	# plus comme un passage sous les pieds. L'inclinaison de la caméra fait l'ellipse.
+	scale = Vector2.ONE
 	# Déphasage par portail : sinon tous tournent à l'unisson, ce qui fait
 	# clignotant d'ambulance plutôt que forêt enchantée. C'est ce qui remplace
 	# la couleur — ils sont identiques, ils ne sont pas synchrones.
 	_time = phase
 	_spin = phase * SPIN_IDLE
 
-	var frames := _load_frames()
-	if frames.is_empty():
-		return
-	sprite.texture = frames[0]
-	_frames = frames.size()
-	_sheet = frames
-	_base_scale = (tile_size * TARGET_HEIGHT_TILES) / float(frames[0].get_height())
-	sprite.scale = Vector2(_base_scale, _base_scale)
-
-	# ⚠️ COMPOSITION NORMALE, pas additive. L'additif faisait de ce portail une
-	# tache pâle sur les stages clairs : il n'ajoute de la lumière qu'à ce qui
-	# est sombre. Le dessin, lui, se suffit — il est déjà lumineux.
-	var material := CanvasItemMaterial.new()
-	material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
-	sprite.material = material
-
-
-var _sheet: Array[Texture2D] = []
-
-
-func _load_frames() -> Array[Texture2D]:
-	var frames: Array[Texture2D] = []
-	var count := 8
-	var text := FileAccess.get_file_as_string(ANIM_PATH)
-	var parsed: Variant = JSON.parse_string(text)
-	if parsed != null:
-		count = maxi(1, int((parsed as Dictionary).get("frames", 8)))
-	for i in count:
-		var path := SHEET_PATH % i
-		if ResourceLoader.exists(path):
-			frames.append(load(path))
-	return frames
+	_paint = ShaderMaterial.new()
+	_paint.shader = SHADER
+	_paint.set_shader_parameter("noise", NOISE)
+	_paint.set_shader_parameter("seed", float(index) * 0.37)
+	sprite.texture = MagicOrb.painted_quad()
+	sprite.scale = Vector2.ONE * float(tile_size) * TARGET_SIZE_TILES
+	sprite.material = _paint
 
 
 ## Appelée par le Level quand un saut part d'ici : le portail s'emballe.
@@ -115,12 +92,11 @@ func _process(delta: float) -> void:
 		_closing = CLOSE_DURATION
 	_was_highlighted = highlighted
 	_closing = maxf(0.0, _closing - delta)
-	if _sheet.is_empty():
+	if _paint == null:
 		return
 
 	# LA VITESSE DIT L'ÉTAT. On avance un compteur continu plutôt que de poser
-	# un numéro d'image : changer de cadence ne doit pas faire sauter la
-	# rotation en arrière.
+	# un angle : changer de cadence ne doit pas faire sauter la rotation en arrière.
 	var speed := SPIN_IDLE
 	if _flash > 0.0:
 		speed = SPIN_FLASH
@@ -129,28 +105,10 @@ func _process(delta: float) -> void:
 	elif _closing > 0.0:
 		speed = lerpf(SPIN_IDLE, SPIN_READY, _closing / CLOSE_DURATION)
 	_spin += delta * speed
-	sprite.texture = _sheet[int(_spin) % _frames]
 
-	var pulse := 0.5 + 0.5 * sin(_time * 2.6)
-	var swell := 1.0 + 0.04 * pulse
-	var glow := 0.72 + 0.10 * pulse
-	if highlighted:
-		swell += 0.07
-		glow = 1.05 + 0.12 * pulse
-	elif _closing > 0.0:
-		var back := _closing / CLOSE_DURATION
-		swell += 0.07 * back
-		glow = lerpf(glow, 1.05, back)
-	if _flash > 0.0:
-		var burst := _flash / TELEPORT_FLASH
-		swell += 0.22 * burst
-		glow = 1.05 + 0.85 * burst
-	sprite.scale = Vector2(_base_scale * swell, _base_scale * swell)
-	sprite.modulate = Color(glow, glow, glow)
-
-
-## ⚠️ PLUS D'ANNEAU TRACÉ. Il en existait un, dessiné en code sous le portail
-## pour dire « c'est CETTE case » — la lueur d'avant était large et floue, elle
-## débordait sur deux couloirs et ne désignait rien. Le dessin actuel fait
-## exactement une case : l'anneau ne disait plus que ce que le portail dit
-## déjà, et deux cercles concentriques se lisaient comme un défaut de rendu.
+	var wanted := 1.0 if highlighted else _closing / CLOSE_DURATION
+	_energy = move_toward(_energy, wanted, delta * ENERGY_RISE)
+	_paint.set_shader_parameter("spin", _spin)
+	_paint.set_shader_parameter("phase", _time)
+	_paint.set_shader_parameter("energy", _energy)
+	_paint.set_shader_parameter("burst", _flash / TELEPORT_FLASH)
