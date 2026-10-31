@@ -121,6 +121,8 @@ var _idle_pose := 0
 ## Course du pied sur un cycle, en part de la hauteur — mesurée sur la planche
 ## par `tools/build_enemies.py`. Zéro pour les planches qui ne la portent pas.
 var _foot_travel := 0.0
+## Hauteur du corps dans la case, mesurée sur la planche.
+var _body_height := 0.0
 var _base_speed := 0.0
 var _soak_left := 0.0
 var _soak_factor := SOAK_FACTOR
@@ -141,6 +143,10 @@ func setup_enemy(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size
 	# du mage (53 px) — une créature deux fois plus haute masquerait le couloir
 	# devant elle, et le joueur ne verrait plus où il court.
 	target_height = float(_tuning["height"])
+	# Le CORPS garde sa taille à l'écran. Une case recalée change de remplissage, et
+	# `height` donne la hauteur de la CASE : seule, elle ferait changer la créature.
+	if _body_height > 0.0 and _tuning.has("body"):
+		target_height = float(_tuning["body"]) * _cell.y / _body_height
 	# Les planches sont calées sur les pieds — sur l'anneau de lumière pour le
 	# spectre, qui lévite : l'ombre de contact se pose donc à l'origine du nœud.
 	shadow_offset = 0.02
@@ -373,6 +379,7 @@ func _load_sheet(sheet_id: String) -> void:
 	_feet_y = float(data["feet_y"])
 	_poses = data["poses"]
 	_foot_travel = float(data.get("foot_travel", 0.0))
+	_body_height = float(data.get("body_height", 0.0))
 	_index_poses()
 
 	_textures.clear()
@@ -515,7 +522,7 @@ func _animate(delta: float) -> void:
 		# ne portent pas la mesure.
 		var stride := float(_tuning.get("stride", 0.0))
 		if _foot_travel > 0.0:
-			stride = 2.0 * _foot_travel * target_height / float(tile_size)
+			stride = 2.0 * _foot_travel * float(_tuning["height"]) / float(tile_size)
 		if stride > 0.0 and not _walk_poses.is_empty():
 			var cadence := mover.speed * float(_walk_poses.size()) / stride
 			# ⚠️ PLAFONNÉE, et il faut dire pourquoi plutôt que de le cacher.

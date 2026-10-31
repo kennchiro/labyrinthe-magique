@@ -99,6 +99,20 @@ HERD = {
     "golem_givre": {"id": "givre", "name": "Golem de Givre"},
     "gobelin": {"id": "goblin", "name": "Gobelin"},
 }
+## Recalés comme les mages : le générateur ne pose pas leurs rangées à la même hauteur,
+## et dessine leur attaque jusqu'à 30 % plus petite. Le jeu garde leur taille grâce à
+## `body_height` et à `body` dans le bestiaire.
+##
+## Sauf deux, dont la dernière image d'attaque n'a pas la forme de leur marche : le
+## Dragonnet a les ailes repliées, le Serpent reste enroulé. Mesurer leur attaque sur
+## leur marche les ferait enfler pour rien.
+for _entry in HERD.values():
+    _entry["align_rows"] = True
+HERD["dragonnet"]["same_scale"] = False
+HERD["serpent"]["same_scale"] = False
+## La planche du Golem de Givre oublie la créature à la 7e image de profil : il n'y a que
+## ses cristaux. L'image précédente est tenue, sinon il disparaît au milieu de son coup.
+HERD["golem_givre"]["held_strike"] = {"right": {7: 6}}
 
 
 ## Les mages ANIMÉS passent par le même découpage : même gabarit, mêmes contrôles.
@@ -806,7 +820,7 @@ def without_edge_crumbs(cell: Image.Image) -> Image.Image:
     return Image.fromarray(data, "RGBA")
 
 
-def steadied(walk_line: list, strike_line: list) -> tuple:
+def steadied(walk_line: list, strike_line: list, is_mage: bool, same_scale: bool) -> tuple:
     """La rangée dont le corps ne bouge plus, de la marche à la fin de l'attaque.
 
     Le prompt l'exige et le générateur ne le tient pas : mesuré sur les huit mages,
@@ -821,7 +835,10 @@ def steadied(walk_line: list, strike_line: list) -> tuple:
         return out
 
     walk_line = [padded(cell) for cell in walk_line]
-    strike_line = [padded(without_edge_crumbs(cell)) for cell in strike_line]
+    # ⚠️ Les miettes ne s'effacent que sur les mages : la flèche de l'Archer et la boule
+    # du Golem sont, elles aussi, de petites formes isolées au bord de la case.
+    strike_line = [padded(without_edge_crumbs(cell) if is_mage else cell)
+                   for cell in strike_line]
     first = bounds(walk_line[0])
     band = (first[1], first[1] + int((first[3] - first[1]) * STEADY_BAND))
     reference = np.asarray(walk_line[0])[band[0]:band[1], :, 3] > 24
@@ -831,7 +848,7 @@ def steadied(walk_line: list, strike_line: list) -> tuple:
     feet = float(np.median([bounds(cell)[3] for cell in walk_line]))
     neutral = bounds(strike_line[-1])
     scale = float(np.clip(np.median(heights) / max(1, neutral[3] - neutral[1]),
-                          1.0, STEADY_MAX_SCALE))
+                          1.0, STEADY_MAX_SCALE)) if same_scale else 1.0
     # L'agrandissement se fait autour des pieds, qui descendent ensuite à leur ligne.
     centre_x, floor = (neutral[0] + neutral[2]) / 2.0, float(neutral[3])
     grown = [cell.transform(cell.size, Image.AFFINE,
@@ -862,12 +879,18 @@ def build(source_name: str, entry: dict) -> str:
 
     walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False))
     strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False))
+    is_mage = source_folder == MAGES_SOURCE
+    for row, frames in entry.get("held_strike", {}).items():
+        for frame, held in frames.items():
+            strike[row][frame - 1] = strike[row][held - 1]
     # La foulée se juge sur la case d'origine : `steadied` l'élargit.
     original_profile = walk["right"]
     if entry.get("align_rows"):
         for row in ROWS:
-            walk[row], strike[row] = steadied(walk[row], strike[row])
-            walk[row] = [walk[row][number - 1] for number in SMALL_STEP_FRAMES]
+            walk[row], strike[row] = steadied(walk[row], strike[row], is_mage,
+                                              entry.get("same_scale", True))
+            if is_mage:
+                walk[row] = [walk[row][number - 1] for number in SMALL_STEP_FRAMES]
 
     # On DÉCOUPE QUAND MÊME après cette plainte : elle porte sur le dessin, pas
     # sur le format, donc les bandes produites restent regardables. Mais elle

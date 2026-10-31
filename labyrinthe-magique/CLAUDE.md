@@ -832,13 +832,13 @@ l'Air.
 
 - ⚠️ **Le générateur ne pose pas ses rangées à la même hauteur** : pieds à 108 de face et
   93 de profil sur le Feu, et le mage flotte au-dessus de son ombre. `align_rows` de
-  `build_enemies.py` recale chaque rangée sur sa marche. Seuls les mages l'ont : les
-  ennemis ont le même défaut (jusqu'à 15 px à l'écran), mais l'activer change leur case
-  et donc leur taille. Un mage animé porte `body_height`, et `Player` en déduit sa taille.
+  `build_enemies.py` recale chaque rangée sur sa marche, pour les mages et les ennemis.
+  La case change alors de remplissage : `frames.json` porte `body_height`, et `Player`
+  et `Enemy` (`Bestiary.body`) en déduisent une taille à l'écran qui ne bouge pas.
 - ⚠️ **Le générateur ne tient pas la consigne « même corps » entre deux planches** :
   mesuré sur les mages, le corps dérive jusqu'à 32 px en marche, et l'attaque est 18 %
-  plus petite. `steadied` les recale (dernière image d'attaque contre la marche), et
-  `check_animated` le vérifie. Les huit mages passent par `build_enemies.py`, plus par
+  plus petite (30 % sur l'Ombre). `steadied` les recale (dernière image d'attaque
+  contre la marche), et `check_animated` le vérifie sur les mages. Les huit mages passent par `build_enemies.py`, plus par
   `build_characters.py`, qui ne reste que la mesure de largeur et les anciennes planches.
 - ⚠️ **LE JOUEUR VEUT DES PAS MOYENS, dans toutes les directions.** Des enjambées d'une
   demi-hauteur ont été rejetées en jeu (« catastrophe »), et les deux pieds collés aussi
