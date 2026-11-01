@@ -12,11 +12,9 @@ un portail s'ouvre, l'énergie jaillit du toit, puis la créature sort. Le joueu
 voit donc le danger venir AVANT qu'il n'arrive — c'est tout l'intérêt de
 remplacer une apparition au hasard par une maison.
 
-Le fond est blanc uni : on le détoure par remplissage depuis les bords, comme
-pour les premières planches de mages. Les colonnes se mesurent toutes seules
-(les maisons ne se touchent pas) ; les rangées se mesurent DANS une colonne
-étroite, parce que les grandes vignettes de gauche débordent d'une rangée sur
-l'autre et brouillent le profil global.
+La grille est RÉGULIÈRE, commandée par `docs/prompts/decor/repaire_ennemi.md` : on
+ne détecte rien. Le fond magenta part par remplissage depuis les bords de la case,
+car la rangée violette vit trop près de lui pour une clé de teinte.
 """
 
 from pathlib import Path
@@ -25,56 +23,67 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-SOURCE = Path("assets/peso&cover/decor/portail_enemi.png")
+SOURCE = Path("assets/peso&cover/decor/repaire_ennemi.png")
 OUT = Path("assets/lairs")
 
 COLORS = ["rouge", "violet", "vert", "cyan"]
 POSES = ["ferme", "lueur", "portail", "ouvert", "plein", "eruption"]
 
-## Colonnes d'animation, relevées automatiquement puis figées : la première
-## vignette de chaque rangée est un PORTRAIT géant qu'on ne veut pas, et la
-## dernière traîne les créatures déjà sorties, qu'on recadre.
-COLUMN_STARTS = [347, 521, 701, 880, 1066, 1254]
-CELL_WIDTH = 168
-## Hauteur des rangées, débordement des faisceaux d'énergie compris.
-ROW_TOPS = [60, 282, 514, 762]
-CELL_HEIGHT = 212
-
-## Hauteur finale d'une case. Le repaire occupe ~2,5 cases de 32 px.
-FRAME_HEIGHT = 132
+SOURCE_CELL = (256, 320)
+## Moitié de la case source : assez pour rester net, sur un écran Retina compris.
+FRAME = (128, 160)
+BACKGROUND = np.array([255.0, 0.0, 255.0])
+## Distance au fond, sur le pire canal : sous `FLOOD` le fond coule depuis le bord, et
+## entre les deux seuils un pixel de contour est un mélange qu'on sépare du fond.
+FLOOD = 70.0
+OPAQUE = 150.0
+RIM_PX = 3
 
 
-def cutout(image: Image.Image) -> Image.Image:
-    """Détourage du fond blanc, par remplissage depuis les bords.
+def cutout(cell: Image.Image) -> np.ndarray:
+    """La case détourée, en alpha PRÉMULTIPLIÉ : le magenta ne bavera pas à la réduction."""
+    rgb = np.asarray(cell.convert("RGB")).astype(float)
+    distance = np.abs(rgb - BACKGROUND).max(axis=2)
+    parts, _ = ndimage.label(distance < FLOOD)
+    edges = np.unique(np.concatenate([parts[0], parts[-1], parts[:, 0], parts[:, -1]]))
+    outside = np.isin(parts, edges[edges > 0])
 
-    Un simple seuil suffirait presque, mais il mangerait les crânes clairs et
-    les bougies des façades. En partant des bords, on ne retire que ce qui est
-    RELIÉ au fond."""
-    rgb = np.array(image.convert("RGB")).astype(int)
-    low, high = rgb.min(axis=2), rgb.max(axis=2)
-    background = (low > 232) & ((high - low) < 14)
-    labels, _ = ndimage.label(background)
-    edges = set(labels[0]) | set(labels[-1]) | set(labels[:, 0]) | set(labels[:, -1])
-    edges.discard(0)
-    alpha = np.where(np.isin(labels, list(edges)), 0, 255).astype(np.uint8)
-    return Image.fromarray(np.dstack([rgb, alpha]).astype(np.uint8), "RGBA")
+    alpha = np.ones(distance.shape)
+    alpha[outside] = 0.0
+    rim = ndimage.binary_dilation(outside, iterations=RIM_PX) & ~outside
+    alpha[rim] = np.clip(distance[rim] / OPAQUE, 0.0, 1.0)
+
+    # Un pixel de bord vaut `a * dessin + (1 - a) * fond` : on en retire le fond.
+    clean = rgb - (1.0 - alpha[..., None]) * BACKGROUND
+    return np.dstack([np.clip(clean, 0.0, 255.0), alpha * 255.0])
+
+
+def reduced(premultiplied: np.ndarray, size: tuple) -> np.ndarray:
+    channels = [Image.fromarray(premultiplied[..., i].astype(np.float32), "F").resize(size, Image.LANCZOS)
+                for i in range(4)]
+    return np.clip(np.dstack([np.asarray(channel) for channel in channels]), 0.0, 255.0)
+
+
+def straight(premultiplied: np.ndarray) -> Image.Image:
+    alpha = premultiplied[..., 3:4] / 255.0
+    rgb = np.where(alpha > 0.0, premultiplied[..., :3] / np.maximum(alpha, 1e-4), 0.0)
+    return Image.fromarray(np.dstack([np.clip(rgb, 0.0, 255.0), premultiplied[..., 3]]).astype(np.uint8), "RGBA")
 
 
 def build() -> dict:
-    sheet = cutout(Image.open(SOURCE))
+    sheet = Image.open(SOURCE)
     OUT.mkdir(parents=True, exist_ok=True)
-    width = int(round(CELL_WIDTH * FRAME_HEIGHT / CELL_HEIGHT))
-
+    feet = 0
     for row, color in enumerate(COLORS):
-        strip = Image.new("RGBA", (CELL_WIDTH * len(POSES), CELL_HEIGHT), (0, 0, 0, 0))
-        for column, x in enumerate(COLUMN_STARTS):
-            y = ROW_TOPS[row]
-            cell = sheet.crop((x, y, x + CELL_WIDTH, y + CELL_HEIGHT))
-            strip.alpha_composite(cell, (column * CELL_WIDTH, 0))
-        strip = strip.resize((width * len(POSES), FRAME_HEIGHT), Image.LANCZOS)
+        strip = Image.new("RGBA", (FRAME[0] * len(POSES), FRAME[1]), (0, 0, 0, 0))
+        for column in range(len(POSES)):
+            box = (column * SOURCE_CELL[0], row * SOURCE_CELL[1],
+                   (column + 1) * SOURCE_CELL[0], (row + 1) * SOURCE_CELL[1])
+            frame = straight(reduced(cutout(sheet.crop(box)), FRAME))
+            feet = max(feet, frame.getbbox()[3])
+            strip.paste(frame, (column * FRAME[0], 0))
         strip.save(OUT / f"{color}.png")
-
-    meta = {"cell": [width, FRAME_HEIGHT], "colors": COLORS, "poses": POSES}
+    meta = {"cell": list(FRAME), "feet_y": feet, "colors": COLORS, "poses": POSES}
     (OUT / "frames.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return meta
 
@@ -84,8 +93,8 @@ def main() -> None:
         print(f"  ! {SOURCE} introuvable")
         return
     meta = build()
-    print("repaires : %d couleurs x %d poses, case %dx%d" % (
-        len(meta["colors"]), len(meta["poses"]), meta["cell"][0], meta["cell"][1]))
+    print("repaires : %d couleurs x %d poses, case %dx%d, pieds à %d" % (
+        len(meta["colors"]), len(meta["poses"]), meta["cell"][0], meta["cell"][1], meta["feet_y"]))
 
 
 if __name__ == "__main__":

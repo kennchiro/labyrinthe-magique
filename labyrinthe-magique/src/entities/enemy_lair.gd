@@ -18,7 +18,16 @@ signal destroyed
 
 const LAIRS_PATH := "res://assets/lairs/"
 const FRAMES_PATH := LAIRS_PATH + "frames.json"
-const TARGET_HEIGHT_TILES := 2.6
+## Hauteur de la CASE, en cases du labyrinthe : la marge de la planche y compte, et le
+## bâtiment lui-même en fait 2.
+const TARGET_HEIGHT_TILES := 2.85
+## Le socle tombe un peu sous le centre de sa case, et la toiture déborde derrière.
+const FEET_BELOW_CENTER_TILES := 0.4
+## La couleur du halo au sol, celle de la magie de chaque repaire.
+const GLOWS := {
+	"rouge": Color(1.0, 0.35, 0.3), "violet": Color(0.6, 0.42, 1.0),
+	"vert": Color(0.45, 1.0, 0.3), "cyan": Color(0.3, 0.88, 0.95),
+}
 ## Durée de l'avertissement, du premier frémissement à la sortie. Fixée par le
 ## `LevelConfig` : c'est un réglage de difficulté, et la simulation
 ## d'équilibrage doit appliquer exactement la même.
@@ -38,7 +47,9 @@ const SPAWNING := 5
 var cell: Vector2i = Vector2i.ZERO
 var tile_size: int = 32
 
-var _cell_size := Vector2(105.0, 132.0)
+var _cell_size := Vector2(128.0, 160.0)
+var _feet_y := 142.0
+var _glow: Color = GLOWS["rouge"]
 var _opening := 0.0
 var _holding := 0.0
 var _flash := 0.0
@@ -63,14 +74,17 @@ func setup(p_cell: Vector2i, p_tile_size: int, index: int, p_health: int = 0,
 		health.died.connect(_on_died)
 	tile_size = p_tile_size
 	var colors := _load_meta()
-	sprite.texture = load(LAIRS_PATH + str(colors[index % colors.size()]) + ".png")
+	var color := str(colors[index % colors.size()])
+	_glow = GLOWS.get(color, _glow)
+	sprite.texture = load(LAIRS_PATH + color + ".png")
 	sprite.hframes = _poses
 	sprite.frame = CLOSED
 	var factor := (tile_size * TARGET_HEIGHT_TILES) / _cell_size.y
 	sprite.scale = Vector2(factor, factor)
 	# La maison est posée SUR sa case : son socle tombe au centre, sa toiture
 	# déborde sur les haies derrière — comme la maison du mage.
-	sprite.offset = Vector2(0.0, -_cell_size.y * 0.34)
+	sprite.offset = Vector2(0.0, _cell_size.y * 0.5 - _feet_y
+		+ FEET_BELOW_CENTER_TILES * tile_size / factor)
 
 
 func _load_meta() -> Array:
@@ -81,6 +95,7 @@ func _load_meta() -> Array:
 	var data: Dictionary = parsed
 	var size: Array = data["cell"]
 	_cell_size = Vector2(float(size[0]), float(size[1]))
+	_feet_y = float(data["feet_y"])
 	_poses = (data["poses"] as Array).size()
 	return data["colors"]
 
@@ -160,7 +175,7 @@ func _draw() -> void:
 	var pulse := 0.5 + 0.5 * sin(_time * (6.0 if is_opening() else 1.7))
 	var strength := 0.16 + (0.34 if is_opening() else 0.0)
 	draw_circle(Vector2(0.0, tile_size * 0.12), tile_size * (0.85 + 0.15 * pulse),
-		Color(1.0, 0.35, 0.30, strength * (0.5 + 0.5 * pulse)))
+		Color(_glow.r, _glow.g, _glow.b, strength * (0.5 + 0.5 * pulse)))
 
 
 ## Barre de vie, dessinée comme celle des ennemis : le joueur doit voir que ses
