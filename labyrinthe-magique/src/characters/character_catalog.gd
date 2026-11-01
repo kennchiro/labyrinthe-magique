@@ -42,10 +42,27 @@ const CHRONO := "chrono"
 const PESTE := "peste"
 const LUMIERE := "lumiere"
 
+const CATEGORY_MAGE := "mage"
+const CATEGORY_ANGE := "ange"
+## Les onglets de l'écran de sélection, dans l'ordre. Une famille de plus ne demande
+## qu'une ligne ici et le champ `category` de ses personnages.
+const CATEGORIES := {
+	CATEGORY_MAGE: {"tab": "Mage", "accent": Color("#9fc4ff")},
+	CATEGORY_ANGE: {"tab": "Ange", "accent": Color("#ffd479")},
+}
+
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
 		peste(), lumiere()]
+
+
+static func in_category(category: String) -> Array[CharacterStats]:
+	var out: Array[CharacterStats] = []
+	for character in all():
+		if character.category == category:
+			out.append(character)
+	return out
 
 
 static func by_id(id: String) -> CharacterStats:
@@ -870,6 +887,7 @@ static func lumiere() -> CharacterStats:
 	var c := CharacterStats.new()
 	c.id = LUMIERE
 	c.display_name = "Porte-Lumière"
+	c.category = CATEGORY_ANGE
 	c.element = Element.Kind.LIGHT
 	c.description = "Sa lumière aveugle : les ennemis perdent sa trace. Bons dégâts en ligne droite, s'il se place bien."
 	c.power_level = 4

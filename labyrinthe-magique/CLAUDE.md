@@ -361,7 +361,7 @@ du `setup()` — à hauteur fixe, il tombait au milieu de l'île.
 
 ## Les ennemis
 
-**Onze créatures**, toutes au format des mages, dans `assets/enemies/<id>/`.
+**Douze créatures**, toutes au format des mages, dans `assets/enemies/<id>/`.
 `src/entities/bestiary.gd` dit ce qu'elles valent ; le stage N ajoute UNE espèce
 et garde toutes les précédentes. Les statistiques sont des RAPPORTS au spectre,
 qui reste l'unité de mesure de tout l'équilibrage.
@@ -401,6 +401,14 @@ a fallu son mode de découpe :
   retournée en jeu : la planche reste la seule source, le moteur lit un dossier
   sans deviner quelle direction miroiter. Le haut et la droite n'ont pas de bande
   et retombent sur `down` — dupliquer un fichier identique n'apprend rien.
+
+Le **Seigneur Démon** est dessiné d'après le pack « Demon Overlord 2D Pixel Art »
+(Le3cH_z), qui n'a qu'un profil : ses quatre directions ont été générées à partir de
+cette référence, puis découpées par `build_enemies.py`.
+⚠️ Le dépôt est public et la licence interdit de redistribuer le pack, même modifié :
+ses planches (`creatures/seigneur_demon*`) sont ignorées par git, seules les bandes
+réduites du jeu sont suivies. Un clone neuf garde le jeu complet, mais ne peut pas
+les redécouper.
 
 ⚠️ L'animation procédurale à trois pièces d'`Actor` n'a donc **plus aucun
 utilisateur** : tous les personnages ont leur planche.
@@ -545,6 +553,16 @@ l'Air.
   quand le pad tactile ne l'est pas. Mêmes entrées, fabriquées une seule fois par
   l'UIManager. Les libellés de touche viennent de l'InputMap, pas du code.
   ⚠️ L'action de la frappe s'appelle `teleport` — nom d'origine, d'avant le combat.
+- **L'écran de sélection a un onglet par famille** (`CharacterCatalog.CATEGORIES`,
+  champ `category` de chaque personnage ; le Porte-Lumière est le seul Ange). Ce
+  classement ne touche que le menu, aucune règle de jeu ne le lit. `tests/test_select.gd`
+  vérifie que chaque personnage est bien dans un onglet.
+- **La barre du mage est un cadre peint, percé** (`src/ui/hud.gd`). Le jeu remplit
+  les jauges et le portrait par-dessous ; `tools/build_barre.py` découpe les planches
+  de `peso&cover/interface/barre/` et mesure les trous dans `assets/ui/barre/barre.json`.
+  Un cadre redessiné ne demande donc aucune constante. `tests/test_hud.gd` vérifie que
+  tout tient. ⚠️ `export_presets.cfg` n'est pas suivi par git : l'exclusion de
+  `interface/barre/` est à reporter sur une autre machine.
 - **La progression ne s'écrit QUE depuis une sauvegarde chargée.**
   `Progress.persistent` est faux par défaut ; seule `load_saved()` le met à vrai.
   Le défaut inverse a coûté la sauvegarde d'un joueur : un test appelait

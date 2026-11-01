@@ -60,19 +60,19 @@ func _test_roster_slider() -> void:
 	root.add_child(select)
 	select.size = Vector2(844.0, 390.0)
 	select._layout()
-	if select._shown >= select._portraits.size():
-		_fail("sélection : à 844 de large, les onze cartes ne devraient pas tenir")
+	if select._shown >= select._listed.size():
+		_fail("sélection : à 844 de large, les cartes de l'onglet ne devraient pas tenir")
 	if not select._arrow_left.disabled or select._arrow_right.disabled:
 		_fail("sélection : au début, seul le bouton de droite doit être actif")
 	var presses := 0
 	while not select._arrow_right.disabled and presses < 20:
 		select._on_arrow(1)
 		presses += 1
-	if select._first_shown + select._shown != select._portraits.size():
+	if select._first_shown + select._shown != select._listed.size():
 		_fail("sélection : le bouton n'atteint pas le dernier mage")
 	select._show_from(0, false)
-	select.select(CharacterCatalog.LUMIERE)
-	var last := select._portraits.size() - 1
+	select.select(CharacterCatalog.PESTE)
+	var last := select._listed.size() - 1
 	if select._first_shown + select._shown <= last:
 		_fail("sélection : le mage choisi reste caché")
 	select.size = Vector2(4000.0, 900.0)
@@ -86,7 +86,7 @@ func _test_roster_slider() -> void:
 ## Tout nom de sort tient en entier dans sa case, à côté de son icône.
 func _test_spell_names_fit() -> void:
 	var font := ThemeDB.fallback_font
-	var room := ActionBar.TILE.x - (ActionBar.TILE.y - 8.0 + 6.0) - ActionBar.NAME_MARGIN
+	var room := ActionBar.name_room()
 	for character in CharacterCatalog.all():
 		for ability: Ability in [character.attack] + character.abilities:
 			var fit := ActionBar.fit_name(font, ability.display_name, room)
@@ -411,7 +411,7 @@ func _test_impact_pose(grid: MazeGrid) -> void:
 		if enemy.sprite.frame != wanted:
 			_fail("%s : image %d à l'impact, %d attendue" % [species, enemy.sprite.frame, wanted])
 		enemy.free()
-	print("coup : l'image d'impact coïncide avec les dégâts, pour les onze")
+	print("coup : l'image d'impact coïncide avec les dégâts, pour les douze")
 
 
 func _key(direction: Vector2i) -> String:

@@ -1,7 +1,8 @@
 class_name CharacterSelect
 extends Control
 
-## Écran de sélection des mages.
+## Écran de sélection des personnages, rangés par famille : un onglet Mage, un onglet
+## Ange (`CharacterCatalog.CATEGORIES`).
 ##
 ## Une rangée de vignettes en haut, la FICHE COMPLÈTE du personnage choisi en
 ## dessous. Cinq fiches côte à côte tiendraient sur un écran de bureau et sur
@@ -20,6 +21,8 @@ const ARROW_GAP := 8.0
 ## Le liseré de la carte choisie dépasse de sa case : la fenêtre lui laisse cette marge.
 const ROSTER_PAD := 8.0
 const SLIDE_TIME := 0.2
+const TAB_WIDTH := 92.0
+const TAB_GAP := 6.0
 
 signal play_requested(character_id: String)
 ## Le terrain d'essai : mêmes sorts, rien d'enjeu. C'est ici qu'un joueur
@@ -50,6 +53,13 @@ var _trait_label: Label = null
 var character_id := CharacterCatalog.default_id()
 
 var _portraits: Array[CharacterPortrait] = []
+## Les cartes de l'onglet ouvert, les seules que la rangée fait défiler.
+var _listed: Array[CharacterPortrait] = []
+var _category := ""
+var _tabs := {}
+## Le dernier personnage choisi dans chaque onglet : revenir sur un onglet ne doit pas
+## faire perdre le choix qu'on y avait fait.
+var _chosen_in := {}
 var _selected_preview: CharacterPortrait
 ## La fenêtre qui coupe la rangée, ses deux boutons, et où en est le défilement.
 var _roster_window: Control = null
@@ -71,6 +81,8 @@ func _ready() -> void:
 		portrait.setup(character)
 		portrait.gui_input.connect(_on_portrait_input.bind(character.id))
 		_portraits.append(portrait)
+	_build_tabs()
+	_open_category(CharacterCatalog.by_id(character_id).category)
 
 	# La fiche laisse voir le décor derrière elle. Opaque, elle posait une dalle
 	# grise sur les deux tiers de l'écran et le fond peint ne servait plus à rien.
@@ -101,6 +113,47 @@ func _ready() -> void:
 	resized.connect(_layout)
 	_layout()
 	select(character_id)
+
+
+func _build_tabs() -> void:
+	var group := ButtonGroup.new()
+	for category: String in CharacterCatalog.CATEGORIES:
+		var info: Dictionary = CharacterCatalog.CATEGORIES[category]
+		var tab := Button.new()
+		tab.text = str(info["tab"])
+		tab.toggle_mode = true
+		tab.button_group = group
+		# Le cadre du focus est sombre : dessiné par-dessus, il effacerait l'onglet ouvert.
+		tab.focus_mode = Control.FOCUS_NONE
+		MenuStyle.apply(tab, info["accent"], 16)
+		for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+			var box: StyleBoxFlat = tab.get_theme_stylebox(state)
+			box.content_margin_top = 2.0
+			box.content_margin_bottom = 2.0
+		tab.pressed.connect(_on_tab.bind(category))
+		add_child(tab)
+		_tabs[category] = tab
+
+
+func _on_tab(category: String) -> void:
+	if category == _category:
+		return
+	_open_category(category)
+	var first: CharacterStats = CharacterCatalog.in_category(category)[0]
+	select(str(_chosen_in.get(category, first.id)))
+
+
+## Ne range que la rangée et l'onglet : c'est `select` qui remplit la fiche.
+func _open_category(category: String) -> void:
+	_category = category
+	_listed.clear()
+	for portrait in _portraits:
+		portrait.visible = portrait.stats.category == category
+		if portrait.visible:
+			_listed.append(portrait)
+	_first_shown = 0
+	for key: String in _tabs:
+		(_tabs[key] as Button).set_pressed_no_signal(key == category)
 
 
 func _build_roster_slider() -> void:
@@ -134,9 +187,9 @@ func _on_arrow(way: int) -> void:
 
 
 func _show_from(first: int, animated: bool = true) -> void:
-	_first_shown = clampi(first, 0, maxi(0, _portraits.size() - _shown))
+	_first_shown = clampi(first, 0, maxi(0, _listed.size() - _shown))
 	_arrow_left.disabled = _first_shown == 0
-	_arrow_right.disabled = _first_shown + _shown >= _portraits.size()
+	_arrow_right.disabled = _first_shown + _shown >= _listed.size()
 	var target := Vector2(ROSTER_PAD - float(_first_shown) * _card_step, ROSTER_PAD)
 	if _slide != null:
 		_slide.kill()
@@ -150,8 +203,8 @@ func _show_from(first: int, animated: bool = true) -> void:
 
 ## La carte choisie n'est jamais cachée, d'où que vienne la sélection.
 func _reveal(id: String) -> void:
-	for index in _portraits.size():
-		if _portraits[index].stats.id != id:
+	for index in _listed.size():
+		if _listed[index].stats.id != id:
 			continue
 		if index < _first_shown:
 			_show_from(index)
@@ -180,6 +233,9 @@ var card_room := 0.0
 func select(id: String) -> void:
 	character_id = id
 	var stats := CharacterCatalog.by_id(id)
+	if stats.category != _category:
+		_open_category(stats.category)
+	_chosen_in[stats.category] = id
 	_selected_preview.setup(stats)
 	_selected_preview.set_selected(true)
 	for portrait in _portraits:
@@ -245,10 +301,24 @@ func _layout() -> void:
 	var buttons: HBoxContainer = $Buttons
 
 	var margin := 14.0
-	var heading_height := 34.0
+	var heading_height := 40.0
 	var button_height := 54.0
-	heading.position = Vector2(margin, margin * 0.6)
-	heading.size = Vector2(size.x - margin * 2.0, heading_height)
+	var tab_x := margin
+	for key: String in _tabs:
+		var tab: Button = _tabs[key]
+		tab.position = Vector2(tab_x, margin * 0.6)
+		tab.size = Vector2(TAB_WIDTH, heading_height)
+		tab_x += TAB_WIDTH + TAB_GAP
+	# Le titre reste centré sur l'écran tant qu'il passe à côté des onglets.
+	var font := heading.get_theme_font("font")
+	var font_size := heading.get_theme_font_size("font_size")
+	var title_width := font.get_string_size(heading.text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
+	var inset := tab_x + margin
+	var title_room := size.x - inset * 2.0
+	if title_room < title_width:
+		title_room = maxf(0.0, size.x - inset - margin)
+	heading.position = Vector2(inset, margin * 0.6)
+	heading.size = Vector2(title_room, heading_height)
 
 	var free_height := size.y - heading_height - button_height - margin * 4.0
 	# La rangée prend un bon tiers, la fiche le reste : plus bas les vignettes
@@ -262,7 +332,7 @@ func _layout() -> void:
 		portrait.custom_minimum_size = Vector2(width, roster_height)
 		portrait.size = portrait.custom_minimum_size
 	var gap := float(roster.get_theme_constant("separation"))
-	var count := _portraits.size()
+	var count := _listed.size()
 	_card_step = width + gap
 	roster.size = Vector2(float(count) * _card_step - gap, roster_height)
 	roster.queue_sort()

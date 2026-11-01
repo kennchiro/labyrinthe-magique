@@ -8,6 +8,8 @@ extends Resource
 @export var id: String = ""
 @export var display_name: String = ""
 @export var element: Element.Kind = Element.Kind.SHADOW
+## L'onglet de l'écran de sélection où il apparaît. Voir `CharacterCatalog.CATEGORIES`.
+@export var category: String = "mage"
 @export var description: String = ""
 ## 1 à 5, affiché en étoiles dans l'écran de sélection. Purement indicatif.
 @export var power_level: int = 3
