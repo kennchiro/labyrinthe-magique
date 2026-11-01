@@ -39,6 +39,12 @@ const SHADERS := {
 	"chrono_rewind": preload("res://assets/shaders/chrono_rewind.gdshader"),
 	"chrono_sand": preload("res://assets/shaders/chrono_sand.gdshader"),
 	"chrono_stop": preload("res://assets/shaders/chrono_stop.gdshader"),
+	"peste_splash": preload("res://assets/shaders/peste_splash.gdshader"),
+	"peste_mist": preload("res://assets/shaders/peste_mist.gdshader"),
+	"peste_puddle": preload("res://assets/shaders/peste_puddle.gdshader"),
+	"peste_heal": preload("res://assets/shaders/peste_heal.gdshader"),
+	"peste_wave": preload("res://assets/shaders/peste_wave.gdshader"),
+	"peste_dissolve": preload("res://assets/shaders/peste_dissolve.gdshader"),
 }
 
 ## L'éclat au toucher, et la fuite, de chaque mage.
@@ -46,11 +52,12 @@ const IMPACT := {
 	"fire": "fire_burst", "shadow": "shadow_collapse", "invocateur": "arcane_sigil",
 	"water": "water_splash", "thunder": "thunder_star", "air": "air_slash",
 	"earth": "earth_crack", "supreme": "prism_star", "chrono": "chrono_tick",
+	"peste": "peste_splash",
 }
 const ESCAPE := {
 	"invocateur": "arcane_sigil", "water": "water_swirl", "thunder": "thunder_strike",
 	"air": "air_streaks", "earth": "earth_fissure", "supreme": "prism_shift",
-	"chrono": "chrono_rewind",
+	"chrono": "chrono_rewind", "peste": "peste_mist",
 }
 ## La couleur de la flamme de chaque sceau du Suprême. Tout autre élément prend l'air.
 const SEAL_KINDS := {
@@ -64,6 +71,7 @@ const EXTRAS := {
 	"earth": ["earth_quake"],
 	"supreme": ["rebirth_aura", "seal_flame", "convergence_burst", "judgement_burst"],
 	"chrono": ["chrono_sand", "chrono_stop"],
+	"peste": ["peste_puddle", "peste_heal", "peste_wave", "peste_dissolve"],
 }
 
 

@@ -16,6 +16,7 @@ const PAINTED_STYLES := {
 	"cercle_peint": preload("res://assets/shaders/arcane_circle.gdshader"),
 	"mare_peinte": preload("res://assets/shaders/water_pool.gdshader"),
 	"bulle_peinte": preload("res://assets/shaders/chrono_bubble.gdshader"),
+	"gaz_peint": preload("res://assets/shaders/peste_fog.gdshader"),
 }
 const PAINTED_FLAMES := 0.3
 

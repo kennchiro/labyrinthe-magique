@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "peste_dart",
+    "peste_trail",
+    "peste_contagion",
+    "peste_transfusion",
+    "peste_mist",
+    "peste_pandemic"
+  ],
+  "size": 256
+}

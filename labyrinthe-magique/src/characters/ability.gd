@@ -25,6 +25,10 @@ enum Kind {
 	ECHO,         ## un double REJOUE la marche récente du mage et blesse ce qu'il croise
 	HOURGLASS,    ## note les coups reçus pendant sa durée, et en rend une part à la fin
 	TIME_STOP,    ## tout se fige sauf le mage
+	TRAIL,        ## le mage laisse du poison sur les cases qu'il quitte
+	CONTAGION,    ## le poison d'une cible passe à ses voisins
+	TRANSFUSION,  ## rend de la vie selon le nombre d'ennemis empoisonnés
+	PANDEMIC,     ## toute la carte tombe malade
 }
 
 @export var id: String = ""
@@ -464,6 +468,19 @@ enum Kind {
 @export var time_factor: float = 1.0
 
 
+## --- Le Mage de la Peste : ses dégâts sont des DOSES, qui travaillent quand il a fui ---
+
+## Doses de venin que pose une zone, une fois par seconde et par créature.
+@export var venom_doses: int = 0
+## Secondes que durent les flaques de la Traînée (forme TRAIL).
+@export var trail_life: float = 0.0
+## Ennemis empoisonnés qu'il faut pour un point de vie (forme TRANSFUSION).
+@export var transfuse_per: int = 2
+## Le nuage toxique que le sort laisse : sa durée et son rayon. Zéro = aucun.
+@export var cloud_duration: float = 0.0
+@export var cloud_radius: float = 1.4
+
+
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
 ## Un _init à douze paramètres positionnels serait illisible au point d'être
 ## dangereux — une valeur décalée d'un cran passerait inaperçue.
@@ -575,6 +592,14 @@ func _base_summary() -> String:
 				int(hourglass_ratio * 100.0), _number(duration)]
 		Kind.TIME_STOP:
 			return "tout se fige %s s" % _number(duration)
+		Kind.TRAIL:
+			return "flaques %s s · pendant %s s" % [_number(trail_life), _number(duration)]
+		Kind.CONTAGION:
+			return "passe le poison à %d cases · portée %d" % [chain_range, range]
+		Kind.TRANSFUSION:
+			return "1 PV par %d ennemis empoisonnés" % transfuse_per
+		Kind.PANDEMIC:
+			return "toute la carte empoisonnée %s s · ils éclatent" % _number(duration)
 		Kind.WAVE:
 			return "%d dégâts · déferle sur %d cases" % [damage, range]
 		Kind.CHAIN:

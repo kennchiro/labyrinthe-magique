@@ -430,6 +430,10 @@ func _on_ability_refused(reason: String) -> void:
 			ui.flash("Aucun ennemi à portée", Color("#7b8bb0"))
 		"place":
 			ui.flash("Pas de place pour ça ici", Color("#7b8bb0"))
+		"sain":
+			ui.flash("Aucun ennemi empoisonné à portée", Color("#7b8bb0"))
+		"pleine":
+			ui.flash("Déjà en pleine santé", Color("#7b8bb0"))
 		"immobile":
 			ui.flash("Aucune trace : marche d'abord", Color("#7b8bb0"))
 

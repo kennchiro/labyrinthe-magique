@@ -23,6 +23,11 @@ outil et à `MAGES_ANIMES` dans `build_characters.py`. **Les huit sont branchés
 
 La commande complète, dans l'ordre : [mages/chronomancien](prompts/mages/chronomancien.md).
 
+## Le Mage de la Peste — le dixième mage
+
+La commande complète, dans l'ordre, et le détail de chaque effet visuel :
+[mages/mage_peste](prompts/mages/mage_peste.md).
+
 ## Refonte des huit mages — uniformiser les tailles
 
 La case est commune à tous, mais chacun l'occupe comme il veut : de **60 %**
@@ -71,6 +76,7 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | le Cyclone du Mage de l'Air | [sorts/air_cyclone](prompts/sorts/air_cyclone.md) |
 | les icônes de sorts du Suprême | [sorts/icones_supreme](prompts/sorts/icones_supreme.md) |
 | les icônes de sorts du Chronomancien | [sorts/icones_chrono](prompts/sorts/icones_chrono.md) |
+| les icônes de sorts du Mage de la Peste | [sorts/icones_peste](prompts/sorts/icones_peste.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol

@@ -38,6 +38,7 @@ func _run() -> void:
 	_test_impact_pose(grid)
 	_test_painted_fire()
 	_test_spell_names_fit()
+	_test_roster_slider()
 
 	print("")
 	if _failures.is_empty():
@@ -51,6 +52,35 @@ func _run() -> void:
 
 func _fail(msg: String) -> void:
 	_failures.append(msg)
+
+
+## La rangée des mages défile : aucune carte n'est hors d'atteinte, sur téléphone comme ailleurs.
+func _test_roster_slider() -> void:
+	var select: CharacterSelect = load("res://scenes/menu/character_select.tscn").instantiate()
+	root.add_child(select)
+	select.size = Vector2(844.0, 390.0)
+	select._layout()
+	if select._shown >= select._portraits.size():
+		_fail("sélection : à 844 de large, les dix cartes ne devraient pas tenir")
+	if not select._arrow_left.disabled or select._arrow_right.disabled:
+		_fail("sélection : au début, seul le bouton de droite doit être actif")
+	var presses := 0
+	while not select._arrow_right.disabled and presses < 20:
+		select._on_arrow(1)
+		presses += 1
+	if select._first_shown + select._shown != select._portraits.size():
+		_fail("sélection : le bouton n'atteint pas le dernier mage")
+	select._show_from(0, false)
+	select.select(CharacterCatalog.PESTE)
+	var last := select._portraits.size() - 1
+	if select._first_shown + select._shown <= last:
+		_fail("sélection : le mage choisi reste caché")
+	select.size = Vector2(4000.0, 900.0)
+	select._layout()
+	if select._arrow_left.visible:
+		_fail("sélection : les boutons restent affichés alors que tout tient")
+	select.free()
+	print("sélection : la rangée défile et atteint tous les mages")
 
 
 ## Tout nom de sort tient en entier dans sa case, à côté de son icône.

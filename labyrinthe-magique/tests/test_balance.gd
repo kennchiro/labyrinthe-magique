@@ -100,7 +100,7 @@ func _init() -> void:
 
 	# Les quatre autres mages sur le même stage : ce qu'on cherche ici n'est pas
 	# l'égalité parfaite, c'est qu'aucun ne soit injouable.
-	print("── Viabilité des neuf mages (Stage 2, explorateur)")
+	print("── Viabilité des dix mages (Stage 2, explorateur)")
 	var stage := LevelConfig.for_stage(2)
 	for character in CharacterCatalog.all():
 		if character.id == reference.id:
@@ -486,7 +486,8 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 		var ability: Ability = character.abilities[slot - 1]
 		if not progress.skill_unlocked(slot) or not combat.can_use(ability):
 			continue
-		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS]:
+		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS,
+				Ability.Kind.TRANSFUSION]:
 			defensive.append(ability)
 		else:
 			offensive.append(ability)

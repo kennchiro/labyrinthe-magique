@@ -493,16 +493,17 @@ def main() -> None:
                 note = f"  ({len(warnings)} débordement(s) de lueur)"
             print(f"✅  {config['id']:8s} {len(DIRECTIONS)} directions x {len(POSES)} poses,"
                   f" toutes cadrées{note}")
-    # Le Chronomancien est né animé : il n'a jamais eu de planche dans `SHEETS`.
-    checked += 1
-    problems = check_animated("chrono")
-    if problems:
-        failures += 1
-        print("❌  chrono (planches animées)")
-        for problem in problems:
-            print(f"      {problem}")
-    else:
-        print("✅  chrono : marche et attaque calées")
+    # Ces mages sont nés animés : ils n'ont jamais eu de planche dans `SHEETS`.
+    for mage in ("chrono", "peste"):
+        checked += 1
+        problems = check_animated(mage)
+        if problems:
+            failures += 1
+            print(f"❌  {mage} (planches animées)")
+            for problem in problems:
+                print(f"      {problem}")
+        else:
+            print(f"✅  {mage} : marche et attaque calées")
     # LE CONTRÔLE QUI PORTE TOUTE LA REFONTE : les huit mages doivent occuper
     # leur case de la même façon. Chacun peut être irréprochable pris à part et
     # l'ensemble rester bancal — c'était exactement l'état d'avant.

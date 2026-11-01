@@ -142,7 +142,7 @@ SHEETS = {
 ## Les mages passés aux planches de 8 pas et 8 attaques : `build_enemies.py` écrit
 ## leurs bandes. Comme le gobelin, ils restent mesurés pour la largeur commune.
 MAGES_ANIMES = {"fire", "water", "earth", "thunder", "air", "shadow", "invocateur", "supreme",
-                "chrono"}
+                "chrono", "peste"}
 
 ## Une forme connexe plus petite que ça est une poussière du rendu, pas un sprite.
 MIN_SHAPE_PIXELS = 300

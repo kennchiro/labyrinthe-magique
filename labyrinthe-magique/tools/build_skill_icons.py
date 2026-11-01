@@ -110,6 +110,12 @@ SHEETS = {
         "chrono_hourglass", "chrono_rewind", "chrono_stop",
     # Le haut du sablier et du cadran dépasse au-dessus de la moitié de la planche.
     ], {"split_y": 490}),
+    # Relevé case par case : dard · botte et flaques · goutte et ses trois filets //
+    # cœur où les filets convergent · masque dans le gaz · fiole brisée. L'ordre demandé.
+    "mage_peste_skills.png": ("peste", [
+        "peste_dart", "peste_trail", "peste_contagion",
+        "peste_transfusion", "peste_mist", "peste_pandemic",
+    ]),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",

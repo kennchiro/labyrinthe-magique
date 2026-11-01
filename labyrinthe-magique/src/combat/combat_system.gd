@@ -130,6 +130,15 @@ signal echo_walked(ability: Ability, cells: Array, times: Array)
 signal hourglass_turned(duration: float)
 signal hourglass_ended(healed: int)
 signal time_stopped(duration: float)
+## Le venin d'une créature a changé. Zéro dose : elle est guérie.
+signal enemy_venomed(index: int, doses: int, duration: float)
+signal trail_started(duration: float)
+signal puddle_laid(cell: Vector2i, life: float)
+signal puddle_stepped(cell: Vector2i)
+signal contagion_spread(from: Vector2i, to: Vector2i)
+signal transfused(cells: Array, healed: int)
+signal pandemic_cast(cell: Vector2i)
+signal venom_killed(cell: Vector2i)
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -247,6 +256,12 @@ const RETARD_DURATION := 1.4
 const RETARD_FACTOR := 0.6
 ## La trace gardée, en secondes : assez pour le plus long sort qui la relit.
 const TRAIL_KEEP := 8.0
+## Le venin : des doses qui s'additionnent et prélèvent ensemble, une fois par seconde.
+## Mesuré aux bots, comme le reste : voir la note du catalogue.
+const VENOM_MAX := 3
+const VENOM_DAMAGE := 7
+const VENOM_DURATION := 5.0
+const VENOM_TICK := 1.0
 
 var grid: MazeGrid
 var stats: CharacterStats
@@ -308,6 +323,12 @@ var _hourglass_left := 0.0
 var _hourglass_health := 0
 var _hourglass_ratio := 0.5
 var _time_stop_left := 0.0
+var _venom := {}                       # index -> {doses, time_left, timer, plague}
+var _venom_locks := {}                 # index -> secondes avant la dose de sol suivante
+var _plague: Ability = null            # l'ultime : ce qui éclate laisse son nuage
+var _seep_left := 0.0
+var _seep_life := 0.0
+var _puddles := {}                     # case -> secondes restantes
 
 
 ## `p_seed` : la pluie de météores tire au sort ses cases. Le tirage doit être
@@ -369,6 +390,8 @@ func update(delta: float, context: CombatContext) -> void:
 	_time_stop_left = maxf(0.0, _time_stop_left - delta)
 	_update_walkers(delta, context)
 	_update_hourglass(delta)
+	_update_venom(delta, context)
+	_update_puddles(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -491,7 +514,10 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 			# fois — l'exaltation y aurait valu +80/s, contre +10 sur un trait
 			# élémentaire. Le même bonus ne peut pas valoir huit fois plus
 			# selon le sort qui le reçoit.
-			_apply_area(slice, zone["cell"], context, ability, true, false)
+			if ability.damage > 0:
+				_apply_area(slice, zone["cell"], context, ability, true, false)
+			if ability.venom_doses > 0:
+				_apply_zone_venom(ability, zone["cell"], context)
 			if ability.snare > 0.0:
 				_apply_snare(ability, zone["cell"], context)
 			if ability.slow_duration > 0.0 and not ability.slow_sustained:
@@ -683,6 +709,18 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = true
 		Ability.Kind.TIME_STOP:
 			_stop_time(ability, context)
+			fired = true
+		Ability.Kind.TRAIL:
+			_seep_left = ability.duration
+			_seep_life = ability.trail_life
+			trail_started.emit(ability.duration)
+			fired = true
+		Ability.Kind.CONTAGION:
+			fired = _cast_contagion(ability, context)
+		Ability.Kind.TRANSFUSION:
+			fired = _cast_transfusion(ability, context)
+		Ability.Kind.PANDEMIC:
+			_cast_pandemic(ability, context)
 			fired = true
 
 	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
@@ -1780,6 +1818,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	if destination == context.player_cell:
 		use_refused.emit("mur")
 		return false
+	if ability.cloud_duration > 0.0:
+		_cloud_zone(context.player_cell, ability)
 	blink_performed.emit(context.player_cell, destination)
 	return true
 
@@ -1789,6 +1829,9 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 func _record_trail(delta: float, context: CombatContext) -> void:
 	_clock += delta
 	if _trail.is_empty() or _trail[-1]["cell"] != context.player_cell:
+		if _seep_left > 0.0 and not _trail.is_empty():
+			_puddles[_trail[-1]["cell"]] = _seep_life
+			puddle_laid.emit(_trail[-1]["cell"], _seep_life)
 		_trail.append({"cell": context.player_cell, "time": _clock})
 	# On garde la dernière case d'AVANT la limite : c'est là qu'il était à cet instant.
 	while _trail.size() > 1 and float(_trail[1]["time"]) < _clock - TRAIL_KEEP:
@@ -1889,6 +1932,152 @@ func time_factor_at(cell: Vector2i) -> float:
 				Vector2(zone["cell"] as Vector2i)) <= ability.radius:
 			factor = ability.time_factor
 	return factor
+
+
+# --- Le venin ---------------------------------------------------------------------
+
+func _add_venom(index: int, context: CombatContext, doses: int = 1,
+		duration: float = VENOM_DURATION) -> void:
+	if not context.enemy_alive(index) or context.is_structure(index):
+		return
+	var venom: Dictionary = _venom.get(index,
+		{"doses": 0, "time_left": 0.0, "timer": VENOM_TICK, "plague": false})
+	venom["doses"] = mini(VENOM_MAX, int(venom["doses"]) + doses)
+	venom["time_left"] = maxf(float(venom["time_left"]), duration)
+	_venom[index] = venom
+	enemy_venomed.emit(index, int(venom["doses"]), float(venom["time_left"]))
+
+
+## Doses qui prélèvent ensemble. Ni trait ni exaltation : ce n'est pas un coup porté.
+func _update_venom(delta: float, context: CombatContext) -> void:
+	for index in _venom_locks.keys():
+		_venom_locks[index] = float(_venom_locks[index]) - delta
+		if float(_venom_locks[index]) <= 0.0:
+			_venom_locks.erase(index)
+	for index in _venom.keys():
+		if not context.enemy_alive(index):
+			_venom.erase(index)
+			continue
+		var venom: Dictionary = _venom[index]
+		venom["time_left"] = float(venom["time_left"]) - delta
+		venom["timer"] = float(venom["timer"]) - delta
+		if float(venom["timer"]) <= 0.0:
+			venom["timer"] = VENOM_TICK
+			_apply_damage(index, Ability.make({"id": "venin", "display_name": "Venin",
+				"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.POISON,
+				"damage": int(venom["doses"]) * VENOM_DAMAGE}), context, false, false)
+			if not context.enemy_alive(index):
+				venom_killed.emit(context.enemy_cells[index])
+				if bool(venom["plague"]) and _plague != null:
+					_cloud_zone(context.enemy_cells[index], _plague)
+				_venom.erase(index)
+				continue
+		if float(venom["time_left"]) <= 0.0:
+			_venom.erase(index)
+			enemy_venomed.emit(index, 0, 0.0)
+
+
+## Une flaque ne pose qu'une dose par seconde : la traverser coûte moins que s'y attarder.
+func _update_puddles(delta: float, context: CombatContext) -> void:
+	_seep_left = maxf(0.0, _seep_left - delta)
+	if _puddles.is_empty():
+		return
+	for cell in _puddles.keys():
+		_puddles[cell] = float(_puddles[cell]) - delta
+		if float(_puddles[cell]) <= 0.0:
+			_puddles.erase(cell)
+	for i in context.enemy_cells.size():
+		if _venom_locks.has(i) or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		if _puddles.has(context.enemy_cells[i]):
+			_venom_locks[i] = VENOM_TICK
+			_add_venom(i, context)
+			puddle_stepped.emit(context.enemy_cells[i])
+
+
+func _apply_zone_venom(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var field := _field_from(centre)
+	for i in context.enemy_cells.size():
+		if _venom_locks.has(i) or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		_venom_locks[i] = VENOM_TICK
+		_add_venom(i, context, ability.venom_doses)
+
+
+## Le nuage que laissent la Brume et ce qui éclate : une zone sans dégâts, qui empoisonne.
+func _cloud_zone(cell: Vector2i, source: Ability) -> void:
+	var id := _next_zone_id
+	_next_zone_id += 1
+	var cloud := Ability.make({"id": "nuage_toxique", "kind": Ability.Kind.ZONE,
+		"element": Element.Kind.POISON, "radius": source.cloud_radius,
+		"duration": source.cloud_duration, "venom_doses": 1, "zone_style": "gaz_peint"})
+	_zones.append({"id": id, "ability": cloud, "cell": cell,
+		"time_left": source.cloud_duration, "tick": 0.0})
+	zone_created.emit(id, cloud, cell)
+
+
+## Le foyer est l'ennemi empoisonné le plus proche du mage, dans la portée du sort.
+func _cast_contagion(ability: Ability, context: CombatContext) -> bool:
+	var source := -1
+	var best := ability.range + 1
+	for index: int in _venom.keys():
+		if not context.enemy_alive(index):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[index])
+		if distance >= 0 and distance < best:
+			best = distance
+			source = index
+	if source < 0:
+		use_refused.emit("sain")
+		return false
+	var field := _field_from(context.enemy_cells[source])
+	var spread := false
+	for i in context.enemy_cells.size():
+		if i == source or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or distance > ability.chain_range:
+			continue
+		_add_venom(i, context, int(_venom[source]["doses"]))
+		contagion_spread.emit(context.enemy_cells[source], context.enemy_cells[i])
+		spread = true
+	if not spread:
+		use_refused.emit("sain")
+	return spread
+
+
+func _cast_transfusion(ability: Ability, context: CombatContext) -> bool:
+	if health.current >= health.maximum:
+		use_refused.emit("pleine")
+		return false
+	var cells: Array = []
+	for index: int in _venom.keys():
+		if context.enemy_alive(index):
+			cells.append(context.enemy_cells[index])
+	if cells.is_empty():
+		use_refused.emit("sain")
+		return false
+	var gained := health.heal(ceili(float(cells.size()) / float(maxi(1, ability.transfuse_per))))
+	player_healed.emit(gained)
+	transfused.emit(cells, gained)
+	return true
+
+
+func _cast_pandemic(ability: Ability, context: CombatContext) -> void:
+	_plague = ability
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i):
+			_add_venom(i, context, VENOM_MAX, ability.duration)
+			_venom[i]["plague"] = true
+	pandemic_cast.emit(context.player_cell)
+
+
+## Combien de doses porte cette créature ? L'interface et les tests s'en servent.
+func venom_doses(index: int) -> int:
+	return int(_venom[index]["doses"]) if _venom.has(index) else 0
 
 
 # --- Invocations ------------------------------------------------------------------
@@ -2232,6 +2421,8 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 		Element.Kind.AIR:
 			if context.enemy_alive(index):
 				_push_away(index, context)
+		Element.Kind.POISON:
+			_add_venom(index, context)
 		Element.Kind.TIME:
 			if context.enemy_alive(index):
 				enemy_soaked.emit(index, RETARD_DURATION, RETARD_FACTOR)

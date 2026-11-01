@@ -151,6 +151,19 @@ MAGES = [
         "aura": "turquoise et cuivre",
         "phrase": "Il ne fuit pas : il revient en arrière.",
     },
+    {
+        "id": "peste", "nom": "Mage de la Peste", "element": "Poison",
+        "couleur": "#b4f02a",
+        "corps": "un MASQUE DE MÉDECIN DE PESTE en cuir sombre, à long bec courbe et à "
+                 "deux verres ronds VERT ACIDE lumineux : aucun visage visible. Une "
+                 "capuche et un long manteau aubergine très sombre, presque noir, à "
+                 "liserés vert acide. Trois petites FIOLES de liquide vert acide pendent "
+                 "à sa ceinture. Il tient de la main droite un bâton tordu en bois noir, "
+                 "surmonté d'une grosse FIOLE RONDE pleine de liquide vert acide d'où "
+                 "montent des bulles, et une fine fumée verte s'enroule autour de ses bottes",
+        "aura": "vert acide et vert très sombre",
+        "phrase": "Plus on le poursuit, plus on s'empoisonne.",
+    },
 ]
 
 ENTETE = """> ⚠️ **Fichier GÉNÉRÉ** par `tools/build_prompts_menu.py`. Ne pas l'éditer à

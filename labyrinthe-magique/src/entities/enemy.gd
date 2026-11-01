@@ -43,6 +43,10 @@ const HIT_FLASH_DURATION := 0.14
 const TINT_SOAK := Color(0.55, 0.75, 1.45)
 const TINT_STAGGER := Color(1.5, 1.4, 1.0)
 const TINT_FROZEN := Color(0.6, 1.3, 1.25)
+const TINT_VENOM := Color(0.72, 1.42, 0.32)
+const VENOM_DROP := Color("#b4f02a")
+const VENOM_RIM := Color("#1e3a0c")
+const VENOM_SHINE := Color("#f2ff9e")
 const TINT_BURN := Color(1.6, 0.85, 0.55)
 ## Le poison d'ombre : SOMBRE et violacé, là où les autres statuts éclaircissent.
 ## Une créature empoisonnée doit avoir l'air éteinte, pas illuminée — et une
@@ -129,6 +133,8 @@ var _soak_left := 0.0
 var _soak_factor := SOAK_FACTOR
 var _stagger_left := 0.0
 var _frozen_left := 0.0
+var _venom_doses := 0
+var _venom_left := 0.0
 var _burn_left := 0.0
 ## Temps d'empoisonnement restant. Il dure DIX FOIS plus qu'une brûlure : sa
 ## teinte doit donc être discrète, sinon un stage entier vire au violet.
@@ -253,6 +259,13 @@ func time_freeze(duration: float) -> void:
 	_frozen_left = maxf(_frozen_left, duration)
 
 
+## Les doses de venin : on doit les lire d'un coup d'œil, sans chiffre.
+func set_venom(doses: int, duration: float) -> void:
+	_venom_doses = doses
+	_venom_left = duration
+	queue_redraw()
+
+
 func burn_glow(duration: float) -> void:
 	_burn_left = maxf(_burn_left, duration)
 
@@ -269,6 +282,11 @@ func _update_desired(delta: float) -> void:
 	_soak_left = maxf(0.0, _soak_left - delta)
 	_stagger_left = maxf(0.0, _stagger_left - delta)
 	_frozen_left = maxf(0.0, _frozen_left - delta)
+	if _venom_doses > 0:
+		_venom_left -= delta
+		if _venom_left <= 0.0:
+			_venom_doses = 0
+		queue_redraw()
 	_burn_left = maxf(0.0, _burn_left - delta)
 	_poison_left = maxf(0.0, _poison_left - delta)
 	_flash = maxf(0.0, _flash - delta)
@@ -311,6 +329,12 @@ func _update_desired(delta: float) -> void:
 		return
 	# Brûlure et trempe passent AVANT les teintes d'état : un statut est une
 	# information de combat, l'état de l'IA n'est qu'une ambiance.
+	# LE VENIN VERDIT À CHAQUE DOSE, en pulsant lentement. Il passe devant les autres :
+	# c'est toute la lecture du Mage de la Peste.
+	if _venom_doses > 0:
+		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.005)
+		_show_state(TINT_CHASE.lerp(TINT_VENOM, (float(_venom_doses) - pulse * 0.4) / 3.0))
+		return
 	if _burn_left > 0.0:
 		var flicker := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.02)
 		_show_state(TINT_BURN.lerp(HIT_FLASH, 0.25 * flicker))
@@ -369,6 +393,7 @@ func revive_at(cell: Vector2i) -> void:
 	_stagger_left = 0.0
 	_burn_left = 0.0
 	_poison_left = 0.0
+	_venom_doses = 0
 	if _base_speed > 0.0:
 		mover.speed = _base_speed
 	set_dead(false)
@@ -591,6 +616,7 @@ func _draw() -> void:
 	super()
 	if health == null or dead:
 		return
+	_draw_venom()
 	# La barre ne s'affiche qu'une fois le premier coup porté : au complet, elle
 	# n'apprend rien et met un bandeau rouge au-dessus de chaque ennemi de la
 	# carte, ce qui noie l'information au moment où elle compte.
@@ -609,3 +635,33 @@ func _draw() -> void:
 	var fill := Color("#e0463a").lerp(Color("#ffd15a"), clampf(1.0 - ratio * 2.0, 0.0, 1.0))
 	draw_rect(Rect2(origin, Vector2(width * ratio, height)), fill)
 	draw_rect(Rect2(origin, Vector2(width, height)), Color(0.85, 0.9, 1.0, 0.35), false, 1.0)
+
+
+## Une à trois gouttes au-dessus de la barre de vie, et des bulles qui montent du corps.
+func _draw_venom() -> void:
+	if _venom_doses <= 0:
+		return
+	var drop := tile_size * 0.075
+	# À droite de la barre : les chiffres de dégâts montent au-dessus et les cacheraient.
+	var y := -tile_size * BAR_HEIGHT_ABOVE + tile_size * BAR_HEIGHT * 0.5
+	var left := tile_size * BAR_WIDTH * 0.5 + drop * 1.8
+	var clock := float(Time.get_ticks_msec()) * 0.001
+	for i in _venom_doses:
+		var x := left + float(i) * drop * 2.5
+		var tip := Vector2(x, y - drop * 1.9)
+		var points := PackedVector2Array([tip, Vector2(x - drop * 0.8, y - drop * 0.3),
+			Vector2(x + drop * 0.8, y - drop * 0.3)])
+		draw_circle(Vector2(x, y), drop + 1.0, VENOM_RIM)
+		draw_colored_polygon(points, VENOM_RIM)
+		draw_circle(Vector2(x, y), drop, VENOM_DROP)
+		draw_circle(Vector2(x - drop * 0.25, y - drop * 0.25), drop * 0.3, VENOM_SHINE)
+	# Une bulle par dose sur les côtés du corps. À trois doses, il en sort sans arrêt.
+	for i in _venom_doses * 2:
+		var life := fmod(clock * 0.8 + float(i) * 0.37, 1.0)
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var at := Vector2(side * tile_size * (0.28 + 0.1 * sin(float(i) * 2.3)),
+			-tile_size * (0.25 + life * 0.85))
+		var radius := tile_size * 0.05 * (0.6 + life * 0.7)
+		var alpha := (1.0 - life) * 0.95
+		draw_circle(at, radius, Color(VENOM_DROP, alpha))
+		draw_arc(at, radius, 0.0, TAU, 10, Color(VENOM_RIM, alpha), 1.0)

@@ -1,7 +1,7 @@
 class_name CharacterSelect
 extends Control
 
-## Écran de sélection des sept mages.
+## Écran de sélection des mages.
 ##
 ## Une rangée de vignettes en haut, la FICHE COMPLÈTE du personnage choisi en
 ## dessous. Cinq fiches côte à côte tiendraient sur un écran de bureau et sur
@@ -13,6 +13,13 @@ extends Control
 ## six créneaux (attaque, trois sorts, fuite, ultime), c'est une règle du jeu.
 const GRID_COLUMNS := 3
 const GRID_ROWS := 2
+## LA RANGÉE DÉFILE, avec un bouton de chaque côté. Rétrécir les cartes pour tout faire
+## tenir n'avait plus de sens à dix mages : elles devenaient illisibles sur téléphone.
+const ARROW_WIDTH := 48.0
+const ARROW_GAP := 8.0
+## Le liseré de la carte choisie dépasse de sa case : la fenêtre lui laisse cette marge.
+const ROSTER_PAD := 8.0
+const SLIDE_TIME := 0.2
 
 signal play_requested(character_id: String)
 ## Le terrain d'essai : mêmes sorts, rien d'enjeu. C'est ici qu'un joueur
@@ -44,9 +51,18 @@ var character_id := CharacterCatalog.default_id()
 
 var _portraits: Array[CharacterPortrait] = []
 var _selected_preview: CharacterPortrait
+## La fenêtre qui coupe la rangée, ses deux boutons, et où en est le défilement.
+var _roster_window: Control = null
+var _arrow_left: Button = null
+var _arrow_right: Button = null
+var _first_shown := 0
+var _shown := 1
+var _card_step := 1.0
+var _slide: Tween = null
 
 
 func _ready() -> void:
+	_build_roster_slider()
 	for character in CharacterCatalog.all():
 		var portrait := CharacterPortrait.new()
 		portrait.custom_minimum_size = Vector2(116.0, 142.0)   # recalculé par _layout
@@ -85,6 +101,62 @@ func _ready() -> void:
 	resized.connect(_layout)
 	_layout()
 	select(character_id)
+
+
+func _build_roster_slider() -> void:
+	_roster_window = Control.new()
+	_roster_window.clip_contents = true
+	_roster_window.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_roster_window)
+	roster.reparent(_roster_window, false)
+	roster.alignment = BoxContainer.ALIGNMENT_BEGIN
+	roster.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_arrow_left = _make_arrow("◀", -1)
+	_arrow_right = _make_arrow("▶", 1)
+
+
+func _make_arrow(glyph: String, way: int) -> Button:
+	var arrow := Button.new()
+	arrow.text = glyph
+	MenuStyle.apply(arrow, Color("#ffd479"), 20)
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var box: StyleBoxFlat = arrow.get_theme_stylebox(state)
+		box.content_margin_left = 2.0
+		box.content_margin_right = 2.0
+	arrow.pressed.connect(_on_arrow.bind(way))
+	add_child(arrow)
+	return arrow
+
+
+## Un appui montre les cartes suivantes, en gardant une carte déjà vue comme repère.
+func _on_arrow(way: int) -> void:
+	_show_from(_first_shown + way * maxi(1, _shown - 1))
+
+
+func _show_from(first: int, animated: bool = true) -> void:
+	_first_shown = clampi(first, 0, maxi(0, _portraits.size() - _shown))
+	_arrow_left.disabled = _first_shown == 0
+	_arrow_right.disabled = _first_shown + _shown >= _portraits.size()
+	var target := Vector2(ROSTER_PAD - float(_first_shown) * _card_step, ROSTER_PAD)
+	if _slide != null:
+		_slide.kill()
+	if not animated or not is_inside_tree():
+		roster.position = target
+		return
+	_slide = create_tween()
+	_slide.tween_property(roster, "position", target, SLIDE_TIME) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+## La carte choisie n'est jamais cachée, d'où que vienne la sélection.
+func _reveal(id: String) -> void:
+	for index in _portraits.size():
+		if _portraits[index].stats.id != id:
+			continue
+		if index < _first_shown:
+			_show_from(index)
+		elif index >= _first_shown + _shown:
+			_show_from(index - _shown + 1)
 
 
 func _on_portrait_input(event: InputEvent, id: String) -> void:
@@ -155,6 +227,7 @@ func select(id: String) -> void:
 		if i == slots.size() - 1:
 			card.mark_ultimate(stats.ultimate_required_kills)
 	_layout()
+	_reveal(id)
 
 
 ## Les cinq vignettes doivent tenir sur la largeur DISPONIBLE. En portrait sur
@@ -184,19 +257,34 @@ func _layout() -> void:
 	# La carte est au rapport 3:4, celui des portraits dessinés. C'était 0,86 du
 	# temps où la vignette montrait un sprite carré : le portrait y serait rogné
 	# sur les côtés jusqu'à manger les bras.
-	# Et le partage se fait sur le NOMBRE DE MAGES, pas sur sept en dur — il y en
-	# a huit depuis l'Invocateur, et la rangée débordait d'une vignette.
-	var count := maxf(1.0, float(_portraits.size()))
-	var width: float = clampf(
-		(size.x - margin * 2.0 - 6.0 * (count - 1.0)) / count, 48.0, roster_height * 0.75)
+	var width := roster_height * 0.75
 	for portrait in _portraits:
 		portrait.custom_minimum_size = Vector2(width, roster_height)
 		portrait.size = portrait.custom_minimum_size
-	roster.position = Vector2(margin, heading.position.y + heading_height + margin * 0.5)
-	roster.size = Vector2(size.x - margin * 2.0, roster_height)
+	var gap := float(roster.get_theme_constant("separation"))
+	var count := _portraits.size()
+	_card_step = width + gap
+	roster.size = Vector2(float(count) * _card_step - gap, roster_height)
 	roster.queue_sort()
 
-	card.position = Vector2(margin, roster.position.y + roster_height + margin * 0.6)
+	var row_y := heading.position.y + heading_height + margin * 0.5
+	var room := size.x - margin * 2.0 - (ARROW_WIDTH + ARROW_GAP) * 2.0
+	_shown = clampi(int((room + gap) / _card_step), 1, count)
+	var slides := _shown < count
+	# Tout tient : plus de boutons, et la rangée se centre sur l'écran.
+	_arrow_left.visible = slides
+	_arrow_right.visible = slides
+	var window_width := float(_shown) * _card_step - gap + ROSTER_PAD * 2.0
+	_roster_window.position = Vector2((size.x - window_width) * 0.5, row_y - ROSTER_PAD)
+	_roster_window.size = Vector2(window_width, roster_height + ROSTER_PAD * 2.0)
+	var arrow_size := Vector2(ARROW_WIDTH, roster_height)
+	_arrow_left.size = arrow_size
+	_arrow_left.position = Vector2(_roster_window.position.x - ARROW_WIDTH - ARROW_GAP + ROSTER_PAD, row_y)
+	_arrow_right.size = arrow_size
+	_arrow_right.position = Vector2(_roster_window.position.x + window_width + ARROW_GAP - ROSTER_PAD, row_y)
+	_show_from(_first_shown, false)
+
+	card.position = Vector2(margin, row_y + roster_height + margin * 0.6)
 	card.size = Vector2(size.x - margin * 2.0,
 		maxf(120.0, size.y - card.position.y - button_height - margin * 2.0))
 	card_room = card.size.y

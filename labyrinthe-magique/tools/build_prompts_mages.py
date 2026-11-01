@@ -216,6 +216,29 @@ MAGES = [
         ],
         "extra": "LE SABLIER garde la même taille et la même place dans les 24 cases, il reste entier dans la case et ne pivote jamais. AUCUN CADRAN GÉANT ni cercle au sol : le jeu dessine lui-même ses sorts. Le turquoise reste VERT-BLEU et le cuivre reste ORANGÉ, jamais rose : ils ne doivent pas se confondre avec le fond magenta.",
     },
+    {
+        "file": "peste", "id": "peste", "name": "Mage de la Peste", "reference": "peste.png",
+        "today": "rien encore, c'est un nouveau mage",
+        "look": "le Mage de la Peste, un alchimiste. MASQUE DE MÉDECIN DE PESTE en cuir "
+                "sombre, à long bec courbe et à deux verres ronds VERT ACIDE lumineux. "
+                "Capuche et long manteau aubergine très sombre, presque noir, à liserés "
+                "vert acide. Trois petites FIOLES de liquide vert acide pendent à sa "
+                "ceinture. Il tient de la main droite un BÂTON tordu en bois noir, "
+                "surmonté d'une grosse FIOLE RONDE pleine de liquide vert acide.",
+        "legs": "le manteau s'ouvre devant et ses bottes de cuir sombre sortent franchement à chaque pas",
+        "hold": "le bâton reste dans sa main droite, tenu droit, et les trois fioles restent accrochées à sa ceinture",
+        "strike": [
+            "il ramène le bâton contre l'épaule, le liquide de la grosse fiole s'éclaire",
+            "le bâton bascule vers l'avant, des bulles vertes montent dans la fiole",
+            "LE TIR : bâton pointé vers l'avant, un court jet de venin vert acide part de la fiole",
+            "le jet s'étire, deux ou trois gouttes vertes s'en détachent",
+            "les gouttes tombent près de la fiole et s'éteignent",
+            "le bâton remonte, les bulles se calment dans la fiole",
+            "le bâton revient presque à la verticale",
+            "il retrouve exactement sa pose de marche",
+        ],
+        "extra": "LE BEC DU MASQUE reste entier et de même taille dans les 24 cases : de profil, il pointe VERS LA DROITE. AUCUN NUAGE, aucune flaque au sol et aucun gaz autour de lui : le jeu dessine lui-même ses sorts. L'aubergine reste PRESQUE NOIR ET BLEUTÉ, jamais violet vif ni rose : il ne doit pas se confondre avec le fond magenta.",
+    },
 ]
 
 HEADER = """Feuille de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style cartoon

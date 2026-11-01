@@ -203,11 +203,11 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
 - ⚠️ Pour mesurer, ne pas lire `delta` : le moteur le lisse sur des multiples de 1/120 s.
   `--bench` prend une vraie horloge, et c'est le p99 qui compte.
 
-## Les neuf mages
+## Les dix mages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien`.
+`Chronomancien` · `Mage de la Peste`.
 
 Le **Chronomancien** (élément Temps) est né animé et peint au shader : il n'a ni planche
 `SHEETS` ni `impact.png`, `orb.png` ou `warp.png` (`_load_character_fx` met le quad peint à
@@ -215,6 +215,11 @@ leur place). Ses sorts lisent la TRACE du mage que tient `CombatSystem` : le Ret
 revient, le double de l'Écho la rejoue. L'Arrêt du temps passe par l'ébranlement ; les jets
 ennemis lisent `time_factor_at`, et le `Level` fige les repaires et les retours d'ennemis.
 ⚠️ Les bots d'équilibrage n'utilisent aucune fuite, le Retour compris.
+
+Le **Mage de la Peste** (élément Poison) est fait pareil. Ses dégâts sont des DOSES de venin
+(`CombatSystem._venom`, trois au plus) qui prélèvent ensemble ; elles sont distinctes de
+`_poisoned`, le poison fixe des Ténèbres. Aucun poison ne touche les repaires, ce qui rend
+les niveaux où il faut les abattre plus durs pour lui.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —

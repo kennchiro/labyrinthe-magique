@@ -38,7 +38,7 @@ OUT_PORTRAITS = OUT_UI / "portraits"
 
 ## Ordre du catalogue — c'est celui de la rangée à l'écran.
 MAGES = ["fire", "water", "earth", "shadow", "thunder", "air",
-         "invocateur", "supreme", "chrono"]
+         "invocateur", "supreme", "chrono", "peste"]
 
 ## Taille des portraits sur le disque. La vignette de la rangée fait ~116 points
 ## de large, doublée sur un écran Retina : 384 laisse de la marge sans peser.

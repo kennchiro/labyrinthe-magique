@@ -39,10 +39,12 @@ const AIR := "air"
 const SUPREME := "supreme"
 const INVOCATEUR := "invocateur"
 const CHRONO := "chrono"
+const PESTE := "peste"
 
 
 static func all() -> Array[CharacterStats]:
-	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono()]
+	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
+		peste()]
 
 
 static func by_id(id: String) -> CharacterStats:
@@ -803,6 +805,61 @@ static func chrono() -> CharacterStats:
 		"description": "Pendant 4 s, tout se fige sauf lui.",
 		"kind": Ability.Kind.TIME_STOP, "element": Element.Kind.TIME,
 		"duration": 4.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+# --- Mage de la Peste : plus on le poursuit, plus on s'empoisonne. --------------------
+static func peste() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = PESTE
+	c.display_name = "Mage de la Peste"
+	c.element = Element.Kind.POISON
+	c.description = "Plus on le poursuit, plus on s'empoisonne. Fragile et rapide : ses doses travaillent pendant qu'il fuit."
+	c.power_level = 3
+	c.base_health = 3
+	c.move_speed = 5.2
+	c.ultimate_required_kills = 4
+	c.attack = Ability.make({
+		"id": "peste_dart", "display_name": "Dard venimeux",
+		"description": "Un trait faible, mais chaque coup ajoute une dose de poison, jusqu'à 3.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.POISON,
+		"projectile_visual": "goutte_venin",
+		"damage": 8, "range": 8, "cooldown": 0.45, "projectile_speed": 1.2,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "peste_trail", "display_name": "Traînée toxique",
+			"description": "Pendant 6 s, il laisse du poison sur les cases où il passe.",
+			"kind": Ability.Kind.TRAIL, "element": Element.Kind.POISON,
+			"duration": 6.0, "trail_life": 5.0, "cooldown": 14.0,
+		}),
+		Ability.make({
+			"id": "peste_contagion", "display_name": "Contagion",
+			"description": "Le poison d'une cible passe aux ennemis proches.",
+			"kind": Ability.Kind.CONTAGION, "element": Element.Kind.POISON,
+			"range": 8, "chain_range": 5, "cooldown": 8.0,
+		}),
+		Ability.make({
+			"id": "peste_transfusion", "display_name": "Transfusion",
+			"description": "Il reprend de la vie selon le nombre d'ennemis empoisonnés.",
+			"kind": Ability.Kind.TRANSFUSION, "element": Element.Kind.POISON,
+			"transfuse_per": 2, "cooldown": 22.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "peste_mist", "display_name": "Brume",
+		"description": "Il se dissout et reparaît plus loin, en laissant un nuage toxique derrière lui.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.POISON,
+		"range": 6, "cooldown": 7.0, "cloud_duration": 4.0, "cloud_radius": 1.4,
+		"zone_style": "gaz_peint",
+	})
+	c.ultimate = Ability.make({
+		"id": "peste_pandemic", "display_name": "Pandémie",
+		"description": "Tous les ennemis de la carte sont empoisonnés 8 s, et ceux qui en meurent éclatent en nuage toxique.",
+		"kind": Ability.Kind.PANDEMIC, "element": Element.Kind.POISON,
+		"duration": 8.0, "cooldown": 1.0, "is_ultimate": true,
+		"cloud_duration": 4.0, "cloud_radius": 1.5,
 	})
 	return c
 

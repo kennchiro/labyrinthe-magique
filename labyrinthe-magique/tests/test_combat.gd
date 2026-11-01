@@ -47,6 +47,7 @@ func _init() -> void:
 	_test_ultimate_thresholds()
 	_test_ability_summaries()
 	_test_chrono()
+	_test_peste()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -216,10 +217,10 @@ func _test_kill_system() -> void:
 func _test_catalog() -> void:
 	var characters := CharacterCatalog.all()
 	# 7 mages élémentaires + l'Invocateur (ajouté par la session voisine — il ne
-	# se bat pas lui-même, il délègue à ses invocations) + le Chronomancien. Le compte
-	# protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 9:
-		_fail("le catalogue contient %d personnages au lieu de 9" % characters.size())
+	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien et la Peste. Le
+	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
+	if characters.size() != 10:
+		_fail("le catalogue contient %d personnages au lieu de 10" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -1679,6 +1680,96 @@ func _test_chrono() -> void:
 	if combat.time_factor_at(context.player_cell + Vector2i(9, 0)) != 1.0:
 		_fail("bulle : un jet loin d'elle est ralenti")
 	print("chronomancien : retour, écho, sablier, arrêt du temps et bulle : OK")
+
+
+func _test_peste() -> void:
+	var peste := CharacterCatalog.peste()
+	var trail: Ability = peste.abilities[0]
+	var contagion: Ability = peste.abilities[1]
+	var transfusion: Ability = peste.abilities[2]
+	# VENIN : les doses s'additionnent, plafonnées, et prélèvent ensemble.
+	var parts := _context(peste)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1000)
+	for i in 5:
+		combat._apply_trait(0, 1, peste.attack, context)
+	if combat.venom_doses(0) != CombatSystem.VENOM_MAX:
+		_fail("venin : attendu %d doses, lu %d" % [CombatSystem.VENOM_MAX, combat.venom_doses(0)])
+	for i in int(CombatSystem.VENOM_TICK / DT) + 2:
+		combat.update(DT, context)
+	if context.enemy_health[0].current != 1000 - CombatSystem.VENOM_MAX * CombatSystem.VENOM_DAMAGE:
+		_fail("venin : les doses ne prélèvent pas ensemble (%d PV)" % context.enemy_health[0].current)
+
+	# TRAÎNÉE : une flaque sur la case quittée, qui empoisonne ce qui marche dessus.
+	parts = _context(peste)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	var start := context.player_cell
+	combat.update(DT, context)
+	combat.use(trail, context)
+	_walk_chrono(grid, combat, context, 2)
+	_add_enemy(context, start, 500)
+	combat.update(DT, context)
+	if combat.venom_doses(0) != 1:
+		_fail("traînée : la flaque n'empoisonne pas (%d doses)" % combat.venom_doses(0))
+
+	# CONTAGION : refusée sans foyer, elle donne ses doses aux voisins.
+	parts = _context(peste)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 500)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 500)
+	if combat.use(contagion, context):
+		_fail("contagion : elle part sans aucun ennemi empoisonné")
+	combat._add_venom(0, context, 2)
+	if not combat.use(contagion, context) or combat.venom_doses(1) != 2:
+		_fail("contagion : le voisin a %d doses au lieu de 2" % combat.venom_doses(1))
+
+	# TRANSFUSION : refusée en pleine santé, un point pour deux ennemis empoisonnés.
+	health = parts[3]
+	if combat.use(transfusion, context):
+		_fail("transfusion : elle part en pleine santé")
+	health.take(Damage.new(2, Element.Kind.SHADOW, "enemy"))
+	var before := health.current
+	if not combat.use(transfusion, context) or health.current != before + 1:
+		_fail("transfusion : attendu %d PV, lu %d" % [before + 1, health.current])
+
+	# BRUME : le nuage reste au départ et empoisonne.
+	parts = _context(peste)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	for way: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		if grid.is_floor_v(context.player_cell + way):
+			context.player_facing = way
+			break
+	_add_enemy(context, context.player_cell, 500)
+	if not combat.use(peste.escape, context):
+		_fail("brume : le saut est refusé")
+	for i in 3:
+		combat.update(DT, context)
+	if combat.venom_doses(0) != 1:
+		_fail("brume : le nuage n'empoisonne pas")
+
+	# PANDÉMIE : toute la carte, jamais les repaires, et le mort éclate en nuage.
+	parts = _context(peste)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 9), 15)
+	_add_enemy(context, _cell_at(grid, context.player_field, 12), 500)
+	context.structures_from = 1
+	var clouds := {"count": 0}
+	combat.zone_created.connect(func(_i: int, _a: Ability, _c: Vector2i) -> void: clouds["count"] += 1)
+	var kills := {"count": 0}
+	combat.venom_killed.connect(func(_c: Vector2i) -> void: kills["count"] += 1)
+	combat.use(peste.ultimate, context)
+	if combat.venom_doses(1) != 0:
+		_fail("pandémie : le repaire est empoisonné")
+	if combat.venom_doses(0) != CombatSystem.VENOM_MAX:
+		_fail("pandémie : la créature n'a pas toutes ses doses")
+	for i in int(CombatSystem.VENOM_TICK / DT) + 2:
+		combat.update(DT, context)
+	if kills["count"] != 1 or clouds["count"] != 1:
+		_fail("pandémie : %d mort(s) et %d nuage(s), attendu 1 et 1" % [kills["count"], clouds["count"]])
+	print("mage de la peste : venin, traînée, contagion, transfusion, brume et pandémie : OK")
 
 
 ## La fiche de personnage doit MENTIONNER les particularités d'un sort : deux

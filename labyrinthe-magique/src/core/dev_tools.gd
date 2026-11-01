@@ -14,7 +14,7 @@ extends Node
 ##   --tap X Y          simule un tap sur la case (X,Y) après 3 frames
 ##   --debug            affiche le bandeau d'informations techniques
 ##   --on-portal        démarre le joueur sur un portail
-##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono
+##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste
 ##   --potion           remplit la jauge de mana
 ##   --kills N          simule N ennemis éliminés (test de l'Extra Power)
 ##   --fx               rejoue en boucle les cinq éclats élémentaires (contrôle visuel)

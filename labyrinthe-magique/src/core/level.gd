@@ -389,6 +389,14 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.hourglass_turned.connect(_on_hourglass_turned)
 	combat.hourglass_ended.connect(_on_hourglass_ended)
 	combat.time_stopped.connect(_on_time_stopped)
+	combat.enemy_venomed.connect(_on_enemy_venomed)
+	combat.trail_started.connect(_on_trail_started)
+	combat.puddle_laid.connect(_on_puddle_laid)
+	combat.puddle_stepped.connect(_on_puddle_stepped)
+	combat.contagion_spread.connect(_on_contagion_spread)
+	combat.transfused.connect(_on_transfused)
+	combat.pandemic_cast.connect(_on_pandemic_cast)
+	combat.venom_killed.connect(_on_venom_killed)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -822,7 +830,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono"]
+	"supreme", "chrono", "peste"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -841,7 +849,7 @@ func _warm_painted_shaders() -> void:
 	if not PaintedFx.IMPACT.has(character.id) or not is_inside_tree():
 		return
 	var materials := PaintedFx.materials_of(character.id)
-	for ability: Ability in [character.attack] + character.abilities:
+	for ability: Ability in [character.attack, character.escape] + character.abilities:
 		if MagicOrb.PAINTED.has(ability.projectile_visual):
 			materials.append(MagicOrb.painted_material(ability.projectile_visual, 0.0))
 		if ZoneEffect.PAINTED_STYLES.has(ability.zone_style):
@@ -943,9 +951,9 @@ func _load_character_fx() -> void:
 		_fire_orb_frames = maxi(1, int(fire_orb_parsed.get("frames", 1)))
 		_fire_orb_grows = String(fire_orb_parsed.get("mode", "loop")) == "grow"
 	_impact_texture = _texture_or_null(folder + "impact.png")
-	# Le Chronomancien n'a jamais eu de planche d'effets. Le quad tient la place du dessin
-	# que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id == "chrono":
+	# Le Chronomancien et la Peste n'ont jamais eu de planche d'effets. Le quad tient la place
+	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
+	if _impact_texture == null and character.id in ["chrono", "peste"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1317,6 +1325,80 @@ func _on_player_made_immune(duration: float) -> void:
 		_spark_texture)
 	if character.id == EARTH:
 		_spawn_painted_burst(player.mover.nearest_cell(), 1.3, 0.5, "earth_crack")
+
+
+# --- Le Mage de la Peste ---------------------------------------------------------
+
+## Le rayon de l'onde de la Pandémie, en cases : elle doit balayer tout l'écran.
+const PANDEMIC_TILES := 11.0
+const THREAD_TIME := 0.5
+const TRANSFUSION_TIME := 0.8
+
+
+func _on_enemy_venomed(index: int, doses: int, duration: float) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	enemies[index].set_venom(doses, duration)
+
+
+## Ses bottes fument tant que la Traînée dure.
+func _on_trail_started(duration: float) -> void:
+	var fumes := FxTextures.smoke_emitter(16, 0.6, TILE_SIZE * 0.4, -TILE_SIZE * 0.5)
+	fumes.modulate = Element.color(Element.Kind.POISON)
+	player.add_child(fumes)
+	fumes.emitting = true
+	get_tree().create_timer(duration).timeout.connect(fumes.queue_free)
+
+
+## Une flaque est au sol : ni redressée par la vue 2,5D, ni au-dessus de qui marche dedans.
+func _on_puddle_laid(cell: Vector2i, life: float) -> void:
+	var puddle := _spawn_painted_burst(cell, 1.0, life, "peste_puddle")
+	puddle.scale = Vector2.ONE
+	puddle.z_index = 3
+
+
+func _on_puddle_stepped(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 0.9, 0.28)
+
+
+func _spawn_thread(from: Vector2i, to: Vector2i, duration: float) -> void:
+	var path := combat.trajectory(from, to)
+	if path.size() < 2:
+		return
+	var points := PackedVector2Array()
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var thread := VenomThread.new()
+	entities.add_child(thread)
+	thread.setup(points, TILE_SIZE, duration)
+
+
+func _on_contagion_spread(from: Vector2i, to: Vector2i) -> void:
+	_spawn_painted_burst(from, 1.0, THREAD_TIME * 0.7)
+	_spawn_thread(from, to, THREAD_TIME)
+	get_tree().create_timer(THREAD_TIME * 0.62).timeout.connect(
+		_spawn_painted_burst.bind(to, 0.9, 0.3))
+
+
+## On voit d'où vient la vie qu'il reprend : les filets partent de chaque ennemi empoisonné.
+func _on_transfused(cells: Array, _healed: int) -> void:
+	var here := player.mover.nearest_cell()
+	for cell: Vector2i in cells:
+		_spawn_thread(cell, here, TRANSFUSION_TIME)
+	var rising := PaintedBurst.new()
+	player.add_child(rising)
+	rising.setup(TILE_SIZE, 1.3, TRANSFUSION_TIME, 0.0, "peste_heal")
+	rising.position = Vector2(0.0, -TILE_SIZE * 0.5)
+
+
+func _on_pandemic_cast(cell: Vector2i) -> void:
+	var wave := _spawn_painted_burst(cell, 1.0, 1.5, "peste_wave")
+	wave.scale = Vector2.ONE
+	wave.span_tiles(TILE_SIZE, PANDEMIC_TILES)
+
+
+func _on_venom_killed(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.3, 0.85, "peste_dissolve")
 
 
 # --- Le Chronomancien ------------------------------------------------------------
@@ -2365,6 +2447,9 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		# cachaient, et le dessin peint s'en passe.
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
+		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
+		if character.id == "peste":
+			return
 	elif drawn != null and drawn == _impact_texture and DRAWN_MAGES.has(character.id):
 		_spawn_painted_burst(cell, radius, duration)
 	var impact: ImpactEffect = IMPACT_EFFECT_SCENE.instantiate()
