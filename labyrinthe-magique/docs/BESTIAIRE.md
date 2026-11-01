@@ -21,6 +21,7 @@ points de vie de chaque espèce s'en déduisent :
 | **Archer d'Os** | stage 7 | ×1.05 | ×1.00 | 0.40 s | 0.34 s | tire à quatre cases en ligne droite, puis recharge |
 | **Démon de Cristal** | stage 8 | ×1.70 | ×0.86 | 0.45 s | 0.50 s | blindé de cristal, lourd à déplacer |
 | **Minotaure** | stage 9 | ×1.60 | ×1.10 | 0.30 s | 0.36 s | charge : robuste ET rapide, la pire combinaison |
+| **Seigneur Démon** | stage 10 | ×1.85 | ×0.94 | 0.55 s | 0.55 s | une lame à deux mains : longue à lever, on la voit venir |
 | **Chevalier Noir** | stage 10 | ×1.45 | ×1.02 | 0.34 s | 0.38 s | bouclier et lame, sans faiblesse marquée |
 | **Golem de Givre** | stage 10 | ×2.00 | ×0.78 | 0.52 s | 0.58 s | le plus dur du bestiaire, et le plus lent |
 
@@ -45,6 +46,7 @@ Ce que chaque espèce encaisse réellement, une fois le rapport appliqué
 | **Archer d'Os** | — | — | — | — | — | — | 213 | 223 | 232 | 242 |
 | **Démon de Cristal** | — | — | — | — | — | — | — | 360 | 376 | 391 |
 | **Minotaure** | — | — | — | — | — | — | — | — | 354 | 368 |
+| **Seigneur Démon** | — | — | — | — | — | — | — | — | — | 426 |
 | **Chevalier Noir** | — | — | — | — | — | — | — | — | — | 334 |
 | **Golem de Givre** | — | — | — | — | — | — | — | — | — | 460 |
 
@@ -65,7 +67,7 @@ ennemis » mais « les mêmes, plus quelque chose de neuf ».
 | 7 | Le Bois d'Épine | Archer d'Os | 7 | ×0.80 | 9 cases |
 | 8 | Les Ruines Anciennes | Démon de Cristal | 7 | ×0.81 | 9 cases |
 | 9 | Le Sanctuaire Déchu | Minotaure | 8 | ×0.81 | 9 cases |
-| 10 | Le Château du Ciel | Chevalier Noir, Golem de Givre | 8 | ×0.82 | 9 cases |
+| 10 | Le Château du Ciel | Seigneur Démon, Chevalier Noir, Golem de Givre | 8 | ×0.82 | 9 cases |
 
 ## Les créatures de l'Invocateur
 

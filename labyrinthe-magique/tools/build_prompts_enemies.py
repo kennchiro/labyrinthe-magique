@@ -3,12 +3,12 @@
 
     tools/.venv/bin/python tools/build_prompts_enemies.py     # DEPUIS LA RACINE
 
-ONZE FICHES ÉCRITES PAR UN SEUL TEXTE, et c'est tout l'intérêt.
+DOUZE FICHES ÉCRITES PAR UN SEUL TEXTE, et c'est tout l'intérêt.
 
 Ces fiches partagent 90 % de leur contenu : le format de la planche, les trois
-rangées, les règles bloquantes, la marche à suivre au retour. Recopiées onze
+rangées, les règles bloquantes, la marche à suivre au retour. Recopiées douze
 fois à la main, elles auraient divergé dès la première correction — on aurait
-durci une règle sur le Minotaure et oublié les dix autres, et le défaut serait
+durci une règle sur le Minotaure et oublié les autres, et le défaut serait
 revenu par la porte qu'on venait de fermer.
 
 Ici la règle s'écrit UNE fois. Ce qui reste par créature, c'est ce qui lui
@@ -389,6 +389,52 @@ HERD = [
         "extra": ["la massue reste DU MÊME CÔTÉ dans les 24 cases : sur la"
                   " rangée de profil, elle est du côté où il regarde"],
     },
+    {
+        "file": "seigneur_demon", "id": "seigneur", "name": "Seigneur Démon",
+        "worst": "Son pack ne le dessine que de profil : il monte et descend les"
+                 " couloirs de côté, comme s'il marchait en crabe. Il lui manque"
+                 " une face et un dos, et il doit rester le même démon que celui"
+                 " du pack, reconnaissable d'un coup d'œil.",
+        "look": "UN SEIGNEUR DÉMON, le boss du jeu, À L'IDENTIQUE de l'image de"
+                " référence jointe (ses couleurs, ses proportions, son armure)."
+                " Peau rouge sang, visage rouge aux yeux orange incandescents,"
+                " deux longues cornes noires courbes rabattues vers l'arrière."
+                " Épaulières et plastron noirs hérissés de pointes d'os ivoire,"
+                " ornements d'os ivoire en étoile sur la poitrine et à la"
+                " ceinture. Grande cape rouge cramoisi déchirée en lambeaux dans"
+                " son dos. Jambières noires à liserés dorés, pieds griffus. Une"
+                " queue rouge fine, avec une petite flamme orange au bout. Il"
+                " tient à DEUX MAINS une immense épée noire dentelée, parcourue"
+                " d'une veine rouge luisante, pointe basse vers le sol.",
+        "walk": "une MARCHE DE BOSS complète : pas lourds et sûrs, la cape ondule"
+                " derrière lui, la queue balance à contretemps, l'épée reste"
+                " tenue à deux mains, pointe basse",
+        "strike": [
+            "il se campe, jambes écartées, l'épée basse à deux mains",
+            "il lève l'épée au-dessus de son épaule, les bras tendus",
+            "l'épée est au plus haut, sa veine rouge s'embrase",
+            "il abat l'épée à deux mains, la cape se soulève",
+            "L'IMPACT : la lame au bout de sa course, DEVANT lui, avec une"
+            " traînée de feu rouge et orange au plus large",
+            "la traînée se dissipe, la lame touche presque le sol",
+            "il relève le buste, l'épée revient à deux mains",
+            "il retrouve sa position de marche, prêt à recommencer",
+        ],
+        "extra": ["de face, l'épée passe devant ses jambes, en diagonale, pointe"
+                  " basse vers le bas à droite de l'image",
+                  "de dos, on voit surtout la cape déchirée, les cornes et la"
+                  " queue à la flamme, et le bout de la lame dépasse à droite de"
+                  " ses jambes",
+                  "sur la rangée de profil, la lame est DEVANT lui, la cape et la"
+                  " queue DERRIÈRE lui : ce sont elles qui disent son sens",
+                  "l'épée est longue et ne sort JAMAIS de sa case : dessine le"
+                  " démon un peu plus petit s'il le faut, mais de la même taille"
+                  " dans toutes les cases",
+                  "ne dessine AUCUNE planche de plus : ni repos, ni blessure, ni"
+                  " mort, seulement les trois rangées demandées"],
+    },
+    # LES CRÉATURES NÉES DE CES FICHES. `arrival` dit ce qu'elles font en jeu. Chacune attaque ce que le bestiaire ne touche pas : les gemmes, l'économie des
+    # kills, les couloirs, les murs. Trois d'entre elles n'ont pas de jambes.
 ]
 
 
@@ -669,7 +715,7 @@ huit pas, huit coups) et leur descripteur.
 
 ---
 
-*Fiche produite par `tools/build_prompts_enemies.py`. Les onze fiches partagent
+*Fiche produite par `tools/build_prompts_enemies.py`. Toutes les fiches partagent
 leur format : corriger une règle se fait dans l'outil, pour tout le bestiaire à
 la fois.*
 """

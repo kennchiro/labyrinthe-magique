@@ -1,7 +1,7 @@
 class_name Bestiary
 extends RefCounted
 
-## Les onze créatures du jeu, et ce qui les distingue.
+## Les douze créatures du jeu, et ce qui les distingue.
 ##
 ## Aucune dépendance au moteur de scène : la simulation d'équilibrage compose
 ## les mêmes rosters que le jeu, avec les mêmes points de vie.
@@ -116,6 +116,11 @@ const SPECIES := {
 		"throw_range": 4, "throw_reload": 2.2, "sweep": true,
 		"trait": "le plus dur du bestiaire, et le plus lent",
 	},
+	"seigneur": {
+		"name": "Seigneur Démon", "toughness": 1.85, "swiftness": 0.94, "height": 62.0, "body": 58.0,
+		"stride": 2.8, "walk_fps": 5.0, "strike": 0.55, "repos": 0.55, "windup": 0.36,
+		"trait": "une lame à deux mains : longue à lever, on la voit venir",
+	},
 }
 
 ## Ce que chaque stage AJOUTE au bestiaire déjà rencontré.
@@ -133,7 +138,7 @@ const NEWCOMERS := [
 	["archer"],                  # stage 7
 	["cristal"],                 # stage 8
 	["minotaure"],               # stage 9
-	["chevalier", "givre"],      # stage 10
+	["seigneur", "chevalier", "givre"],  # stage 10
 ]
 
 const FALLBACK := "hunter"

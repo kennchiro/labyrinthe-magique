@@ -12,3 +12,7 @@ tools/.venv/
 
 # Caches Python des outils
 __pycache__/
+
+# Pack sous licence : ne pas redistribuer, même modifié (voir CLAUDE.md)
+assets/peso&cover/creatures/seigneur_demon/
+assets/peso&cover/creatures/seigneur_demon_*

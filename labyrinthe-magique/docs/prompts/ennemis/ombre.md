@@ -273,6 +273,6 @@ huit pas, huit coups) et leur descripteur.
 
 ---
 
-*Fiche produite par `tools/build_prompts_enemies.py`. Les onze fiches partagent
+*Fiche produite par `tools/build_prompts_enemies.py`. Toutes les fiches partagent
 leur format : corriger une règle se fait dans l'outil, pour tout le bestiaire à
 la fois.*

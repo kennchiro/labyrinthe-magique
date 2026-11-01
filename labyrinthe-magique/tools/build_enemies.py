@@ -98,6 +98,7 @@ HERD = {
     "chevalier_noir": {"id": "chevalier", "name": "Chevalier Noir"},
     "golem_givre": {"id": "givre", "name": "Golem de Givre"},
     "gobelin": {"id": "goblin", "name": "Gobelin"},
+    "seigneur_demon": {"id": "seigneur", "name": "Seigneur Démon"},
 }
 ## Recalés comme les mages : le générateur ne pose pas leurs rangées à la même hauteur,
 ## et dessine leur attaque jusqu'à 30 % plus petite. Le jeu garde leur taille grâce à
