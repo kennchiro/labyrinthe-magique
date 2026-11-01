@@ -23,23 +23,31 @@ const ACTIONS := ["teleport", "skill_1", "skill_2", "skill_3", "escape_skill", "
 ## Slot renvoyé par l'UIManager quand la frappe devient « prendre le portail ».
 const SLOT_PORTAL := -1
 
-const TILE := Vector2(104.0, 50.0)
+const TILE := Vector2(114.0, 52.0)
 const GAP := 8.0
 const MARGIN_BOTTOM := 16.0
 ## Tailles du nom du sort : sur une ligne tant qu'il reste lisible, puis sur deux.
 const NAME_SIZE := 12
 const NAME_ONE_LINE_MIN := 10
 const NAME_SIZE_MIN := 8
-const NAME_MARGIN := 3.0
+const NAME_MARGIN := 6.0
+## L'icône reste à l'intérieur du cadre peint, dont la bordure fait ~5 points.
+const ICON_INSET := 6.0
+## Le cadre est stocké trois fois plus grand qu'affiché, et ses angles ne s'étirent pas.
+const FRAME_SCALE := 3.0
+const FRAME_PATH := "res://assets/ui/barre/cadre_case.png"
 
 var entries: Array[Dictionary] = []
 
 var _keys: Array[String] = []
+var _frame := StyleBoxTexture.new()
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_keys = _key_labels()
+	_frame.texture = load(FRAME_PATH)
+	_frame.set_texture_margin_all(float(_frame.texture.get_height()) * 0.18)
 	resized.connect(queue_redraw)
 
 
@@ -110,16 +118,15 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 	# L'icône occupe la GAUCHE de la case, le texte se décale à sa droite. Une
 	# icône posée derrière le texte rendrait les deux illisibles.
 	var icon: Texture2D = entry.get("icon", null)
-	var text_left := 6.0
+	var text_left := ICON_INSET + 2.0
 	if icon != null:
-		var span := rect.size.y - 8.0
+		var span := icon_span()
 		draw_texture_rect(icon,
-			Rect2(rect.position + Vector2(3.0, 4.0), Vector2(span, span)), false,
+			Rect2(rect.position + Vector2(ICON_INSET, ICON_INSET), Vector2(span, span)), false,
 			Color(1, 1, 1, 0.95) if ready else Color(0.78, 0.8, 0.86, 0.8))
-		text_left = span + 6.0
+		text_left = text_start()
 
-	var edge := color if ready else Color(0.38, 0.44, 0.58)
-	draw_rect(rect, edge, false, 2.0 if ready else 1.0)
+	_draw_frame(rect, color.lerp(Color.WHITE, 0.6) if ready else Color(0.62, 0.64, 0.70))
 	if ready and bool(entry.get("highlight", false)):
 		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.005)
 		draw_rect(rect.grow(2.0 + 2.0 * pulse), Color(color.r, color.g, color.b, 0.5 * pulse), false, 2.0)
@@ -133,7 +140,7 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 		key = _keys[0]
 	var tint := Color(1, 1, 1) if ready else Color(0.62, 0.68, 0.80)
 	if not key.is_empty():
-		draw_string(font, rect.position + Vector2(text_left, 17.0), key,
+		draw_string(font, rect.position + Vector2(text_left, 19.0), key,
 			HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - text_left - 4.0, 14, tint)
 	# Les charges se lisent en haut à droite de la case : « 3/5 ». C'est
 	# l'information qui décide du prochain geste — poser un brasier de plus, ou
@@ -142,7 +149,7 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 	if charges >= 0:
 		var stock := "%d/%d" % [charges, int(entry.get("charges_max", 1))]
 		var stock_color := color if charges > 0 else Color(0.62, 0.66, 0.78)
-		draw_string(font, rect.position + Vector2(rect.size.x - 34.0, 17.0), stock,
+		draw_string(font, rect.position + Vector2(rect.size.x - 36.0, 19.0), stock,
 			HORIZONTAL_ALIGNMENT_RIGHT, 28.0, 12, stock_color)
 
 	var label := str(entry.get("name", ""))
@@ -153,12 +160,33 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 		tint = Color(0.55, 0.60, 0.72)
 	var fit := fit_name(font, label, rect.size.x - text_left - NAME_MARGIN)
 	var lines: PackedStringArray = fit["lines"]
-	var baseline := rect.position.y + rect.size.y - 8.0 if lines.size() == 1 \
-			else rect.position.y + rect.size.y - 6.0 - float(fit["size"]) - 1.0
+	var baseline := rect.position.y + rect.size.y - 10.0 if lines.size() == 1 \
+			else rect.position.y + rect.size.y - 8.0 - float(fit["size"]) - 1.0
 	for line in lines:
 		draw_string(font, Vector2(rect.position.x + text_left, baseline), line,
 			HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - text_left - NAME_MARGIN, int(fit["size"]), tint)
 		baseline += float(fit["size"]) + 1.0
+
+
+## Le cadre gris et or, teinté à la couleur du mage quand le sort est prêt.
+func _draw_frame(rect: Rect2, tint: Color) -> void:
+	_frame.modulate_color = tint
+	draw_set_transform(rect.position, 0.0, Vector2.ONE / FRAME_SCALE)
+	draw_style_box(_frame, Rect2(Vector2.ZERO, rect.size * FRAME_SCALE))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+static func icon_span() -> float:
+	return TILE.y - ICON_INSET * 2.0
+
+
+static func text_start() -> float:
+	return ICON_INSET + icon_span() + 3.0
+
+
+## La largeur laissée au nom du sort, à droite de son icône.
+static func name_room() -> float:
+	return TILE.x - text_start() - NAME_MARGIN
 
 
 ## Le nom entier, jamais amputé : « Pas de… » n'apprend rien au joueur. Il rétrécit sur
