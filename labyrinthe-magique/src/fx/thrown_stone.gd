@@ -31,6 +31,8 @@ var _spin := 1.0
 var _tint := Color(0.45, 1.0, 0.4)
 var _grain := 32.0
 var _arrow := false
+## L'allure du temps là où le jet tombe : le Chronomancien le ralentit ou le fige.
+var time_scale := 1.0
 
 
 func setup(from: Vector2, to: Vector2, texture: Texture2D, tile_size: int,
@@ -88,7 +90,7 @@ func setup_arrow(from: Vector2, to: Vector2, tile_size: int, tint: Color,
 
 
 func _process(delta: float) -> void:
-	_life += delta
+	_life += delta * time_scale
 	if _life >= _flight or body == null:
 		queue_free()
 		return

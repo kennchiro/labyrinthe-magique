@@ -134,6 +134,8 @@ MAGES = {
             "out": MAGES_OUT, "walks": True, "align_rows": True},
     "invocateur": {"id": "invocateur", "name": "Invocateur", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True},
+    "chrono": {"id": "chrono", "name": "Chronomancien", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,

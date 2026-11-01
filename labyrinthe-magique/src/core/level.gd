@@ -385,6 +385,10 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.player_made_immune.connect(_on_player_made_immune)
 	combat.player_immunity_faded.connect(_on_immunity_faded)
 	combat.player_shield_faded.connect(_on_shield_faded)
+	combat.echo_walked.connect(_on_echo_walked)
+	combat.hourglass_turned.connect(_on_hourglass_turned)
+	combat.hourglass_ended.connect(_on_hourglass_ended)
+	combat.time_stopped.connect(_on_time_stopped)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -474,7 +478,13 @@ func _process(delta: float) -> void:
 		combat.update(delta, combat_context)
 		if _bubble != null and is_instance_valid(_bubble):
 			_bubble.set_amount(float(combat.shield_left()) / float(_shield_max))
-	_update_respawns(delta)
+	# L'Arrêt du temps fige aussi ce qui allait sortir des repaires.
+	var stopped := combat != null and combat.time_stop_left() > 0.0
+	for lair in lairs:
+		lair.set_process(not stopped)
+	if not stopped:
+		_update_respawns(delta)
+	_update_stones()
 	_update_ai(delta)
 	_update_enemy_target()
 	_update_portal_highlight()
@@ -812,7 +822,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme"]
+	"supreme", "chrono"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -933,6 +943,11 @@ func _load_character_fx() -> void:
 		_fire_orb_frames = maxi(1, int(fire_orb_parsed.get("frames", 1)))
 		_fire_orb_grows = String(fire_orb_parsed.get("mode", "loop")) == "grow"
 	_impact_texture = _texture_or_null(folder + "impact.png")
+	# Le Chronomancien n'a jamais eu de planche d'effets. Le quad tient la place du dessin
+	# que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
+	if _impact_texture == null and character.id == "chrono":
+		_impact_texture = MagicOrb.painted_quad()
+		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
 	# la frappe au sol, le geyser, l'éclaboussure. Chacun vient avec son ANCRE,
 	# le point du dessin qui doit tomber sur la case.
@@ -1302,6 +1317,52 @@ func _on_player_made_immune(duration: float) -> void:
 		_spark_texture)
 	if character.id == EARTH:
 		_spawn_painted_burst(player.mover.nearest_cell(), 1.3, 0.5, "earth_crack")
+
+
+# --- Le Chronomancien ------------------------------------------------------------
+
+## Le dessin d'un jet doit tomber quand le jet tombe : même allure que `ThrowSystem`.
+var _stones: Array[Dictionary] = []
+
+
+func _update_stones() -> void:
+	if combat == null:
+		return
+	for i in range(_stones.size() - 1, -1, -1):
+		if not is_instance_valid(_stones[i]["ball"]):
+			_stones.remove_at(i)
+			continue
+		(_stones[i]["ball"] as ThrownStone).time_scale = combat.time_factor_at(_stones[i]["cell"])
+
+
+func _on_echo_walked(_ability: Ability, cells: Array, times: Array) -> void:
+	var points := PackedVector2Array()
+	for cell: Vector2i in cells:
+		points.append(maze_renderer.cell_to_world(cell))
+	var ghost := EchoGhost.new()
+	entities.add_child(ghost)
+	ghost.setup(points, times, player.walk_textures(), player.walk_poses(), player.pose_count(),
+		player.sprite.scale, player.sprite.offset, TILE_SIZE)
+	_spawn_painted_burst(cells[0], 1.0, 0.45)
+
+
+func _on_hourglass_turned(duration: float) -> void:
+	var ring := PaintedBurst.new()
+	player.add_child(ring)
+	ring.setup(TILE_SIZE, 1.2, duration, 0.0, "chrono_sand")
+	# Sous le mage : relatif à son `z_index`, l'anneau reste au sol.
+	ring.z_index = -1
+
+
+func _on_hourglass_ended(healed: int) -> void:
+	_spawn_painted_burst(player.mover.nearest_cell(), 1.6 if healed > 0 else 1.0, 0.5)
+
+
+func _on_time_stopped(duration: float) -> void:
+	_spawn_painted_burst(player.mover.nearest_cell(), PaintedBurst.MAX_RADIUS_TILES, duration,
+		"chrono_stop")
+	for enemy in enemies:
+		enemy.time_freeze(duration)
 
 
 func _on_immunity_faded() -> void:
@@ -2438,7 +2499,9 @@ func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
 			"range": enemy.throw_range(), "reload": enemy.strike_cycle(),
 			"sweep": enemy.sweeps(), "arrow": enemy.fires_arrows()})
 	var target := Vector2i(roundi(player_position.x), roundi(player_position.y))
-	for shot in _throws.aim(get_process_delta_time(), shooters, target):
+	var opened: Array = [] if combat != null and combat.time_stop_left() > 0.0 \
+		else _throws.aim(get_process_delta_time(), shooters, target)
+	for shot in opened:
 		# Le geste part sur l'ennemi qui a tiré : c'est lui qu'on doit voir armer.
 		for enemy in enemies:
 			if not enemy.dead and enemy.mover.nearest_cell() == shot["from"]:
@@ -2454,10 +2517,12 @@ func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
 			ball.setup_arrow(maze_renderer.cell_to_world(shot["from"]),
 				maze_renderer.cell_to_world(shot["to"]), TILE_SIZE,
 				Color(0.72, 0.4, 1.0), float(shot["flight"]))
+			_stones.append({"ball": ball, "cell": shot["to"]})
 			continue
 		ball.setup(maze_renderer.cell_to_world(shot["from"]),
 			maze_renderer.cell_to_world(shot["to"]), _lava_texture(), TILE_SIZE,
 			Color(1.0, 0.45, 0.12), 0.6, float(shot["flight"]))
+		_stones.append({"ball": ball, "cell": shot["to"]})
 		# LA PIERRE ELLE-MÊME PASSE AU ROUGE. La teinte donnée à `setup` ne peint
 		# que le halo du shader : le corps restait le caillou brun du Mage de la
 		# Terre. De loin on lisait « un rocher » là où il faut lire « de la
@@ -2489,7 +2554,7 @@ func _update_lava(delta: float) -> void:
 		return
 	var sheltered := teleport_system != null and player != null \
 		and teleport_system.is_invulnerable(player.mover)
-	for cell in _throws.advance(delta):
+	for cell in _throws.advance(delta, combat):
 		if not _throws.quiet_landings.has(cell):
 			_spawn_impact(cell, Element.Kind.FIRE, 1.0, 0.55)
 		if player == null or sheltered:

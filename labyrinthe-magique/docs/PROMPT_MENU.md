@@ -28,6 +28,7 @@ et c'est elle qu'on rejoue.
 | Mage de l'Air | Air | `#cfe9ff` | [portrait_air](prompts/menu/portrait_air.md) |
 | Invocateur | Ténèbres | `#b06cff` | [portrait_invocateur](prompts/menu/portrait_invocateur.md) |
 | Sorcier Suprême | Suprême | `#ffd36a` | [portrait_supreme](prompts/menu/portrait_supreme.md) |
+| Chronomancien | Temps | `#2fd6b8` | [portrait_chrono](prompts/menu/portrait_chrono.md) |
 
 Plus deux prompts communs :
 

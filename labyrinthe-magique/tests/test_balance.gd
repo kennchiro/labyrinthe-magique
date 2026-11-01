@@ -81,7 +81,10 @@ func _init() -> void:
 		print("")
 	_runs = QUICK_ITERATIONS if quick else ITERATIONS
 
-	var reference := CharacterCatalog.shadow()
+	# `--mage ID` mesure ce mage-là sur tous les niveaux, à la place de l'étalon.
+	var mage_arg := OS.get_cmdline_user_args().find("--mage")
+	var reference := CharacterCatalog.by_id(OS.get_cmdline_user_args()[mage_arg + 1]) \
+		if mage_arg >= 0 else CharacterCatalog.shadow()
 	var levels := LevelConfig.all_levels()
 	if quick:
 		var sampled: Array[LevelConfig] = []
@@ -97,7 +100,7 @@ func _init() -> void:
 
 	# Les quatre autres mages sur le même stage : ce qu'on cherche ici n'est pas
 	# l'égalité parfaite, c'est qu'aucun ne soit injouable.
-	print("── Viabilité des sept mages (Stage 2, explorateur)")
+	print("── Viabilité des neuf mages (Stage 2, explorateur)")
 	var stage := LevelConfig.for_stage(2)
 	for character in CharacterCatalog.all():
 		if character.id == reference.id:
@@ -446,8 +449,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			shooters.append({"cell": movers[i].nearest_cell(), "range": reach,
 				"reload": ThrowSystem.reload_of(tuning),
 				"sweep": bool(tuning.get("sweep", false))})
-		throws.aim(DT, shooters, player.nearest_cell())
-		for cell in throws.advance(DT):
+		if combat.time_stop_left() <= 0.0:
+			throws.aim(DT, shooters, player.nearest_cell())
+		for cell in throws.advance(DT, combat):
 			if sheltered or not ThrowSystem.touches(cell, player.grid_position()):
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
@@ -482,7 +486,7 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 		var ability: Ability = character.abilities[slot - 1]
 		if not progress.skill_unlocked(slot) or not combat.can_use(ability):
 			continue
-		if ability.kind == Ability.Kind.SHIELD or ability.kind == Ability.Kind.HEAL:
+		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS]:
 			defensive.append(ability)
 		else:
 			offensive.append(ability)

@@ -68,6 +68,8 @@ const PAINTED := {
 		"length": 1.9, "height": 0.5, "lead": 0.3, "sparks": 0.0},
 	"dard_foudre": {"shader": preload("res://assets/shaders/thunder_dart.gdshader"),
 		"length": 2.0, "height": 0.62, "lead": 0.42, "sparks": 0.0},
+	"aiguille_temps": {"shader": preload("res://assets/shaders/chrono_needle.gdshader"),
+		"length": 1.7, "height": 0.4, "lead": 0.3, "sparks": 0.0},
 	"trait_prisme": {"shader": preload("res://assets/shaders/prism_bolt.gdshader"),
 		"length": 2.2, "height": 0.66, "lead": 0.3, "sparks": 0.3},
 	"convergence_peinte": {"shader": preload("res://assets/shaders/convergence.gdshader"),

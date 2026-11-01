@@ -35,17 +35,22 @@ const SHADERS := {
 	"prism_shift": preload("res://assets/shaders/prism_shift.gdshader"),
 	"convergence_burst": preload("res://assets/shaders/convergence_burst.gdshader"),
 	"judgement_burst": preload("res://assets/shaders/judgement_burst.gdshader"),
+	"chrono_tick": preload("res://assets/shaders/chrono_tick.gdshader"),
+	"chrono_rewind": preload("res://assets/shaders/chrono_rewind.gdshader"),
+	"chrono_sand": preload("res://assets/shaders/chrono_sand.gdshader"),
+	"chrono_stop": preload("res://assets/shaders/chrono_stop.gdshader"),
 }
 
 ## L'éclat au toucher, et la fuite, de chaque mage.
 const IMPACT := {
 	"fire": "fire_burst", "shadow": "shadow_collapse", "invocateur": "arcane_sigil",
 	"water": "water_splash", "thunder": "thunder_star", "air": "air_slash",
-	"earth": "earth_crack", "supreme": "prism_star",
+	"earth": "earth_crack", "supreme": "prism_star", "chrono": "chrono_tick",
 }
 const ESCAPE := {
 	"invocateur": "arcane_sigil", "water": "water_swirl", "thunder": "thunder_strike",
 	"air": "air_streaks", "earth": "earth_fissure", "supreme": "prism_shift",
+	"chrono": "chrono_rewind",
 }
 ## La couleur de la flamme de chaque sceau du Suprême. Tout autre élément prend l'air.
 const SEAL_KINDS := {
@@ -58,6 +63,7 @@ const EXTRAS := {
 	"air": ["air_gust", "air_veil"],
 	"earth": ["earth_quake"],
 	"supreme": ["rebirth_aura", "seal_flame", "convergence_burst", "judgement_burst"],
+	"chrono": ["chrono_sand", "chrono_stop"],
 }
 
 

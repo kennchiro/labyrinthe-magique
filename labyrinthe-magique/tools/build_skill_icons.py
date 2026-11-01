@@ -103,6 +103,13 @@ SHEETS = {
     # (226, 8, 222 contre 249, 4, 250) et ses halos roses s'en approchent
     # davantage. À 80, chaque icône traînait un lambeau de fond en forme de
     # halo ; à 140, la gargouille perdait son casque. Vérifié case par case.
+    # Relevé case par case : aiguille · bulle à spirale · silhouette et ses échos //
+    # sablier au cœur · flèche qui revient · cadran brisé. L'ordre demandé.
+    "mage_chrono_skills.png": ("chrono", [
+        "chrono_needle", "chrono_bubble", "chrono_echo",
+        "chrono_hourglass", "chrono_rewind", "chrono_stop",
+    # Le haut du sablier et du cadran dépasse au-dessus de la moitié de la planche.
+    ], {"split_y": 490}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",
@@ -324,6 +331,9 @@ def main() -> None:
             column, row = index % COLUMNS, index // COLUMNS
             box = (column * cell_w + inset, row * cell_h + inset,
                    (column + 1) * cell_w - inset, (row + 1) * cell_h - inset)
+            if "split_y" in options:
+                split = options["split_y"]
+                box = (box[0], 0 if row == 0 else split, box[2], split if row == 0 else sheet.height)
             cell = sheet.crop(box)
             cut = (keyed_on_flat(cell, options["flood"])
                    if options.get("key") == "flat" else keyed(cell))

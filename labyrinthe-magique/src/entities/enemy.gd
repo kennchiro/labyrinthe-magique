@@ -42,6 +42,7 @@ const HIT_FLASH_DURATION := 0.14
 ## un ennemi trempé qui ralentit sans virer au bleu semblerait bugué, pas gêné.
 const TINT_SOAK := Color(0.55, 0.75, 1.45)
 const TINT_STAGGER := Color(1.5, 1.4, 1.0)
+const TINT_FROZEN := Color(0.6, 1.3, 1.25)
 const TINT_BURN := Color(1.6, 0.85, 0.55)
 ## Le poison d'ombre : SOMBRE et violacé, là où les autres statuts éclaircissent.
 ## Une créature empoisonnée doit avoir l'air éteinte, pas illuminée — et une
@@ -127,6 +128,7 @@ var _base_speed := 0.0
 var _soak_left := 0.0
 var _soak_factor := SOAK_FACTOR
 var _stagger_left := 0.0
+var _frozen_left := 0.0
 var _burn_left := 0.0
 ## Temps d'empoisonnement restant. Il dure DIX FOIS plus qu'une brûlure : sa
 ## teinte doit donc être discrète, sinon un stage entier vire au violet.
@@ -246,6 +248,11 @@ func stagger(duration: float) -> void:
 	mover.desired_direction = Vector2i.ZERO
 
 
+## Figé par l'Arrêt du temps : la teinte dit que ce n'est pas un simple ébranlement.
+func time_freeze(duration: float) -> void:
+	_frozen_left = maxf(_frozen_left, duration)
+
+
 func burn_glow(duration: float) -> void:
 	_burn_left = maxf(_burn_left, duration)
 
@@ -261,6 +268,7 @@ func _update_desired(delta: float) -> void:
 	_strike_rest = maxf(0.0, _strike_rest - delta)
 	_soak_left = maxf(0.0, _soak_left - delta)
 	_stagger_left = maxf(0.0, _stagger_left - delta)
+	_frozen_left = maxf(0.0, _frozen_left - delta)
 	_burn_left = maxf(0.0, _burn_left - delta)
 	_poison_left = maxf(0.0, _poison_left - delta)
 	_flash = maxf(0.0, _flash - delta)
@@ -274,7 +282,7 @@ func _update_desired(delta: float) -> void:
 		if _flash > 0.0:
 			set_tint(HIT_FLASH)
 		else:
-			_show_state(TINT_STAGGER)
+			_show_state(TINT_FROZEN if _frozen_left > 0.0 else TINT_STAGGER)
 		return
 	var step := ai.decide(
 		mover.grid, mover.decision_cell(), mover.direction, player_field, delta)

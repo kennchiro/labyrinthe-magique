@@ -38,10 +38,11 @@ const THUNDER := "thunder"
 const AIR := "air"
 const SUPREME := "supreme"
 const INVOCATEUR := "invocateur"
+const CHRONO := "chrono"
 
 
 static func all() -> Array[CharacterStats]:
-	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme()]
+	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono()]
 
 
 static func by_id(id: String) -> CharacterStats:
@@ -745,6 +746,63 @@ static func thunder() -> CharacterStats:
 		"damage": 140, "radius": 6.0, "cooldown": 1.0, "is_ultimate": true,
 		"shockwave": true, "pierces_walls": true,
 		"sky_clouds": 12, "sky_duration": 15.0, "sky_interval": 1.2, "sky_reach": 4,
+	})
+	return c
+
+
+# --- Chronomancien : il gagne en gérant le terrain et ses erreurs de chemin. --------
+static func chrono() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = CHRONO
+	c.display_name = "Chronomancien"
+	c.element = Element.Kind.TIME
+	c.description = "Il ne fuit pas : il revient en arrière. Frappe peu, ralentit tout et répare ses erreurs de chemin."
+	c.power_level = 3
+	c.base_health = 4
+	c.move_speed = 5.0
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "chrono_needle", "display_name": "Aiguille",
+		"description": "Une aiguille d'horloge qui ralentit un court instant ce qu'elle touche.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.TIME,
+		"projectile_visual": "aiguille_temps",
+		"damage": 16, "range": 8, "cooldown": 0.45, "projectile_speed": 1.3,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "chrono_bubble", "display_name": "Bulle de lenteur",
+			"description": "Dans la bulle, ennemis et projectiles vont au ralenti. Lui, non.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.TIME,
+			"damage": 12, "radius": 2.6, "duration": 8.0, "cooldown": 12.0,
+			"slow_duration": 0.3, "slow_factor": 0.35, "slow_sustained": true,
+			"time_factor": 0.35, "zone_style": "bulle_peinte",
+		}),
+		# Le double repasse par où le mage est venu : c'est-à-dire sur ses poursuivants.
+		Ability.make({
+			"id": "chrono_echo", "display_name": "Écho",
+			"description": "Un double rejoue ses 5 dernières secondes de marche et blesse ce qu'il croise.",
+			"kind": Ability.Kind.ECHO, "element": Element.Kind.TIME,
+			"damage": 60, "echo_seconds": 5.0, "cooldown": 9.0,
+		}),
+		Ability.make({
+			"id": "chrono_hourglass", "display_name": "Sablier",
+			"description": "Pendant 8 s, les coups reçus sont notés. À la fin, il récupère la moitié des points perdus, arrondie au-dessus.",
+			"kind": Ability.Kind.HOURGLASS, "element": Element.Kind.TIME,
+			"duration": 8.0, "cooldown": 28.0, "hourglass_ratio": 0.5,
+		}),
+	]
+	# Sans récupérer de vie : c'est le Sablier qui répare, le Retour ne répare que le chemin.
+	c.escape = Ability.make({
+		"id": "chrono_rewind", "display_name": "Retour",
+		"description": "Il revient là où il était il y a 4 s, sans récupérer de vie.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.TIME,
+		"rewind_seconds": 4.0, "cooldown": 7.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "chrono_stop", "display_name": "Arrêt du temps",
+		"description": "Pendant 4 s, tout se fige sauf lui.",
+		"kind": Ability.Kind.TIME_STOP, "element": Element.Kind.TIME,
+		"duration": 4.0, "cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 

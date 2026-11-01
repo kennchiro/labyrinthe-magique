@@ -140,12 +140,14 @@ func aim(delta: float, shooters: Array, player_cell: Vector2i) -> Array:
 	return opened
 
 
-## Avance les boules. Renvoie les cases où l'une vient de tomber.
-func advance(delta: float) -> Array[Vector2i]:
+## Avance les boules. Renvoie les cases où l'une vient de tomber. `combat` dit à quelle
+## allure le temps passe là où chacune va tomber : le Chronomancien la ralentit ou la fige.
+func advance(delta: float, combat: CombatSystem = null) -> Array[Vector2i]:
 	var landed: Array[Vector2i] = []
 	quiet_landings.clear()
 	for i in range(_flying.size() - 1, -1, -1):
-		_flying[i]["time_left"] = float(_flying[i]["time_left"]) - delta
+		var pace := combat.time_factor_at(_flying[i]["cell"]) if combat != null else 1.0
+		_flying[i]["time_left"] = float(_flying[i]["time_left"]) - delta * pace
 		if float(_flying[i]["time_left"]) > 0.0:
 			continue
 		landed.append(_flying[i]["cell"])

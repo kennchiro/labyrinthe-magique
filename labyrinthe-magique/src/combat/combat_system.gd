@@ -125,6 +125,11 @@ signal meteor_landed(cell: Vector2i, ability: Ability)
 ## une bizarrerie de chiffres.
 signal player_empowered(bonus: int, duration: float)
 signal player_calmed
+## Le double de l'Écho part : les cases de son trajet et l'instant de chacune.
+signal echo_walked(ability: Ability, cells: Array, times: Array)
+signal hourglass_turned(duration: float)
+signal hourglass_ended(healed: int)
+signal time_stopped(duration: float)
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -236,6 +241,12 @@ const CHAIN_RATIO := 0.5
 const PUSH_CELLS := 2
 const ECHO_RATIO := 0.40
 const ECHO_DELAY := 0.6
+## Le trait du Temps : aussi fort que la Trempe mais plus court, c'est un accroc. Mesuré :
+## à 72 % pendant 1 s, le bot expert mourait 75 % du temps au Bois d'Épine.
+const RETARD_DURATION := 1.4
+const RETARD_FACTOR := 0.6
+## La trace gardée, en secondes : assez pour le plus long sort qui la relit.
+const TRAIL_KEEP := 8.0
 
 var grid: MazeGrid
 var stats: CharacterStats
@@ -290,6 +301,13 @@ var _next_turret_id := 1
 var _chains: Array[Dictionary] = []
 var _storm := {}
 var _sky: Array[Dictionary] = []
+var _clock := 0.0
+var _trail: Array[Dictionary] = []     # {cell, time}, du plus ancien au plus récent
+var _walkers: Array[Dictionary] = []
+var _hourglass_left := 0.0
+var _hourglass_health := 0
+var _hourglass_ratio := 0.5
+var _time_stop_left := 0.0
 
 
 ## `p_seed` : la pluie de météores tire au sort ses cases. Le tirage doit être
@@ -347,6 +365,10 @@ func can_use(ability: Ability) -> bool:
 # --- Boucle ----------------------------------------------------------------------
 
 func update(delta: float, context: CombatContext) -> void:
+	_record_trail(delta, context)
+	_time_stop_left = maxf(0.0, _time_stop_left - delta)
+	_update_walkers(delta, context)
+	_update_hourglass(delta)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -651,6 +673,17 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_storm(ability, context)
 		Ability.Kind.SUMMON:
 			fired = _cast_summon(ability, context)
+		Ability.Kind.ECHO:
+			fired = _cast_echo(ability)
+		Ability.Kind.HOURGLASS:
+			_hourglass_left = ability.duration
+			_hourglass_health = health.current
+			_hourglass_ratio = ability.hourglass_ratio
+			hourglass_turned.emit(ability.duration)
+			fired = true
+		Ability.Kind.TIME_STOP:
+			_stop_time(ability, context)
+			fired = true
 
 	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
 	#
@@ -1725,6 +1758,13 @@ func _nearest_in_reach(cell: Vector2i, reach: int, context: CombatContext) -> in
 ## vient dès que le mage est collé à une haie.
 func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	var destination := context.player_cell
+	if ability.rewind_seconds > 0.0:
+		destination = cell_at_past(ability.rewind_seconds)
+		if destination == context.player_cell:
+			use_refused.emit("immobile")
+			return false
+		blink_performed.emit(context.player_cell, destination)
+		return true
 	if ability.pierces_walls:
 		for step in range(ability.range, 0, -1):
 			var far: Vector2i = context.player_cell + context.player_facing * step
@@ -1742,6 +1782,113 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		return false
 	blink_performed.emit(context.player_cell, destination)
 	return true
+
+
+# --- Le temps : la trace du mage ----------------------------------------------------
+
+func _record_trail(delta: float, context: CombatContext) -> void:
+	_clock += delta
+	if _trail.is_empty() or _trail[-1]["cell"] != context.player_cell:
+		_trail.append({"cell": context.player_cell, "time": _clock})
+	# On garde la dernière case d'AVANT la limite : c'est là qu'il était à cet instant.
+	while _trail.size() > 1 and float(_trail[1]["time"]) < _clock - TRAIL_KEEP:
+		_trail.pop_front()
+
+
+## La trace depuis `seconds` : son premier élément est la case où il se tenait alors.
+func _trail_since(seconds: float) -> Array[Dictionary]:
+	var cutoff := _clock - seconds
+	var first := 0
+	for i in _trail.size():
+		if float(_trail[i]["time"]) <= cutoff:
+			first = i
+	return _trail.slice(first)
+
+
+## Où était le mage il y a `seconds`. Plus tôt que le début du niveau : son départ.
+func cell_at_past(seconds: float) -> Vector2i:
+	var recent := _trail_since(seconds)
+	return recent[0]["cell"] if not recent.is_empty() else Vector2i.ZERO
+
+
+func _cast_echo(ability: Ability) -> bool:
+	var recent := _trail_since(ability.echo_seconds)
+	if recent.size() < 2:
+		use_refused.emit("immobile")
+		return false
+	var cells: Array = []
+	var times: Array = []
+	var start := float(recent[1]["time"]) - 0.2
+	for i in recent.size():
+		cells.append(recent[i]["cell"])
+		times.append(maxf(0.0, float(recent[i]["time"]) - start) if i > 0 else 0.0)
+	_walkers.append({"ability": ability, "cells": cells, "times": times,
+		"elapsed": 0.0, "at": 0, "hit": {}})
+	echo_walked.emit(ability, cells, times)
+	return true
+
+
+## Le double frappe ce qui se tient sur sa case ou la touche, une seule fois par créature.
+func _update_walkers(delta: float, context: CombatContext) -> void:
+	for w in range(_walkers.size() - 1, -1, -1):
+		var walker: Dictionary = _walkers[w]
+		walker["elapsed"] = float(walker["elapsed"]) + delta
+		var times: Array = walker["times"]
+		while int(walker["at"]) + 1 < times.size() \
+				and float(times[int(walker["at"]) + 1]) <= float(walker["elapsed"]):
+			walker["at"] = int(walker["at"]) + 1
+		var cell: Vector2i = walker["cells"][int(walker["at"])]
+		var hit: Dictionary = walker["hit"]
+		for i in context.enemy_cells.size():
+			if hit.has(i) or not context.enemy_alive(i):
+				continue
+			var gap: Vector2i = context.enemy_cells[i] - cell
+			if absi(gap.x) + absi(gap.y) <= 1:
+				hit[i] = true
+				_apply_damage(i, walker["ability"], context)
+		if float(walker["elapsed"]) >= float(times[-1]):
+			_walkers.remove_at(w)
+
+
+func _update_hourglass(delta: float) -> void:
+	if _hourglass_left <= 0.0:
+		return
+	_hourglass_left -= delta
+	if _hourglass_left > 0.0:
+		return
+	var lost := maxi(0, _hourglass_health - health.current)
+	var gained := health.heal(ceili(lost * _hourglass_ratio)) if lost > 0 else 0
+	if gained > 0:
+		player_healed.emit(gained)
+	hourglass_ended.emit(gained)
+
+
+## L'arrêt passe par l'ébranlement existant : la simulation d'équilibrage et le jeu savent
+## déjà qu'une créature ébranlée ne bouge ni ne frappe. Les projectiles et les repaires,
+## eux, lisent `time_factor_at` et `time_stop_left`.
+func _stop_time(ability: Ability, context: CombatContext) -> void:
+	_time_stop_left = ability.duration
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i):
+			enemy_staggered.emit(i, ability.duration)
+	time_stopped.emit(ability.duration)
+
+
+func time_stop_left() -> float:
+	return _time_stop_left
+
+
+## L'allure du temps sur une case, pour un projectile ennemi : 0 quand tout est figé.
+func time_factor_at(cell: Vector2i) -> float:
+	if _time_stop_left > 0.0:
+		return 0.0
+	var factor := 1.0
+	for zone in _zones:
+		var ability: Ability = zone["ability"]
+		if ability.time_factor < factor and Vector2(cell).distance_to(
+				Vector2(zone["cell"] as Vector2i)) <= ability.radius:
+			factor = ability.time_factor
+	return factor
 
 
 # --- Invocations ------------------------------------------------------------------
@@ -2085,6 +2232,9 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 		Element.Kind.AIR:
 			if context.enemy_alive(index):
 				_push_away(index, context)
+		Element.Kind.TIME:
+			if context.enemy_alive(index):
+				enemy_soaked.emit(index, RETARD_DURATION, RETARD_FACTOR)
 		Element.Kind.SUPREME:
 			if context.enemy_alive(index):
 				_echoes.append({"index": index, "time_left": ECHO_DELAY,

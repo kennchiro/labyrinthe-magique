@@ -29,6 +29,7 @@ const TRAIT_TEXT := {
 	Element.Kind.THUNDER: "**Arc** — le coup saute à un voisin à %d cases (%d %% des dégâts)",
 	Element.Kind.AIR: "**Bourrasque** — la cible est repoussée de %d cases",
 	Element.Kind.SUPREME: "**Écho** — %d %% des dégâts se répètent %.1f s plus tard",
+	Element.Kind.TIME: "**Retard** — la cible ralentit de %d %% pendant %.1f s",
 }
 
 
@@ -103,6 +104,9 @@ func _trait_line(element: Element.Kind) -> String:
 		Element.Kind.SUPREME:
 			return TRAIT_TEXT[element] % [int(CombatSystem.ECHO_RATIO * 100.0),
 				CombatSystem.ECHO_DELAY]
+		Element.Kind.TIME:
+			return TRAIT_TEXT[element] % [int((1.0 - CombatSystem.RETARD_FACTOR) * 100.0),
+				CombatSystem.RETARD_DURATION]
 	return "—"
 
 

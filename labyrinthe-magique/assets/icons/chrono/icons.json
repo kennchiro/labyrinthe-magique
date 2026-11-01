@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "chrono_needle",
+    "chrono_bubble",
+    "chrono_echo",
+    "chrono_hourglass",
+    "chrono_rewind",
+    "chrono_stop"
+  ],
+  "size": 256
+}

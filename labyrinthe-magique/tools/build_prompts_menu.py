@@ -137,6 +137,20 @@ MAGES = [
         "aura": "or, avec les quatre couleurs élémentaires qui s'y mêlent",
         "phrase": "Maître des quatre éléments.",
     },
+    {
+        "id": "chrono", "nom": "Chronomancien", "element": "Temps",
+        "couleur": "#2fd6b8",
+        "corps": "une longue robe turquoise sombre à liserés de cuivre, un haut "
+                 "col de cuivre, des cheveux argentés courts coiffés en arrière "
+                 "et un visage calme bien VISIBLE, un monocle de cuivre à l'œil "
+                 "droit. Un GRAND SABLIER de cuivre au sable turquoise est fixé "
+                 "dans son dos et dépasse au-dessus de ses épaules. Il tient de "
+                 "la main droite un bâton en forme de GRANDE AIGUILLE D'HORLOGE "
+                 "en cuivre, surmonté d'un petit cadran turquoise, et des grains "
+                 "de sable turquoise restent suspendus en l'air autour de lui",
+        "aura": "turquoise et cuivre",
+        "phrase": "Il ne fuit pas : il revient en arrière.",
+    },
 ]
 
 ENTETE = """> ⚠️ **Fichier GÉNÉRÉ** par `tools/build_prompts_menu.py`. Ne pas l'éditer à

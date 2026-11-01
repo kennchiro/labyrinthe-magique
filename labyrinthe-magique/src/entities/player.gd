@@ -131,6 +131,18 @@ func play_hurt(seconds: float) -> void:
 ## Réapparition après une translation : le mage revient en fondu plutôt qu'en
 ## surgissant. Court — 0,26 s — parce qu'un mage invisible pendant une poursuite
 ## est un mage qu'on ne peut pas piloter.
+func walk_textures() -> Dictionary:
+	return _textures
+
+
+func walk_poses() -> Array[int]:
+	return _walk_poses
+
+
+func pose_count() -> int:
+	return _poses.size()
+
+
 func play_warp() -> void:
 	_warp_left = WARP_FADE
 

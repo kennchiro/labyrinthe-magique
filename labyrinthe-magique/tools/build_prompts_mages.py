@@ -193,6 +193,29 @@ MAGES = [
             "il retrouve exactement sa pose de marche",
         ],
     },
+    {
+        "file": "chrono", "id": "chrono", "name": "Chronomancien", "reference": "chrono.png",
+        "today": "rien encore, c'est un nouveau mage",
+        "look": "le Chronomancien. Longue robe turquoise sombre à liserés de cuivre, "
+                "haut col de cuivre, cheveux argentés courts coiffés en arrière, "
+                "visage découvert. Un GRAND SABLIER de cuivre au sable turquoise est "
+                "fixé DANS SON DOS et dépasse au-dessus de ses épaules. Il tient de "
+                "la main droite un BÂTON en forme de GRANDE AIGUILLE D'HORLOGE en "
+                "cuivre, surmonté d'un petit cadran turquoise.",
+        "legs": "la robe s'ouvre devant et ses bottes de cuir cuivré sortent franchement à chaque pas",
+        "hold": "l'aiguille reste dans sa main droite, tenue droite, et le sablier reste immobile dans son dos",
+        "strike": [
+            "il ramène l'aiguille contre l'épaule, le petit cadran s'éclaire",
+            "l'aiguille bascule vers l'avant, un filet de sable turquoise s'enroule autour",
+            "LE TIR : aiguille pointée vers l'avant, une courte pointe de lumière turquoise part du cadran",
+            "la pointe s'efface, quelques grains de sable turquoise restent suspendus",
+            "les grains retombent près du cadran",
+            "l'aiguille remonte, le cadran faiblit",
+            "l'aiguille revient presque à la verticale",
+            "il retrouve exactement sa pose de marche",
+        ],
+        "extra": "LE SABLIER garde la même taille et la même place dans les 24 cases, il reste entier dans la case et ne pivote jamais. AUCUN CADRAN GÉANT ni cercle au sol : le jeu dessine lui-même ses sorts. Le turquoise reste VERT-BLEU et le cuivre reste ORANGÉ, jamais rose : ils ne doivent pas se confondre avec le fond magenta.",
+    },
 ]
 
 HEADER = """Feuille de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style cartoon
@@ -237,7 +260,7 @@ def fiche(mage: dict) -> str:
     hold = fill(f"SES MAINS : {mage['hold']}.", 79)
     return f"""# {mage['name']} — planches de marche et d'attaque
 
-    aujourd'hui   4 pas · 1 pose d'attaque
+    aujourd'hui   {mage.get('today', "4 pas · 1 pose d'attaque")}
     demain        4 orientations · 8 pas · 8 images d'attaque
 
 **Avant de lancer :** joindre l'image `assets/peso&cover/refonte/{mage['reference']}`

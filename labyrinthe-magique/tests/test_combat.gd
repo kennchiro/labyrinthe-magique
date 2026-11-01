@@ -46,6 +46,7 @@ func _init() -> void:
 	_test_volcanic_ultimate()
 	_test_ultimate_thresholds()
 	_test_ability_summaries()
+	_test_chrono()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -215,10 +216,10 @@ func _test_kill_system() -> void:
 func _test_catalog() -> void:
 	var characters := CharacterCatalog.all()
 	# 7 mages élémentaires + l'Invocateur (ajouté par la session voisine — il ne
-	# se bat pas lui-même, il délègue à ses invocations). Le compte protège
-	# contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 8:
-		_fail("le catalogue contient %d personnages au lieu de 8" % characters.size())
+	# se bat pas lui-même, il délègue à ses invocations) + le Chronomancien. Le compte
+	# protège contre un doublon ou une disparition, pas contre l'évolution du roster.
+	if characters.size() != 9:
+		_fail("le catalogue contient %d personnages au lieu de 9" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -1587,6 +1588,97 @@ func _test_ultimate_thresholds() -> void:
 		seen[character.ultimate_required_kills] = true
 	if seen.size() < 3:
 		_fail("les seuils d'ultime ne prennent que %d valeurs distinctes" % seen.size())
+
+
+## Marche le mage de `steps` cases, à une par dixième de seconde.
+func _walk_chrono(grid: MazeGrid, combat: CombatSystem, context: CombatContext, steps: int) -> void:
+	var from := context.player_cell
+	var previous := from
+	for i in steps:
+		for way: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next := context.player_cell + way
+			if grid.is_floor_v(next) and next != previous:
+				previous = context.player_cell
+				context.player_cell = next
+				break
+		for tick in 6:
+			combat.update(DT, context)
+
+
+func _test_chrono() -> void:
+	var chrono := CharacterCatalog.chrono()
+	# RETOUR : il ramène à la case d'il y a 4 s, et refuse s'il n'a pas bougé.
+	var parts := _context(chrono)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var refused := {"reason": ""}
+	combat.use_refused.connect(func(reason: String) -> void: refused["reason"] = reason)
+	combat.update(DT, context)
+	if combat.use(chrono.escape, context) or refused["reason"] != "immobile":
+		_fail("retour : il part alors que le mage n'a pas bougé")
+	var start := context.player_cell
+	_walk_chrono(grid, combat, context, 3)
+	var landed := {"cell": Vector2i(-1, -1)}
+	combat.blink_performed.connect(func(_f: Vector2i, to: Vector2i) -> void: landed["cell"] = to)
+	if not combat.use(chrono.escape, context) or landed["cell"] != start:
+		_fail("retour : attendu %s, lu %s" % [start, landed["cell"]])
+
+	# ÉCHO : le double frappe une fois ce qu'il croise sur la trace.
+	parts = _context(chrono)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	start = context.player_cell
+	combat.update(DT, context)
+	if combat.use(chrono.abilities[1], context):
+		_fail("écho : il part sans aucune trace")
+	_walk_chrono(grid, combat, context, 3)
+	_add_enemy(context, start, 500)
+	if not combat.use(chrono.abilities[1], context):
+		_fail("écho : il refuse une vraie trace")
+	for i in 120:
+		combat.update(DT, context)
+	if context.enemy_health[0].current != 500 - chrono.abilities[1].damage:
+		_fail("écho : attendu un seul coup, lu %d PV" % context.enemy_health[0].current)
+
+	# SABLIER : la moitié des points perdus, arrondie au-dessus, et seulement à la fin.
+	parts = _context(chrono)
+	combat = parts[1]; context = parts[2]; health = parts[3]
+	combat.use(chrono.abilities[2], context)
+	for i in 3:
+		health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	for i in int(chrono.abilities[2].duration / DT) - 5:
+		combat.update(DT, context)
+	if health.current != 1:
+		_fail("sablier : il rend avant la fin (%d PV)" % health.current)
+	for i in 10:
+		combat.update(DT, context)
+	if health.current != 3:
+		_fail("sablier : attendu 3 PV après 3 coups, lu %d" % health.current)
+
+	# ARRÊT DU TEMPS : tout ennemi vivant est figé, les jets aussi, puis tout repart.
+	parts = _context(chrono)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 100)
+	var frozen := {"duration": 0.0}
+	combat.enemy_staggered.connect(func(_i: int, d: float) -> void: frozen["duration"] = d)
+	combat.use(chrono.ultimate, context)
+	if frozen["duration"] != chrono.ultimate.duration or combat.time_factor_at(start) != 0.0:
+		_fail("arrêt du temps : les ennemis ou les jets ne sont pas figés")
+	for i in int(chrono.ultimate.duration / DT) + 2:
+		combat.update(DT, context)
+	if combat.time_factor_at(start) != 1.0:
+		_fail("arrêt du temps : le temps ne repart pas")
+
+	# BULLE : les jets qui visent l'intérieur ralentissent, ceux d'ailleurs non.
+	parts = _context(chrono)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	combat.use(chrono.abilities[0], context)
+	if combat.time_factor_at(context.player_cell) != chrono.abilities[0].time_factor:
+		_fail("bulle : un jet qui y tombe n'est pas ralenti")
+	if combat.time_factor_at(context.player_cell + Vector2i(9, 0)) != 1.0:
+		_fail("bulle : un jet loin d'elle est ralenti")
+	print("chronomancien : retour, écho, sablier, arrêt du temps et bulle : OK")
 
 
 ## La fiche de personnage doit MENTIONNER les particularités d'un sort : deux

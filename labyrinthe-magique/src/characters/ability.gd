@@ -22,6 +22,9 @@ enum Kind {
 	STORM,        ## un nuage qui SUIT le mage et foudroie tout seul
 	LINE,         ## une gerbe qui COURT dans le couloir et reste plantée
 	TURRET,       ## un cristal PLANTÉ qui tire tout seul tant qu'il tient
+	ECHO,         ## un double REJOUE la marche récente du mage et blesse ce qu'il croise
+	HOURGLASS,    ## note les coups reçus pendant sa durée, et en rend une part à la fin
+	TIME_STOP,    ## tout se fige sauf le mage
 }
 
 @export var id: String = ""
@@ -446,6 +449,21 @@ enum Kind {
 @export var summon_cap: int = 0
 
 
+## --- Le Chronomancien : tout part de la TRACE que le mage laisse derrière lui ---
+
+## Le saut ne va pas devant : il ramène là où le mage était il y a ce temps (forme BLINK).
+## Seule fuite du jeu qui répare une erreur de chemin : elle sort d'un cul-de-sac.
+@export var rewind_seconds: float = 0.0
+## Secondes de marche que le double rejoue (forme ECHO). Il repasse par où le mage est
+## venu : c'est-à-dire là où sont ses poursuivants.
+@export var echo_seconds: float = 0.0
+## Part des points de vie perdus que le sablier rend à la fin, arrondie au-dessus : un
+## coup coûte toujours un point, et une moitié de point n'existe pas (forme HOURGLASS).
+@export var hourglass_ratio: float = 0.5
+## Allure des projectiles ennemis qui visent l'intérieur de la zone. 1 = aucun effet.
+@export var time_factor: float = 1.0
+
+
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
 ## Un _init à douze paramètres positionnels serait illisible au point d'être
 ## dangereux — une valeur décalée d'un cran passerait inaperçue.
@@ -546,8 +564,17 @@ func _base_summary() -> String:
 			return "rend %d PV" % damage
 		Kind.WALL:
 			return "bloque %.0f s" % duration
+		Kind.BLINK when rewind_seconds > 0.0:
+			return "revient %s s en arrière" % _number(rewind_seconds)
 		Kind.BLINK:
 			return "saut de %d cases" % range
+		Kind.ECHO:
+			return "%d dégâts · rejoue %s s de marche" % [damage, _number(echo_seconds)]
+		Kind.HOURGLASS:
+			return "rend %d %% des PV perdus en %s s" % [
+				int(hourglass_ratio * 100.0), _number(duration)]
+		Kind.TIME_STOP:
+			return "tout se fige %s s" % _number(duration)
 		Kind.WAVE:
 			return "%d dégâts · déferle sur %d cases" % [damage, range]
 		Kind.CHAIN:
