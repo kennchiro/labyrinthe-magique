@@ -1,14 +1,19 @@
 extends SceneTree
 
-## Le portail dans ses trois états, sur un sol sombre, moyen et clair, hors partie.
+## Le portail dans ses trois états, sur un sol sombre, moyen et clair, hors partie, puis
+## l'éclat du saut à cinq instants de sa vie et la flèche de la boussole.
 ##
-##   godot --path . --resolution 960x600 --script res://tools/preview_portal.gd -- /tmp/portail.png
+##   godot --path . --resolution 960x1000 --script res://tools/preview_portal.gd -- /tmp/portail.png
 
 const SCENE := preload("res://scenes/entities/portal.tscn")
 ## Une case à l'écran, zoom du jeu compris : agrandie pour lire le dessin.
 const TILE := 150
 const GROUNDS: Array[Color] = [Color(0.16, 0.13, 0.2), Color(0.5, 0.48, 0.28), Color(0.82, 0.75, 0.6)]
 const COLUMNS := 3
+const BURST_SCENE := preload("res://scenes/entities/teleport_effect.tscn")
+const COMPASS_SCENE := preload("res://scenes/ui/compass.tscn")
+const BURST_STEPS: Array[float] = [0.05, 0.25, 0.45, 0.65, 0.85]
+const GEM_TINTS: Array[Color] = [Color("#8fe6ff"), Color("#4f7fe0"), Color("#a05cff"), Color("#ffd479")]
 
 
 func _initialize() -> void:
@@ -39,7 +44,29 @@ func _sheet(out: String) -> void:
 			portal.highlighted = column == 1
 			if column == 2:
 				flashes.append(portal)
-	get_root().size = Vector2i(int(cell.x * COLUMNS), int(cell.y * GROUNDS.size()))
+	var bursts := Vector2(cell.x * COLUMNS / 6.0, cell.y)
+	for row in 2:
+		var ground := GROUNDS[row * 2]
+		var band := ColorRect.new()
+		band.size = Vector2(cell.x * COLUMNS, bursts.y)
+		band.position = Vector2(0, cell.y * (GROUNDS.size() + row))
+		band.color = ground
+		root.add_child(band)
+		var y := band.position.y + bursts.y * 0.5
+		for step in BURST_STEPS.size():
+			var effect: TeleportEffect = BURST_SCENE.instantiate()
+			root.add_child(effect)
+			effect.position = Vector2(bursts.x * (step + 0.5), y)
+			effect.setup(64, GEM_TINTS[0], 1.3)
+			effect.set_process(false)
+			effect.sprite.material.set_shader_parameter("progress", BURST_STEPS[step])
+		for tint in GEM_TINTS.size():
+			var compass: Compass = COMPASS_SCENE.instantiate()
+			root.add_child(compass)
+			compass.setup(64)
+			var at := Vector2(bursts.x * 5.25 + tint % 2 * 70.0, y - 40.0 + (tint / 2) * 80.0)
+			compass.point_to(at - Vector2.RIGHT * 99.2, at + Vector2.RIGHT * 200.0, GEM_TINTS[tint])
+	get_root().size = Vector2i(int(cell.x * COLUMNS), int(cell.y * (GROUNDS.size() + 2)))
 	for i in 40:
 		await process_frame
 	for portal in flashes:

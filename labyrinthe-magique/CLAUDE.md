@@ -685,7 +685,8 @@ l'Air.
   couloir en fait une — et se compose NORMALEMENT : en additif il se délavait
   sur les stages clairs, l'additif ne sachant qu'éclaircir. Contrairement aux
   personnages, il reste COUCHÉ sur le sol en 2,5D : `setup` annule le redressement
-  de `WorldStage._stand_up`. Les images `assets/portals/` ne sont plus lues.
+  de `WorldStage._stand_up`. Portails, gemmes et potions passent devant le monument :
+  mesuré sur 400 parties, il a recouvert une gemme et quatre portails.
   ⚠️ Le repère de couleur est perdu volontairement (« le portail vert » était
   mémorisable) ; ce qui les distingue est leur déphasage.
 - **L'AMBIANCE DE LA CARTE vit sur un CanvasLayer** (`Ambience`) : vignette

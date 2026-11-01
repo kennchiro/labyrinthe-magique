@@ -228,7 +228,7 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 	var icon: Texture2D = entry.get("icon", null)
 	if icon != null:
 		var span := radius * 1.5
-		var tint := Color(1, 1, 1, 0.95) if ready else Color(0.55, 0.58, 0.66, 0.7)
+		var tint := Color(1, 1, 1, 0.95) if ready else Color(0.78, 0.8, 0.86, 0.8)
 		draw_texture_rect(icon, Rect2(centre - Vector2(span, span) * 0.5,
 			Vector2(span, span)), false, tint)
 

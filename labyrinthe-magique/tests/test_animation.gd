@@ -37,6 +37,7 @@ func _run() -> void:
 	_test_animated_mage(grid)
 	_test_impact_pose(grid)
 	_test_painted_fire()
+	_test_spell_names_fit()
 
 	print("")
 	if _failures.is_empty():
@@ -50,6 +51,21 @@ func _run() -> void:
 
 func _fail(msg: String) -> void:
 	_failures.append(msg)
+
+
+## Tout nom de sort tient en entier dans sa case, à côté de son icône.
+func _test_spell_names_fit() -> void:
+	var font := ThemeDB.fallback_font
+	var room := ActionBar.TILE.x - (ActionBar.TILE.y - 8.0 + 6.0) - ActionBar.NAME_MARGIN
+	for character in CharacterCatalog.all():
+		for ability: Ability in [character.attack] + character.abilities:
+			var fit := ActionBar.fit_name(font, ability.display_name, room)
+			for line in fit["lines"]:
+				var width := font.get_string_size(
+					line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, int(fit["size"])).x
+				if width > room:
+					_fail("nom coupé : « %s » (%s) fait %d px pour %d" % [
+						ability.display_name, character.id, int(width), int(room)])
 
 
 ## LE TRAIT ET LA BOULE DU FEU SONT PEINTS, ET LE RESTE NE L'EST PAS. Une clé mal

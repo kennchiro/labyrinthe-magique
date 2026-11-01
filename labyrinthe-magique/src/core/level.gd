@@ -836,6 +836,7 @@ func _warm_painted_shaders() -> void:
 			materials.append(MagicOrb.painted_material(ability.projectile_visual, 0.0))
 		if ZoneEffect.PAINTED_STYLES.has(ability.zone_style):
 			materials.append(ZoneEffect.painted_material(ability.zone_style, 2.0, 0.0))
+	materials.append(TeleportEffect.make_material())
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	for shaded in materials:
@@ -859,7 +860,7 @@ func _load_character_fx() -> void:
 	_seal_fx.clear()
 	_seal_fx_frames = 0
 	var fx_meta := FileAccess.get_file_as_string(folder + "sceaux_fx.json")
-	var fx_parsed: Variant = JSON.parse_string(fx_meta)
+	var fx_parsed: Variant = _parse_optional(fx_meta)
 	if fx_parsed is Dictionary:
 		_seal_fx_frames = maxi(0, int(fx_parsed.get("frames", 0)))
 		_seal_fx_fps = maxf(1.0, float(fx_parsed.get("fps", 6.0)))
@@ -869,13 +870,13 @@ func _load_character_fx() -> void:
 				_seal_fx[str(name)] = fx
 	_judgement_meteor = _texture_or_null(folder + "jugement_meteore.png")
 	_judgement_meteor_frames = 1
-	var jm: Variant = JSON.parse_string(
+	var jm: Variant = _parse_optional(
 		FileAccess.get_file_as_string(folder + "jugement_meteore.json"))
 	if jm is Dictionary:
 		_judgement_meteor_frames = maxi(1, int(jm.get("frames", 1)))
 		_judgement_meteor_fps = maxf(1.0, float(jm.get("fps", 18.0)))
 	_judgement_impact.clear()
-	var jc: Variant = JSON.parse_string(
+	var jc: Variant = _parse_optional(
 		FileAccess.get_file_as_string(folder + "jugement_impact.json"))
 	if jc is Dictionary:
 		for rank in maxi(0, int(jc.get("frames", 0))):
@@ -885,7 +886,7 @@ func _load_character_fx() -> void:
 	_rebirth_strip = _texture_or_null(folder + "renaissance_aura.png")
 	_rebirth_frames = 0
 	_rebirth_loop = []
-	var jr: Variant = JSON.parse_string(
+	var jr: Variant = _parse_optional(
 		FileAccess.get_file_as_string(folder + "renaissance_aura.json"))
 	if jr is Dictionary:
 		_rebirth_frames = maxi(0, int(jr.get("frames", 0)))
@@ -893,7 +894,7 @@ func _load_character_fx() -> void:
 		_rebirth_loop = jr.get("loop", []) as Array
 	_judgement_charge = _texture_or_null(folder + "jugement_incantation.png")
 	_judgement_charge_frames = 0
-	var ji: Variant = JSON.parse_string(
+	var ji: Variant = _parse_optional(
 		FileAccess.get_file_as_string(folder + "jugement_incantation.json"))
 	if ji is Dictionary:
 		_judgement_charge_frames = maxi(0, int(ji.get("frames", 0)))
@@ -901,7 +902,7 @@ func _load_character_fx() -> void:
 	_seal_charge_texture = _texture_or_null(folder + "sceaux_charge.png")
 	_seal_charge_frames = 0
 	var seal_meta := FileAccess.get_file_as_string(folder + "sceaux_charge.json")
-	var seal_parsed: Variant = JSON.parse_string(seal_meta)
+	var seal_parsed: Variant = _parse_optional(seal_meta)
 	if seal_parsed is Dictionary:
 		_seal_charge_frames = maxi(0, int(seal_parsed.get("frames", 0)))
 		_seal_charge_fps = maxf(1.0, float(seal_parsed.get("fps", 8.0)))
@@ -917,7 +918,7 @@ func _load_character_fx() -> void:
 	_convergence_orb_frames = 1
 	_convergence_orb_grows = false
 	var convergence_meta := FileAccess.get_file_as_string(folder + "convergence_orb.json")
-	var convergence_parsed: Variant = JSON.parse_string(convergence_meta)
+	var convergence_parsed: Variant = _parse_optional(convergence_meta)
 	if convergence_parsed is Dictionary:
 		_convergence_orb_frames = maxi(1, int(convergence_parsed.get("frames", 1)))
 		_convergence_orb_grows = String(convergence_parsed.get("mode", "loop")) == "grow"
@@ -927,7 +928,7 @@ func _load_character_fx() -> void:
 	_fire_orb_frames = 1
 	_fire_orb_grows = false
 	var fire_orb_meta := FileAccess.get_file_as_string("res://assets/characters/fire/orb.json")
-	var fire_orb_parsed: Variant = JSON.parse_string(fire_orb_meta)
+	var fire_orb_parsed: Variant = _parse_optional(fire_orb_meta)
 	if fire_orb_parsed is Dictionary:
 		_fire_orb_frames = maxi(1, int(fire_orb_parsed.get("frames", 1)))
 		_fire_orb_grows = String(fire_orb_parsed.get("mode", "loop")) == "grow"
@@ -946,7 +947,7 @@ func _load_character_fx() -> void:
 	_rune_texture = _texture_or_null(folder + "rune.png")
 	_rune_frames = 1
 	var rune_meta := FileAccess.get_file_as_string(folder + "rune.json")
-	var rune_parsed: Variant = JSON.parse_string(rune_meta)
+	var rune_parsed: Variant = _parse_optional(rune_meta)
 	if rune_parsed != null:
 		_rune_frames = maxi(1, int((rune_parsed as Dictionary).get("frames", 1)))
 	_cloud_texture = _texture_or_null(folder + "cloud_dark.png")
@@ -1010,11 +1011,17 @@ func _load_character_fx() -> void:
 	# pleine puissance à son étincelle de départ, en plein vol.
 	_orb_grows = false
 	var meta := FileAccess.get_file_as_string(folder + "orb.json")
-	var parsed: Variant = JSON.parse_string(meta)
+	var parsed: Variant = _parse_optional(meta)
 	if parsed != null:
 		var data := parsed as Dictionary
 		_orb_frames = maxi(1, int(data.get("frames", 1)))
 		_orb_grows = String(data.get("mode", "loop")) == "grow"
+
+
+## Beaucoup de ces fichiers n'existent que pour un mage : leur absence n'est pas une
+## erreur, et l'écrire dans le journal à chaque niveau y noierait les vraies.
+static func _parse_optional(text: String) -> Variant:
+	return null if text.is_empty() else JSON.parse_string(text)
 
 
 ## Une animation dessinée du personnage : ses images et son ancre. Le tableau
@@ -1024,7 +1031,7 @@ func _load_burst(folder: String, name: String) -> Array[Texture2D]:
 	_burst_anchor = Vector2.ZERO
 	var suite: Array[Texture2D] = []
 	var meta := FileAccess.get_file_as_string("%s%s_anim.json" % [folder, name])
-	var parsed: Variant = JSON.parse_string(meta)
+	var parsed: Variant = _parse_optional(meta)
 	if parsed == null:
 		return suite
 	var data := parsed as Dictionary

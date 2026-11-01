@@ -73,7 +73,8 @@ SHEETS = {
     "mage_supreme_skills.png": ("supreme", [
         "supreme_bolt", "supreme_convergence", "supreme_seals",
         "supreme_bloom", "supreme_shift", "supreme_judgement",
-    ]),
+    # Sa grille laissait un filet gris à deux bords de chaque icône, comme l'Invocateur.
+    ], {"inset": 0.025}),
     "mage_water_skills.png": ("water", [
         "water_jet", "water_wave", "water_geyser",
         "water_shield", "water_circle", "water_current",
@@ -95,7 +96,8 @@ SHEETS = {
     "mage_shadow_skills.png": ("shadow", [
         "shadow_orb", "shadow_rune", "shadow_blink",
         "shadow_burst", "shadow_step", "shadow_rift",
-    ], {"key": "flat", "flood": 80}),
+    # `lift` : violet sombre sur une case violet sombre, ses icônes étaient des taches.
+    ], {"key": "flat", "flood": 80, "lift": True}),
     # L'Invocateur demande un seuil PLUS LARGE que les Ténèbres (110 contre 80)
     # et ce n'est pas un réglage au jugé : son fond est plus sombre
     # (226, 8, 222 contre 249, 4, 250) et ses halos roses s'en approchent
@@ -278,6 +280,23 @@ def fitted(icon: Image.Image) -> Image.Image:
     return canvas
 
 
+## Éclaircit le dessin et le cerne d'un filet pâle, qui fait un pixel à la taille de la
+## barre d'action. La teinte ne change pas : le violet reste la couleur du mage.
+LIFT_GAMMA = 0.62
+LIFT_RIM_PX = 6
+LIFT_RIM_COLOR = (226, 196, 255)
+
+
+def lifted(icon: Image.Image) -> Image.Image:
+    data = np.asarray(icon).astype(float)
+    rgb = 255.0 * (data[..., :3] / 255.0) ** LIFT_GAMMA
+    solid = data[..., 3] > 96
+    rim = ndimage.binary_dilation(solid, iterations=LIFT_RIM_PX) & ~solid
+    out = np.dstack([rgb, data[..., 3]])
+    out[rim] = (*LIFT_RIM_COLOR, 255)
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
+
+
 def main() -> None:
     for sheet_name, entry in SHEETS.items():
         character, names = entry[0], entry[1]
@@ -311,7 +330,10 @@ def main() -> None:
             if cut is None:
                 print(f"  ! {name} : rien après détourage")
                 continue
-            fitted(cut).save(out_dir / f"{name}.png")
+            icon = fitted(cut)
+            if options.get("lift"):
+                icon = lifted(icon)
+            icon.save(out_dir / f"{name}.png")
             written.append(name)
             print(f"{character}/{name:12s} {cut.size} -> {ICON_SIZE}x{ICON_SIZE}")
         (out_dir / "icons.json").write_text(

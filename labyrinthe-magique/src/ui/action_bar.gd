@@ -26,6 +26,11 @@ const SLOT_PORTAL := -1
 const TILE := Vector2(104.0, 50.0)
 const GAP := 8.0
 const MARGIN_BOTTOM := 16.0
+## Tailles du nom du sort : sur une ligne tant qu'il reste lisible, puis sur deux.
+const NAME_SIZE := 12
+const NAME_ONE_LINE_MIN := 10
+const NAME_SIZE_MIN := 8
+const NAME_MARGIN := 3.0
 
 var entries: Array[Dictionary] = []
 
@@ -110,7 +115,7 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 		var span := rect.size.y - 8.0
 		draw_texture_rect(icon,
 			Rect2(rect.position + Vector2(3.0, 4.0), Vector2(span, span)), false,
-			Color(1, 1, 1, 0.95) if ready else Color(0.55, 0.58, 0.66, 0.65))
+			Color(1, 1, 1, 0.95) if ready else Color(0.78, 0.8, 0.86, 0.8))
 		text_left = span + 6.0
 
 	var edge := color if ready else Color(0.38, 0.44, 0.58)
@@ -146,23 +151,37 @@ func _draw_slot(font: Font, rect: Rect2, entry: Dictionary, index: int) -> void:
 	if locked:
 		label = "verrouillé"
 		tint = Color(0.55, 0.60, 0.72)
-	# Le nom rétrécit jusqu'à tenir. Godot COUPE au lieu de réduire, et un sort
-	# affiché « Explosion d' » n'apprend rien — mieux vaut deux points de moins.
-	var room := rect.size.x - text_left - 6.0
-	var font_size := 12
-	while font_size > 8 and font.get_string_size(
-			label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x > room:
-		font_size -= 1
-	# Et si même la plus petite taille ne suffit pas, on coupe SUR UN MOT.
-	#
-	# Les vignettes de sorts ont pris la place du texte : « Chaîne d'éclairs »
-	# s'affichait « Chaîne d'écl », coupé en plein mot par Godot. Un nom amputé
-	# d'un mot entier avec ses points de suite — « Chaîne… » — se lit ; un mot
-	# tranché au milieu ressemble à un bug.
-	var mots := label.split(" ", false)
-	while mots.size() > 1 and font.get_string_size(
-			label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x > room:
-		mots.remove_at(mots.size() - 1)
-		label = " ".join(mots) + "…"
-	draw_string(font, rect.position + Vector2(text_left, rect.size.y - 8.0), label,
-		HORIZONTAL_ALIGNMENT_LEFT, room, font_size, tint)
+	var fit := fit_name(font, label, rect.size.x - text_left - NAME_MARGIN)
+	var lines: PackedStringArray = fit["lines"]
+	var baseline := rect.position.y + rect.size.y - 8.0 if lines.size() == 1 \
+			else rect.position.y + rect.size.y - 6.0 - float(fit["size"]) - 1.0
+	for line in lines:
+		draw_string(font, Vector2(rect.position.x + text_left, baseline), line,
+			HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - text_left - NAME_MARGIN, int(fit["size"]), tint)
+		baseline += float(fit["size"]) + 1.0
+
+
+## Le nom entier, jamais amputé : « Pas de… » n'apprend rien au joueur. Il rétrécit sur
+## une ligne, puis passe sur deux, coupé là où les lignes s'équilibrent le mieux.
+static func fit_name(font: Font, label: String, room: float) -> Dictionary:
+	for font_size in range(NAME_SIZE, NAME_ONE_LINE_MIN - 1, -1):
+		if _width(font, label, font_size) <= room:
+			return {"lines": PackedStringArray([label]), "size": font_size}
+	var words := label.split(" ", false)
+	for font_size in range(NAME_SIZE - 1, NAME_SIZE_MIN - 1, -1):
+		var best := PackedStringArray()
+		var best_width := room
+		for cut in range(1, words.size()):
+			var first := " ".join(words.slice(0, cut))
+			var second := " ".join(words.slice(cut))
+			var widest := maxf(_width(font, first, font_size), _width(font, second, font_size))
+			if widest <= best_width:
+				best = PackedStringArray([first, second])
+				best_width = widest
+		if not best.is_empty():
+			return {"lines": best, "size": font_size}
+	return {"lines": PackedStringArray([label]), "size": NAME_SIZE_MIN}
+
+
+static func _width(font: Font, text: String, font_size: int) -> float:
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x

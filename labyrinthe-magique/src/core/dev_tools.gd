@@ -216,10 +216,17 @@ func _run_bench(seconds: float) -> void:
 		times.append(spent)
 		total += spent
 	times.sort()
-	print("BENCH images=%d %.0f img/s p50=%.2fms p99=%.2fms pire=%.2fms appels=%d" % [
+	var report := "BENCH [" + " ".join(OS.get_cmdline_user_args()) + "] images=%d %.0f img/s p50=%.2fms p99=%.2fms pire=%.2fms appels=%d" % [
 		times.size(), times.size() / total, times[times.size() / 2] * 1000.0,
 		times[int(times.size() * 0.99)] * 1000.0, times[-1] * 1000.0,
-		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)]
+	print(report)
+	# Sur iPhone, `print` ne remonte pas à la console de devicectl : le résultat se
+	# récupère dans ce fichier, `Documents/bench.txt` du conteneur de l'application.
+	var file := FileAccess.open("user://bench.txt", FileAccess.WRITE)
+	if file != null:
+		file.store_line(report)
+		file.close()
 	get_tree().quit()
 
 
