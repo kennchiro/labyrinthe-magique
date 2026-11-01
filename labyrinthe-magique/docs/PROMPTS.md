@@ -19,6 +19,15 @@ planches dans `assets/peso&cover/mages/<mage>_{marche,attaque}.png`.
 Découpage : `tools/build_enemies.py <mage>`, après l'avoir ajouté à `MAGES` dans cet
 outil et à `MAGES_ANIMES` dans `build_characters.py`. **Les huit sont branchés.**
 
+## Les créatures neuves — quatre fiches, toutes en jeu
+
+Dans `docs/prompts/ennemis/`, générées par `tools/build_prompts_enemies.py` :
+[Rat Chapardeur](prompts/ennemis/rat_chapardeur.md),
+[Gelée des Marées](prompts/ennemis/gelee_marees.md),
+[Vesse-de-Loup](prompts/ennemis/vesse_de_loup.md),
+[Raie des Ruines](prompts/ennemis/raie_ruines.md).
+Leurs planches sont dans `assets/peso&cover/creatures/`.
+
 ## Le Chronomancien — le neuvième mage
 
 La commande complète, dans l'ordre : [mages/chronomancien](prompts/mages/chronomancien.md).

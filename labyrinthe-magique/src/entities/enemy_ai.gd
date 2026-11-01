@@ -78,6 +78,55 @@ func decide(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 	return _patrol(grid, from, current_direction)
 
 
+## Le Rat : il court vers une gemme, puis fuit le mage avec. L'état reste SEARCH : sa teinte
+## de poursuite dirait qu'il menace, et il ne frappe jamais.
+func decide_thief(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
+		gem_field: PackedInt32Array, player_field: PackedInt32Array, carrying: bool,
+		delta: float) -> Vector2i:
+	if blind_left > 0.0:
+		blind_left -= delta
+		state = State.PATROL
+		return _patrol(grid, from, current_direction)
+	state = State.SEARCH
+	var step := _flee(grid, from, player_field) if carrying \
+		else Pathfinder.step_toward(grid, gem_field, from)
+	if step != Vector2i.ZERO or carrying:
+		return step
+	state = State.PATROL
+	return _patrol(grid, from, current_direction)
+
+
+## La case voisine la plus loin du mage, ou l'arrêt s'il n'y a pas mieux. Acculé dans un
+## cul-de-sac, il attend : c'est là qu'on le rattrape.
+func _flee(grid: MazeGrid, from: Vector2i, player_field: PackedInt32Array) -> Vector2i:
+	var best := Pathfinder.value_at(grid, player_field, from)
+	var best_direction := Vector2i.ZERO
+	for d in MazeGrid.NEIGHBORS:
+		var value := Pathfinder.value_at(grid, player_field, from + d)
+		if value > best:
+			best = value
+			best_direction = d
+	return best_direction
+
+
+## La Raie : à portée, elle va droit sur le mage à VOL D'OISEAU, murs compris. Hors de
+## portée elle patrouille comme les autres, après être sortie du mur où elle se trouve.
+func decide_phasing(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
+		player_field: PackedInt32Array, player_cell: Vector2i, reach: float,
+		delta: float) -> Vector2i:
+	var inside := not grid.is_floor_v(from)
+	if blind_left > 0.0 and not inside:
+		return decide(grid, from, current_direction, player_field, delta)
+	var gap := player_cell - from
+	if player_cell.x >= 0 and (inside or Vector2(gap).length() <= reach):
+		blind_left = maxf(0.0, blind_left - delta)
+		state = State.CHASE
+		if absi(gap.x) >= absi(gap.y):
+			return Vector2i(signi(gap.x), 0)
+		return Vector2i(0, signi(gap.y))
+	return decide(grid, from, current_direction, player_field, delta)
+
+
 func _patrol(grid: MazeGrid, from: Vector2i, current_direction: Vector2i) -> Vector2i:
 	var needs_new_direction := (
 		from != _patrol_decided_at

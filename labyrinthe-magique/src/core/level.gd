@@ -102,6 +102,7 @@ signal potion_collected(skill_slot: int)
 signal enemy_damaged(dealt: int)
 signal enemy_killed
 signal enemy_respawned
+signal gem_stolen
 signal lair_destroyed(remaining: int)
 signal player_empowered(bonus: int, duration: float)
 signal player_shielded(amount: int)
@@ -317,6 +318,13 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	_orbs.clear()
 	_zone_nodes.clear()
 	_respawns.clear()
+	_has_thief = false
+	_thief_field = PackedInt32Array()
+	_spores = SporeClouds.new()
+	for cloud in _spore_nodes:
+		if is_instance_valid(cloud):
+			cloud.queue_free()
+	_spore_nodes.clear()
 	teleport_count = 0
 	gems_taken = 0
 	gems_total = grid.gems.size()
@@ -451,18 +459,23 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	_player_was_in_house = grid.is_house(grid.player_spawn)
 	_walk_player_out_of_house()
 
-	for i in grid.enemy_spawns.size():
+	var slots := config.slot_species(grid.enemy_spawns.size())
+	for i in slots.size():
 		var enemy: Enemy = ENEMY_SCENE.instantiate()
 		entities.add_child(enemy)
 		# Les gobelins occupent les premiers index : ce sont eux qu'on voit en
 		# premier à l'écran, et c'est l'espèce qui donne son nom au stage 2.
 		# L'espèce tourne dans le roster du stage : le stage montre donc toutes
 		# ses créatures, la nouvelle comprise, avant d'en répéter une.
-		var id := config.species_at(i)
-		enemy.setup_enemy(grid, grid.enemy_spawns[i],
+		var id := slots[i]
+		enemy.setup_enemy(grid, grid.enemy_spawns[i % grid.enemy_spawns.size()],
 			REFERENCE_SPEED * config.enemy_speed(id), TILE_SIZE,
 			config.enemy_detection_radius, id, config.enemy_health(id))
 		enemies.append(enemy)
+		_has_thief = _has_thief or enemy.is_thief()
+		if Bestiary.is_droplet(id):
+			enemy.health.current = 0
+			enemy.set_dead(true)
 	_stagger_initial_spawns()
 	_refresh_ai()
 
@@ -502,6 +515,8 @@ func _process(delta: float) -> void:
 	_update_enemy_target()
 	_update_portal_highlight()
 	_update_enemy_portals()
+	_update_thieves()
+	_update_spores(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
 	_update_compass()
@@ -541,7 +556,7 @@ func _update_pickups(delta: float) -> void:
 		if not is_instance_valid(gem):
 			gems.remove_at(i)
 			continue
-		if Vector2(gem.cell).distance_to(player_position) >= PICKUP_DISTANCE:
+		if gem.carried or Vector2(gem.cell).distance_to(player_position) >= PICKUP_DISTANCE:
 			continue
 		_collect_gem(i)
 
@@ -579,6 +594,9 @@ func _collect_gem(index: int) -> void:
 	var gem: Gem = gems[index]
 	gems.remove_at(index)
 	gems_taken += 1
+	for enemy in enemies:
+		if enemy.stolen == gem:
+			enemy.stolen = null
 	_spawn_effect(gem.cell, gem.color())
 	gem.queue_free()
 	house.set_locked(missing_gem_colors().size())
@@ -695,7 +713,10 @@ func use_ability(slot: int) -> bool:
 func _enemy_cells() -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for enemy in enemies:
-		cells.append(enemy.current_cell())
+		var cell := enemy.current_cell()
+		if enemy.phases() and player != null:
+			cell = CreatureRules.anchor_cell(grid, cell, player.current_cell())
+		cells.append(cell)
 	return cells
 
 
@@ -767,7 +788,8 @@ func _update_respawns(delta: float) -> void:
 func _stagger_initial_spawns() -> void:
 	if lairs.is_empty():
 		return
-	for i in range(lairs.size(), enemies.size()):
+	# Seulement les poursuivants : les petites gelées, elles, attendent une mort.
+	for i in range(lairs.size(), grid.enemy_spawns.size()):
 		enemies[i].set_dead(true)
 		_respawns[i] = float(i - lairs.size() + 1) * config.initial_release_step
 
@@ -2332,9 +2354,128 @@ func _on_enemy_killed(index: int) -> void:
 	# et chaque mage finissait ses combats par le même feu d'artifice.
 	_spawn_impact(enemy.current_cell(),
 		character.element if character != null else Element.Kind.SUPREME, 2.0, 0.8)
+	_drop_stolen_gem(enemy)
 	enemy.set_dead(true)
+	if Bestiary.is_droplet(enemy.species):
+		enemy_killed.emit()
+		return
 	_respawns[index] = config.enemy_respawn_delay
-	enemy_killed.emit()
+	if not _split(enemy):
+		enemy_killed.emit()
+
+
+# --- Le Rat, la Gelée et la Vesse ---------------------------------------------------
+
+var _has_thief := false
+var _thief_field := PackedInt32Array()
+var _spores := SporeClouds.new()
+var _spore_nodes: Array[SporeCloud] = []
+const STOLEN_GEM_HEIGHT := 1.05
+const TINT_SLOWED := Color(0.86, 1.08, 0.62)
+
+
+## La gemme suit son voleur. Sa `cell` bouge avec lui : tout ce qui la vise la suit donc.
+func _update_thieves() -> void:
+	if not _has_thief:
+		return
+	for enemy in enemies:
+		if enemy.dead or not enemy.is_thief():
+			continue
+		var cell := enemy.mover.nearest_cell()
+		if enemy.stolen != null:
+			enemy.stolen.cell = cell
+			enemy.stolen.position = enemy.position \
+				+ Vector2.UP * float(TILE_SIZE) * STOLEN_GEM_HEIGHT
+		elif not enemy.is_blinded() and not enemy.is_staggered() \
+				and CreatureRules.may_steal(grid, _player_field, cell):
+			_steal_gem_at(enemy, cell)
+
+
+func _steal_gem_at(enemy: Enemy, cell: Vector2i) -> void:
+	for gem in gems:
+		if not is_instance_valid(gem) or gem.carried or gem.cell != cell:
+			continue
+		gem.carried = true
+		enemy.stolen = gem
+		enemy.strike()
+		_spawn_effect(cell, gem.color())
+		_refresh_thief_field()
+		gem_stolen.emit()
+		return
+
+
+func _drop_stolen_gem(enemy: Enemy) -> void:
+	if enemy.stolen == null:
+		return
+	var gem := enemy.stolen
+	enemy.stolen = null
+	gem.carried = false
+	gem.cell = enemy.mover.nearest_cell()
+	gem.position = maze_renderer.cell_to_world(gem.cell)
+	_spawn_effect(gem.cell, gem.color())
+	_refresh_thief_field()
+	_refresh_objective()
+
+
+func _refresh_thief_field() -> void:
+	if not _has_thief:
+		return
+	var ground: Array[Vector2i] = []
+	for gem in gems:
+		if is_instance_valid(gem) and not gem.carried:
+			ground.append(gem.cell)
+	_thief_field = CreatureRules.stealable_field(grid, ground, _player_field)
+	for enemy in enemies:
+		if enemy.is_thief():
+			enemy.gem_field = _thief_field
+
+
+## Sa mort lâche ses deux petites, prises dans les places réservées. Rend faux si elles
+## sont déjà toutes en jeu : la grande compte alors comme un kill ordinaire.
+func _split(enemy: Enemy) -> bool:
+	var tuning := Bestiary.of(enemy.species)
+	var count := int(tuning.get("splits_count", 0))
+	if count <= 0:
+		return false
+	var waiting: Array[Enemy] = []
+	for other in enemies:
+		if other.dead and other.species == str(tuning["splits_into"]) and waiting.size() < count:
+			waiting.append(other)
+	if waiting.is_empty():
+		return false
+	var cells := CreatureRules.split_cells(grid, enemy.mover.nearest_cell(),
+		player.mover.nearest_cell() if player != null else Vector2i(-1, -1), waiting.size())
+	for i in cells.size():
+		_release_enemy(enemies.find(waiting[i]), cells[i])
+	return true
+
+
+func _update_spores(delta: float, stopped: bool) -> void:
+	if player == null:
+		return
+	if not stopped:
+		for enemy in enemies:
+			if enemy.dead or not enemy.can_spit() or enemy.is_blinded() or enemy.is_staggered():
+				continue
+			var cell := enemy.mover.nearest_cell()
+			if CreatureRules.in_spit_reach(grid, _player_field, cell, enemy.spit_reach()):
+				enemy.spit()
+				_spores.spit(CreatureRules.spit_cells(grid, cell, _player_field),
+					Bestiary.windup(enemy.species))
+		for cell in _spores.advance(delta):
+			var cloud := SporeCloud.new()
+			# Sous les pieds, comme la marque de marche : entre les gemmes et les acteurs.
+			cloud.z_index = 5
+			add_child(cloud)
+			cloud.setup(maze_renderer.cell_to_world(cell), TILE_SIZE, SporeClouds.DURATION,
+				float(cell.x * 13 + cell.y * 7))
+			_spore_nodes.append(cloud)
+	var factor := _spores.speed_factor(player.mover.nearest_cell())
+	if factor < 1.0 and player.mover.speed >= character.move_speed:
+		player.set_tint(TINT_SLOWED)
+	elif factor >= 1.0 and player.mover.speed < character.move_speed:
+		player.set_tint(Color.WHITE)
+	player.mover.speed = character.move_speed * factor
 
 
 ## La cible bouge pendant le vol : on lui recolle le dernier point du trajet à
@@ -2465,7 +2606,7 @@ func _update_enemy_portals() -> void:
 	if teleport_system == null:
 		return
 	for enemy in enemies:
-		if enemy.dead:
+		if enemy.dead or not enemy.uses_portals():
 			continue
 		if teleport_system.is_on_portal(enemy.mover):
 			teleport_system.try_teleport_enemy(enemy.mover, _player_field)
@@ -2591,6 +2732,7 @@ func _refresh_ai() -> void:
 	_player_field = Pathfinder.distance_field(grid, sources)
 	for enemy in enemies:
 		enemy.player_field = _player_field
+	_refresh_thief_field()
 	_refresh_objective()
 
 
@@ -2621,7 +2763,8 @@ func _check_capture() -> void:
 		if _swings[i] == null:
 			_swings[i] = MeleeSwing.new()
 		var swing: MeleeSwing = _swings[i]
-		if enemy.dead or enemy.ranged_only() or enemy.is_staggered() or enemy.is_blinded():
+		if enemy.dead or enemy.ranged_only() or enemy.harmless() or enemy.is_staggered() \
+				or enemy.is_blinded():
 			swing.cancel()
 			continue
 		var gap := enemy.mover.grid_position().distance_to(player_position)

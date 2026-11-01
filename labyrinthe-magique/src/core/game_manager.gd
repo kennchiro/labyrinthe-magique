@@ -91,6 +91,8 @@ func _ready() -> void:
 	level.all_gems_collected.connect(_on_all_gems_collected)
 	level.potion_collected.connect(_on_potion_collected)
 	level.enemy_killed.connect(_on_enemy_killed)
+	level.gem_stolen.connect(func() -> void:
+		ui.flash("Un rat a volé une gemme !", Color("#ffd15a")))
 	level.ability_refused.connect(_on_ability_refused)
 	level.lair_destroyed.connect(_on_lair_destroyed)
 	level.player_shielded.connect(func(amount: int) -> void:

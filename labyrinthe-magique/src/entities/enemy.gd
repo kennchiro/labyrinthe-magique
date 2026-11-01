@@ -99,6 +99,10 @@ var player_field := PackedInt32Array()
 ## 300 ms au pire, suffit pour choisir un chemin ; il ne suffit pas pour décider
 ## de s'arrêter net devant quelqu'un qui bouge.
 var player_cell := Vector2i(-1, -1)
+## Vers quelles gemmes courir, pour le Rat. Renseigné comme `player_field`.
+var gem_field := PackedInt32Array()
+## La gemme que porte le Rat.
+var stolen: Gem = null
 var health: Health = null
 ## Espèce, telle que la nomme le bestiaire.
 var species := Bestiary.FALLBACK
@@ -112,6 +116,7 @@ var _strike := 0.0
 ## case n'a plus de direction, et un tireur regarde rarement sa cible.
 var _strike_facing := Vector2i.DOWN
 var _strike_rest := 0.0
+var _spit_cooldown := 0.0
 ## Cadences de la planche jouée (voir SHEET_TUNING).
 var _tuning: Dictionary = Bestiary.of(Bestiary.FALLBACK)
 
@@ -148,7 +153,7 @@ func setup_enemy(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size
 		detection_radius: int, p_species: String, max_health: int, rng_seed: int = 0) -> void:
 	species = p_species if Bestiary.has(p_species) else Bestiary.FALLBACK
 	_tuning = Bestiary.of(species)
-	_load_sheet(species)
+	_load_sheet(Bestiary.sheet(species))
 	# La stature vient de l'espèce : un golem doit dominer un serpent, sinon le
 	# bestiaire ne se lit qu'aux couleurs. Les valeurs restent proches de celle
 	# du mage (53 px) — une créature deux fois plus haute masquerait le couloir
@@ -164,6 +169,7 @@ func setup_enemy(grid: MazeGrid, start_cell: Vector2i, speed: float, p_tile_size
 	shadow_radius = 0.26
 	setup(grid, start_cell, speed, p_tile_size)
 	_base_speed = speed
+	mover.phases = phases()
 	ai = EnemyAI.new(detection_radius, rng_seed)
 	health = Health.new(max_health)
 
@@ -199,6 +205,38 @@ func ranged_only() -> bool:
 ## Sa frappe lointaine BALAIE-t-elle le couloir, au lieu de viser une case ?
 func sweeps() -> bool:
 	return bool(_tuning.get("sweep", false))
+
+
+## Vole-t-il des gemmes ?
+func is_thief() -> bool:
+	return bool(_tuning.get("thief", false))
+
+
+## Ne frappe-t-il jamais au contact, sans tirer pour autant ?
+func harmless() -> bool:
+	return bool(_tuning.get("harmless", false))
+
+
+func phases() -> bool:
+	return bool(_tuning.get("phases", false))
+
+
+func uses_portals() -> bool:
+	return not bool(_tuning.get("no_portals", false))
+
+
+func spit_reach() -> int:
+	return int(_tuning.get("spit_reach", 0))
+
+
+func can_spit() -> bool:
+	return spit_reach() > 0 and can_strike() and _spit_cooldown <= 0.0
+
+
+## Le geste de la Vesse. Le nuage, lui, tombe dans `SporeClouds` au bout de l'armement.
+func spit() -> void:
+	strike()
+	_spit_cooldown = float(_tuning["spit_reload"])
 
 
 ## Peut-il frapper MAINTENANT ? Le Level le demande avant de chercher une ligne
@@ -294,6 +332,7 @@ func _update_desired(delta: float) -> void:
 		return
 	_strike = maxf(0.0, _strike - delta)
 	_strike_rest = maxf(0.0, _strike_rest - delta)
+	_spit_cooldown = maxf(0.0, _spit_cooldown - delta)
 	_soak_left = maxf(0.0, _soak_left - delta)
 	_stagger_left = maxf(0.0, _stagger_left - delta)
 	_frozen_left = maxf(0.0, _frozen_left - delta)
@@ -317,8 +356,7 @@ func _update_desired(delta: float) -> void:
 		else:
 			_show_state(TINT_FROZEN if _frozen_left > 0.0 else TINT_STAGGER)
 		return
-	var step := ai.decide(
-		mover.grid, mover.decision_cell(), mover.direction, player_field, delta)
+	var step := _next_step(delta)
 	# Le DERNIER pas est refusé : celui qui ferait monter l'ennemi sur la case du
 	# mage. Deux sprites superposés, on ne voit plus ni qui frappe ni où l'on est
 	# — alors qu'un poursuivant arrêté à une case, arme levée, raconte la même
@@ -331,6 +369,12 @@ func _update_desired(delta: float) -> void:
 	# Le tireur pur s'arrête dès qu'il a sa ligne.
 	if ranged_only() and ThrowSystem.in_line(
 			mover.grid, mover.decision_cell(), player_cell, throw_range()):
+		step = Vector2i.ZERO
+	# Le larcin et le crachat se font à l'arrêt. La Vesse reste aussi à distance de crachat.
+	if (is_thief() or spit_reach() > 0) and _strike > 0.0:
+		step = Vector2i.ZERO
+	if spit_reach() > 0 and CreatureRules.in_spit_reach(
+			mover.grid, player_field, mover.decision_cell(), spit_reach()):
 		step = Vector2i.ZERO
 	mover.desired_direction = step
 
@@ -377,6 +421,17 @@ func _update_desired(delta: float) -> void:
 			_show_state(TINT_PATROL)
 
 
+func _next_step(delta: float) -> Vector2i:
+	var from := mover.decision_cell()
+	if is_thief():
+		return ai.decide_thief(mover.grid, from, mover.direction, gem_field, player_field,
+			stolen != null, delta)
+	if phases():
+		return ai.decide_phasing(mover.grid, from, mover.direction, player_field, player_cell,
+			float(_tuning["phase_reach"]), delta)
+	return ai.decide(mover.grid, from, mover.direction, player_field, delta)
+
+
 ## Teinte d'état, atténuée (voir TINT_STRENGTH).
 func _show_state(color: Color) -> void:
 	set_tint(Color.WHITE.lerp(color, TINT_STRENGTH))
@@ -408,6 +463,7 @@ func revive_at(cell: Vector2i) -> void:
 	_flash = 0.0
 	_strike = 0.0
 	_strike_rest = 0.0
+	_spit_cooldown = 0.0
 	_soak_left = 0.0
 	_stagger_left = 0.0
 	_burn_left = 0.0

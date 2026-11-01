@@ -222,14 +222,30 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	# Vitesse PAR ESPÈCE, comme le Level : un golem traîne, un serpent file.
 	# La version à vitesse unique mesurait un autre jeu que celui qu'on joue.
 	var base_speeds: Array[float] = []
-	for i in grid.enemy_spawns.size():
-		var enemy_speed := REFERENCE_SPEED * config.enemy_speed(config.species_at(i))
+	var slots := config.slot_species(grid.enemy_spawns.size())
+	for i in slots.size():
+		var spawn := grid.enemy_spawns[i % grid.enemy_spawns.size()]
+		var enemy_speed := REFERENCE_SPEED * config.enemy_speed(slots[i])
 		base_speeds.append(enemy_speed)
-		movers.append(GridMover.new(grid, grid.enemy_spawns[i], enemy_speed))
+		movers.append(GridMover.new(grid, spawn, enemy_speed))
+		movers[i].phases = bool(Bestiary.of(slots[i]).get("phases", false))
 		brains.append(EnemyAI.new(config.enemy_detection_radius, rng_seed * 31 + i + 1))
 		swings.append(MeleeSwing.new())
-		context.enemy_cells.append(grid.enemy_spawns[i])
-		context.enemy_health.append(Health.new(config.enemy_health(config.species_at(i))))
+		context.enemy_cells.append(spawn)
+		context.enemy_health.append(Health.new(config.enemy_health(slots[i])))
+		# Les petites gelées attendent hors jeu, sans réapparition.
+		if Bestiary.is_droplet(slots[i]):
+			context.enemy_health[i].current = 0
+
+	# Les gemmes des rats, les nuages de la Vesse : les mêmes règles qu'en jeu.
+	var carried := {}
+	var acting := {}
+	var spit_cooldowns := {}
+	var spores := SporeClouds.new()
+	var thief_field := PackedInt32Array()
+	var gem_fields := {}
+	var remaining := grid.gems.duplicate()
+	var dirty := {"objective": false}
 
 	var respawns := {}
 	# Les traits élémentaires qui touchent au MOUVEMENT : la simulation les
@@ -252,7 +268,36 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		if index < movers.size():
 			movers[index].teleport_to(cell))
 	combat.enemy_killed.connect(func(index: int) -> void:
-		kills.register_kill()
+		swings[index].cancel()
+		if carried.has(index):
+			carried.erase(index)
+			var dropped := movers[index].nearest_cell()
+			remaining.append(dropped)
+			if not gem_fields.has(dropped):
+				gem_fields[dropped] = Pathfinder.distance_field(grid, [dropped] as Array[Vector2i])
+			dirty["objective"] = true
+		if Bestiary.is_droplet(slots[index]):
+			kills.register_kill()
+			return
+		# Une gelée qui se scinde ne compte pas : ses petites compteront. Mêmes règles que
+		# `Level._split`, sinon la simulation donnerait trois kills par gelée.
+		var tuning := Bestiary.of(slots[index])
+		var waiting: Array[int] = []
+		for other in slots.size():
+			if slots[other] == str(tuning.get("splits_into", "")) \
+					and waiting.size() < int(tuning.get("splits_count", 0)) \
+					and not context.enemy_health[other].is_alive():
+				waiting.append(other)
+		if waiting.is_empty():
+			kills.register_kill()
+		else:
+			var cells := CreatureRules.split_cells(grid, movers[index].nearest_cell(),
+				player.nearest_cell(), waiting.size())
+			for i in cells.size():
+				movers[waiting[i]].teleport_to(cells[i])
+				context.enemy_health[waiting[i]].current = context.enemy_health[waiting[i]].maximum
+				brains[waiting[i]].state = EnemyAI.State.PATROL
+				swings[waiting[i]].cancel()
 		# Le délai de réapparition INCLUT l'ouverture de la maison : dans le jeu
 		# la porte s'anime une seconde avant de lâcher la créature, et cette
 		# seconde-là est du répit pour le joueur. L'oublier mesurait un jeu plus
@@ -265,7 +310,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	# une meute que le jeu ne produit jamais.
 	var lair_count := maxi(1, grid.lairs.size())
 	if not grid.lairs.is_empty():
-		for i in range(lair_count, movers.size()):
+		for i in range(lair_count, grid.enemy_spawns.size()):
 			# À zéro PV, l'ennemi est HORS JEU pour tout le reste de la boucle :
 			# il ne menace pas, il n'est pas ciblable, et sa réapparition le
 			# remet à plein. C'est exactement l'état « encore dans la maison ».
@@ -275,11 +320,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed
 
-	var gem_fields := {}
 	for gem in grid.gems:
 		gem_fields[gem] = Pathfinder.distance_field(grid, [gem] as Array[Vector2i])
 	var house_field := Pathfinder.distance_field(grid, [grid.house_center] as Array[Vector2i])
-	var remaining := grid.gems.duplicate()
 	var potions := grid.potions.duplicate()
 	var potion_timer := 0.0
 
@@ -320,9 +363,18 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			# danger que consultent les profils simulés.
 			var threats: Array[Vector2i] = []
 			for i in movers.size():
-				if context.enemy_health[i].is_alive():
-					threats.append(movers[i].cell)
+				# Un Rat ne frappe pas : le bot ne le fuit pas, il le chasse.
+				if context.enemy_health[i].is_alive() \
+						and not bool(Bestiary.of(slots[i]).get("thief", false)):
+					threats.append(CreatureRules.anchor_cell(grid, movers[i].cell, player.cell))
 			enemy_field = Pathfinder.distance_field(grid, threats)
+			thief_field = CreatureRules.stealable_field(grid, remaining, player_field)
+			# Une gemme volée se poursuit : le bot vise aussi ses voleurs.
+			if not carried.is_empty():
+				var targets: Array[Vector2i] = remaining.duplicate()
+				for index in carried:
+					targets.append(movers[index].nearest_cell())
+				objective_field = Pathfinder.distance_field(grid, targets)
 		ai_timer -= DT
 
 		# --- État du monde vu par le combat --------------------------------------
@@ -330,14 +382,19 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		context.player_facing = player.direction if player.direction != Vector2i.ZERO else Vector2i.DOWN
 		context.player_field = player_field
 		for i in movers.size():
-			context.enemy_cells[i] = movers[i].cell
+			context.enemy_cells[i] = CreatureRules.anchor_cell(grid, movers[i].cell, player.cell)
+
+		if bool(dirty["objective"]):
+			dirty["objective"] = false
+			objective_field = _objective_field(grid, gem_fields, house_field, remaining, player.cell)
 
 		teleports.update(DT)
 		combat.update(DT, context)
 
 		# Les ennemis vivants empruntent les portails (appel identique à Level).
 		for i in movers.size():
-			if not context.enemy_health[i].is_alive():
+			if not context.enemy_health[i].is_alive() \
+					or bool(Bestiary.of(slots[i]).get("no_portals", false)):
 				continue
 			if teleports.is_on_portal(movers[i]):
 				teleports.try_teleport_enemy(movers[i], player_field)
@@ -365,10 +422,13 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		# --- Déplacement -----------------------------------------------------------
 		if explorer:
 			player.desired_direction = _explore(grid, player, objective_field, enemy_field,
-				_objective_cell(grid, remaining), visits, rng)
+				_hunted_cell(grid, remaining, carried, movers), visits, rng)
 		else:
 			player.desired_direction = _expert(grid, player.decision_cell(), objective_field, enemy_field)
+		player.speed = character.move_speed * spores.speed_factor(player.nearest_cell())
 		player.update(DT)
+		if combat.time_stop_left() <= 0.0:
+			spores.advance(DT)
 
 		# --- Ramassage --------------------------------------------------------------
 		var position := player.grid_position()
@@ -392,7 +452,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					potions.append(cell)
 
 		# Victoire : toutes les gemmes ET la maison, comme dans le GameManager.
-		if remaining.is_empty() and grid.is_house(player.cell):
+		if remaining.is_empty() and carried.is_empty() and grid.is_house(player.cell):
 			return _outcome("win", frame, grid.gems.size(), kills.kills, portal_uses)
 
 		# --- Ennemis -----------------------------------------------------------------
@@ -408,6 +468,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				swings[i].cancel()
 				continue
 			var mover: GridMover = movers[i]
+			var species_tuning := Bestiary.of(slots[i])
 			mover.speed = base_speeds[i]
 			if soaked.has(i):
 				soaked[i] = float(soaked[i]) - DT
@@ -416,22 +477,52 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				else:
 					mover.speed = base_speeds[i] * float(
 						soak_factors.get(i, CombatSystem.SOAK_FACTOR))
-			mover.desired_direction = brains[i].decide(grid, mover.decision_cell(), mover.direction, player_field, DT)
-			if mover.decision_cell() + mover.desired_direction == player.nearest_cell():
+			acting[i] = maxf(0.0, float(acting.get(i, 0.0)) - DT)
+			spit_cooldowns[i] = maxf(0.0, float(spit_cooldowns.get(i, 0.0)) - DT)
+			var from := mover.decision_cell()
+			var is_thief := bool(species_tuning.get("thief", false))
+			var spit_reach := int(species_tuning.get("spit_reach", 0))
+			if is_thief:
+				mover.desired_direction = brains[i].decide_thief(grid, from, mover.direction,
+					thief_field, player_field, carried.has(i), DT)
+			elif bool(species_tuning.get("phases", false)):
+				mover.desired_direction = brains[i].decide_phasing(grid, from, mover.direction,
+					player_field, player.nearest_cell(), float(species_tuning["phase_reach"]), DT)
+			else:
+				mover.desired_direction = brains[i].decide(grid, from, mover.direction, player_field, DT)
+			if from + mover.desired_direction == player.nearest_cell():
 				mover.desired_direction = Vector2i.ZERO
-			var species_tuning := Bestiary.of(config.species_at(i))
+			if float(acting[i]) > 0.0:
+				mover.desired_direction = Vector2i.ZERO
+			if spit_reach > 0 and CreatureRules.in_spit_reach(grid, player_field, from, spit_reach):
+				mover.desired_direction = Vector2i.ZERO
+				if float(acting[i]) <= 0.0 and float(spit_cooldowns[i]) <= 0.0 \
+						and brains[i].blind_left <= 0.0 and combat.time_stop_left() <= 0.0:
+					acting[i] = float(species_tuning["strike"])
+					spit_cooldowns[i] = float(species_tuning["spit_reload"])
+					spores.spit(CreatureRules.spit_cells(grid, mover.nearest_cell(), player_field),
+						Bestiary.windup(slots[i]))
 			var ranged_only := bool(species_tuning.get("ranged_only", false))
 			if ranged_only and ThrowSystem.in_line(grid, mover.decision_cell(),
 					player.nearest_cell(), int(species_tuning["throw_range"])):
 				mover.desired_direction = Vector2i.ZERO
 			mover.update(DT)
+			# Le larcin, au passage sur la gemme.
+			if is_thief and not carried.has(i) and brains[i].blind_left <= 0.0:
+				var at := mover.nearest_cell()
+				if remaining.has(at) and CreatureRules.may_steal(grid, player_field, at):
+					remaining.erase(at)
+					carried[i] = true
+					acting[i] = float(species_tuning["strike"])
+					dirty["objective"] = true
 			# Aveuglé, il erre mais ne frappe pas, comme en jeu.
-			if ranged_only or brains[i].blind_left > 0.0:
+			if ranged_only or bool(species_tuning.get("harmless", false)) \
+					or brains[i].blind_left > 0.0:
 				continue
 			# Le même coup qu'en jeu : armé au contact, porté à l'impact.
 			var swing_event: MeleeSwing.Event = swings[i].tick(DT,
 				mover.grid_position().distance_to(position), CATCH_DISTANCE,
-				Bestiary.windup(config.species_at(i)),
+				Bestiary.windup(slots[i]),
 				ThrowSystem.reload_of(species_tuning))
 			if swing_event != MeleeSwing.Event.LANDED or sheltered:
 				continue
@@ -445,11 +536,11 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		# la fin du tour, comme en jeu.
 		var shooters: Array = []
 		for i in movers.size():
-			var reach := int(Bestiary.of(config.species_at(i)).get("throw_range", 0))
+			var reach := int(Bestiary.of(slots[i]).get("throw_range", 0))
 			if reach <= 0 or not context.enemy_health[i].is_alive() or brains[i].blind_left > 0.0:
 				shooters.append({"cell": Vector2i.ZERO, "range": 0})
 				continue
-			var tuning := Bestiary.of(config.species_at(i))
+			var tuning := Bestiary.of(slots[i])
 			shooters.append({"cell": movers[i].nearest_cell(), "range": reach,
 				"reload": ThrowSystem.reload_of(tuning),
 				"sweep": bool(tuning.get("sweep", false))})
@@ -540,8 +631,14 @@ func _objective_field(grid: MazeGrid, gem_fields: Dictionary, house_field: Packe
 	return best
 
 
-func _objective_cell(grid: MazeGrid, remaining: Array[Vector2i]) -> Vector2i:
-	return grid.house_center if remaining.is_empty() else remaining[0]
+## Ce que la boussole montre : la gemme, sinon celle qu'un rat emporte, sinon la maison.
+func _hunted_cell(grid: MazeGrid, remaining: Array[Vector2i], carried: Dictionary,
+		movers: Array[GridMover]) -> Vector2i:
+	if not remaining.is_empty():
+		return remaining[0]
+	for index in carried:
+		return movers[index].nearest_cell()
+	return grid.house_center
 
 
 ## Joueur expert : descend vers son objectif, mais paie un lourd surcoût pour

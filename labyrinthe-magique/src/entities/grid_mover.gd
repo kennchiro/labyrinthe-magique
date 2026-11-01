@@ -26,6 +26,8 @@ var progress: float = 0.0
 ## En cases par seconde.
 var speed: float = 5.0
 var stop_when_idle := true
+## Traverse les murs, sans sortir de l'enceinte du labyrinthe.
+var phases := false
 ## Faut-il s'arrêter quand plus aucune direction n'est demandée ?
 ##
 ## À false, on obtient le comportement Pac-Man : le personnage continue tout
@@ -48,6 +50,9 @@ func is_moving() -> bool:
 
 
 func can_walk(target: Vector2i) -> bool:
+	if grid != null and phases:
+		return target.x > 0 and target.y > 0 and target.x < grid.cols - 1 \
+			and target.y < grid.rows - 1
 	return grid != null and grid.is_floor_v(target)
 
 

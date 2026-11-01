@@ -3,7 +3,7 @@
 
     tools/.venv/bin/python tools/build_prompts_enemies.py     # DEPUIS LA RACINE
 
-DOUZE FICHES ÉCRITES PAR UN SEUL TEXTE, et c'est tout l'intérêt.
+SEIZE FICHES ÉCRITES PAR UN SEUL TEXTE, et c'est tout l'intérêt.
 
 Ces fiches partagent 90 % de leur contenu : le format de la planche, les trois
 rangées, les règles bloquantes, la marche à suivre au retour. Recopiées douze
@@ -435,6 +435,173 @@ HERD = [
     },
     # LES CRÉATURES NÉES DE CES FICHES. `arrival` dit ce qu'elles font en jeu. Chacune attaque ce que le bestiaire ne touche pas : les gemmes, l'économie des
     # kills, les couloirs, les murs. Trois d'entre elles n'ont pas de jambes.
+    {
+        "file": "rat_chapardeur", "id": "rat", "name": "Rat Chapardeur",
+        "medium_steps": True,
+        "worst": "Aucun ennemi ne touche à l'objectif du jeu : on peut tous les"
+                 " fuir et ramasser ses gemmes tranquillement. Lui ne vous attaque"
+                 " pas, il vole une gemme et s'enfuit. Pour la première fois, c'est"
+                 " le mage qui poursuit.",
+        "arrival": "Stage 3. Il court vers la gemme la plus proche, la prend et"
+                   " s'enfuit loin du mage. Il ne porte aucun coup. Abattu, il rend"
+                   " la gemme à l'endroit où il tombe. Le jeu dessine la gemme"
+                   " volée au-dessus de lui, sans planche de plus. Robustesse ×0.70, vélocité ×0.95, pour qu'on puisse le rattraper.",
+        "look": "UN RAT CHAPARDEUR. Un grand rat debout sur ses pattes arrière,"
+                " sec et maigre, pelage gris sable, grandes oreilles rondes"
+                " brunes, museau pointu, moustaches, yeux ambrés rusés et une"
+                " longue queue brun sombre. Un foulard safran lui masque le bas du"
+                " cou. Il porte sur le dos un GROS SAC de toile beige rapiécé,"
+                " presque aussi grand que lui, fermé par une corde. Il n'a aucune"
+                " arme.",
+        "walk": "une MARCHE FURTIVE à pas moyens : le dos voûté sous le sac, la"
+                " tête basse qui guette, la queue qui balance derrière lui, le sac"
+                " qui rebondit à contretemps",
+        "strike": [
+            "il s'accroupit, le museau en avant, les moustaches dressées",
+            "il tend une patte devant lui, les doigts écartés",
+            "il se penche encore, sa patte s'allonge, ses yeux brillent",
+            "sa patte se referme devant lui, avec un petit trait doré",
+            "LE LARCIN : il brandit devant lui un petit éclat lumineux doré",
+            "il ramène l'éclat par-dessus son épaule, vers le sac",
+            "l'éclat disparaît dans le sac, qui se gonfle un peu",
+            "il revient à sa position de marche, le sac sur le dos",
+        ],
+        "extra": ["le sac est visible dans les 24 cases : au centre de son dos sur"
+                  " la rangée de dos, dépassant de ses épaules sur la rangée de"
+                  " face, derrière lui sur la rangée de profil",
+                  "⚠️ AUCUN ROSE dans ses oreilles, son museau ou sa queue : le"
+                  " fond magenta s'effacerait avec eux",
+                  "il ne griffe pas, ne mord pas et ne porte AUCUNE arme : c'est"
+                  " un voleur, pas un combattant"],
+    },
+    {
+        "file": "gelee_marees", "id": "gelee", "name": "Gelée des Marées",
+        "legs": False,
+        "worst": "Dans un couloir d'une case, se diviser vaut mieux que frapper"
+                 " fort : la tuer peut empirer la situation pendant quelques"
+                 " secondes. Chaque coup fatal pose donc une question : ici, ou"
+                 " un peu plus loin ?",
+        "arrival": "Stage 4. Abattue, elle se scinde en deux petites gelées au"
+                   " quart de ses PV, qui ne se divisent plus. Le jeu réutilise la"
+                   " même planche, réduite de moitié. Seules les petites comptent"
+                   " comme kills, sinon une gelée vaudrait trois kills pour l'ultime."
+                   " Robustesse ×1.00, vélocité ×0.85.",
+        "look": "UNE GELÉE DES MARÉES. Une grosse goutte de gelée turquoise"
+                " OPAQUE, ronde et basse, plus large que haute, posée au sol sur"
+                " un bas bien plat. Le dessus est plus clair, avec un reflet blanc"
+                " net. Elle a deux grands yeux noirs ronds et une petite bouche"
+                " boudeuse, un coquillage doré collé sur le sommet et deux petits"
+                " tentacules courts sur les côtés.",
+        "walk": "une REPTATION complète : le haut de la gelée s'écrase puis"
+                " s'étire et penche vers l'avant, les petits tentacules ondulent,"
+                " le coquillage suit avec un léger retard, tandis que son bas plat"
+                " reste posé au même endroit",
+        "strike": [
+            "elle s'écrase sur elle-même, les yeux plissés",
+            "elle s'étire en hauteur, le coquillage monte",
+            "tout son haut penche en arrière, la bouche s'ouvre",
+            "elle lance un gros tentacule turquoise devant elle",
+            "L'IMPACT : le tentacule au bout de sa course, avec un éclat d'eau"
+            " turquoise et blanc devant elle",
+            "le tentacule se rétracte, des gouttes retombent",
+            "elle s'écrase, le tentacule rentre dans le corps",
+            "elle reprend sa forme de marche, prête à recommencer",
+        ],
+        "extra": ["⚠️ ELLE EST OPAQUE : on ne voit JAMAIS le fond à travers elle."
+                  " Une gelée translucide laisserait passer le magenta, qui serait"
+                  " effacé au milieu de son corps et la trouerait",
+                  "ses yeux et sa bouche sont sur la moitié DROITE de la gelée sur"
+                  " la rangée de profil : ce sont eux qui disent son sens",
+                  "de dos, on ne voit ni yeux ni bouche, seulement le reflet et le"
+                  " coquillage",
+                  "son BAS PLAT reste à la même place et à la même largeur dans les"
+                  " 24 cases : seul le haut se déforme"],
+    },
+    {
+        "file": "vesse_de_loup", "id": "vesse", "name": "Vesse-de-Loup",
+        "legs": False,
+        "worst": "Rien dans le jeu ne ralentit le mage ni ne lui ferme un passage :"
+                 " les couloirs restent sûrs tant qu'on court. Ce champignon lent"
+                 " frappe à peine, mais il laisse derrière lui un nuage qui englue.",
+        "arrival": "Stage 5. À deux cases du mage, il gonfle longuement et crache"
+                   " un nuage qui reste environ cinq secondes sur le couloir et"
+                   " ralentit le mage d'environ 35 %. Le nuage est peint au shader,"
+                   " comme les sorts : la planche ne montre que le crachat. Robustesse"
+                   " ×0.90, vélocité ×0.70, armement 0.70 s.",
+        "look": "UNE VESSE-DE-LOUP. Un petit champignon vivant et ventru, au gros"
+                " chapeau rond ocre jaune tacheté de sarcelle, posé sur un pied"
+                " épais crème. Il a deux yeux noirs mi-clos et une bouche ronde au"
+                " milieu du pied, et se déplace sur une frange de radicelles brunes"
+                " au ras du sol. De fines spores jaune-vert flottent contre son"
+                " chapeau.",
+        "walk": "une TRAÎNE LENTE complète : les radicelles rampent par vagues"
+                " sous lui, le chapeau oscille et ballotte à contretemps du pied,"
+                " quelques spores s'en échappent",
+        "strike": [
+            "il se tasse, le chapeau descend sur ses yeux",
+            "il aspire : le chapeau commence à gonfler",
+            "le chapeau a nettement gonflé, ses taches s'écartent",
+            "le chapeau est à son plus gros, tendu, le pied tremble",
+            "L'ÉJECTION : un jet de spores jaune-vert jaillit de sa bouche, devant"
+            " lui, et son chapeau se dégonfle d'un coup",
+            "le jet s'élargit en petit nuage et pâlit, toujours devant lui",
+            "le nuage se dissipe, le chapeau reprend sa taille",
+            "il revient à sa position de marche, prêt à recommencer",
+        ],
+        "extra": ["seul le CHAPEAU change de taille, et seulement aux images 2 à 6"
+                  " de l'attaque. Le pied ne bouge pas. Dessine-le assez petit pour"
+                  " que le chapeau gonflé tienne dans la case",
+                  "le nuage de spores reste DANS la case : c'est le jeu qui le pose"
+                  " ensuite sur le couloir",
+                  "son visage est sur la moitié DROITE du pied sur la rangée de"
+                  " profil : c'est lui qui dit son sens. De dos, aucun visage",
+                  "⚠️ il n'a AUCUNE jambe ni aucun pied séparé : les radicelles"
+                  " rampent, rien ne doit ressembler à un pas"],
+    },
+    {
+        "file": "raie_ruines", "id": "raie", "name": "Raie des Ruines",
+        "legs": False,
+        "worst": "Une haie protège de tout : aucun ennemi ne la traverse. Cette"
+                 " raie de pierre vole à travers les murs, lentement mais tout"
+                 " droit. Le labyrinthe cesse d'être un abri, et on la voit d'autant"
+                 " mieux qu'aucune autre créature n'a sa silhouette.",
+        "arrival": "Stage 8, une seule à la fois. Elle vise le mage en ligne droite"
+                   " à travers les murs, à partir de six cases à vol d'oiseau."
+                   " Robustesse ×0.75, vélocité ×0.60. Elle reste visible sur les haies"
+                   " en 2,5D : `--raie-mur` la fige dans l'une d'elles pour le vérifier.",
+        "look": "UNE RAIE DES RUINES. Une grande raie volante taillée dans une"
+                " pierre ivoire, au corps plat en losange et aux deux larges"
+                " nageoires en ailes, gravée de runes dorées. Elle a deux yeux"
+                " ambre lumineux au bout d'un museau court. Une longue queue fine"
+                " en anneaux de pierre se termine par un dard doré. Elle plane au"
+                " ras du sol, et ses nageoires ne touchent jamais la terre.",
+        "walk": "une NAGE DANS L'AIR complète : les deux nageoires se soulèvent"
+                " puis s'abaissent en une lente vague qui court de l'avant vers"
+                " l'arrière, la queue ondule derrière elle à contretemps, les runes"
+                " pulsent doucement",
+        "strike": [
+            "elle se cabre, le museau relevé, les nageoires ramenées",
+            "sa queue passe au-dessus de son dos, le dard vers l'avant",
+            "le dard doré s'allume, les runes brillent à plein",
+            "elle abaisse le corps et fouette la queue vers l'avant",
+            "L'IMPACT : le dard au bout de sa course, DEVANT elle, avec un éclat"
+            " doré en étoile",
+            "l'éclat se dissipe, la queue commence à revenir",
+            "la queue repasse derrière elle, les nageoires se rouvrent",
+            "elle retrouve sa nage, prête à recommencer",
+        ],
+        "extra": ["⚠️ ELLE N'A NI JAMBES NI PATTES : elle nage dans l'air, rien ne"
+                  " doit ressembler à un pas",
+                  "sur la rangée de profil, ses yeux et son museau sont à DROITE, sa"
+                  " queue à GAUCHE : ce sont eux qui disent son sens",
+                  "de face, sa queue reste cachée derrière son corps ; de dos, elle"
+                  " descend vers le bas de l'image et on ne voit pas ses yeux",
+                  "elle est faite de pierre mate et OPAQUE : ni fantôme, ni voile,"
+                  " ni transparence. C'est ce qui la sépare du Spectre et de l'Ombre",
+                  "ses nageoires et sa queue ne sortent jamais de la case : dessine"
+                  " la raie un peu plus petite s'il le faut, mais de la même taille"
+                  " partout"],
+    },
 ]
 
 
@@ -501,6 +668,20 @@ et c'est précisément ce qui fait glisser la bête. Des jambes qui ne font que
 frémir donnent une bête qui GLISSE sur le sol au lieu de marcher — c'est le
 défaut le plus désagréable à l'œil, et le seul qu'on ne sache pas nommer quand on
 le voit."""
+# ⚠️ LE JOUEUR VEUT DES PAS MOYENS (CLAUDE.md, mesuré sur les mages) : ni grand écart, ni
+# pieds collés. Le texte seul ne suffit pas au générateur, d'où le guide joint à la marche.
+# Les bêtes déjà livrées gardent la règle du dessus tant qu'on ne les recommande pas.
+MEDIUM_LEG_RULE = """⚠️ L'IMAGE JOINTE EST UN GUIDE DE POSE. Elle a la même grille que la planche à
+produire. Dans chaque case, recopie EXACTEMENT la position de ses deux pieds et la
+place de son corps. Le pied ROUGE est la jambe la plus proche de nous, le pied BLEU
+la plus éloignée. Le mannequin et ses couleurs ne doivent PAS apparaître : c'est la
+créature décrite ici, avec ses vraies pattes, qui prend ces poses.
+
+⚠️ RÈGLE BLOQUANTE — NI GRAND ÉCART NI PIEDS COLLÉS. De profil, aux images 1 et 5,
+l'écart entre les pieds vaut environ UN TIERS DE LA HAUTEUR de la créature, jamais
+plus. Les deux pieds échangent leur place : celui qui est devant à l'image 1 est
+derrière à l'image 5. De face et de dos, les pieds restent sous le corps, sans
+s'écarter vers les côtés : l'un puis l'autre se lève."""
 
 BLOCKING_BOTTOM = """⚠️ RÈGLE BLOQUANTE — LE CORPS NE BOUGE PAS D'UNE CASE À L'AUTRE. C'est la règle
 la plus souvent ratée, alors voici comment la vérifier toi-même :
@@ -543,6 +724,17 @@ LEG_BEATS = [
     "la jambe droite repart vers l'avant : on revient à l'image 1",
 ]
 
+MEDIUM_BEATS = [
+    "le pied proche est devant, le pied éloigné derrière, les deux posés",
+    "le pied proche recule, le pied éloigné se lève à peine",
+    "PASSAGE : les pieds se croisent, le pied éloigné levé",
+    "le pied éloigné passe devant, le pied proche recule",
+    "l'INVERSE de l'image 1 : le pied éloigné devant, le pied proche derrière",
+    "le pied éloigné recule, le pied proche se lève à peine",
+    "PASSAGE : les pieds se croisent, le pied proche levé",
+    "le pied proche passe devant : l'image enchaîne sur la première",
+]
+
 
 def fiche(beast: dict) -> str:
     walk_rows = """LES TROIS RANGÉES, de haut en bas :
@@ -568,8 +760,9 @@ def fiche(beast: dict) -> str:
     # ⚠️ Toutes les bêtes à jambes les reçoivent : la marche de l'Archer d'Os,
     # commandée sur sa seule phrase, a donné huit fois la même foulée figée
     # (0,03 de course du pied, contre 0,50 pour le gobelin).
-    walk_beats = beast.get("walk_beats") or (LEG_BEATS if beast.get("legs", True)
-                                             else None)
+    medium = beast.get("medium_steps", False)
+    walk_beats = (MEDIUM_BEATS if medium else beast.get("walk_beats")
+                  or (LEG_BEATS if beast.get("legs", True) else None))
     if walk_beats:
         steps = "\n".join(f"{i + 1}. {beat}"
                            for i, beat in enumerate(walk_beats))
@@ -587,7 +780,32 @@ def fiche(beast: dict) -> str:
     has_legs = beast.get("legs", True)
     blocking = "\n\n".join([BLOCKING_TOP, LEG_RULE, BLOCKING_BOTTOM] if has_legs
                            else [BLOCKING_TOP, BLOCKING_BOTTOM])
-    glide_row = GLIDE_ROW if has_legs else ""
+    # Sur l'attaque, le guide n'est pas joint et les jambes ne marchent pas.
+    walk_rules = blocking
+    strike_rules = blocking
+    if medium:
+        walk_rules = "\n\n".join([MEDIUM_LEG_RULE, BLOCKING_TOP, BLOCKING_BOTTOM])
+        strike_rules = "\n\n".join([BLOCKING_TOP, BLOCKING_BOTTOM])
+    glide_row = GLIDE_ROW if has_legs and not medium else ""
+
+    if beast.get("arrival"):
+        guide = ("Pour la marche, joindre `docs/prompts/mages_animes/guide_marche.png`."
+                 if medium else "Lancer d'abord la marche.")
+        status = f"""{fill("**Ce qu'elle fait.** " + beast['arrival'], 79)}
+
+**Avant de lancer :** {guide} Pour l'attaque, joindre la planche de marche
+livrée, pour que le générateur garde la même créature."""
+        same_sheet = ("⚠️ L'IMAGE JOINTE EST SA PLANCHE DE MARCHE : c'est cette créature-là,"
+                      " à l'identique.\n\n")
+    else:
+        status = """    aujourd'hui   4 pas · 1 pose de coup
+    demain        4 orientations · 8 pas · 8 poses de coup
+
+⚠️ **Le moteur sait déjà les jouer.** Il lit les poses par leur NOM et non par
+leur nombre : une planche à seize poses et une planche à six se jouent par le
+même code, et l'attaque se déroule sur la durée exacte de la frappe. Les autres
+créatures continuent de tourner sans y toucher. Il ne manque que le dessin."""
+        same_sheet = ""
 
     return f"""# {beast['name']} — planches de marche et d'attaque
 
@@ -595,13 +813,7 @@ def fiche(beast: dict) -> str:
 
 {fill(beast['worst'], 79)}
 
-    aujourd'hui   4 pas · 1 pose de coup
-    demain        4 orientations · 8 pas · 8 poses de coup
-
-⚠️ **Le moteur sait déjà les jouer.** Il lit les poses par leur NOM et non par
-leur nombre : une planche à seize poses et une planche à six se jouent par le
-même code, et l'attaque se déroule sur la durée exacte de la frappe. Les autres
-créatures continuent de tourner sans y toucher. Il ne manque que le dessin.
+{status}
 
 ---
 
@@ -638,7 +850,7 @@ Les deux planches vont dans `assets/peso&cover/creatures/`.
 
 {walk_block}
 
-{blocking}
+{walk_rules}
 
 AUTRES RÈGLES :
 - la MÊME créature dans les 24 cases : mêmes couleurs, même taille
@@ -656,7 +868,7 @@ AUTRES RÈGLES :
 
 {sheet_block(beast['look'])}
 
-⚠️ MÊMES COULEURS ET MÊME TAILLE QUE LA PLANCHE DE MARCHE. Les deux planches
+{same_sheet}⚠️ MÊMES COULEURS ET MÊME TAILLE QUE LA PLANCHE DE MARCHE. Les deux planches
 sont jouées l'une après l'autre sur le même monstre : une teinte plus sombre ou
 une créature plus grande se verrait comme un clignotement au moment du coup.
 
@@ -670,7 +882,7 @@ gauche à droite — ce n'est PAS une boucle :
 directement sur le déplacement : si la créature reste en position de combat à la
 dernière image, elle se remettra à marcher dans cette pose.
 
-{blocking}
+{strike_rules}
 
 AUTRES RÈGLES :
 - la traînée du coup part DEVANT elle, dans la direction qu'elle frappe — vers le

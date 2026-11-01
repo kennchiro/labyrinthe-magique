@@ -34,6 +34,9 @@ const FLOAT_AMPLITUDE := 0.10
 var cell: Vector2i = Vector2i.ZERO
 var tile_size: int = 32
 var tint: Color = Color.WHITE
+## Portée par un Rat : elle reste dans la liste des gemmes et sa `cell` le suit. La boussole,
+## le sceau et les portails continuent donc de la viser, sans une ligne de plus.
+var carried := false
 
 var _time := 0.0
 

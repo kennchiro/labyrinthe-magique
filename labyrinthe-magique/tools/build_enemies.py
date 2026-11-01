@@ -99,6 +99,10 @@ HERD = {
     "golem_givre": {"id": "givre", "name": "Golem de Givre"},
     "gobelin": {"id": "goblin", "name": "Gobelin"},
     "seigneur_demon": {"id": "seigneur", "name": "Seigneur Démon"},
+    "rat_chapardeur": {"id": "rat", "name": "Rat Chapardeur"},
+    "gelee_marees": {"id": "gelee", "name": "Gelée des Marées"},
+    "vesse_de_loup": {"id": "vesse", "name": "Vesse-de-Loup"},
+    "raie_ruines": {"id": "raie", "name": "Raie des Ruines"},
 }
 ## Recalés comme les mages : le générateur ne pose pas leurs rangées à la même hauteur,
 ## et dessine leur attaque jusqu'à 30 % plus petite. Le jeu garde leur taille grâce à
@@ -114,6 +118,21 @@ HERD["serpent"]["same_scale"] = False
 ## La planche du Golem de Givre oublie la créature à la 7e image de profil : il n'y a que
 ## ses cristaux. L'image précédente est tenue, sinon il disparaît au milieu de son coup.
 HERD["golem_givre"]["held_strike"] = {"right": {7: 6}}
+## Leurs coups sortent de la grille : voir `cells_by_shape`.
+for _name in ("rat_chapardeur", "gelee_marees", "vesse_de_loup", "raie_ruines"):
+    HERD[_name]["whole_shapes"] = True
+## Le blanc et l'or de la Raie reflètent le fond, comme ceux du Porte-Lumière.
+HERD["raie_ruines"]["despill"] = True
+## Boîtes à effacer sur la planche d'attaque, relevées à la main, avant de ranger les formes.
+## L'éclat de la Raie touche le dard de l'image suivante : il faut les séparer, et ses rayons
+## de droite tomberaient sur cette image. Le second arc du Rat flotte à mi-chemin de deux
+## images et se lirait comme une tache sur l'autre.
+HERD["raie_ruines"]["strike_erase"] = [(1291, 570, 1294, 700), (1294, 570, 1330, 632),
+                                       (1294, 660, 1330, 700)]
+HERD["rat_chapardeur"]["strike_erase"] = [(1023, 555, 1040, 625)]
+## Le centre de cet éclat tombe juste après la frontière, mais c'est l'impact de la 5e image
+## de profil : un point de la forme, puis sa rangée et sa colonne.
+HERD["raie_ruines"]["strike_give"] = [((1284, 638), (2, 4))]
 
 
 ## Les mages ANIMÉS passent par le même découpage : même gabarit, mêmes contrôles.
@@ -477,10 +496,80 @@ def without_grid(sheet: Image.Image) -> Image.Image:
     return Image.fromarray(out, "RGB")
 
 
-def cells_of(path: Path, rows: int, keep_enclosed: bool = False) -> dict:
+## Marge de chaque case quand les formes y sont rangées entières, en pixels de planche.
+SHAPE_MARGIN = 64
+## Une forme dont la deuxième case tient plus que cette part appartient aux deux : ce sont
+## deux poses qui se touchent. On la coupe alors à la frontière, faute de mieux.
+SHARED_SHAPE = 0.35
+## Écart de rouge et de bleu sur le vert à partir duquel un pixel tire sur le fond.
+MAGENTA_CAST = 12
+
+
+def without_magenta_cast(data: np.ndarray) -> np.ndarray:
+    """Le dessin sans le violet que le fond laisse dans ses creux, comme entre les racines.
+
+    Ces pixels sont trop loin du fond pour être effacés. Rouge et bleu y dominent le vert ;
+    ramener le bleu au vert les rend à leur brun sans toucher au turquoise, où le rouge
+    est faible. ⚠️ À réserver aux créatures qui ne portent pas de magenta elles-mêmes.
+    """
+    red, green, blue = (data[..., channel].astype(np.int32) for channel in range(3))
+    cast = np.minimum(red, blue) > green + MAGENTA_CAST
+    data[..., 2] = np.where(cast, green, blue).astype(np.uint8)
+    return data
+
+
+def cells_by_shape(sheet: Image.Image, rows: int, keep_enclosed: bool,
+                   erase: list = (), give: list = ()) -> dict:
+    """Les cases d'une planche dont les poses sortent de la grille, formes entières.
+
+    La découpe à la frontière coupait le corps de la Gelée et l'éclat de la Raie, puis
+    laissait le morceau restant sur l'image suivante, où il clignotait. Chaque forme
+    va donc à la case qui en tient le plus, marge comprise.
+    """
+    width, height = sheet.size
+    cell_w, cell_h = width // COLUMNS, height // rows
+    data = without_magenta_cast(np.array(keyed(sheet, keep_enclosed)))
+    for x0, y0, x1, y1 in erase:
+        data[y0:y1, x0:x1, 3] = 0
+    labels, count = ndimage.label(data[..., 3] > 24)
+    home = np.zeros(data.shape[:2], dtype=np.int32) - 1
+    home_by_grid = (np.arange(height)[:, None] // cell_h).clip(0, rows - 1) * COLUMNS \
+        + (np.arange(width)[None, :] // cell_w).clip(0, COLUMNS - 1)
+    for piece, slices in enumerate(ndimage.find_objects(labels), start=1):
+        mask = labels[slices] == piece
+        owners, sizes = np.unique(home_by_grid[slices][mask], return_counts=True)
+        ranked = np.sort(sizes)[::-1]
+        shared = ranked.size > 1 and ranked[1] > ranked.sum() * SHARED_SHAPE
+        home[slices] = np.where(mask, home_by_grid[slices] if shared
+                                else owners[int(np.argmax(sizes))], home[slices])
+    for (x, y), (row, column) in give:
+        home[labels == labels[y, x]] = row * COLUMNS + column
+    out = {}
+    for row in range(rows):
+        line = []
+        for column in range(COLUMNS):
+            canvas = np.zeros((cell_h + 2 * SHAPE_MARGIN, cell_w + 2 * SHAPE_MARGIN, 4),
+                              dtype=np.uint8)
+            left, top = column * cell_w - SHAPE_MARGIN, row * cell_h - SHAPE_MARGIN
+            x0, y0 = max(left, 0), max(top, 0)
+            x1, y1 = min(left + canvas.shape[1], width), min(top + canvas.shape[0], height)
+            window = data[y0:y1, x0:x1].copy()
+            window[..., 3] = np.where(home[y0:y1, x0:x1] == row * COLUMNS + column,
+                                      window[..., 3], 0)
+            canvas[y0 - top:y1 - top, x0 - left:x1 - left] = window
+            line.append(deblorded(Image.fromarray(canvas, "RGBA")))
+        out[ROWS[row]] = line
+    return out
+
+
+def cells_of(path: Path, rows: int, keep_enclosed: bool = False,
+             whole_shapes: bool = False, erase: list = (), give: list = ()) -> dict:
     """Découpe une planche en cases détourées, rangée par rangée."""
     with Image.open(path) as image:
         sheet = without_grid(image.convert("RGB"))
+    if whole_shapes:
+        return {row: mend(line, f"{path.stem} rangée {ROWS.index(row) + 1}")
+                for row, line in cells_by_shape(sheet, rows, keep_enclosed, erase, give).items()}
     width, height = sheet.size
     cell_w, cell_h = width / COLUMNS, height / rows
     out = {}
@@ -720,6 +809,9 @@ def stride_complaint(line: list, label: str) -> str:
     span = max(max(fronts) - min(fronts), max(backs) - min(backs),
                max(spans) - min(spans))
     width = float(np.asarray(line[0]).shape[1])
+    # La marge des formes entières n'est pas de la case : à 384 px, le seuil montait de moitié.
+    if width > 256.0:
+        width -= 2 * SHAPE_MARGIN
     if span >= width * STRIDE_SHARE:
         return ""
     return (f"{label} : les pieds ne parcourent que {span} px sur {width:.0f}"
@@ -905,8 +997,10 @@ def build(source_name: str, entry: dict) -> str:
         if complaint:
             return f"{entry['id']} REFUSÉ : {complaint}"
 
-    walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False))
-    strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False))
+    whole = entry.get("whole_shapes", False)
+    walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False), whole)
+    strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False), whole,
+                      entry.get("strike_erase", ()), entry.get("strike_give", ()))
     is_mage = source_folder == MAGES_SOURCE
     for row, frames in entry.get("held_strike", {}).items():
         for frame, held in frames.items():

@@ -15,11 +15,15 @@ points de vie de chaque espèce s'en déduisent :
 | **Spectre** | stage 1 | ×1.00 | ×1.00 | 0.60 s | 0.55 s | lévite lentement, charge son coup à bout de bras |
 | **Gobelin** | stage 2 | ×1.37 | ×1.00 | 0.22 s | 0.28 s | petit, coriace, frappe vite et souvent |
 | **Serpent d'Émeraude** | stage 3 | ×0.82 | ×1.16 | 0.30 s | 0.30 s | file dans les couloirs, mais se brise au premier sort |
+| **Rat Chapardeur** | stage 3 | ×0.70 | ×0.95 | 0.45 s | 0.00 s | ne frappe pas : il vole une gemme et s'enfuit, abattu il la rend |
 | **Ombre Encapuchonnée** | stage 4 | ×1.10 | ×1.12 | 0.45 s | 0.40 s | glisse sans bruit, rattrape en ligne droite |
+| **Gelée des Marées** | stage 4 | ×1.00 | ×0.85 | 0.40 s | 0.45 s | abattue, elle se scinde en deux petites gelées |
 | **Dragonnet de Feu** | stage 5 | ×1.20 | ×1.14 | 0.35 s | 0.35 s | vole, donc ne ralentit jamais dans les virages |
+| **Vesse-de-Loup** | stage 5 | ×0.90 | ×0.70 | 0.70 s | 0.50 s | crache un nuage qui ralentit le mage, sans jamais le toucher |
 | **Golem de Lave** | stage 6 | ×1.90 | ×0.80 | 0.50 s | 0.55 s | une masse : on ne le sème pas, on l'use — et il jette de loin |
 | **Archer d'Os** | stage 7 | ×1.05 | ×1.00 | 0.40 s | 0.34 s | tire à quatre cases en ligne droite, puis recharge |
 | **Démon de Cristal** | stage 8 | ×1.70 | ×0.86 | 0.45 s | 0.50 s | blindé de cristal, lourd à déplacer |
+| **Raie des Ruines** | stage 8 | ×0.75 | ×0.60 | 0.45 s | 0.50 s | traverse les murs, lentement mais tout droit |
 | **Minotaure** | stage 9 | ×1.60 | ×1.10 | 0.30 s | 0.36 s | charge : robuste ET rapide, la pire combinaison |
 | **Seigneur Démon** | stage 10 | ×1.85 | ×0.94 | 0.55 s | 0.55 s | une lame à deux mains : longue à lever, on la voit venir |
 | **Chevalier Noir** | stage 10 | ×1.45 | ×1.02 | 0.34 s | 0.38 s | bouclier et lame, sans faiblesse marquée |
@@ -40,11 +44,15 @@ Ce que chaque espèce encaisse réellement, une fois le rapport appliqué
 | **Spectre** | 100 | 135 | 165 | 175 | 184 | 193 | 203 | 212 | 221 | 230 |
 | **Gobelin** | — | 185 | 226 | 240 | 252 | 264 | 278 | 290 | 303 | 315 |
 | **Serpent d'Émeraude** | — | — | 135 | 144 | 151 | 158 | 166 | 174 | 181 | 189 |
+| **Rat Chapardeur** | — | — | 115 | 122 | 129 | 135 | 142 | 148 | 155 | 161 |
 | **Ombre Encapuchonnée** | — | — | — | 193 | 202 | 212 | 223 | 233 | 243 | 253 |
+| **Gelée des Marées** | — | — | — | 175 | 184 | 193 | 203 | 212 | 221 | 230 |
 | **Dragonnet de Feu** | — | — | — | — | 221 | 232 | 244 | 254 | 265 | 276 |
+| **Vesse-de-Loup** | — | — | — | — | 166 | 174 | 183 | 191 | 199 | 207 |
 | **Golem de Lave** | — | — | — | — | — | 367 | 386 | 403 | 420 | 437 |
 | **Archer d'Os** | — | — | — | — | — | — | 213 | 223 | 232 | 242 |
 | **Démon de Cristal** | — | — | — | — | — | — | — | 360 | 376 | 391 |
+| **Raie des Ruines** | — | — | — | — | — | — | — | 159 | 166 | 173 |
 | **Minotaure** | — | — | — | — | — | — | — | — | 354 | 368 |
 | **Seigneur Démon** | — | — | — | — | — | — | — | — | — | 426 |
 | **Chevalier Noir** | — | — | — | — | — | — | — | — | — | 334 |
@@ -60,12 +68,12 @@ ennemis » mais « les mêmes, plus quelque chose de neuf ».
 |---:|---|---|---:|---:|---:|
 | 1 | La Forêt | Spectre | 3 | ×0.74 | 6 cases |
 | 2 | Le Canyon de la Foudre | Gobelin | 4 | ×0.76 | 7 cases |
-| 3 | Les Dunes de Feu | Serpent d'Émeraude | 6 | ×0.80 | 8 cases |
-| 4 | Les Rivages Océaniques | Ombre Encapuchonnée | 6 | ×0.78 | 8 cases |
-| 5 | Les Cavernes de Cristal | Dragonnet de Feu | 6 | ×0.79 | 8 cases |
+| 3 | Les Dunes de Feu | Serpent d'Émeraude, Rat Chapardeur | 6 | ×0.80 | 8 cases |
+| 4 | Les Rivages Océaniques | Ombre Encapuchonnée, Gelée des Marées | 6 | ×0.78 | 8 cases |
+| 5 | Les Cavernes de Cristal | Dragonnet de Feu, Vesse-de-Loup | 6 | ×0.79 | 8 cases |
 | 6 | Les Montagnes Glacées | Golem de Lave | 7 | ×0.79 | 8 cases |
 | 7 | Le Bois d'Épine | Archer d'Os | 7 | ×0.80 | 9 cases |
-| 8 | Les Ruines Anciennes | Démon de Cristal | 7 | ×0.81 | 9 cases |
+| 8 | Les Ruines Anciennes | Démon de Cristal, Raie des Ruines | 7 | ×0.81 | 9 cases |
 | 9 | Le Sanctuaire Déchu | Minotaure | 8 | ×0.81 | 9 cases |
 | 10 | Le Château du Ciel | Seigneur Démon, Chevalier Noir, Golem de Givre | 8 | ×0.82 | 9 cases |
 

@@ -137,6 +137,9 @@ func apply_command_line() -> void:
 	var species_arg := args.find("--enemi")
 	if species_arg >= 0 and species_arg + 1 < args.size():
 		_cling_enemy(args[species_arg + 1])
+	# Fige la Raie dans une haie : en jouant, elle n'y reste qu'une demi-seconde.
+	if "--raie-mur" in args:
+		_hold_ray_in_wall()
 	# Tue un ennemi sur place : la seule façon de voir la maison s'ouvrir sans
 	# attendre d'en abattre un en jouant, donc de pouvoir la capturer.
 	# Pose le mage devant la maison du coin : la seule façon de voir la barre de
@@ -235,6 +238,21 @@ func _run_bench(seconds: float) -> void:
 ## qu'il prend en marchant, l'arrêt à une case, puis le geste. Posé au contact,
 ## il n'a jamais eu de direction et reste tourné vers l'écran.
 const CLING_DISTANCE := 3
+
+
+func _hold_ray_in_wall() -> void:
+	var from := game.level.player.mover.nearest_cell()
+	for enemy in game.level.enemies:
+		if enemy.species != "raie":
+			continue
+		for reach in range(1, 9):
+			# Sur les côtés : plus haut ou plus bas, la haie sort du cadre.
+			for direction in [Vector2i.RIGHT, Vector2i.LEFT]:
+				var cell: Vector2i = from + direction * int(reach)
+				if enemy.mover.can_walk(cell) and not game.level.grid.is_floor_v(cell):
+					enemy.revive_at(cell)
+					enemy.stagger(3600.0)
+					return
 
 
 func _cling_enemy(species: String) -> void:

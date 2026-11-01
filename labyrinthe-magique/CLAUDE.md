@@ -361,8 +361,8 @@ du `setup()` — à hauteur fixe, il tombait au milieu de l'île.
 
 ## Les ennemis
 
-**Douze créatures**, toutes au format des mages, dans `assets/enemies/<id>/`.
-`src/entities/bestiary.gd` dit ce qu'elles valent ; le stage N ajoute UNE espèce
+**Seize créatures**, toutes au format des mages, dans `assets/enemies/<id>/`.
+`src/entities/bestiary.gd` dit ce qu'elles valent ; le stage N ajoute ses nouveautés
 et garde toutes les précédentes. Les statistiques sont des RAPPORTS au spectre,
 qui reste l'unité de mesure de tout l'équilibrage.
 
@@ -409,6 +409,29 @@ cette référence, puis découpées par `build_enemies.py`.
 ses planches (`creatures/seigneur_demon*`) sont ignorées par git, seules les bandes
 réduites du jeu sont suivies. Un clone neuf garde le jeu complet, mais ne peut pas
 les redécouper.
+
+**Quatre créatures ne se contentent pas de poursuivre** (2026-11-01), et leurs règles
+vivent dans `CreatureRules` et `SporeClouds`, en RefCounted, pour que `test_balance` les
+simule. `tests/test_creatures.gd` les vérifie sur le vrai `Level`.
+- **Rat Chapardeur** : il ne frappe jamais, il vole une gemme et fuit. La gemme reste dans
+  `Level.gems` et sa `cell` suit le voleur : boussole, sceau et portails la visent sans une
+  ligne de plus. Abattu, il la rend là où il tombe. Il ne prend ni les portails, ni une
+  gemme à moins de trois cases du mage, et il n'y en a qu'un par niveau.
+- **Gelée des Marées** : abattue, elle lâche deux petites gelées, qui ont la même planche
+  (`"sheet"`), et sa mort à elle n'est pas un kill. ⚠️ Les petites ont leurs places RÉSERVÉES
+  (`LevelConfig.slot_species`) : les repaires suivent les ennemis dans les tableaux du
+  combat, et un ennemi ajouté en pleine partie décalerait leurs index sous les projectiles
+  en vol. Utiliser `slot_species` et non `species_at` pour poser un niveau.
+- **Vesse-de-Loup** : elle ne touche pas le mage. Elle crache un nuage qui le ralentit (facteur
+  0,65, 5 s), peint au shader et couché sur le sol. Le ralentissement passe par
+  `player.mover.speed`, recalculé à chaque frame par `Level._update_spores`.
+- **Raie des Ruines** : `GridMover.phases` la laisse traverser les murs, jamais l'enceinte,
+  et une seule à la fois. ⚠️ Le combat ne connaît que les distances de chemin : dans une haie
+  elle serait intouchable, d'où `CreatureRules.anchor_cell`, la case de sol qui la représente.
+  Elle reste visible sur les haies en 2,5D (`--raie-mur` la fige dans l'une d'elles).
+- ⚠️ Leurs planches sortent de la grille, et `whole_shapes` dans `build_enemies.py` range donc
+  chaque forme entière dans la case qui en tient le plus. Un dessin qui touche sa voisine se
+  règle à la main avec `strike_erase` et `strike_give`, coordonnées relevées sur la planche.
 
 ⚠️ L'animation procédurale à trois pièces d'`Actor` n'a donc **plus aucun
 utilisateur** : tous les personnages ont leur planche.

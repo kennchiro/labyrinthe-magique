@@ -1,0 +1,35 @@
+{
+  "cell": [
+    143,
+    112
+  ],
+  "feet_y": 107.4,
+  "foot_travel": 0.1693,
+  "body_height": 101.8,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "rat_chapardeur_marche.png + rat_chapardeur_attaque.png"
+}

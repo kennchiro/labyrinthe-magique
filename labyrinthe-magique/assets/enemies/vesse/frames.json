@@ -1,0 +1,35 @@
+{
+  "cell": [
+    127,
+    112
+  ],
+  "feet_y": 99.1,
+  "foot_travel": 0.0,
+  "body_height": 85.8,
+  "poses": [
+    "idle",
+    "walk_1",
+    "walk_2",
+    "walk_3",
+    "walk_4",
+    "walk_5",
+    "walk_6",
+    "walk_7",
+    "walk_8",
+    "attack_1",
+    "attack_2",
+    "attack_3",
+    "attack_4",
+    "attack_5",
+    "attack_6",
+    "attack_7",
+    "attack_8"
+  ],
+  "directions": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "source": "vesse_de_loup_marche.png + vesse_de_loup_attaque.png"
+}

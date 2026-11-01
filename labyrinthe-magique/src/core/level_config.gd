@@ -198,6 +198,36 @@ func species_at(index: int) -> String:
 	return order[index % order.size()]
 
 
+## L'espèce de chaque place du niveau, dans l'ordre de ses index.
+##
+## Les `spawns` premières sont les poursuivants, et les suivantes les petites gelées qui
+## attendent, hors jeu. Elles sont réservées D'AVANCE parce que les repaires suivent les
+## ennemis dans les tableaux du combat : un ennemi ajouté en pleine partie décalerait leurs
+## index sous les projectiles déjà en vol.
+##
+## `max_per_level` écarte le surnuméraire : la rotation pose deux Rats sur un petit roster.
+func slot_species(spawns: int) -> Array[String]:
+	var out: Array[String] = []
+	var seen := {}
+	var cursor := 0
+	var order_size := maxi(1, lineup.size() if not lineup.is_empty() else species.size())
+	for _slot in spawns:
+		var id := species_at(cursor)
+		for _try in order_size:
+			if int(seen.get(id, 0)) < int(Bestiary.of(id).get("max_per_level", 1 << 20)):
+				break
+			cursor += 1
+			id = species_at(cursor)
+		seen[id] = int(seen.get(id, 0)) + 1
+		out.append(id)
+		cursor += 1
+	for slot in spawns:
+		var tuning := Bestiary.of(out[slot])
+		for _piece in int(tuning.get("splits_count", 0)):
+			out.append(str(tuning["splits_into"]))
+	return out
+
+
 ## Ordre de placement des espèces, distinct du roster.
 ##
 ## Le roster est cumulatif et grandit à chaque chapitre ; l'effectif d'un stage,

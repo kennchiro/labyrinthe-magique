@@ -47,6 +47,47 @@ const SPECIES := {
 		"walk_fps": 7.0, "strike": 0.30, "repos": 0.30, "windup": 0.18,
 		"trait": "file dans les couloirs, mais se brise au premier sort",
 	},
+	# LE SEUL QUI S'EN PREND À L'OBJECTIF. Il ne frappe jamais : il vole une gemme et
+	# s'enfuit, et c'est le mage qui devient le poursuivant. Moins vite que lui, sinon la
+	# gemme serait perdue. Il ne prend pas les portails : un saut le ramènerait vers le
+	# mage, et une gemme qui change de quartier ne se rattrape plus.
+	"rat": {
+		"name": "Rat Chapardeur", "toughness": 0.70, "swiftness": 0.95, "height": 52.0, "body": 42.0,
+		"stride": 1.6, "walk_fps": 8.0, "strike": 0.45, "repos": 0.0, "windup": 0.25,
+		"thief": true, "harmless": true, "no_portals": true, "max_per_level": 1,
+		"trait": "ne frappe pas : il vole une gemme et s'enfuit, abattu il la rend",
+	},
+	# LA TUER PEUT EMPIRER LES CHOSES. Sa mort ne compte pas comme un kill : seules ses
+	# deux petites comptent, sinon une gelée vaudrait trois kills pour l'ultime.
+	"gelee": {
+		"name": "Gelée des Marées", "toughness": 1.00, "swiftness": 0.85, "height": 46.0, "body": 34.0,
+		"walk_fps": 5.0, "strike": 0.40, "repos": 0.45, "windup": 0.26,
+		"splits_into": "gelee_petite", "splits_count": 2,
+		"trait": "abattue, elle se scinde en deux petites gelées",
+	},
+	# Hors de `NEWCOMERS` : elle n'entre en jeu que par la mort d'une grande.
+	"gelee_petite": {
+		"name": "Petite Gelée", "toughness": 0.25, "swiftness": 1.20, "height": 30.0, "body": 21.0,
+		"walk_fps": 7.0, "strike": 0.40, "repos": 0.45, "windup": 0.26, "sheet": "gelee",
+		"droplet": true,
+		"trait": "née d'une grande, elle ne se divise plus",
+	},
+	# ELLE NE TOUCHE JAMAIS LE MAGE : elle lui ferme le couloir. Lente et longue à armer,
+	# pour qu'on la voie gonfler et qu'on passe avant.
+	"vesse": {
+		"name": "Vesse-de-Loup", "toughness": 0.90, "swiftness": 0.70, "height": 50.0, "body": 42.0,
+		"walk_fps": 4.0, "strike": 0.70, "repos": 0.50, "windup": 0.70, "harmless": true,
+		"spit_reach": 2, "spit_reload": 4.0,
+		"trait": "crache un nuage qui ralentit le mage, sans jamais le toucher",
+	},
+	# LE MUR NE PROTÈGE PLUS. Lente et fragile en contrepartie, et une seule à la fois :
+	# deux feraient du labyrinthe une plaine.
+	"raie": {
+		"name": "Raie des Ruines", "toughness": 0.75, "swiftness": 0.60, "height": 54.0, "body": 46.0,
+		"walk_fps": 4.0, "strike": 0.45, "repos": 0.50, "windup": 0.28, "hover": true,
+		"phases": true, "phase_reach": 6, "no_portals": true, "max_per_level": 1,
+		"trait": "traverse les murs, lentement mais tout droit",
+	},
 	"ombre": {
 		"name": "Ombre Encapuchonnée", "toughness": 1.10, "swiftness": 1.12, "height": 52.0, "body": 46.5,
 		"walk_fps": 4.0, "strike": 0.45, "repos": 0.40, "windup": 0.24, "hover": true,
@@ -131,12 +172,12 @@ const SPECIES := {
 const NEWCOMERS := [
 	["hunter"],                  # stage 1
 	["goblin"],                  # stage 2
-	["serpent"],                 # stage 3
-	["ombre"],                   # stage 4
-	["dragonnet"],               # stage 5
+	["serpent", "rat"],          # stage 3
+	["ombre", "gelee"],          # stage 4
+	["dragonnet", "vesse"],      # stage 5
 	["golem"],                   # stage 6
 	["archer"],                  # stage 7
-	["cristal"],                 # stage 8
+	["cristal", "raie"],         # stage 8
 	["minotaure"],               # stage 9
 	["seigneur", "chevalier", "givre"],  # stage 10
 ]
@@ -167,6 +208,15 @@ static func windup(id: String) -> float:
 ## planches : c'est celle où l'arme arrive au bout de sa course.
 static func impact_pose(id: String) -> int:
 	return int(of(id).get("impact_pose", DEFAULT_IMPACT_POSE))
+
+
+## Le dossier de sa planche : son identifiant, sauf pour qui emprunte celle d'une autre.
+static func sheet(id: String) -> String:
+	return str(of(id).get("sheet", id))
+
+
+static func is_droplet(id: String) -> bool:
+	return bool(of(id).get("droplet", false))
 
 
 static func display_name(id: String) -> String:
