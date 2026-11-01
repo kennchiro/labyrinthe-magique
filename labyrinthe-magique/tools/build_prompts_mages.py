@@ -239,6 +239,29 @@ MAGES = [
         ],
         "extra": "LE BEC DU MASQUE reste entier et de même taille dans les 24 cases : de profil, il pointe VERS LA DROITE. AUCUN NUAGE, aucune flaque au sol et aucun gaz autour de lui : le jeu dessine lui-même ses sorts. L'aubergine reste PRESQUE NOIR ET BLEUTÉ, jamais violet vif ni rose : il ne doit pas se confondre avec le fond magenta.",
     },
+    {
+        "file": "lumiere", "id": "lumiere", "name": "Porte-Lumière", "reference": "lumiere.png",
+        "today": "rien encore, c'est un nouveau mage",
+        "look": "le Porte-Lumière, un ange. Deux GRANDES AILES de plumes blanches, à demi "
+                "repliées dans son dos. Une AURÉOLE d'or plate flotte au-dessus de sa tête. "
+                "Courts cheveux blonds, visage serein bien visible, armure légère blanc "
+                "ivoire à liserés d'or sur une tunique blanche, bottes d'or. Il tient de la "
+                "main droite une LANCE dorée, surmontée d'une pointe de cristal blanc "
+                "lumineux. Toutes ses formes blanches sont cernées d'un contour BRUN FONCÉ net.",
+        "legs": "la tunique courte s'ouvre et ses bottes d'or sortent franchement à chaque pas",
+        "hold": "la lance reste dans sa main droite, tenue droite, et les ailes restent à demi repliées dans son dos, sans battre",
+        "strike": [
+            "il ramène la lance contre l'épaule, la pointe de cristal s'éclaire",
+            "la lance bascule vers l'avant, un filet de lumière dorée s'enroule autour",
+            "LE TIR : lance pointée vers l'avant, un court trait de lumière blanche et or part de la pointe",
+            "le trait s'efface, deux ou trois étincelles d'or restent près de la pointe",
+            "les étincelles s'éteignent, la pointe brille encore",
+            "la lance remonte, la lumière de la pointe faiblit",
+            "la lance revient presque à la verticale",
+            "il retrouve exactement sa pose de marche",
+        ],
+        "extra": "LES AILES ET L'AURÉOLE gardent la même taille, la même forme et la même place dans les 24 cases, et restent entières DANS la case : jamais déployées, elles ne dépassent pas de plus d'un quart de la largeur du corps de chaque côté. AUCUN RAYON ni halo large autour de lui et aucune colonne de lumière : le jeu dessine lui-même ses sorts. Les ombres du blanc sont BEIGE et BRUN CLAIR, jamais roses ni violettes : aucun reflet du fond magenta sur les plumes.",
+    },
 ]
 
 HEADER = """Feuille de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style cartoon

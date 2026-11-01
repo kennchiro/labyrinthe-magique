@@ -203,11 +203,11 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
 - ⚠️ Pour mesurer, ne pas lire `delta` : le moteur le lisse sur des multiples de 1/120 s.
   `--bench` prend une vraie horloge, et c'est le p99 qui compte.
 
-## Les dix mages
+## Les onze mages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien` · `Mage de la Peste`.
+`Chronomancien` · `Mage de la Peste` · `Porte-Lumière`.
 
 Le **Chronomancien** (élément Temps) est né animé et peint au shader : il n'a ni planche
 `SHEETS` ni `impact.png`, `orb.png` ou `warp.png` (`_load_character_fx` met le quad peint à
@@ -220,6 +220,12 @@ Le **Mage de la Peste** (élément Poison) est fait pareil. Ses dégâts sont de
 (`CombatSystem._venom`, trois au plus) qui prélèvent ensemble ; elles sont distinctes de
 `_poisoned`, le poison fixe des Ténèbres. Aucun poison ne touche les repaires, ce qui rend
 les niveaux où il faut les abattre plus durs pour lui.
+
+Le **Porte-Lumière** (élément Lumière) est fait pareil. Sa lumière AVEUGLE : `EnemyAI.blind_left`
+fait errer l'ennemi, qui ne frappe plus. `CombatSystem._blind_locks` empêche qu'il le reste en
+permanence, et seule l'Aube passe outre. La Lance (`Kind.BEAM`) suit les couloirs : elle part du côté où regarde le mage, puis vers
+la proie la plus proche, sans repasser sur ses pas (`_beam_path`). ⚠️ `build_enemies.py` fixe l'échelle de son attaque (`strike_scale`) :
+égaliser les hauteurs la faussait à cause de sa lance, et les ailes l'élargissent.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —

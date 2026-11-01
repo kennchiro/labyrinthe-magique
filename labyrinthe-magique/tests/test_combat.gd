@@ -48,6 +48,7 @@ func _init() -> void:
 	_test_ability_summaries()
 	_test_chrono()
 	_test_peste()
+	_test_lumiere()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -217,10 +218,11 @@ func _test_kill_system() -> void:
 func _test_catalog() -> void:
 	var characters := CharacterCatalog.all()
 	# 7 mages élémentaires + l'Invocateur (ajouté par la session voisine — il ne
-	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien et la Peste. Le
+	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
+	# Porte-Lumière. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 10:
-		_fail("le catalogue contient %d personnages au lieu de 10" % characters.size())
+	if characters.size() != 11:
+		_fail("le catalogue contient %d personnages au lieu de 11" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -1770,6 +1772,126 @@ func _test_peste() -> void:
 	if kills["count"] != 1 or clouds["count"] != 1:
 		_fail("pandémie : %d mort(s) et %d nuage(s), attendu 1 et 1" % [kills["count"], clouds["count"]])
 	print("mage de la peste : venin, traînée, contagion, transfusion, brume et pandémie : OK")
+
+
+func _test_lumiere() -> void:
+	var lumiere := CharacterCatalog.lumiere()
+	var lance: Ability = lumiere.abilities[0]
+	var sanctuary: Ability = lumiere.abilities[1]
+	var wings: Ability = lumiere.abilities[2]
+	var blinded := {}
+	# IA : aveuglé, il ne suit plus le mage, puis reprend sa poursuite.
+	var parts := _context(lumiere)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var from := _cell_at(grid, context.player_field, 3)
+	var brain := EnemyAI.new(8, 7)
+	brain.blind_left = 0.2
+	brain.decide(grid, from, Vector2i.ZERO, context.player_field, DT)
+	if brain.state != EnemyAI.State.PATROL:
+		_fail("aveuglement : l'ennemi poursuit encore")
+	brain.blind_left = 0.0
+	brain.decide(grid, from, Vector2i.ZERO, context.player_field, DT)
+	if brain.state != EnemyAI.State.CHASE:
+		_fail("aveuglement : l'ennemi ne reprend pas sa poursuite")
+
+	# ÉBLOUISSEMENT : pas deux fois de suite sur la même créature.
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1000)
+	combat.enemy_blinded.connect(func(i: int, d: float) -> void:
+		blinded[i] = int(blinded.get(i, 0)) + 1)
+	combat._apply_trait(0, 1, lumiere.attack, context)
+	combat._apply_trait(0, 1, lumiere.attack, context)
+	if int(blinded.get(0, 0)) != 1:
+		_fail("éblouissement : verrou absent, %d aveuglements d'affilée" % int(blinded.get(0, 0)))
+	for i in int((CombatSystem.GLARE_SECONDS + CombatSystem.BLIND_LOCK) / DT) + 2:
+		combat.update(DT, context)
+	combat._apply_trait(0, 1, lumiere.attack, context)
+	if int(blinded.get(0, 0)) != 2:
+		_fail("éblouissement : il ne revient jamais après le verrou")
+
+	# LANCE : elle touche ce qui est devant elle.
+	parts = _context(lumiere)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	for way: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		if grid.is_floor_v(context.player_cell + way):
+			context.player_facing = way
+			break
+	_add_enemy(context, context.player_cell + context.player_facing, 500)
+	if not combat.use(lance, context) or context.enemy_health[0].current != 500 - lance.damage:
+		_fail("lance : l'ennemi en ligne n'est pas touché")
+
+	# LANCE : elle tourne dans les couloirs jusqu'à sa proie, sans dépasser sa portée.
+	parts = _context(lumiere)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	var far := _cell_at(grid, context.player_field, 7)
+	var to_prey := Pathfinder.distance_field(grid, [far] as Array[Vector2i])
+	context.player_facing = Pathfinder.step_toward(grid, to_prey, context.player_cell)
+	_add_enemy(context, far, 500)
+	var beam_path := {"cells": []}
+	combat.beam_fired.connect(func(_from: Vector2i, cells: Array) -> void: beam_path["cells"] = cells)
+	if not combat.use(lance, context) or context.enemy_health[0].current != 500 - lance.damage:
+		_fail("lance : la proie au bout des couloirs n'est pas touchée")
+	var route: Array = beam_path["cells"]
+	if route.size() > lance.range:
+		_fail("lance : le rayon dépasse sa portée (%d cases)" % route.size())
+	var previous: Vector2i = context.player_cell
+	for cell: Vector2i in route:
+		if not grid.is_floor_v(cell) or absi(cell.x - previous.x) + absi(cell.y - previous.y) != 1:
+			_fail("lance : le trajet traverse un mur ou saute une case")
+		previous = cell
+
+	# SANCTUAIRE : ce qui y entre est aveuglé.
+	parts = _context(lumiere)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	blinded.clear()
+	combat.enemy_blinded.connect(func(i: int, d: float) -> void: blinded[i] = d)
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 500)
+	combat.use(sanctuary, context)
+	for i in 3:
+		combat.update(DT, context)
+	if blinded.get(0, 0.0) != sanctuary.blind_seconds:
+		_fail("sanctuaire : l'ennemi qui y entre n'est pas aveuglé")
+
+	# AILES : un coup absorbé, puis l'éclair aveugle le contact.
+	parts = _context(lumiere)
+	grid = parts[0]; combat = parts[1]; context = parts[2]; health = parts[3]
+	blinded.clear()
+	combat.enemy_blinded.connect(func(i: int, d: float) -> void: blinded[i] = d)
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 500)
+	combat.use(wings, context)
+	var before := health.current
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != before:
+		_fail("ailes : le coup n'est pas absorbé")
+	combat.update(DT, context)
+	if blinded.get(0, 0.0) != wings.blind_seconds:
+		_fail("ailes : l'attaquant n'est pas aveuglé")
+
+	# ENVOL : par-dessus les haies, et l'atterrissage aveugle.
+	if not lumiere.escape.pierces_walls or lumiere.escape.blind_radius <= 0:
+		_fail("envol : il doit survoler les haies et aveugler en atterrissant")
+
+	# L'AUBE : chaque créature de la carte, pas les repaires, malgré le verrou.
+	parts = _context(lumiere)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	blinded.clear()
+	_add_enemy(context, _cell_at(grid, context.player_field, 12), 500)
+	_add_enemy(context, _cell_at(grid, context.player_field, 9), 500)
+	context.structures_from = 1
+	combat._blind(0, 0.1, context)
+	combat.enemy_blinded.connect(func(i: int, d: float) -> void: blinded[i] = d)
+	combat.use(lumiere.ultimate, context)
+	for i in int((CombatSystem.DAWN_DELAY + 0.3) / DT):
+		combat.update(DT, context)
+	if blinded.get(0, 0.0) != lumiere.ultimate.blind_seconds:
+		_fail("aube : l'ennemi n'est pas aveuglé, verrou compris")
+	if context.enemy_health[0].current != 500 - lumiere.ultimate.damage:
+		_fail("aube : l'ennemi lointain n'est pas touché")
+	if blinded.has(1):
+		_fail("aube : le repaire est aveuglé")
+	print("porte-lumière : aveuglement, lance, sanctuaire, ailes et aube : OK")
 
 
 ## La fiche de personnage doit MENTIONNER les particularités d'un sort : deux

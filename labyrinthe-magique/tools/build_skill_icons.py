@@ -116,6 +116,13 @@ SHEETS = {
         "peste_dart", "peste_trail", "peste_contagion",
         "peste_transfusion", "peste_mist", "peste_pandemic",
     ]),
+    # Relevé case par case : étoile et sa traînée · lance et son rayon · cercle d'or //
+    # ailes refermées · aile, plumes et flèche · soleil. L'ordre demandé.
+    "mage_lumiere_skills.png": ("lumiere", [
+        "lumiere_dawn", "lumiere_lance", "lumiere_sanctuary",
+        "lumiere_wings", "lumiere_flight", "lumiere_aube",
+    # Le fond se reflète en rose sur son blanc, et le centre du cercle tire au violet.
+    ], {"despill": True}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",
@@ -347,6 +354,12 @@ def main() -> None:
                 print(f"  ! {name} : rien après détourage")
                 continue
             icon = fitted(cut)
+            if options.get("despill"):
+                data = np.array(icon)
+                spill = data[..., 2] > data[..., 1]
+                data[..., 1] = np.where(spill, data[..., 0] * 0.945, data[..., 1]).astype(np.uint8)
+                data[..., 2] = np.where(spill, data[..., 0] * 0.72, data[..., 2]).astype(np.uint8)
+                icon = Image.fromarray(data, "RGBA")
             if options.get("lift"):
                 icon = lifted(icon)
             icon.save(out_dir / f"{name}.png")

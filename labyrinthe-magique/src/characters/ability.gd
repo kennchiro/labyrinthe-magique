@@ -29,6 +29,8 @@ enum Kind {
 	CONTAGION,    ## le poison d'une cible passe à ses voisins
 	TRANSFUSION,  ## rend de la vie selon le nombre d'ennemis empoisonnés
 	PANDEMIC,     ## toute la carte tombe malade
+	BEAM,         ## un rayon qui suit les couloirs vers ses proies et touche tout ce qu'il traverse
+	DAWN,         ## une colonne de lumière sur chaque ennemi de la carte
 }
 
 @export var id: String = ""
@@ -481,6 +483,14 @@ enum Kind {
 @export var cloud_radius: float = 1.4
 
 
+## --- Le Porte-Lumière : un ennemi aveuglé perd sa trace et ne frappe plus --------------
+
+## Secondes d'aveuglement que pose le sort : zone, coque qui cède, atterrissage ou ultime.
+@export var blind_seconds: float = 0.0
+## Rayon, en cases, de l'éclair qui aveugle quand la coque cède ou quand il atterrit.
+@export var blind_radius: int = 0
+
+
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
 ## Un _init à douze paramètres positionnels serait illisible au point d'être
 ## dangereux — une valeur décalée d'un cran passerait inaperçue.
@@ -600,6 +610,10 @@ func _base_summary() -> String:
 			return "1 PV par %d ennemis empoisonnés" % transfuse_per
 		Kind.PANDEMIC:
 			return "toute la carte empoisonnée %s s · ils éclatent" % _number(duration)
+		Kind.BEAM:
+			return "%d dégâts · rayon de %d cases dans les couloirs" % [damage, range]
+		Kind.DAWN:
+			return "%d dégâts sur toute la carte · aveugle %s s" % [damage, _number(blind_seconds)]
 		Kind.WAVE:
 			return "%d dégâts · déferle sur %d cases" % [damage, range]
 		Kind.CHAIN:

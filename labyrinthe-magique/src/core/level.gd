@@ -397,6 +397,11 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.transfused.connect(_on_transfused)
 	combat.pandemic_cast.connect(_on_pandemic_cast)
 	combat.venom_killed.connect(_on_venom_killed)
+	combat.enemy_blinded.connect(_on_enemy_blinded)
+	combat.beam_fired.connect(_on_beam_fired)
+	combat.wings_burst.connect(_on_wings_burst)
+	combat.dawn_cast.connect(_on_dawn_cast)
+	combat.dawn_struck.connect(_on_dawn_struck)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -830,7 +835,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste"]
+	"supreme", "chrono", "peste", "lumiere"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -951,9 +956,9 @@ func _load_character_fx() -> void:
 		_fire_orb_frames = maxi(1, int(fire_orb_parsed.get("frames", 1)))
 		_fire_orb_grows = String(fire_orb_parsed.get("mode", "loop")) == "grow"
 	_impact_texture = _texture_or_null(folder + "impact.png")
-	# Le Chronomancien et la Peste n'ont jamais eu de planche d'effets. Le quad tient la place
+	# Ces trois mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1216,6 +1221,10 @@ func _on_player_shielded(amount: int, duration: float) -> void:
 	if player == null:
 		return
 	_shield_max = maxi(1, amount)
+	if character.id == "lumiere":
+		_spawn_wings(duration)
+		player_shielded.emit(amount)
+		return
 	# UN ÉTAT, UN VISUEL. Quand la protection vient d'une exaltation qui porte
 	# déjà son aura dessinée, la coque ne paraît PAS : les deux disent la même
 	# chose, elles se superposent sur le même corps, et la coque — qui se pose
@@ -1325,6 +1334,69 @@ func _on_player_made_immune(duration: float) -> void:
 		_spark_texture)
 	if character.id == EARTH:
 		_spawn_painted_burst(player.mover.nearest_cell(), 1.3, 0.5, "earth_crack")
+
+
+# --- Le Porte-Lumière -------------------------------------------------------------
+
+## L'éclair de l'Aube couvre l'écran, et ses colonnes montent à cette hauteur.
+const DAWN_TILES := 16.0
+const DAWN_TIME := 1.6
+const COLUMN_TIME := 0.42
+const COLUMN_SIZE := Vector2(1.5, 7.0)
+
+var _wings_cocoon: PaintedBurst = null
+
+
+func _on_enemy_blinded(index: int, duration: float) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	enemies[index].blind(duration)
+
+
+func _on_beam_fired(from: Vector2i, cells: Array) -> void:
+	var points := PackedVector2Array([maze_renderer.cell_to_world(from)])
+	for cell: Vector2i in cells:
+		points.append(maze_renderer.cell_to_world(cell))
+	var hits: Array[int] = []
+	for enemy in enemies:
+		var rank := cells.find(enemy.mover.nearest_cell())
+		if rank >= 0:
+			hits.append(rank + 1)
+	var beam := LightBeam.new()
+	entities.add_child(beam)
+	beam.setup(points, hits, TILE_SIZE)
+
+
+func _spawn_wings(duration: float) -> void:
+	if _wings_cocoon != null and is_instance_valid(_wings_cocoon):
+		_wings_cocoon.queue_free()
+	_wings_cocoon = PaintedBurst.new()
+	player.add_child(_wings_cocoon)
+	_wings_cocoon.setup(TILE_SIZE, 1.2, duration, 0.0, "lumiere_wings")
+	_wings_cocoon.position = Vector2(0.0, -TILE_SIZE * 0.55)
+	_wings_cocoon.z_index = 2
+
+
+func _on_wings_burst(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.6, 0.4, "lumiere_ring")
+	_spawn_painted_burst(cell, 1.0, 0.5, "lumiere_feathers")
+
+
+func _on_dawn_cast(cell: Vector2i) -> void:
+	var dawn := _spawn_painted_burst(cell, 1.0, DAWN_TIME, "lumiere_dawn")
+	dawn.scale = Vector2.ONE
+	dawn.span_tiles(TILE_SIZE, DAWN_TILES)
+	dawn.z_index = 12
+	_spawn_painted_burst(cell, 1.0, 1.4, "lumiere_feathers")
+
+
+## La colonne descend du ciel jusqu'aux pieds de l'ennemi, debout dans les deux vues.
+func _on_dawn_struck(cell: Vector2i) -> void:
+	var column := _spawn_painted_burst(cell, 1.0, COLUMN_TIME, "lumiere_column")
+	var shaft := column.get_child(0) as Sprite2D
+	shaft.scale = COLUMN_SIZE * TILE_SIZE
+	shaft.position = Vector2(0.0, -COLUMN_SIZE.y * TILE_SIZE * 0.5)
+	_spawn_painted_burst(cell, 1.3, 0.5, "lumiere_ring")
 
 
 # --- Le Mage de la Peste ---------------------------------------------------------
@@ -1454,6 +1526,9 @@ func _on_immunity_faded() -> void:
 
 
 func _on_shield_faded() -> void:
+	if _wings_cocoon != null and is_instance_valid(_wings_cocoon):
+		_wings_cocoon.queue_free()
+	_wings_cocoon = null
 	if _bubble != null and is_instance_valid(_bubble):
 		_bubble.queue_free()
 	_bubble = null
@@ -1856,7 +1931,12 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 	# Un seul effet, sept lectures.
 	var tint := Element.color(character.element)
 	_spawn_warp(player.mover.nearest_cell(), tint, false)
-	_spawn_warp_trail(from, to, tint)
+	if character.id == "lumiere":
+		var flight := LightArc.new()
+		entities.add_child(flight)
+		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
+	else:
+		_spawn_warp_trail(from, to, tint)
 	player.mover.teleport_to(to)
 	player.snap_to_mover()
 	_spawn_warp(to, tint, true)
@@ -2448,7 +2528,7 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id == "peste":
+		if character.id in ["peste", "lumiere"]:
 			return
 	elif drawn != null and drawn == _impact_texture and DRAWN_MAGES.has(character.id):
 		_spawn_painted_burst(cell, radius, duration)
@@ -2541,7 +2621,7 @@ func _check_capture() -> void:
 		if _swings[i] == null:
 			_swings[i] = MeleeSwing.new()
 		var swing: MeleeSwing = _swings[i]
-		if enemy.dead or enemy.ranged_only() or enemy.is_staggered():
+		if enemy.dead or enemy.ranged_only() or enemy.is_staggered() or enemy.is_blinded():
 			swing.cancel()
 			continue
 		var gap := enemy.mover.grid_position().distance_to(player_position)
@@ -2577,7 +2657,7 @@ func _check_throws(player_position: Vector2, _sheltered: bool) -> void:
 		_throws = ThrowSystem.new(grid)
 	var shooters: Array = []
 	for enemy in enemies:
-		if enemy.dead or enemy.throw_range() <= 0 or not enemy.can_strike():
+		if enemy.dead or enemy.throw_range() <= 0 or not enemy.can_strike() or enemy.is_blinded():
 			shooters.append({"cell": Vector2i.ZERO, "range": 0})
 			continue
 		shooters.append({"cell": enemy.mover.nearest_cell(),

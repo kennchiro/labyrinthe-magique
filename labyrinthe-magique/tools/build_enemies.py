@@ -138,6 +138,13 @@ MAGES = {
             "out": MAGES_OUT, "walks": True, "align_rows": True},
     "peste": {"id": "peste", "name": "Mage de la Peste", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True},
+    # ⚠️ Pas d'égalisation des hauteurs : sa lance, dressée en marchant et baissée en fin
+    # d'attaque, la faussait, et son corps enflait de 20 % à chaque sort. Sans aucun
+    # agrandissement, sa tête reste juste, mais la planche d'attaque le dessine plus trapu
+    # et son auréole tombait de 12 pixels. 8 % partage le défaut entre les deux.
+    "lumiere": {"id": "lumiere", "name": "Porte-Lumière", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "despill": True,
+            "strike_scale": 1.08},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,
@@ -162,6 +169,19 @@ FRINGE_DISTANCE = 140.0
 ENCLOSED_MATTER = 25.0
 ## Marge autour de cette matière, à l'abri du dégorgement de la frange.
 ENCLOSED_MARGIN = 4
+
+
+def despilled(image: Image.Image) -> Image.Image:
+    """Retire le rose que le fond magenta laisse sur un dessin blanc et or.
+
+    Un blanc et un or n'ont jamais plus de bleu que de vert : là où c'est le cas, c'est
+    le fond qui s'y reflète. Le pixel prend le blanc chaud du mage, à sa luminosité."""
+    data = np.array(image.convert("RGBA"))
+    red, green, blue = (data[..., channel].astype(float) for channel in range(3))
+    spill = blue > green
+    data[..., 1] = np.where(spill, red * 0.945, green).astype(np.uint8)
+    data[..., 2] = np.where(spill, red * 0.72, blue).astype(np.uint8)
+    return Image.fromarray(data, "RGBA")
 
 
 def keyed(cell: Image.Image, keep_enclosed: bool = False) -> Image.Image:
@@ -824,7 +844,8 @@ def without_edge_crumbs(cell: Image.Image) -> Image.Image:
     return Image.fromarray(data, "RGBA")
 
 
-def steadied(walk_line: list, strike_line: list, is_mage: bool, same_scale: bool) -> tuple:
+def steadied(walk_line: list, strike_line: list, is_mage: bool, same_scale: bool,
+             strike_scale: float = 0.0) -> tuple:
     """La rangée dont le corps ne bouge plus, de la marche à la fin de l'attaque.
 
     Le prompt l'exige et le générateur ne le tient pas : mesuré sur les huit mages,
@@ -853,6 +874,8 @@ def steadied(walk_line: list, strike_line: list, is_mage: bool, same_scale: bool
     neutral = bounds(strike_line[-1])
     scale = float(np.clip(np.median(heights) / max(1, neutral[3] - neutral[1]),
                           1.0, STEADY_MAX_SCALE)) if same_scale else 1.0
+    if strike_scale > 0.0:
+        scale = strike_scale
     # L'agrandissement se fait autour des pieds, qui descendent ensuite à leur ligne.
     centre_x, floor = (neutral[0] + neutral[2]) / 2.0, float(neutral[3])
     grown = [cell.transform(cell.size, Image.AFFINE,
@@ -892,7 +915,8 @@ def build(source_name: str, entry: dict) -> str:
     if entry.get("align_rows"):
         for row in ROWS:
             walk[row], strike[row] = steadied(walk[row], strike[row], is_mage,
-                                              entry.get("same_scale", True))
+                                              entry.get("same_scale", True),
+                                              entry.get("strike_scale", 0.0))
             if is_mage:
                 walk[row] = [walk[row][number - 1] for number in SMALL_STEP_FRAMES]
 
@@ -998,7 +1022,7 @@ def build(source_name: str, entry: dict) -> str:
             if flip:
                 piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
             strip.alpha_composite(piece, (number * cell_w, 0))
-        strip.save(folder / f"{direction}.png")
+        (despilled(strip) if entry.get("despill") else strip).save(folder / f"{direction}.png")
 
     # LES PIEDS SONT LE BAS DE LA MARCHE, et non le bas de la matière. Même
     # raison que le centrage : une traînée de coup qui plonge sous la robe

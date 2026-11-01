@@ -494,7 +494,7 @@ def main() -> None:
             print(f"✅  {config['id']:8s} {len(DIRECTIONS)} directions x {len(POSES)} poses,"
                   f" toutes cadrées{note}")
     # Ces mages sont nés animés : ils n'ont jamais eu de planche dans `SHEETS`.
-    for mage in ("chrono", "peste"):
+    for mage in ("chrono", "peste", "lumiere"):
         checked += 1
         problems = check_animated(mage)
         if problems:

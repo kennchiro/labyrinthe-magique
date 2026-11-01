@@ -3,7 +3,7 @@
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
 > La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-8 mages jouables. La barre d'action a toujours la même forme —
+11 mages jouables. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -19,6 +19,9 @@ comparables d'un personnage à l'autre.
 | **Mage de l'Air** | Air | 4 | 4.9 | 5 kills | **Bourrasque** — la cible est repoussée de 2 cases |
 | **Invocateur** | Ténèbres | 3 | 4.9 | 6 kills | **Ponction** — le mage récupère 1 PV, au plus toutes les 10 s |
 | **Sorcier Suprême** | Suprême | 4 | 4.9 | 8 kills | **Écho** — 40 % des dégâts se répètent 0.6 s plus tard |
+| **Chronomancien** | Temps | 4 | 5.0 | 5 kills | **Retard** — la cible ralentit de 40 % pendant 1.4 s |
+| **Mage de la Peste** | Poison | 3 | 5.2 | 4 kills | **Venin** — jusqu'à 3 doses, 7 dégâts par seconde chacune pendant 5 s |
+| **Porte-Lumière** | Lumière | 4 | 5.0 | 5 kills | **Éblouissement** — la cible perd sa trace 1.2 s, au plus toutes les 5 s |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
@@ -231,3 +234,81 @@ Trait : **Écho** — 40 % des dégâts se répètent 0.6 s plus tard
 - **Renaissance** — Il renaît des quatre éléments : +8 à chaque coup et 2 coups absorbés pendant 30 s, et ses blessures se referment.
 - **Glissement** — Les quatre éléments le déplacent d'un souffle.
 - **Jugement des quatre** — Le ciel s'ouvre : des météores des quatre éléments tombent sur chaque poursuivant, et la terre tremble.
+
+---
+
+## Chronomancien — Temps
+
+> Il ne fuit pas : il revient en arrière. Frappe peu, ralentit tout et répare ses erreurs de chemin.
+
+`id: chrono` · puissance affichée 3/5 · vie 4 · vitesse 5.0 · extra à 5 kills
+
+Trait : **Retard** — la cible ralentit de 40 % pendant 1.4 s
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Aiguille** | projectile | 16 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Bulle de lenteur** | zone | 12 dégâts/s · rayon 2.6 · 8 s · recharge 12 s · englue à 35 % tant qu'on y reste | 12.0 s |
+| SKILL 2 | **Écho** | ? | 60 dégâts · rejoue 5 s de marche · recharge 9 s | 9.0 s |
+| SKILL 3 | **Sablier** | ? | rend 50 % des PV perdus en 8 s · recharge 28 s | 28.0 s |
+| FUITE | **Retour** | translation | revient 4 s en arrière · recharge 7 s | 7.0 s |
+| EXTRA | **Arrêt du temps** | ? | tout se fige 4 s | 1.0 s |
+
+- **Aiguille** — Une aiguille d'horloge qui ralentit un court instant ce qu'elle touche.
+- **Bulle de lenteur** — Dans la bulle, ennemis et projectiles vont au ralenti. Lui, non.
+- **Écho** — Un double rejoue ses 5 dernières secondes de marche et blesse ce qu'il croise.
+- **Sablier** — Pendant 8 s, les coups reçus sont notés. À la fin, il récupère la moitié des points perdus, arrondie au-dessus.
+- **Retour** — Il revient là où il était il y a 4 s, sans récupérer de vie.
+- **Arrêt du temps** — Pendant 4 s, tout se fige sauf lui.
+
+---
+
+## Mage de la Peste — Poison
+
+> Plus on le poursuit, plus on s'empoisonne. Fragile et rapide : ses doses travaillent pendant qu'il fuit.
+
+`id: peste` · puissance affichée 3/5 · vie 3 · vitesse 5.2 · extra à 4 kills
+
+Trait : **Venin** — jusqu'à 3 doses, 7 dégâts par seconde chacune pendant 5 s
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Dard venimeux** | projectile | 8 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Traînée toxique** | ? | flaques 5 s · pendant 6 s · recharge 14 s | 14.0 s |
+| SKILL 2 | **Contagion** | ? | passe le poison à 5 cases · portée 8 · recharge 8 s | 8.0 s |
+| SKILL 3 | **Transfusion** | ? | 1 PV par 2 ennemis empoisonnés · recharge 22 s | 22.0 s |
+| FUITE | **Brume** | translation | saut de 6 cases · recharge 7 s | 7.0 s |
+| EXTRA | **Pandémie** | ? | toute la carte empoisonnée 8 s · ils éclatent | 1.0 s |
+
+- **Dard venimeux** — Un trait faible, mais chaque coup ajoute une dose de poison, jusqu'à 3.
+- **Traînée toxique** — Pendant 6 s, il laisse du poison sur les cases où il passe.
+- **Contagion** — Le poison d'une cible passe aux ennemis proches.
+- **Transfusion** — Il reprend de la vie selon le nombre d'ennemis empoisonnés.
+- **Brume** — Il se dissout et reparaît plus loin, en laissant un nuage toxique derrière lui.
+- **Pandémie** — Tous les ennemis de la carte sont empoisonnés 8 s, et ceux qui en meurent éclatent en nuage toxique.
+
+---
+
+## Porte-Lumière — Lumière
+
+> Sa lumière aveugle : les ennemis perdent sa trace. Bons dégâts en ligne droite, s'il se place bien.
+
+`id: lumiere` · puissance affichée 4/5 · vie 4 · vitesse 5.0 · extra à 5 kills
+
+Trait : **Éblouissement** — la cible perd sa trace 1.2 s, au plus toutes les 5 s
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Trait d'aube** | projectile | 15 dégâts · portée 9 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Lance solaire** | ? | 55 dégâts · rayon de 14 cases dans les couloirs · recharge 6 s | 6.0 s |
+| SKILL 2 | **Sanctuaire** | zone | 14 dégâts/s · rayon 2.4 · 8 s · recharge 16 s | 16.0 s |
+| SKILL 3 | **Ailes gardiennes** | bouclier | absorbe 1 · 8 s · recharge 18 s | 18.0 s |
+| FUITE | **Envol** | translation | saut de 5 cases · recharge 8 s · TRAVERSE LES MURS | 8.0 s |
+| EXTRA | **L'Aube** | ? | 130 dégâts sur toute la carte · aveugle 5 s | 1.0 s |
+
+- **Trait d'aube** — Un trait net. De temps en temps, il aveugle sa cible un instant.
+- **Lance solaire** — Un rayon qui suit les couloirs, vire vers les ennemis et touche tout ce qu'il traverse.
+- **Sanctuaire** — Un cercle de lumière au sol : ce qui y entre est aveuglé et brûlé.
+- **Ailes gardiennes** — Ses ailes absorbent un coup, puis aveuglent ce qui se tient au contact.
+- **Envol** — Il survole les haies, et son atterrissage aveugle les ennemis proches.
+- **L'Aube** — L'écran s'embrase, et une colonne de lumière tombe sur chaque ennemi de la carte, aveuglé 5 s.

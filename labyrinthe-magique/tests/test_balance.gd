@@ -100,7 +100,7 @@ func _init() -> void:
 
 	# Les quatre autres mages sur le même stage : ce qu'on cherche ici n'est pas
 	# l'égalité parfaite, c'est qu'aucun ne soit injouable.
-	print("── Viabilité des dix mages (Stage 2, explorateur)")
+	print("── Viabilité des onze mages (Stage 2, explorateur)")
 	var stage := LevelConfig.for_stage(2)
 	for character in CharacterCatalog.all():
 		if character.id == reference.id:
@@ -243,6 +243,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	combat.enemy_soaked.connect(func(index: int, duration: float, factor: float) -> void:
 		soaked[index] = duration
 		soak_factors[index] = factor)
+	combat.enemy_blinded.connect(func(index: int, duration: float) -> void:
+		brains[index].blind_left = duration
+		swings[index].cancel())
 	combat.enemy_staggered.connect(func(index: int, duration: float) -> void:
 		staggered[index] = duration)
 	combat.enemy_pushed.connect(func(index: int, cell: Vector2i) -> void:
@@ -422,7 +425,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					player.nearest_cell(), int(species_tuning["throw_range"])):
 				mover.desired_direction = Vector2i.ZERO
 			mover.update(DT)
-			if ranged_only:
+			# Aveuglé, il erre mais ne frappe pas, comme en jeu.
+			if ranged_only or brains[i].blind_left > 0.0:
 				continue
 			# Le même coup qu'en jeu : armé au contact, porté à l'impact.
 			var swing_event: MeleeSwing.Event = swings[i].tick(DT,
@@ -442,7 +446,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		var shooters: Array = []
 		for i in movers.size():
 			var reach := int(Bestiary.of(config.species_at(i)).get("throw_range", 0))
-			if reach <= 0 or not context.enemy_health[i].is_alive():
+			if reach <= 0 or not context.enemy_health[i].is_alive() or brains[i].blind_left > 0.0:
 				shooters.append({"cell": Vector2i.ZERO, "range": 0})
 				continue
 			var tuning := Bestiary.of(config.species_at(i))

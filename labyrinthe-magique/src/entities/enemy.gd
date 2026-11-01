@@ -47,6 +47,9 @@ const TINT_VENOM := Color(0.72, 1.42, 0.32)
 const VENOM_DROP := Color("#b4f02a")
 const VENOM_RIM := Color("#1e3a0c")
 const VENOM_SHINE := Color("#f2ff9e")
+const TINT_BLIND := Color(1.5, 1.45, 1.25)
+const BLIND_STAR := Color("#ffcf5a")
+const BLIND_RIM := Color("#4a2f12")
 const TINT_BURN := Color(1.6, 0.85, 0.55)
 ## Le poison d'ombre : SOMBRE et violacé, là où les autres statuts éclaircissent.
 ## Une créature empoisonnée doit avoir l'air éteinte, pas illuminée — et une
@@ -259,6 +262,18 @@ func time_freeze(duration: float) -> void:
 	_frozen_left = maxf(_frozen_left, duration)
 
 
+## Il erre sans chercher le mage, et le Level ne le laisse plus frapper.
+func blind(duration: float) -> void:
+	if ai != null:
+		ai.blind_left = maxf(ai.blind_left, duration)
+	flash_hit()
+	queue_redraw()
+
+
+func is_blinded() -> bool:
+	return ai != null and ai.blind_left > 0.0
+
+
 ## Les doses de venin : on doit les lire d'un coup d'œil, sans chiffre.
 func set_venom(doses: int, duration: float) -> void:
 	_venom_doses = doses
@@ -329,6 +344,10 @@ func _update_desired(delta: float) -> void:
 		return
 	# Brûlure et trempe passent AVANT les teintes d'état : un statut est une
 	# information de combat, l'état de l'IA n'est qu'une ambiance.
+	if is_blinded():
+		_show_state(TINT_BLIND)
+		queue_redraw()
+		return
 	# LE VENIN VERDIT À CHAQUE DOSE, en pulsant lentement. Il passe devant les autres :
 	# c'est toute la lecture du Mage de la Peste.
 	if _venom_doses > 0:
@@ -617,6 +636,7 @@ func _draw() -> void:
 	if health == null or dead:
 		return
 	_draw_venom()
+	_draw_blind()
 	# La barre ne s'affiche qu'une fois le premier coup porté : au complet, elle
 	# n'apprend rien et met un bandeau rouge au-dessus de chaque ennemi de la
 	# carte, ce qui noie l'information au moment où elle compte.
@@ -665,3 +685,24 @@ func _draw_venom() -> void:
 		var alpha := (1.0 - life) * 0.95
 		draw_circle(at, radius, Color(VENOM_DROP, alpha))
 		draw_arc(at, radius, 0.0, TAU, 10, Color(VENOM_RIM, alpha), 1.0)
+
+
+## Trois étoiles d'or tournent au-dessus de la barre de vie. Elles s'éteignent une à une
+## juste avant qu'il reprenne la poursuite.
+func _draw_blind() -> void:
+	if not is_blinded():
+		return
+	var lit := mini(3, ceili(ai.blind_left / 0.3))
+	var clock := float(Time.get_ticks_msec()) * 0.004
+	var centre := Vector2(0.0, -tile_size * (BAR_HEIGHT_ABOVE + 0.2))
+	var span := tile_size * 0.05
+	for i in lit:
+		var angle := clock + float(i) * TAU / 3.0
+		var at := centre + Vector2(cos(angle) * tile_size * 0.3, sin(angle) * tile_size * 0.1)
+		var star := PackedVector2Array()
+		for point in 8:
+			var length := span * (2.0 if point % 2 == 0 else 0.7)
+			star.append(at + Vector2.from_angle(float(point) * TAU / 8.0 + 0.4) * length)
+		star.append(star[0])
+		draw_colored_polygon(star, BLIND_STAR)
+		draw_polyline(star, BLIND_RIM, 1.0)

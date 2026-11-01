@@ -40,11 +40,12 @@ const SUPREME := "supreme"
 const INVOCATEUR := "invocateur"
 const CHRONO := "chrono"
 const PESTE := "peste"
+const LUMIERE := "lumiere"
 
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste()]
+		peste(), lumiere()]
 
 
 static func by_id(id: String) -> CharacterStats:
@@ -860,6 +861,62 @@ static func peste() -> CharacterStats:
 		"kind": Ability.Kind.PANDEMIC, "element": Element.Kind.POISON,
 		"duration": 8.0, "cooldown": 1.0, "is_ultimate": true,
 		"cloud_duration": 4.0, "cloud_radius": 1.5,
+	})
+	return c
+
+
+# --- Porte-Lumière : sa lumière aveugle, et les ennemis perdent sa trace. --------------
+static func lumiere() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = LUMIERE
+	c.display_name = "Porte-Lumière"
+	c.element = Element.Kind.LIGHT
+	c.description = "Sa lumière aveugle : les ennemis perdent sa trace. Bons dégâts en ligne droite, s'il se place bien."
+	c.power_level = 4
+	c.base_health = 4
+	c.move_speed = 5.0
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "lumiere_dawn", "display_name": "Trait d'aube",
+		"description": "Un trait net. De temps en temps, il aveugle sa cible un instant.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.LIGHT,
+		"projectile_visual": "trait_aube",
+		"damage": 15, "range": 9, "cooldown": 0.45, "projectile_speed": 1.5,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "lumiere_lance", "display_name": "Lance solaire",
+			"description": "Un rayon qui suit les couloirs, vire vers les ennemis et touche tout ce qu'il traverse.",
+			"kind": Ability.Kind.BEAM, "element": Element.Kind.LIGHT,
+			"damage": 55, "range": 14, "cooldown": 6.0,
+		}),
+		Ability.make({
+			"id": "lumiere_sanctuary", "display_name": "Sanctuaire",
+			"description": "Un cercle de lumière au sol : ce qui y entre est aveuglé et brûlé.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.LIGHT,
+			"damage": 14, "radius": 2.4, "duration": 8.0, "cooldown": 16.0,
+			"blind_seconds": 2.5, "zone_style": "sanctuaire_peint",
+		}),
+		Ability.make({
+			"id": "lumiere_wings", "display_name": "Ailes gardiennes",
+			"description": "Ses ailes absorbent un coup, puis aveuglent ce qui se tient au contact.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.LIGHT,
+			"damage": 1, "duration": 8.0, "cooldown": 18.0,
+			"blind_seconds": 3.0, "blind_radius": 2,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "lumiere_flight", "display_name": "Envol",
+		"description": "Il survole les haies, et son atterrissage aveugle les ennemis proches.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.LIGHT,
+		"range": 5, "cooldown": 8.0, "pierces_walls": true,
+		"blind_seconds": 2.0, "blind_radius": 2,
+	})
+	c.ultimate = Ability.make({
+		"id": "lumiere_aube", "display_name": "L'Aube",
+		"description": "L'écran s'embrase, et une colonne de lumière tombe sur chaque ennemi de la carte, aveuglé 5 s.",
+		"kind": Ability.Kind.DAWN, "element": Element.Kind.LIGHT,
+		"damage": 130, "cooldown": 1.0, "is_ultimate": true, "blind_seconds": 5.0,
 	})
 	return c
 

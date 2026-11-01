@@ -23,6 +23,8 @@ var state: State = State.PATROL
 var detection_radius: int = 8
 var search_duration: float = 3.0
 
+## Aveuglé : il erre sans chercher le mage, et ne peut pas frapper.
+var blind_left := 0.0
 var _search_field := PackedInt32Array()
 var _search_timer := 0.0
 var _patrol_direction := Vector2i.ZERO
@@ -40,6 +42,11 @@ func _init(p_detection_radius: int, rng_seed: int = 0) -> void:
 
 func decide(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 		player_field: PackedInt32Array, delta: float) -> Vector2i:
+	if blind_left > 0.0:
+		blind_left -= delta
+		state = State.PATROL
+		_search_field = PackedInt32Array()
+		return _patrol(grid, from, current_direction)
 	var distance_to_player := Pathfinder.value_at(grid, player_field, from)
 	var detected := distance_to_player >= 0 and distance_to_player <= detection_radius
 

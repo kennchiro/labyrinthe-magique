@@ -61,7 +61,7 @@ func _test_roster_slider() -> void:
 	select.size = Vector2(844.0, 390.0)
 	select._layout()
 	if select._shown >= select._portraits.size():
-		_fail("sélection : à 844 de large, les dix cartes ne devraient pas tenir")
+		_fail("sélection : à 844 de large, les onze cartes ne devraient pas tenir")
 	if not select._arrow_left.disabled or select._arrow_right.disabled:
 		_fail("sélection : au début, seul le bouton de droite doit être actif")
 	var presses := 0
@@ -71,7 +71,7 @@ func _test_roster_slider() -> void:
 	if select._first_shown + select._shown != select._portraits.size():
 		_fail("sélection : le bouton n'atteint pas le dernier mage")
 	select._show_from(0, false)
-	select.select(CharacterCatalog.PESTE)
+	select.select(CharacterCatalog.LUMIERE)
 	var last := select._portraits.size() - 1
 	if select._first_shown + select._shown <= last:
 		_fail("sélection : le mage choisi reste caché")

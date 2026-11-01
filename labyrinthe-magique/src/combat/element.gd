@@ -7,7 +7,7 @@ extends RefCounted
 ## effets et les projectiles la lisent ici. Sans ça, le rouge du Mage de Feu finit
 ## par exister en cinq nuances différentes dans cinq fichiers.
 
-enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON }
+enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT }
 
 const COLORS := {
 	Kind.FIRE: Color("#ff6a2a"),
@@ -19,6 +19,7 @@ const COLORS := {
 	Kind.SUPREME: Color("#ffd36a"),
 	Kind.TIME: Color("#2fd6b8"),
 	Kind.POISON: Color("#b4f02a"),
+	Kind.LIGHT: Color("#fff1b8"),
 }
 const NAMES := {
 	Kind.FIRE: "Feu",
@@ -30,6 +31,7 @@ const NAMES := {
 	Kind.SUPREME: "Suprême",
 	Kind.TIME: "Temps",
 	Kind.POISON: "Poison",
+	Kind.LIGHT: "Lumière",
 }
 
 
@@ -52,6 +54,7 @@ static func trait_name(kind: Kind) -> String:
 		Kind.SUPREME: return "Écho"
 		Kind.TIME: return "Retard"
 		Kind.POISON: return "Venin"
+		Kind.LIGHT: return "Éblouissement"
 	return ""
 
 
@@ -66,6 +69,7 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.SUPREME: return "le coup se répète en écho"
 		Kind.TIME: return "la cible ralentit un court instant"
 		Kind.POISON: return "chaque coup ajoute une dose de poison, jusqu'à 3"
+		Kind.LIGHT: return "de temps en temps, la cible aveuglée perd sa trace"
 	return ""
 
 

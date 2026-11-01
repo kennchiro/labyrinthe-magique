@@ -164,6 +164,19 @@ MAGES = [
         "aura": "vert acide et vert très sombre",
         "phrase": "Plus on le poursuit, plus on s'empoisonne.",
     },
+    {
+        "id": "lumiere", "nom": "Porte-Lumière", "element": "Lumière",
+        "couleur": "#fff1b8",
+        "corps": "un ANGE aux deux GRANDES AILES de plumes blanches, largement ouvertes "
+                 "derrière lui. Une AURÉOLE d'or plate flotte au-dessus de sa tête. Courts "
+                 "cheveux blonds, visage jeune et serein bien VISIBLE, armure légère blanc "
+                 "ivoire à liserés d'or sur une tunique blanche, bottes d'or. Il tient de la "
+                 "main droite une LANCE dorée, surmontée d'une pointe de cristal blanc "
+                 "lumineux, et de petites plumes de lumière flottent autour de lui. Ses formes "
+                 "blanches sont cernées d'un contour brun foncé net, qui les détache du fond",
+        "aura": "or pâle au centre et bleu nuit profond",
+        "phrase": "Sa lumière aveugle : ils perdent sa trace.",
+    },
 ]
 
 ENTETE = """> ⚠️ **Fichier GÉNÉRÉ** par `tools/build_prompts_menu.py`. Ne pas l'éditer à

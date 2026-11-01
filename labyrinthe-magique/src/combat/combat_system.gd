@@ -139,6 +139,11 @@ signal contagion_spread(from: Vector2i, to: Vector2i)
 signal transfused(cells: Array, healed: int)
 signal pandemic_cast(cell: Vector2i)
 signal venom_killed(cell: Vector2i)
+signal enemy_blinded(index: int, duration: float)
+signal beam_fired(from: Vector2i, cells: Array)
+signal wings_burst(cell: Vector2i)
+signal dawn_cast(cell: Vector2i)
+signal dawn_struck(cell: Vector2i)
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -262,6 +267,13 @@ const VENOM_MAX := 3
 const VENOM_DAMAGE := 7
 const VENOM_DURATION := 5.0
 const VENOM_TICK := 1.0
+## L'éblouissement du trait : court, et jamais deux fois de suite sur la même créature.
+## Le verrou empêche qu'un ennemi reste aveuglé en permanence : il doit pouvoir revenir.
+const GLARE_SECONDS := 1.2
+const BLIND_LOCK := 5.0
+## L'Aube laisse le temps de l'éclair, puis frappe ennemi après ennemi.
+const DAWN_DELAY := 0.65
+const DAWN_GAP := 0.09
 
 var grid: MazeGrid
 var stats: CharacterStats
@@ -329,6 +341,10 @@ var _plague: Ability = null            # l'ultime : ce qui éclate laisse son nu
 var _seep_left := 0.0
 var _seep_life := 0.0
 var _puddles := {}                     # case -> secondes restantes
+var _blind_locks := {}                 # index -> secondes avant le prochain aveuglement
+var _dawn: Array[Dictionary] = []      # {index, time_left, ability}
+var _wings: Ability = null             # la coque en place, quand elle aveugle en cédant
+var _wings_cell := Vector2i.ZERO
 
 
 ## `p_seed` : la pluie de météores tire au sort ses cases. Le tirage doit être
@@ -392,6 +408,7 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_hourglass(delta)
 	_update_venom(delta, context)
 	_update_puddles(delta, context)
+	_update_light(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -440,7 +457,10 @@ func update(delta: float, context: CombatContext) -> void:
 		# Il tombe de DEUX façons : l'échéance, ou les coups qui l'ont vidé.
 		# Les deux comptent — un bouclier à zéro qui resterait affiché mentirait
 		# autant qu'un bouclier éternel.
+		if _wings != null and health.shield <= 0 and _shield_left > 0.0:
+			_burst_wings(context)
 		if _shield_left <= 0.0 or health.shield <= 0:
+			_wings = null
 			_shield_left = 0.0
 			health.shield = 0
 			player_shield_faded.emit()
@@ -518,6 +538,8 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 				_apply_area(slice, zone["cell"], context, ability, true, false)
 			if ability.venom_doses > 0:
 				_apply_zone_venom(ability, zone["cell"], context)
+			if ability.blind_seconds > 0.0:
+				_apply_zone_blind(ability, zone["cell"], context)
 			if ability.snare > 0.0:
 				_apply_snare(ability, zone["cell"], context)
 			if ability.slow_duration > 0.0 and not ability.slow_sustained:
@@ -678,6 +700,7 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			else:
 				health.add_shield(ability.damage)
 				_shield_left = ability.duration
+				_wings = ability if ability.blind_seconds > 0.0 else null
 				player_shielded.emit(ability.damage, ability.duration)
 			fired = true
 		Ability.Kind.HEAL:
@@ -721,6 +744,11 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_transfusion(ability, context)
 		Ability.Kind.PANDEMIC:
 			_cast_pandemic(ability, context)
+			fired = true
+		Ability.Kind.BEAM:
+			fired = _cast_beam(ability, context)
+		Ability.Kind.DAWN:
+			_cast_dawn(ability, context)
 			fired = true
 
 	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
@@ -1821,6 +1849,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	if ability.cloud_duration > 0.0:
 		_cloud_zone(context.player_cell, ability)
 	blink_performed.emit(context.player_cell, destination)
+	if ability.blind_radius > 0:
+		_blind_around(destination, ability, context)
 	return true
 
 
@@ -2078,6 +2108,146 @@ func _cast_pandemic(ability: Ability, context: CombatContext) -> void:
 ## Combien de doses porte cette créature ? L'interface et les tests s'en servent.
 func venom_doses(index: int) -> int:
 	return int(_venom[index]["doses"]) if _venom.has(index) else 0
+
+
+# --- La lumière -------------------------------------------------------------------
+
+## `force` passe le verrou : seule l'Aube y a droit, c'est son privilège d'ultime.
+func _blind(index: int, duration: float, context: CombatContext, force: bool = false) -> void:
+	if not context.enemy_alive(index) or context.is_structure(index):
+		return
+	if _blind_locks.has(index) and not force:
+		return
+	_blind_locks[index] = duration + BLIND_LOCK
+	enemy_blinded.emit(index, duration)
+
+
+func _update_light(delta: float, context: CombatContext) -> void:
+	for index in _blind_locks.keys():
+		_blind_locks[index] = float(_blind_locks[index]) - delta
+		if float(_blind_locks[index]) <= 0.0:
+			_blind_locks.erase(index)
+	for i in range(_dawn.size() - 1, -1, -1):
+		var strike: Dictionary = _dawn[i]
+		strike["time_left"] = float(strike["time_left"]) - delta
+		if float(strike["time_left"]) > 0.0:
+			continue
+		var index := int(strike["index"])
+		var ability: Ability = strike["ability"]
+		_dawn.remove_at(i)
+		if not context.enemy_alive(index):
+			continue
+		dawn_struck.emit(context.enemy_cells[index])
+		_apply_damage(index, ability, context, false)
+		_blind(index, ability.blind_seconds, context, true)
+
+
+func _blind_around(cell: Vector2i, ability: Ability, context: CombatContext) -> void:
+	var field := _field_from(cell)
+	for i in context.enemy_cells.size():
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and distance <= ability.blind_radius:
+			_blind(i, ability.blind_seconds, context)
+
+
+func _apply_zone_blind(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var field := _field_from(centre)
+	for i in context.enemy_cells.size():
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and float(distance) <= ability.radius:
+			_blind(i, ability.blind_seconds, context)
+
+
+## La coque a absorbé son coup : l'éclair aveugle ce qui se tient au contact.
+func _burst_wings(context: CombatContext) -> void:
+	wings_burst.emit(context.player_cell)
+	_blind_around(context.player_cell, _wings, context)
+
+
+## TOUT DROIT, et jusqu'au mur : c'est le placement dans le couloir qui fait le sort.
+func _cast_beam(ability: Ability, context: CombatContext) -> bool:
+	var cells := _beam_path(ability.range, context)
+	if cells.is_empty():
+		use_refused.emit("mur")
+		return false
+	beam_fired.emit(context.player_cell, cells)
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and cells.has(context.enemy_cells[i]):
+			_apply_damage(i, ability, context)
+	return true
+
+
+## Le trajet de la Lance : elle part là où regarde le mage, puis file vers la proie la plus
+## proche par les couloirs, en passe à la suivante, et sans proie continue devant elle. Elle ne
+## repasse jamais sur ses pas : le regard du mage décide donc du côté qu'elle prend.
+func _beam_path(limit: int, context: CombatContext) -> Array[Vector2i]:
+	var prey := {}
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i):
+			prey[context.enemy_cells[i]] = true
+	var path: Array[Vector2i] = []
+	var walked := {context.player_cell: true}
+	var cell: Vector2i = context.player_cell
+	var dir: Vector2i = context.player_facing
+	if grid.is_floor_v(cell + dir):
+		cell += dir
+		path.append(cell)
+		walked[cell] = true
+		prey.erase(cell)
+	while path.size() < limit:
+		var leg := _beam_leg(cell, walked, prey, limit - path.size())
+		if leg.is_empty():
+			var onward := _beam_onward(cell, dir, walked)
+			if onward == Vector2i.ZERO:
+				break
+			leg.append(cell + onward)
+		for step in leg:
+			dir = step - cell
+			cell = step
+			path.append(cell)
+			walked[cell] = true
+			prey.erase(cell)
+	return path
+
+
+## Le plus court chemin libre jusqu'à la proie la plus proche, vide s'il n'y en a pas à portée.
+func _beam_leg(from: Vector2i, walked: Dictionary, prey: Dictionary, limit: int) -> Array[Vector2i]:
+	var came := {from: from}
+	var frontier: Array[Vector2i] = [from]
+	for depth in limit:
+		var next: Array[Vector2i] = []
+		for cell in frontier:
+			for neighbour in grid.floor_neighbors(cell):
+				if came.has(neighbour) or walked.has(neighbour):
+					continue
+				came[neighbour] = cell
+				if prey.has(neighbour):
+					var leg: Array[Vector2i] = []
+					var back: Vector2i = neighbour
+					while back != from:
+						leg.push_front(back)
+						back = came[back]
+					return leg
+				next.append(neighbour)
+		frontier = next
+	return []
+
+
+## La direction sans proie : tout droit, sinon le virage libre, sinon demi-tour au départ.
+func _beam_onward(cell: Vector2i, dir: Vector2i, walked: Dictionary) -> Vector2i:
+	for way: Vector2i in [dir, Vector2i(dir.y, dir.x), Vector2i(-dir.y, -dir.x), -dir]:
+		if grid.is_floor_v(cell + way) and not walked.has(cell + way):
+			return way
+	return Vector2i.ZERO
+
+
+func _cast_dawn(ability: Ability, context: CombatContext) -> void:
+	dawn_cast.emit(context.player_cell)
+	var wait := DAWN_DELAY
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i):
+			_dawn.append({"index": i, "time_left": wait, "ability": ability})
+			wait += DAWN_GAP
 
 
 # --- Invocations ------------------------------------------------------------------
@@ -2423,6 +2593,8 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 				_push_away(index, context)
 		Element.Kind.POISON:
 			_add_venom(index, context)
+		Element.Kind.LIGHT:
+			_blind(index, GLARE_SECONDS, context)
 		Element.Kind.TIME:
 			if context.enemy_alive(index):
 				enemy_soaked.emit(index, RETARD_DURATION, RETARD_FACTOR)

@@ -30,6 +30,7 @@ et c'est elle qu'on rejoue.
 | Sorcier Suprême | Suprême | `#ffd36a` | [portrait_supreme](prompts/menu/portrait_supreme.md) |
 | Chronomancien | Temps | `#2fd6b8` | [portrait_chrono](prompts/menu/portrait_chrono.md) |
 | Mage de la Peste | Poison | `#b4f02a` | [portrait_peste](prompts/menu/portrait_peste.md) |
+| Porte-Lumière | Lumière | `#fff1b8` | [portrait_lumiere](prompts/menu/portrait_lumiere.md) |
 
 Plus deux prompts communs :
 

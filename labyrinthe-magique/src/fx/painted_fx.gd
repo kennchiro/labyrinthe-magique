@@ -45,6 +45,12 @@ const SHADERS := {
 	"peste_heal": preload("res://assets/shaders/peste_heal.gdshader"),
 	"peste_wave": preload("res://assets/shaders/peste_wave.gdshader"),
 	"peste_dissolve": preload("res://assets/shaders/peste_dissolve.gdshader"),
+	"lumiere_star": preload("res://assets/shaders/lumiere_star.gdshader"),
+	"lumiere_feathers": preload("res://assets/shaders/lumiere_feathers.gdshader"),
+	"lumiere_wings": preload("res://assets/shaders/lumiere_wings.gdshader"),
+	"lumiere_ring": preload("res://assets/shaders/lumiere_ring.gdshader"),
+	"lumiere_dawn": preload("res://assets/shaders/lumiere_dawn.gdshader"),
+	"lumiere_column": preload("res://assets/shaders/lumiere_column.gdshader"),
 }
 
 ## L'éclat au toucher, et la fuite, de chaque mage.
@@ -52,12 +58,12 @@ const IMPACT := {
 	"fire": "fire_burst", "shadow": "shadow_collapse", "invocateur": "arcane_sigil",
 	"water": "water_splash", "thunder": "thunder_star", "air": "air_slash",
 	"earth": "earth_crack", "supreme": "prism_star", "chrono": "chrono_tick",
-	"peste": "peste_splash",
+	"peste": "peste_splash", "lumiere": "lumiere_star",
 }
 const ESCAPE := {
 	"invocateur": "arcane_sigil", "water": "water_swirl", "thunder": "thunder_strike",
 	"air": "air_streaks", "earth": "earth_fissure", "supreme": "prism_shift",
-	"chrono": "chrono_rewind", "peste": "peste_mist",
+	"chrono": "chrono_rewind", "peste": "peste_mist", "lumiere": "lumiere_feathers",
 }
 ## La couleur de la flamme de chaque sceau du Suprême. Tout autre élément prend l'air.
 const SEAL_KINDS := {
@@ -72,6 +78,7 @@ const EXTRAS := {
 	"supreme": ["rebirth_aura", "seal_flame", "convergence_burst", "judgement_burst"],
 	"chrono": ["chrono_sand", "chrono_stop"],
 	"peste": ["peste_puddle", "peste_heal", "peste_wave", "peste_dissolve"],
+	"lumiere": ["lumiere_wings", "lumiere_ring", "lumiere_dawn", "lumiere_column"],
 }
 
 
