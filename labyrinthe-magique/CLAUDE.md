@@ -290,8 +290,12 @@ ferme la porte que pendant le combat. `--demo --demo-stage 4 --boss` passe par c
 
 - `BossCatalog` dit qui garde quel chapitre et la forme de son attaque, `Bestiary` ce qu'il vaut,
   `BossFight` quand et où tombe sa zone, en RefCounted. `tests/test_boss.gd` vérifie le tout.
-- Il frappe au contact comme tout ennemi. De loin, il marque le sol (`BossZone`) à partir de la case
-  du mage : la zone se voit se remplir, et qui en sort à temps n'a rien.
+- Il frappe au contact comme tout ennemi. De loin, il marque le sol (`BossZone`) : la zone se voit
+  se remplir, et qui en sort à temps n'a rien. `test_boss` vérifie qu'on peut toujours en sortir.
+- Chaque boss a SA forme d'attaque (`BossFight`), et test_boss refuse deux formes identiques. Sa
+  démarche (`BossGait`) et sa vitesse viennent de `BossCatalog`, en cases par seconde : elles suivent
+  sa taille (`body` dans `Bestiary`), pas le stage. Les fiches de `docs/prompts/boss/` décrivent les
+  images ; pour les portées et les attaques, c'est `BossCatalog` et `BossFight` qui font foi.
 - ⚠️ Sa place dans `enemies` est RÉSERVÉE au chargement, comme celle des petites gelées : un ennemi
   ajouté en pleine partie décalerait les index sous les projectiles en vol. Il est hors de
   `slot_species`, et donc hors de `test_balance`, qui NE MESURE PAS les combats de boss.
