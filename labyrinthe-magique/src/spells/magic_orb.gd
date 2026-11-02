@@ -55,6 +55,8 @@ const GROW_TIME := 0.22
 ## vit pendant tout le vol. `lead` recule le quad pour que la POINTE du dessin, et
 ## non son milieu, tombe sur la position du projectile. Les tailles sont en cases,
 ## avant l'échelle de la compétence.
+## Le Suprême lit une matière par canal (`tools/build_noise.py`).
+const SUPREME_NOISE := preload("res://assets/shaders/supreme_noise.png")
 const PAINTED := {
 	"trait_peint": {"shader": preload("res://assets/shaders/fire_bolt.gdshader"),
 		"length": 1.6, "height": 0.45, "lead": 0.3, "sparks": 0.4},
@@ -70,17 +72,21 @@ const PAINTED := {
 		"length": 2.0, "height": 0.62, "lead": 0.42, "sparks": 0.0},
 	"trait_aube": {"shader": preload("res://assets/shaders/lumiere_bolt.gdshader"),
 		"length": 1.6, "height": 0.42, "lead": 0.3, "sparks": 0.0},
+	"eclat_stellaire": {"shader": preload("res://assets/shaders/etoiles_spark.gdshader"),
+		"length": 1.3, "height": 0.54, "lead": 0.3, "sparks": 0.0},
+	"croissant_noir": {"shader": preload("res://assets/shaders/mort_crescent.gdshader"),
+		"length": 1.5, "height": 0.8, "lead": 0.3, "sparks": 0.0},
 	"goutte_venin": {"shader": preload("res://assets/shaders/peste_dart.gdshader"),
 		"length": 1.5, "height": 0.46, "lead": 0.3, "sparks": 0.0},
 	"aiguille_temps": {"shader": preload("res://assets/shaders/chrono_needle.gdshader"),
 		"length": 1.7, "height": 0.4, "lead": 0.3, "sparks": 0.0},
-	"trait_prisme": {"shader": preload("res://assets/shaders/prism_bolt.gdshader"),
+	"trait_prisme": {"shader": preload("res://assets/shaders/prism_bolt.gdshader"), "noise": SUPREME_NOISE,
 		"length": 2.2, "height": 0.66, "lead": 0.3, "sparks": 0.3},
-	"convergence_peinte": {"shader": preload("res://assets/shaders/convergence.gdshader"),
+	"convergence_peinte": {"shader": preload("res://assets/shaders/convergence.gdshader"), "noise": SUPREME_NOISE,
 		"length": 1.45, "height": 1.45, "lead": 0.0, "sparks": 0.5},
 	"goutte": {"shader": preload("res://assets/shaders/water_drop_fx.gdshader"),
 		"length": 1.0, "height": 0.56, "lead": 0.18, "sparks": 0.0},
-	"meteore_jugement": {"shader": preload("res://assets/shaders/judgement_meteor.gdshader"),
+	"meteore_jugement": {"shader": preload("res://assets/shaders/judgement_meteor.gdshader"), "noise": SUPREME_NOISE,
 		"length": 2.6, "height": 1.0, "lead": 0.28, "sparks": 0.0},
 }
 const PAINTED_NOISE := preload("res://assets/shaders/fire_noise.png")
@@ -103,7 +109,7 @@ static func painted_quad() -> Texture2D:
 static func painted_material(visual: String, seed_value: float) -> ShaderMaterial:
 	var shaded := ShaderMaterial.new()
 	shaded.shader = PAINTED[visual]["shader"]
-	shaded.set_shader_parameter("noise", PAINTED_NOISE)
+	shaded.set_shader_parameter("noise", PAINTED[visual].get("noise", PAINTED_NOISE))
 	shaded.set_shader_parameter("seed", seed_value)
 	return shaded
 

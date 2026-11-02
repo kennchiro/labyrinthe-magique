@@ -1,0 +1,23 @@
+{
+  "cell": [
+    256,
+    256
+  ],
+  "columns": 8,
+  "scene_body": 246.0,
+  "scene_feet_y": 252.0,
+  "scene": [
+    "arrival",
+    "ranged_attack",
+    "death"
+  ],
+  "portee": [
+    "warning",
+    "impact",
+    "fade"
+  ],
+  "source": {
+    "scene": "boss_sylvain_scene.png",
+    "portee": "boss_sylvain_portee.png"
+  }
+}

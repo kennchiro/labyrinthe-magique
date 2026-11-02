@@ -41,6 +41,8 @@ const INVOCATEUR := "invocateur"
 const CHRONO := "chrono"
 const PESTE := "peste"
 const LUMIERE := "lumiere"
+const MORT := "mort"
+const ETOILES := "etoiles"
 
 const CATEGORY_MAGE := "mage"
 const CATEGORY_ANGE := "ange"
@@ -54,7 +56,7 @@ const CATEGORIES := {
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste(), lumiere()]
+		peste(), lumiere(), mort(), etoiles()]
 
 
 static func in_category(category: String) -> Array[CharacterStats]:
@@ -422,7 +424,7 @@ static func water() -> CharacterStats:
 			# exaltation de 30 s, givre qui tient le terrain). Des recharges
 			# longues l'auraient obligé à choisir lequel entretenir, alors que
 			# son fantasme est de tout tenir à la fois.
-			"zone_style": "mare_peinte",
+			"zone_style": "glace_peinte",
 		}),
 	]
 	c.escape = Ability.make({
@@ -935,6 +937,117 @@ static func lumiere() -> CharacterStats:
 		"description": "L'écran s'embrase, et une colonne de lumière tombe sur chaque ennemi de la carte, aveuglé 5 s.",
 		"kind": Ability.Kind.DAWN, "element": Element.Kind.LIGHT,
 		"damage": 130, "cooldown": 1.0, "is_ultimate": true, "blind_seconds": 5.0,
+	})
+	return c
+
+
+# --- Ange de la Mort : ce qu'il a blessé, il vient le prendre. --------------------
+
+static func mort() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = MORT
+	c.display_name = "Ange de la Mort"
+	c.category = CATEGORY_ANGE
+	c.element = Element.Kind.DEATH
+	c.description = "Ce qu'il a blessé, il vient le prendre : il achève les ennemis presque morts et récolte leurs âmes. Fragile."
+	c.power_level = 4
+	c.base_health = 3
+	c.move_speed = 5.2
+	c.ultimate_required_kills = 4
+	c.attack = Ability.make({
+		"id": "mort_crescent", "display_name": "Croissant noir",
+		"description": "La faux lance un croissant de lame qui ne rate jamais.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.DEATH,
+		"projectile_visual": "croissant_noir",
+		"damage": 16, "range": 7, "cooldown": 0.5, "projectile_speed": 1.4,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "mort_moisson", "display_name": "Moisson",
+			"description": "Un grand coup de faux en arc devant lui, qui achève ce qui est déjà blessé.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.DEATH,
+			"damage": 45, "radius": 3.0, "arc": 150.0, "cooldown": 5.0, "execute_below": 0.35,
+		}),
+		Ability.make({
+			"id": "mort_glas", "display_name": "Glas",
+			"description": "Une cloche sonne : les ennemis du cercle sont marqués et prennent plus de dégâts.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.DEATH,
+			"damage": 6, "radius": 2.6, "duration": 7.0, "cooldown": 15.0,
+			"mark_seconds": 3.0, "zone_style": "glas_peint",
+		}),
+		Ability.make({
+			"id": "mort_ames", "display_name": "Âmes captives",
+			"description": "Il lâche une âme et toutes celles de ses victimes : elles chassent dans les couloirs.",
+			"kind": Ability.Kind.SOULS, "element": Element.Kind.DEATH,
+			"damage": 30, "range": 14, "cooldown": 9.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "mort_passage", "display_name": "Passage",
+		"description": "Il se défait en plumes noires et traverse les haies.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.DEATH,
+		"range": 5, "cooldown": 8.0, "pierces_walls": true,
+	})
+	c.ultimate = Ability.make({
+		"id": "mort_heure", "display_name": "L'Heure dernière",
+		"description": "Éclipse : une faux géante traverse l'écran, et chaque ennemi perd la moitié de ses PV.",
+		"kind": Ability.Kind.LAST_HOUR, "element": Element.Kind.DEATH,
+		"damage": 1, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+# --- Ange des Étoiles : elle dessine ses pièges dans le labyrinthe. -----------------
+
+static func etoiles() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = ETOILES
+	c.display_name = "Ange des Étoiles"
+	c.category = CATEGORY_ANGE
+	c.element = Element.Kind.STARS
+	c.description = "Elle pose des étoiles dans le labyrinthe : les rayons qui les relient brûlent ce qui passe. C'est le placement qui fait ses dégâts."
+	c.power_level = 4
+	c.base_health = 4
+	c.move_speed = 5.1
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "etoiles_eclat", "display_name": "Éclat stellaire",
+		"description": "Un petit trait d'étoile. Au troisième coup, les étoiles de la cible explosent.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.STARS,
+		"projectile_visual": "eclat_stellaire",
+		"damage": 12, "range": 8, "cooldown": 0.45, "projectile_speed": 1.5,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "etoiles_constellation", "display_name": "Constellation",
+			"description": "Pose une étoile à ses pieds. Des rayons les relient par-dessus les haies et brûlent ce qui passe.",
+			"kind": Ability.Kind.CONSTELLATION, "element": Element.Kind.STARS,
+			"damage": 28, "duration": 16.0, "cooldown": 3.0,
+		}),
+		Ability.make({
+			"id": "etoiles_pluie", "display_name": "Pluie d'étoiles",
+			"description": "Des étoiles tombent une à une autour d'elle, sur les ennemis d'abord.",
+			"kind": Ability.Kind.STARFALL, "element": Element.Kind.STARS,
+			"damage": 22, "radius": 3.5, "star_falls": 9, "cooldown": 11.0,
+		}),
+		Ability.make({
+			"id": "etoiles_voile", "display_name": "Voile de lune",
+			"description": "Pendant un court instant, les coups la traversent.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.STARS,
+			"immune": true, "duration": 3.0, "cooldown": 15.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "etoiles_filante", "display_name": "Étoile filante",
+		"description": "Un saut rapide en ligne droite, qui laisse une traînée brûlante.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.STARS,
+		"range": 5, "cooldown": 8.0, "trail_damage": 25,
+	})
+	c.ultimate = Ability.make({
+		"id": "etoiles_nuit", "display_name": "Nuit éternelle",
+		"description": "La nuit tombe sur l'écran, et une comète frappe chaque ennemi de la carte.",
+		"kind": Ability.Kind.DAWN, "element": Element.Kind.STARS,
+		"damage": 120, "cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 

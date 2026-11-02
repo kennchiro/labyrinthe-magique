@@ -34,8 +34,8 @@ extends Resource
 
 ## Ce stage sert-il à APPRENDRE ?
 ##
-## Le stage 1 n'a ni potion ni compétence : on y découvre le déplacement, la
-## collecte et la frappe, rien d'autre. Un niveau d'apprentissage doit être
+## Le stage 1 sert à découvrir le déplacement, la collecte et les sorts. Un niveau
+## d'apprentissage doit être
 ## survivable — l'équilibrage ne lui applique donc pas la règle « un joueur qui
 ## ne meurt jamais, c'est un jeu sans enjeu », qui vaut pour les suivants.
 ##
@@ -75,11 +75,8 @@ extends Resource
 ## gagnable en ligne droite — le générateur refuse cette valeur.
 @export var gem_count: int = 3
 
-## Potions présentes au départ. Chacune débloque UN sort, pour toujours.
-##
-## 0 au stage 1 : on y apprend le déplacement, la collecte et la frappe, rien
-## d'autre. 1 au stage 2, 2 au stage 3 — les trois sorts sont donc acquis au
-## terme du stage 3, et le restent.
+## Potions présentes au départ. Chacune charge l'Extra Power (`KillSystem`), seconde
+## façon de le remplir après les kills.
 @export var potion_count: int = 0
 
 @export var enemy_count: int = 1
@@ -167,7 +164,7 @@ var lineup: Array[String] = []
 ## l'ignore mesure un autre jeu que celui qu'on joue.
 
 
-## Le stage propose-t-il des potions ? Chacune débloque un sort, DÉFINITIVEMENT.
+## Le stage propose-t-il des potions ?
 func has_potions() -> bool:
 	return potion_count > 0
 
@@ -290,6 +287,12 @@ func is_stage_finale() -> bool:
 	return episode >= EPISODES_PER_STAGE
 
 
+## Un boss garde la porte du dernier épisode de chaque chapitre. Le terrain d'essai a
+## aussi le sien, mais il ne garde rien : on l'appelle pour le voir (`Level.call_boss`).
+func has_boss() -> bool:
+	return is_stage_finale() or is_demo
+
+
 # --- Fabriques -----------------------------------------------------------------
 # PRIVÉES, et c'est important : elles rendent un chapitre NU — sans nom, sans
 # roster d'espèces, sans numéro d'épisode. `for_stage()` est la seule porte
@@ -312,6 +315,7 @@ static func _stage_1() -> LevelConfig:
 	c.enemy_detection_radius = 6
 	c.player_health_bonus = 0
 	c.is_tutorial = true
+	c.potion_count = 1         # dès le premier stage : l'Extra se charge de deux façons
 	c.hunter_health = 100      # le stage de l'apprentissage : 6 ou 7 coups suffisent
 	c.enemy_respawn_delay = 8.0
 	return c
@@ -324,7 +328,7 @@ static func _stage_2() -> LevelConfig:
 	c.portal_count = 9
 	c.portal_min_spacing = 6
 	c.gem_count = 5
-	c.potion_count = 1         # le sort apparaît ici
+	c.potion_count = 1
 	c.enemy_count = 4
 	c.enemy_speed_ratio = 0.76
 	c.enemy_detection_radius = 7
@@ -342,7 +346,7 @@ static func _stage_3() -> LevelConfig:
 	c.portal_count = 13        # plus de portails : plus de raccourcis, plus de paris
 	c.portal_min_spacing = 6
 	c.gem_count = 6
-	c.potion_count = 2         # plus de pouvoir, parce qu'il en faudra
+	c.potion_count = 2
 	c.enemy_count = 6
 	c.enemy_speed_ratio = 0.80
 	c.enemy_detection_radius = 8

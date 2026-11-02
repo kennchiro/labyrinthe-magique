@@ -15,7 +15,7 @@ enum State { PLAYING, PAUSED, VICTORY, DEFEAT }
 ## une mécanique du labyrinthe et non un sort.
 const SLOT_PORTAL := -1
 const SLOT_ATTACK := 0
-## 1 à 3 : les sorts, débloqués un par un par les potions.
+## 1 à 3 : les sorts, tous disponibles dès le départ.
 const SLOT_ESCAPE := 4
 const SLOT_ULTIMATE := 5
 
@@ -74,7 +74,7 @@ func _ready() -> void:
 	if demo:
 		# Progression FICTIVE, tout ouvert — et incapable d'écrire sur le
 		# disque : un essai ne doit jamais toucher la partie du joueur.
-		progress = Progress.everything(3)
+		progress = Progress.everything()
 		# Les dix stages, en terrain d'essai : la démo sert autant à essayer un
 		# mage qu'à REGARDER un décor. On les prépare tous, le joueur passe de
 		# l'un à l'autre sans repasser par le menu.
@@ -91,6 +91,9 @@ func _ready() -> void:
 	level.all_gems_collected.connect(_on_all_gems_collected)
 	level.potion_collected.connect(_on_potion_collected)
 	level.enemy_killed.connect(_on_enemy_killed)
+	level.boss_appeared.connect(func(name: String) -> void:
+		ui.flash("%s surgit !" % name, Color("#ff9a7a")))
+	level.boss_defeated.connect(_on_boss_defeated)
 	level.gem_stolen.connect(func() -> void:
 		ui.flash("Un rat a volé une gemme !", Color("#ffd15a")))
 	level.ability_refused.connect(_on_ability_refused)
@@ -116,7 +119,7 @@ func _ready() -> void:
 	if demo:
 		# La barre de visite est branchée AVANT le premier niveau : `set_level`
 		# y écrit le nom du décor, elle doit donc déjà exister.
-		ui.show_demo_bar(demo_stage)
+		ui.show_demo_bar(demo_stage, demo_call_boss)
 	start_level(start_index)
 	# Appelé explicitement : les _ready() des enfants s'exécutent AVANT celui du
 	# parent, DevTools ne peut donc pas s'initialiser tout seul.
@@ -156,15 +159,16 @@ func start_level(index: int) -> void:
 	ui.set_level(config, level_index + 1)
 	ui.set_health(level.player_health.current, level.player_health.maximum)
 	ui.set_shield(0)
+	ui.hide_boss()
 	ui.set_gems(level.missing_gem_colors(), level.gems_total)
-	ui.set_counters(0, progress.unlocked_skills)
+	ui.set_counters(0)
 	ui.set_kills(0, character.ultimate_required_kills, false)
 	if demo:
 		# L'ultime arrive CHARGÉ : la page d'essai sert à voir les sorts, pas à
 		# les mériter — les kills du joueur, eux, se gagnent en campagne.
 		for i in character.ultimate_required_kills:
 			kills.register_kill()
-		ui.set_kills(kills.kills, character.ultimate_required_kills, kills.available())
+		ui.set_kills(kills.progress, character.ultimate_required_kills, kills.available())
 		ui.flash("MODE DÉMO — sorts illimités, sans recharge", Color("#9fe8b4"))
 	# LE CARNET S'OUVRE TOUT SEUL LA PREMIÈRE FOIS qu'on entre dans un épisode,
 	# et une seule : un briefing qu'on doit refermer à chaque essai devient un
@@ -235,7 +239,13 @@ func _on_player_reached_house() -> void:
 	# La maison n'est plus une ligne d'arrivée mais une SERRURE : sans toutes les
 	# gemmes, la porte reste scellée et le mage repart. C'est la seule règle de
 	# victoire du jeu, et elle tient en une condition.
+	if level.boss_is_due():
+		level.summon_boss()
+		return
 	if not level.house_is_open():
+		if level.boss_guards_door():
+			ui.flash("Porte scellée — abats %s" % level.boss_name(), Color("#ff9a7a"))
+			return
 		var gems_left := level.gems_remaining()
 		var lairs_left := level.lairs_remaining()
 		if gems_left > 0:
@@ -292,8 +302,12 @@ func _process(delta: float) -> void:
 	# Le joueur est recréé à chaque chargement : on relie ici plutôt que par
 	# signal, pour ne pas avoir à gérer les reconnexions.
 	level.player.touch_direction = ui.touch_direction()
-	ui.set_counters(level.teleport_count, progress.unlocked_skills)
+	ui.set_counters(level.teleport_count)
 	ui.set_action_state(_action_state())
+	if level.boss_is_fighting():
+		ui.show_boss(level.boss_name(), level.boss_health_ratio())
+	if demo:
+		ui.set_demo_boss_available(level.boss_can_be_called())
 
 
 ## Décrit la barre d'action complète pour l'interface : ce qui est prêt, ce qui
@@ -305,7 +319,6 @@ func _action_state() -> Dictionary:
 	for slot in bar.size():
 		var ability: Ability = bar[slot]
 		var is_ultimate := slot == SLOT_ULTIMATE
-		var locked := not progress.skill_unlocked(slot)
 		var ready := level.can_use(slot) and (not is_ultimate or kills.available())
 		var ratio := level.combat.cooldown_ratio(ability)
 		if is_ultimate:
@@ -332,7 +345,7 @@ func _action_state() -> Dictionary:
 			"icon": UiIcons.for_ability(character.id, ability.id),
 			"charges": level.combat.charges_left(ability) if level.combat != null else -1,
 			"charges_max": ability.charges,
-			"locked": locked or (is_ultimate and not kills.available()),
+			"locked": is_ultimate and not kills.available(),
 			"highlight": is_ultimate,
 		})
 	return {
@@ -361,6 +374,12 @@ func demo_stage(step: int) -> void:
 		return
 	get_tree().paused = false
 	start_level(posmod(level_index + step, levels.size()))
+
+
+## Le boss du décor visité, en démo seulement.
+func demo_call_boss() -> void:
+	if demo and state == State.PLAYING:
+		level.call_boss()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -409,7 +428,7 @@ func use_slot(slot: int) -> void:
 		return
 	if slot == SLOT_ULTIMATE:
 		if not kills.available():
-			ui.flash("Extra Hit verrouillé — encore %d kills" % maxi(0,
+			ui.flash("Extra Hit verrouillé — encore %d kills, ou une potion" % maxi(0,
 				kills.needed - kills.progress), Color("#7b8bb0"))
 			return
 		# L'ultime n'est dépensé QUE s'il est réellement parti : un ultime perdu
@@ -418,7 +437,7 @@ func use_slot(slot: int) -> void:
 		if level.use_ability(slot):
 			if not demo:
 				kills.spend()
-			ui.set_kills(kills.kills, kills.needed, demo)
+			ui.set_kills(kills.progress, kills.needed, demo)
 			ui.flash("%s !" % level.ability_at(slot).display_name, Color("#ffd15a"))
 		return
 	level.use_ability(slot)
@@ -426,8 +445,6 @@ func use_slot(slot: int) -> void:
 
 func _on_ability_refused(reason: String) -> void:
 	match reason:
-		"verrouillé":
-			ui.flash("Sort verrouillé — trouve une potion", Color("#7b8bb0"))
 		"cible":
 			ui.flash("Aucun ennemi à portée", Color("#7b8bb0"))
 		"place":
@@ -444,9 +461,9 @@ func _on_ability_refused(reason: String) -> void:
 
 func _on_enemy_killed() -> void:
 	kills.register_kill()
-	ui.set_kills(kills.kills, kills.needed, kills.available())
+	ui.set_kills(kills.progress, kills.needed, kills.available())
 	if not kills.available():
-		ui.flash("KILLS : %d / %d" % [kills.progress, kills.needed], Color("#c9a8ff"))
+		ui.flash("EXTRA : %d / %d" % [kills.progress, kills.needed], Color("#c9a8ff"))
 
 
 func _on_ultimate_ready() -> void:
@@ -467,7 +484,16 @@ func _on_all_gems_collected() -> void:
 			[level.lairs_remaining(), "s" if level.lairs_remaining() > 1 else ""],
 			Color("#ff9a7a"))
 		return
+	if level.boss_guards_door():
+		ui.flash("Retourne à la maison : %s t'y attend" % level.boss_name(), Color("#ff9a7a"))
+		return
 	ui.flash("La porte de la maison s'ouvre !", Color("#ffd479"))
+
+
+func _on_boss_defeated() -> void:
+	ui.hide_boss()
+	var opens := "" if demo else " — la porte s'ouvre !"
+	ui.flash("%s est vaincu%s" % [level.boss_name(), opens], Color("#ffd479"))
 
 
 func _on_lair_destroyed(remaining: int) -> void:
@@ -476,16 +502,19 @@ func _on_lair_destroyed(remaining: int) -> void:
 	elif level.gems_remaining() > 0:
 		ui.flash("Les repaires sont à terre — plus aucun ennemi ne reviendra",
 			Color("#ffd479"))
+	elif level.boss_guards_door():
+		ui.flash("Retourne à la maison : %s t'y attend" % level.boss_name(), Color("#ff9a7a"))
 	else:
 		ui.flash("La porte de la maison s'ouvre !", Color("#ffd479"))
 
 
-func _on_potion_collected(slot: int) -> void:
-	if slot < 0:
-		ui.flash("Tous tes sorts sont déjà acquis", Color("#7b8bb0"))
+func _on_potion_collected() -> void:
+	if not kills.drink_potion():
+		ui.flash("Extra Power déjà prêt", Color("#7b8bb0"))
 		return
-	var ability := level.ability_at(slot)
-	ui.flash("%s débloqué — pour toujours !" % ability.display_name, Color("#ffd15a"))
+	ui.set_kills(kills.progress, kills.needed, kills.available())
+	if not kills.available():
+		ui.flash("Potion — EXTRA : %d / %d" % [kills.progress, kills.needed], Color("#c9a8ff"))
 
 
 func _on_player_teleported(advantageous: bool) -> void:

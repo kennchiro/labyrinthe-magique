@@ -99,12 +99,26 @@ func objectives(gems_taken: int, lairs_left: int, house_open: bool) -> Array[Dic
 			"done": lairs_left <= 0,
 		})
 
+	# La porte ne s'ouvre qu'à sa mort : elle dit donc aussi s'il est tombé.
+	if config.has_boss():
+		out.append({
+			"text": "Vaincre %s, qui garde la porte" % _boss_name(),
+			"progress": "",
+			"done": house_open,
+		})
+
 	out.append({
 		"text": "Franchir la porte du sanctuaire",
 		"progress": "",
 		"done": house_open and gems_taken >= gems,
 	})
 	return out
+
+
+## « Le Sylvain Ancien », avec la minuscule qu'il prend au milieu d'une phrase.
+func _boss_name() -> String:
+	var name := Bestiary.display_name(BossCatalog.id_of(config.stage))
+	return name.substr(0, 1).to_lower() + name.substr(1)
 
 
 ## LA NOUVEAUTÉ DU CHAPITRE — la créature que ce stage ajoute au bestiaire.
@@ -121,12 +135,12 @@ func novelty() -> Array[String]:
 	return names
 
 
-## Ce que le lieu offre en plus des gemmes, s'il offre quelque chose. Les
-## potions n'apparaissent qu'à partir du stage 2 (`potion_count`), et le silence
+## Ce que le lieu offre en plus des gemmes, s'il offre quelque chose : le silence
 ## vaut mieux qu'une ligne « Potions : 0 ».
 func provisions() -> String:
 	if config.is_demo or config.potion_count <= 0:
 		return ""
 	if config.potion_count == 1:
-		return "Une potion est cachée dans les couloirs."
-	return "%d potions sont cachées dans les couloirs." % config.potion_count
+		return "Une potion est cachée dans les couloirs : elle charge ton Extra Power."
+	return "%d potions sont cachées dans les couloirs : elles chargent ton Extra Power." \
+		% config.potion_count

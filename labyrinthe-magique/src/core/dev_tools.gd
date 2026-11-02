@@ -14,13 +14,14 @@ extends Node
 ##   --tap X Y          simule un tap sur la case (X,Y) après 3 frames
 ##   --debug            affiche le bandeau d'informations techniques
 ##   --on-portal        démarre le joueur sur un portail
-##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste, lumiere
-##   --potion           remplit la jauge de mana
+##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste, lumiere, mort, etoiles
+##   --potion           boit une potion : charge l'Extra Power
 ##   --kills N          simule N ennemis éliminés (test de l'Extra Power)
 ##   --fx               rejoue en boucle les cinq éclats élémentaires (contrôle visuel)
 ##   --demo-stage N    en démo, ouvre directement le décor du stage N
 ##   --use-slot N      lance le sort du slot N dès qu'il part (test des invocations)
 ##   --goblin / --hunter  colle cet ennemi au joueur (test de sa pose de coup)
+##   --stars          plante trois étoiles autour de l'Ange des Étoiles
 ##   --skill-delay F    attend F secondes avant --skill (le temps que les
 ##                      ennemis arrivent : un sort qui agit SUR EUX ne se
 ##                      capture pas à la frame zéro, le labyrinthe est vide)
@@ -109,9 +110,8 @@ func apply_command_line() -> void:
 		# le portail pour retraverser le labyrinthe vers sa porte.
 		game.level.player.cancel_path()
 	if "--potion" in args:
-		# Débloque les trois sorts d'un coup, pour les tester sans jouer la
-		# campagne. La progression réelle du joueur n'est PAS touchée.
-		game.progress.unlocked_skills = 3
+		game.kills.drink_potion()
+		game.ui.set_kills(game.kills.progress, game.kills.needed, game.kills.available())
 	# Lance un sort précis dès que possible : --use-slot 1 (voir GameManager.SLOT_*).
 	var slot_arg := args.find("--use-slot")
 	if slot_arg >= 0 and slot_arg + 1 < args.size():
@@ -126,7 +126,7 @@ func apply_command_line() -> void:
 	if kills_arg >= 0 and kills_arg + 1 < args.size():
 		for i in int(args[kills_arg + 1]):
 			game.kills.register_kill()
-		game.ui.set_kills(game.kills.kills, game.kills.needed, game.kills.available())
+		game.ui.set_kills(game.kills.progress, game.kills.needed, game.kills.available())
 	# Colle un ennemi au joueur : la seule façon de voir sa pose de coup sans
 	# jouer jusqu'à se faire rattraper, donc de pouvoir la capturer en image.
 	if "--goblin" in args:
@@ -169,10 +169,31 @@ func apply_command_line() -> void:
 		# refusé tant que personne n'est sorti de son repaire, et la capture
 		# repartait sans l'avoir jamais lancé.
 		_skill_tries = 240
+	# Plante trois étoiles autour du mage : les rayons d'une Constellation demandent de marcher.
+	if "--stars" in args and game.level.character.id == CharacterCatalog.ETOILES:
+		var around: Vector2i = game.level.player.mover.nearest_cell()
+		for gap: Vector2i in [Vector2i(-3, -1), Vector2i(3, -2), Vector2i(1, 3)]:
+			game.level.combat._stars.append({"cell": around + gap, "time_left": 30.0,
+				"ability": game.level.character.abilities[0]})
+		game.level.combat._report_stars()
 	if "--raze" in args:
 		for lair in game.level.lairs:
 			if lair.is_vulnerable():
 				lair.health.take(Damage.new(99999, Element.Kind.SUPREME, "debug"))
+	# Le boss sans la tournée : `--stage 4 --episode 2 --boss`. Il surgit par le vrai chemin.
+	if "--boss" in args and game.demo:
+		# Par le bouton lui-même : c'est aussi son branchement qu'on regarde.
+		game.ui.demo_bar.get_node("Boss").pressed.emit()
+		if "--boss-down" in args:
+			_down_boss_later()
+	elif "--boss" in args and game.level.config.has_boss():
+		game.level.debug_collect_all_gems()
+		for lair in game.level.lairs:
+			if lair.is_vulnerable():
+				lair.health.take(Damage.new(99999, Element.Kind.SUPREME, "debug"))
+		game.level.summon_boss()
+		if "--boss-down" in args:
+			_down_boss_later()
 	if "--lair" in args and not game.level.enemies.is_empty():
 		game.level._on_enemy_killed(0)
 		# Sans raccourcir l'attente, il faudrait capturer huit secondes plus tard.
@@ -399,6 +420,15 @@ func _apply_outcome(args: PackedStringArray) -> void:
 		game.level.player_reached_house.emit()
 	if "--lose" in args:
 		game.level.player_caught.emit()
+
+
+## Abat le boss une fois arrivé, le mage sur le seuil : la fin du combat, par le vrai chemin.
+func _down_boss_later() -> void:
+	await get_tree().create_timer(Level.BOSS_ARRIVAL_TIME + 0.4).timeout
+	var level: Level = game.level
+	level.player.cancel_path()
+	level.player.mover.teleport_to(level.grid.house_center)
+	level.debug_kill_boss()
 
 
 func _unhandled_input(event: InputEvent) -> void:

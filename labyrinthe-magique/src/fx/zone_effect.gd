@@ -14,12 +14,19 @@ const PAINTED_STYLES := {
 	"brasier_peint": preload("res://assets/shaders/fire_zone.gdshader"),
 	"rune_peinte": preload("res://assets/shaders/shadow_rune.gdshader"),
 	"cercle_peint": preload("res://assets/shaders/arcane_circle.gdshader"),
-	"mare_peinte": preload("res://assets/shaders/water_pool.gdshader"),
+	"glace_peinte": preload("res://assets/shaders/water_ice.gdshader"),
 	"bulle_peinte": preload("res://assets/shaders/chrono_bubble.gdshader"),
 	"gaz_peint": preload("res://assets/shaders/peste_fog.gdshader"),
 	"sanctuaire_peint": preload("res://assets/shaders/lumiere_sanctuary.gdshader"),
+	"glas_peint": preload("res://assets/shaders/mort_bell.gdshader"),
 }
+## La glace lit des plaques et des fissures, pas un bruit lissé (`tools/build_noise.py`).
+const ICE_NOISE := preload("res://assets/shaders/ice_noise.png")
 const PAINTED_FLAMES := 0.3
+## La colonne de lumière du cercle d'invocation : sa hauteur, en rayons du sort.
+const PILLAR_HEIGHT := 2.6
+const PILLAR_FOOT := 0.16
+const PILLAR_SHADER := preload("res://assets/shaders/arcane_pillar.gdshader")
 
 var tile_size: int = 32
 var tint: Color = Color.WHITE
@@ -56,6 +63,7 @@ var _bites := false
 ## Champ électrifié : rendu par shader et non par particules.
 var _field: ColorRect = null
 var _field_material: ShaderMaterial = null
+var _pillar_material: ShaderMaterial = null
 
 
 ## `p_flames` : densité des flammes ANIMÉES. Une zone qui dure trente secondes
@@ -102,7 +110,7 @@ func setup(p_tile_size: int, p_tint: Color, p_radius: float, duration: float,
 		# des taches floues dans l'aura, et le reste ne brûle pas.
 		p_flames = p_flames * PAINTED_FLAMES if p_style == "nappe_peinte" else 0.0
 	if p_style == "champ":
-		_build_field(p_tint)
+		_build_field()
 	elif _rune and p_flames > 0.0:
 		_build_dark_flames(p_flames)
 	elif p_flames > 0.0:
@@ -122,7 +130,7 @@ func setup(p_tile_size: int, p_tint: Color, p_radius: float, duration: float,
 ## l'électricité est faite de TRAITS qui relient, pas de grains qui volent. Des
 ## particules donnent des étincelles — jolies, mais elles ne disent pas « ce sol
 ## est sous tension ».
-func _build_field(tint: Color) -> void:
+func _build_field() -> void:
 	var span := tile_size * radius_tiles * 2.0
 	_field = ColorRect.new()
 	_field.size = Vector2(span, span)
@@ -130,8 +138,7 @@ func _build_field(tint: Color) -> void:
 	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_field_material = ShaderMaterial.new()
 	_field_material.shader = load("res://assets/shaders/field.gdshader")
-	_field_material.set_shader_parameter("arc_color", Color(0.92, 0.96, 1.0))
-	_field_material.set_shader_parameter("glow_color", tint)
+	_field_material.set_shader_parameter("noise", PaintedFx.THUNDER_NOISE)
 	_field.material = _field_material
 	add_child(_field)
 
@@ -148,12 +155,28 @@ func _build_painted(style: String) -> void:
 		float(Time.get_ticks_usec() % 1000) * 0.001)
 	_field.material = _field_material
 	add_child(_field)
+	if style == "cercle_peint":
+		_build_pillar(span)
+
+
+func _build_pillar(span: float) -> void:
+	var pillar := ColorRect.new()
+	pillar.size = Vector2(span, span * 0.5 * PILLAR_HEIGHT)
+	# Son pied descend sous le centre du cercle : voir `FOOT` dans le shader.
+	pillar.position = Vector2(-span * 0.5, -pillar.size.y * (1.0 - PILLAR_FOOT))
+	pillar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pillar_material = ShaderMaterial.new()
+	_pillar_material.shader = PILLAR_SHADER
+	_pillar_material.set_shader_parameter("seed", float(Time.get_ticks_usec() % 1000) * 0.001)
+	pillar.material = _pillar_material
+	add_child(pillar)
 
 
 static func painted_material(style: String, radius: float, seed_value: float) -> ShaderMaterial:
 	var shaded := ShaderMaterial.new()
 	shaded.shader = PAINTED_STYLES[style]
-	shaded.set_shader_parameter("noise", MagicOrb.PAINTED_NOISE)
+	shaded.set_shader_parameter("noise",
+		ICE_NOISE if style == "glace_peinte" else MagicOrb.PAINTED_NOISE)
 	shaded.set_shader_parameter("aura", 1.0 if style == "brasier_peint" else 0.0)
 	shaded.set_shader_parameter("radius_tiles", radius)
 	shaded.set_shader_parameter("seed", seed_value)
@@ -321,6 +344,9 @@ func _process(delta: float) -> void:
 	if _field_material != null:
 		_field_material.set_shader_parameter("phase", _time)
 		_field_material.set_shader_parameter("life", 1.0 - _time / _duration)
+	if _pillar_material != null:
+		_pillar_material.set_shader_parameter("phase", _time)
+		_pillar_material.set_shader_parameter("life", 1.0 - _time / _duration)
 	if _time >= _duration:
 		queue_free()
 		return
@@ -328,7 +354,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	if _painted:
+	# Le champ non plus : ses anneaux jaunes par-dessus son shader lui rendaient l'aspect
+	# d'un disque brûlé.
+	if _painted or _field != null:
 		return
 	var life := 1.0 - _time / _duration
 	# La zone PÂLIT en s'épuisant : c'est le seul indice qui dit au joueur

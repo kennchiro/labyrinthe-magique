@@ -7,7 +7,7 @@ extends Node2D
 ## ennemis — le joueur voit les chiffres monter sans comprendre qu'ils sont
 ## LIÉS. C'est le trait, et lui seul, qui raconte le saut.
 ##
-## Le tracé est BRISÉ et retiré au sort, mais à partir d'une graine dérivée des
+## Le tracé est BRISÉ, fourchu, et retiré au sort, mais à partir d'une graine dérivée des
 ## deux extrémités : deux captures du même sort donnent donc le même éclair, ce
 ## qui permet de comparer deux images. Un tracé retiré à chaque frame
 ## grésillerait sans raison.
@@ -19,16 +19,22 @@ extends Node2D
 ## créatures étaient proches. Un éclair qui traîne devient un câble ; un éclair
 ## qu'on ne voit pas n'explique rien.
 const LIFETIME := 0.20
-const SEGMENTS := 7
-## Écart maximal d'un coude par rapport à la ligne droite, en fraction de la
-## distance parcourue. C'est ce qui fait la nervosité du trait.
-const JAG := 0.16
+## Trois passes de milieu brisé : huit tronçons, de longueurs inégales, cassés sur
+## trois échelles. Sept coudes de même taille donnaient un zigzag d'écolier.
+const PASSES := 3
+## Écart d'un coude par rapport à sa corde, en fraction de la corde.
+const JAG := 0.24
+const FORKS := 2
+## Longueur d'une fourche, en fraction de ce qu'il reste au trait à parcourir.
+const FORK_REACH := 0.3
 
 var _from := Vector2.ZERO
 var _to := Vector2.ZERO
 var _tint := Color(1.0, 0.95, 0.55)
 var _life := 0.0
-var _points := PackedVector2Array()
+## Deux formes : il claque une fois en changeant de tracé à mi-vie. Chacune : le trait,
+## puis ses fourches.
+var _shapes: Array = []
 var _width := 3.0
 
 
@@ -41,22 +47,40 @@ func setup(from: Vector2, to: Vector2, tint: Color, width: float) -> void:
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(absf(from.x + from.y * 7.0 + to.x * 13.0 + to.y * 29.0)) + 1
-	var span := to - from
-	var across := Vector2(-span.y, span.x).normalized()
-	_points.append(from)
-	for i in range(1, SEGMENTS):
-		var t := float(i) / float(SEGMENTS)
-		# Les coudes sont plus francs AU MILIEU qu'aux extrémités : un éclair
-		# part d'un point précis et arrive à un point précis, il ne flotte qu'entre
-		# les deux.
-		var belly := sin(t * PI)
-		var offset := across * rng.randf_range(-1.0, 1.0) * span.length() * JAG * belly
-		_points.append(from + span * t + offset)
-	_points.append(to)
+	_shapes = [_trace(rng), _trace(rng)]
 
-	var material := CanvasItemMaterial.new()
-	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	self.material = material
+
+func _trace(rng: RandomNumberGenerator) -> Array:
+	var main := _broken(_from, _to, rng)
+	var out: Array = [main]
+	for i in FORKS:
+		var at := rng.randi_range(1, main.size() - 3)
+		var start := main[at]
+		var heading := (main[at + 1] - start).normalized()
+		var side := -1.0 if i == 0 else 1.0
+		var reach := (_to - start).length() * FORK_REACH
+		var end := start + heading.rotated(side * rng.randf_range(0.4, 0.9)) * reach
+		out.append(_broken(start, end, rng))
+	return out
+
+
+## Le milieu de chaque tronçon s'écarte de sa corde, et on recommence : les grands coudes
+## d'abord, puis les petits. Les bouts ne bougent jamais : un éclair part d'un point
+## précis et arrive à un point précis.
+func _broken(from: Vector2, to: Vector2, rng: RandomNumberGenerator) -> PackedVector2Array:
+	var points := PackedVector2Array([from, to])
+	for pass_index in PASSES:
+		var next := PackedVector2Array()
+		for i in points.size() - 1:
+			var a := points[i]
+			var b := points[i + 1]
+			var chord := b - a
+			var across := Vector2(-chord.y, chord.x)
+			next.append(a)
+			next.append(a + chord * rng.randf_range(0.35, 0.65) + across * rng.randf_range(-JAG, JAG))
+		next.append(points[-1])
+		points = next
+	return points
 
 
 func _process(delta: float) -> void:
@@ -68,24 +92,19 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	if _points.size() < 2:
+	if _shapes.is_empty():
 		return
-	var fade := 1.0 - _life / LIFETIME
-	# Quatre passes : deux halos, le trait, puis un cœur blanc. Une seule ligne
-	# donne un trait de crayon ; c'est l'empilement qui fait la lumière.
+	var shape: Array = _shapes[0 if _life < LIFETIME * 0.5 else 1]
+	var fade := 1.0 - _life / LIFETIME * 0.6
+	# Trois passes : le halo, le cerne bleu, le cœur blanc.
 	#
-	# ⚠️ Les largeurs ont été TRIPLÉES après capture. Le trait était juste, mais
-	# à l'échelle du jeu — une case fait 32 pixels et la caméra dézoome — le
-	# cœur mesurait moins de deux pixels : à l'écran, la Chaîne d'éclairs et la
-	# frappe du Jugement ne montraient qu'un impact au sol, sans le trait qui
-	# les explique. Un effet correct en isolement peut être invisible en jeu :
-	# c'est l'image du JEU qui tranche, jamais celle du banc d'essai.
-	# La teinte de l'élément sert de HALO, pas de corps. Le corps est doré et
-	# saturé, le cœur est blanc : c'est ce contraste-là qui fait lire un éclair
-	# sur le vert du labyrinthe. Un trait uniformément teinté s'y délavait.
-	draw_polyline(_points, Color(_tint.r * 0.40, _tint.g * 0.45, 1.0, 0.20 * fade),
-		_width * 9.0, true)
-	draw_polyline(_points, Color(_tint.r * 0.75, _tint.g * 0.70, 1.0, 0.35 * fade),
-		_width * 4.5, true)
-	draw_polyline(_points, Color(1.0, 0.78, 0.12, 0.95 * fade), _width * 2.0, true)
-	draw_polyline(_points, Color(1, 1, 1, fade), _width * 0.7, true)
+	# ⚠️ Composé NORMALEMENT, et le cerne fait le travail : en additif, doré sur blanc, le
+	# trait se délavait sur l'herbe et la neige. Il reste épais pour la même raison que le
+	# reste : à l'échelle du jeu, un cœur de moins de deux pixels ne se voit pas.
+	for layer in [[4.6, Color(0.26, 0.4, 1.0, 0.22)], [1.9, Color(0.2, 0.32, 1.0, 0.95)],
+			[0.85, Color(1.0, 1.0, 0.92, 1.0)]]:
+		var width: float = _width * float(layer[0])
+		var color: Color = layer[1]
+		color.a *= fade
+		for i in shape.size():
+			draw_polyline(shape[i], color, width if i == 0 else width * 0.5, true)

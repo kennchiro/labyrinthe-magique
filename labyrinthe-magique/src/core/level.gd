@@ -96,13 +96,16 @@ signal player_teleported(advantageous: bool)
 ## Émis à chaque gemme ramassée, puis une fois de plus quand c'était la dernière.
 signal gem_collected(collected: int, total: int)
 signal all_gems_collected
-## Une potion ramassée : elle débloque un sort, pour toujours.
-signal potion_collected(skill_slot: int)
+## Une potion ramassée : le GameManager en charge l'Extra Power.
+signal potion_collected
 ## Un ennemi vient d'encaisser, de mourir, ou de revenir avec la vague suivante.
 signal enemy_damaged(dealt: int)
 signal enemy_killed
 signal enemy_respawned
 signal gem_stolen
+## Le boss du chapitre surgit, puis il tombe. Le GameManager dit ce que ça veut dire.
+signal boss_appeared(name: String)
+signal boss_defeated
 signal lair_destroyed(remaining: int)
 signal player_empowered(bonus: int, duration: float)
 signal player_shielded(amount: int)
@@ -325,6 +328,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 		if is_instance_valid(cloud):
 			cloud.queue_free()
 	_spore_nodes.clear()
+	_clear_boss()
 	teleport_count = 0
 	gems_taken = 0
 	gems_total = grid.gems.size()
@@ -410,6 +414,20 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.wings_burst.connect(_on_wings_burst)
 	combat.dawn_cast.connect(_on_dawn_cast)
 	combat.dawn_struck.connect(_on_dawn_struck)
+	combat.enemy_star_marks.connect(_on_enemy_star_marks)
+	combat.astre_burst.connect(_on_astre_burst)
+	combat.stars_changed.connect(_on_stars_changed)
+	combat.star_falling.connect(_on_star_falling)
+	combat.star_trail.connect(_on_star_trail)
+	_on_stars_changed([])
+	combat.enemy_sentenced.connect(_on_enemy_sentenced)
+	combat.enemy_marked.connect(_on_enemy_marked)
+	combat.souls_changed.connect(_on_souls_changed)
+	combat.soul_sent.connect(_on_soul_sent)
+	combat.soul_struck.connect(_on_soul_struck)
+	combat.last_hour_cast.connect(_on_last_hour_cast)
+	combat.last_hour_struck.connect(_on_last_hour_struck)
+	_on_souls_changed(0)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -476,6 +494,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 		if Bestiary.is_droplet(id):
 			enemy.health.current = 0
 			enemy.set_dead(true)
+	_prepare_boss()
 	_stagger_initial_spawns()
 	_refresh_ai()
 
@@ -517,6 +536,7 @@ func _process(delta: float) -> void:
 	_update_enemy_portals()
 	_update_thieves()
 	_update_spores(delta, stopped)
+	_update_boss(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
 	_update_compass()
@@ -531,9 +551,9 @@ func gems_remaining() -> int:
 
 
 ## La maison du mage s'ouvre quand TOUT l'objectif est rempli : les gemmes, et —
-## au dernier épisode des stages 3 et 9 — les repaires abattus.
+## au dernier épisode des stages 3 et 9 — les repaires abattus, puis le boss du chapitre.
 func house_is_open() -> bool:
-	return gems_remaining() <= 0 and lairs_remaining() <= 0
+	return gems_remaining() <= 0 and lairs_remaining() <= 0 and not boss_guards_door()
 
 
 ## Couleurs des gemmes qui restent à trouver — le sceau de la maison et le
@@ -568,15 +588,12 @@ func _update_pickups(delta: float) -> void:
 		if Vector2(potion.cell).distance_to(player_position) >= PICKUP_DISTANCE:
 			continue
 		potions.remove_at(i)
-		# La potion ne remplit plus une jauge : elle DÉBLOQUE le sort suivant,
-		# définitivement. Une compétence acquise n'est pas un consommable.
-		var gained := progress.unlock_next_skill()
 		_spawn_effect(potion.cell, Potion.TINT)
 		potion.queue_free()
 		# Le compteur de réapparition ne démarre qu'ici : tant qu'une potion
 		# traîne par terre, en faire pousser une deuxième n'a pas de sens.
 		_potion_timer = POTION_RESPAWN_DELAY
-		potion_collected.emit(gained)
+		potion_collected.emit()
 
 	if config.potion_count > 0 and potions.size() < config.potion_count and _potion_timer > 0.0:
 		_potion_timer -= delta
@@ -599,7 +616,7 @@ func _collect_gem(index: int) -> void:
 			enemy.stolen = null
 	_spawn_effect(gem.cell, gem.color())
 	gem.queue_free()
-	house.set_locked(missing_gem_colors().size())
+	house.set_locked(_house_seals())
 	# La cible change à l'instant du ramassage : boussole et portails doivent
 	# viser la suivante tout de suite, pas au prochain rafraîchissement d'IA.
 	_refresh_objective()
@@ -673,8 +690,6 @@ func ability_at(slot: int) -> Ability:
 func can_use(slot: int) -> bool:
 	var ability := ability_at(slot)
 	if ability == null or combat == null:
-		return false
-	if not progress.skill_unlocked(slot):
 		return false
 	if not combat.can_use(ability):
 		return false
@@ -751,6 +766,10 @@ func _refresh_context() -> void:
 ## sans ce retour, un joueur patient nettoierait le labyrinthe et la poursuite —
 ## le cœur du jeu — disparaîtrait.
 func _update_respawns(delta: float) -> void:
+	# Face au boss, la vague s'arrête : ce qui tombe ne revient pas, sinon on ne verrait
+	# plus ses zones au milieu de la meute.
+	if boss_has_appeared():
+		return
 	for index in _respawns.keys():
 		var left: float = _respawns[index] - delta
 		if left > 0.0:
@@ -857,10 +876,11 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste", "lumiere"]
+	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
+const FIRE_BURST_TIME := 0.85
 ## Une météore peinte, à l'échelle de la Boule de feu : quatorze à 2,1 boucheraient
 ## le labyrinthe.
 const METEOR_PAINTED_SCALE := 1.3
@@ -978,9 +998,9 @@ func _load_character_fx() -> void:
 		_fire_orb_frames = maxi(1, int(fire_orb_parsed.get("frames", 1)))
 		_fire_orb_grows = String(fire_orb_parsed.get("mode", "loop")) == "grow"
 	_impact_texture = _texture_or_null(folder + "impact.png")
-	# Ces trois mages n'ont jamais eu de planche d'effets. Le quad tient la place
+	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1347,6 +1367,9 @@ var _aegis: EarthAegis = null
 func _on_player_made_immune(duration: float) -> void:
 	if player == null:
 		return
+	if character.id == "etoiles":
+		_spawn_veil(duration)
+		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.refresh(duration)
 		return
@@ -1405,6 +1428,9 @@ func _on_wings_burst(cell: Vector2i) -> void:
 
 
 func _on_dawn_cast(cell: Vector2i) -> void:
+	if character.id == "etoiles":
+		_spawn_night(cell)
+		return
 	var dawn := _spawn_painted_burst(cell, 1.0, DAWN_TIME, "lumiere_dawn")
 	dawn.scale = Vector2.ONE
 	dawn.span_tiles(TILE_SIZE, DAWN_TILES)
@@ -1414,11 +1440,167 @@ func _on_dawn_cast(cell: Vector2i) -> void:
 
 ## La colonne descend du ciel jusqu'aux pieds de l'ennemi, debout dans les deux vues.
 func _on_dawn_struck(cell: Vector2i) -> void:
+	if character.id == "etoiles":
+		_spawn_comet(cell, COMET_TIME, COMET_SIZE)
+		return
 	var column := _spawn_painted_burst(cell, 1.0, COLUMN_TIME, "lumiere_column")
 	var shaft := column.get_child(0) as Sprite2D
 	shaft.scale = COLUMN_SIZE * TILE_SIZE
 	shaft.position = Vector2(0.0, -COLUMN_SIZE.y * TILE_SIZE * 0.5)
 	_spawn_painted_burst(cell, 1.3, 0.5, "lumiere_ring")
+
+
+# --- L'Ange des Étoiles ------------------------------------------------------------
+
+## La nuit couvre l'écran au-delà de ce que voit le joueur, comme l'Aube.
+const NIGHT_TILES := 16.0
+const NIGHT_TIME := 2.6
+const COMET_TIME := 0.8
+const COMET_SIZE := Vector2(3.0, 7.0)
+const FALLING_SIZE := Vector2(2.2, 5.0)
+## L'impact de la comète tombe à 45 % de sa vie (`etoiles_comet.gdshader`).
+const COMET_LAND := 0.45
+const VEIL_ALPHA := 0.62
+
+var _constellation: Constellation = null
+
+
+func _on_enemy_star_marks(index: int, count: int) -> void:
+	if _structure_at(index) == null and index < enemies.size():
+		enemies[index].set_star_marks(count)
+
+
+func _on_astre_burst(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.5, 0.4, "etoiles_ring")
+	_spawn_painted_burst(cell, 1.0, 0.35, "etoiles_impact").z_index = 11
+
+
+func _on_stars_changed(cells: Array) -> void:
+	if character == null or character.id != "etoiles":
+		return
+	if cells.is_empty() and (_constellation == null or not is_instance_valid(_constellation)):
+		return
+	if _constellation == null or not is_instance_valid(_constellation):
+		_constellation = Constellation.new()
+		entities.add_child(_constellation)
+		_constellation.setup(TILE_SIZE)
+	var points := PackedVector2Array()
+	for cell: Vector2i in cells:
+		points.append(maze_renderer.cell_to_world(cell))
+	if points.size() > _constellation_size():
+		_spawn_painted_burst(cells[-1], 1.2, 0.4, "etoiles_ring")
+	_constellation.set_points(points)
+
+
+func _constellation_size() -> int:
+	return _constellation._points.size()
+
+
+func _on_star_falling(cell: Vector2i, lead: float) -> void:
+	_spawn_comet(cell, lead / COMET_LAND, FALLING_SIZE)
+
+
+func _on_star_trail(from: Vector2i, to: Vector2i) -> void:
+	var trail := StarTrail.new()
+	entities.add_child(trail)
+	trail.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
+
+
+## La comète descend du ciel jusqu'au sol de sa case, debout dans les deux vues.
+func _spawn_comet(cell: Vector2i, duration: float, size: Vector2) -> void:
+	var comet := _spawn_painted_burst(cell, 1.0, duration, "etoiles_comet")
+	var shaft := comet.get_child(0) as Sprite2D
+	shaft.scale = size * TILE_SIZE
+	shaft.position = Vector2(0.0, -size.y * TILE_SIZE * 0.43)
+	comet.z_index = 11
+
+
+func _spawn_veil(duration: float) -> void:
+	var veil := PaintedBurst.new()
+	player.add_child(veil)
+	veil.setup(TILE_SIZE, 1.2, duration, 0.0, "etoiles_veil")
+	veil.position = Vector2(0.0, -TILE_SIZE * 0.55)
+	veil.z_index = 2
+	player.modulate.a = VEIL_ALPHA
+
+
+func _spawn_night(cell: Vector2i) -> void:
+	var night := _spawn_painted_burst(cell, 1.0, NIGHT_TIME, "etoiles_night")
+	night.scale = Vector2.ONE
+	night.span_tiles(TILE_SIZE, NIGHT_TILES)
+
+
+# --- L'Ange de la Mort -------------------------------------------------------------
+
+## L'éclipse couvre l'écran au-delà de ce que voit le joueur, comme l'Aube.
+const HOUR_TILES := 16.0
+const HOUR_TIME := 2.2
+const SWEEP_TIME := 0.6
+const SOUL_RETURN_TIME := 0.5
+
+var _soul_orbit: SoulOrbit = null
+
+
+func _spawn_sweep(ability: Ability, cell: Vector2i) -> void:
+	var sweep := _spawn_painted_burst(cell, ability.radius, SWEEP_TIME, "mort_sweep")
+	sweep.scale = Vector2.ONE
+	sweep.rotation = Vector2(combat_context.player_facing).angle()
+	sweep.z_index = 11
+
+
+## La cible vire au noir sous l'entaille, part en plumes, et son âme file vers le mage.
+func _on_enemy_sentenced(index: int) -> void:
+	if index >= enemies.size():
+		return
+	var cell: Vector2i = enemies[index].current_cell()
+	_spawn_painted_burst(cell, 1.5, 0.45, "mort_cut").z_index = 11
+	_spawn_painted_burst(cell, 1.0, 0.5, "mort_feathers")
+	var path := combat.trajectory(cell, player.mover.nearest_cell())
+	if path.size() >= 2:
+		_spawn_soul(path, SOUL_RETURN_TIME)
+
+
+func _on_enemy_marked(index: int, duration: float) -> void:
+	if _structure_at(index) == null and index < enemies.size():
+		enemies[index].mark(duration)
+
+
+func _on_souls_changed(count: int) -> void:
+	if character == null or character.id != "mort" or player == null:
+		return
+	if _soul_orbit == null or not is_instance_valid(_soul_orbit):
+		_soul_orbit = SoulOrbit.new()
+		player.add_child(_soul_orbit)
+		_soul_orbit.setup(TILE_SIZE)
+	_soul_orbit.set_count(count)
+
+
+func _on_soul_sent(path: Array, duration: float) -> void:
+	_spawn_soul(path, duration)
+
+
+func _spawn_soul(path: Array, duration: float) -> void:
+	var points := PackedVector2Array()
+	for cell: Vector2i in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var wisp := SoulWisp.new()
+	entities.add_child(wisp)
+	wisp.setup(points, TILE_SIZE, duration)
+
+
+func _on_soul_struck(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.0, 0.35, "mort_cut")
+
+
+func _on_last_hour_cast(cell: Vector2i) -> void:
+	var hour := _spawn_painted_burst(cell, 1.0, HOUR_TIME, "mort_hour")
+	hour.scale = Vector2.ONE
+	hour.span_tiles(TILE_SIZE, HOUR_TILES)
+	hour.z_index = 12
+
+
+func _on_last_hour_struck(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.3, 0.45, "mort_cut").z_index = 13
 
 
 # --- Le Mage de la Peste ---------------------------------------------------------
@@ -1542,6 +1724,9 @@ func _on_time_stopped(duration: float) -> void:
 
 
 func _on_immunity_faded() -> void:
+	if character.id == "etoiles":
+		player.modulate.a = 1.0
+		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.stop()
 	_aegis = null
@@ -1582,6 +1767,9 @@ func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 
 
 func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
+	if character.id == "mort":
+		_spawn_sweep(ability, cell)
+		return
 	# L'éclat prend le RAYON RÉEL du sort : le joueur doit voir jusqu'où il a
 	# porté, sinon il ne peut pas apprendre à s'en servir.
 	#
@@ -1723,6 +1911,11 @@ func _on_incantation_cast(cell: Vector2i, _ability: Ability) -> void:
 
 
 func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
+	if ability.mark_seconds > 0.0:
+		var bell := TollingBell.new()
+		entities.add_child(bell)
+		bell.position = maze_renderer.cell_to_world(cell)
+		bell.setup(TILE_SIZE, ability.duration)
 	# LES PICS NE SONT PAS UNE NAPPE. Une gerbe de pierre se dresse : elle a une
 	# base au sol et une hauteur, là où le brasier et le cercle glacé s'étalent.
 	# Elle a donc son propre nœud, avec son jaillissement et sa terre soulevée,
@@ -1957,6 +2150,12 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		var flight := LightArc.new()
 		entities.add_child(flight)
 		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
+	elif character.id == "etoiles":
+		pass
+	elif character.id == "mort":
+		var passage := DeathPassage.new()
+		entities.add_child(passage)
+		passage.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
 	else:
 		_spawn_warp_trail(from, to, tint)
 	player.mover.teleport_to(to)
@@ -2015,7 +2214,12 @@ func _spawn_warp_trail(from: Vector2i, to: Vector2i, tint: Color) -> void:
 		points.append(maze_renderer.cell_to_world(cell))
 	var trail: WarpTrail = WARP_TRAIL_SCENE.instantiate()
 	entities.add_child(trail)
-	trail.setup(points, TILE_SIZE, tint)
+	# Le Pas du néant ouvre un trou noir à chaque bout : les grosses braises, entassées
+	# sur la case, y faisaient une tache blanche par-dessus le visage du mage.
+	if character.id == "invocateur":
+		trail.setup(points, TILE_SIZE, tint, 0.14)
+	else:
+		trail.setup(points, TILE_SIZE, tint)
 	# LE MAGE DE FOUDRE NE SE TÉLÉPORTE PAS : IL DEVIENT L'ÉCLAIR.
 	#
 	# Sa description le dit depuis toujours — « il devient foudre le temps d'un
@@ -2286,7 +2490,7 @@ func _on_storm_gathered(ability: Ability, duration: float) -> void:
 		return
 	_cloud = CLOUD_SCENE.instantiate()
 	player.add_child(_cloud)
-	_cloud.setup(TILE_SIZE, Element.color(ability.element), duration)
+	_cloud.setup(TILE_SIZE, duration)
 
 
 func _on_storm_dispersed() -> void:
@@ -2347,6 +2551,9 @@ func _on_enemy_killed(index: int) -> void:
 		if is_instance_valid(orb):
 			orb.burst()
 		_orbs.erase(index)
+	if index == _boss_index:
+		_on_boss_killed()
+		return
 	var fade := DeathFade.new()
 	fade.setup(enemy.sprite, enemy.position)
 	entities.add_child(fade)
@@ -2362,6 +2569,332 @@ func _on_enemy_killed(index: int) -> void:
 	_respawns[index] = config.enemy_respawn_delay
 	if not _split(enemy):
 		enemy_killed.emit()
+
+
+# --- Le boss du chapitre -----------------------------------------------------------
+
+const BOSS_ENEMIES_PATH := "res://assets/enemies/%s/"
+## Le temps de ses grands gestes, en secondes.
+const BOSS_ARRIVAL_TIME := 2.2
+const BOSS_DEATH_TIME := 1.8
+const BOSS_DEATH_FADE := 0.7
+## À combien de pas du mage il surgit : assez loin pour ne pas frapper à l'arrivée.
+const BOSS_SPAWN_STEPS := 5
+const BOSS_COVER_TILES := 1.6
+const BOSS_COVER_ALPHA := 0.55
+## Le Roi Déchu reparaît à cette distance du mage : assez loin pour qu'il voie d'où il vient.
+const BOSS_BLINK_STEPS := 4
+## Le mage est-il assez près dans sa ligne pour valoir une charge ?
+const BOSS_CHARGE_SIGHT := 8
+## Le Béhémoth rejette le mage de tant de cases.
+const BOSS_PUSH_CELLS := 2
+
+## Sa place dans `enemies`, réservée au chargement comme celle des petites gelées : les
+## index du combat ne bougent jamais sous les projectiles en vol. -1 sans boss.
+var _boss_index := -1
+var _boss_fight: BossFight = null
+var _boss_gait: BossGait = null
+var _boss_beaten := false
+var _boss_strips := {}
+var _boss_scene_scale := 1.0
+var _boss_scene_offset := Vector2.ZERO
+var _boss_zones: Array[BossZone] = []
+var _boss_scene: BossStrip = null
+
+
+## Il garde la porte tant qu'il n'est pas tombé. En démo, seulement une fois appelé.
+func boss_guards_door() -> bool:
+	return _boss_index >= 0 and not _boss_beaten and (not config.is_demo or boss_has_appeared())
+
+
+## Tout le reste est fait : c'est son tour.
+func boss_is_due() -> bool:
+	return boss_guards_door() and not boss_has_appeared() \
+		and gems_remaining() <= 0 and lairs_remaining() <= 0
+
+
+## En démo, on l'appelle quand on veut : aucune gemme ne le précède, et il revient après
+## sa mort. Pas pendant sa chute, deux dessins du même boss se croiseraient.
+func boss_can_be_called() -> bool:
+	return config != null and config.is_demo and _boss_index >= 0 and not boss_has_appeared()
+
+
+func boss_has_appeared() -> bool:
+	return _boss_scene != null or _boss_fight != null
+
+
+## Le boss est-il là, à combattre ? La barre de l'écran ne parle que de ça.
+func boss_is_fighting() -> bool:
+	return _boss_fight != null
+
+
+func boss_name() -> String:
+	return "" if _boss_index < 0 else Bestiary.display_name(enemies[_boss_index].species)
+
+
+func boss_health_ratio() -> float:
+	return 0.0 if _boss_index < 0 else enemies[_boss_index].health.ratio()
+
+
+func _house_seals() -> int:
+	return missing_gem_colors().size() + (1 if boss_guards_door() else 0)
+
+
+func _clear_boss() -> void:
+	_boss_index = -1
+	_boss_fight = null
+	_boss_gait = null
+	_boss_beaten = false
+	_boss_strips.clear()
+	_boss_scene = null
+	for zone in _boss_zones:
+		if is_instance_valid(zone):
+			zone.queue_free()
+	_boss_zones.clear()
+
+
+func _prepare_boss() -> void:
+	if not config.has_boss():
+		house.set_locked(_house_seals())
+		return
+	var id := BossCatalog.id_of(config.stage)
+	# En démo, le vrai boss : le terrain d'essai change les PV de ses poursuivants, et on ne
+	# saurait plus ce que vaut le combat qu'on vient essayer. Sa vitesse ne suit aucun stage.
+	var fight_config := LevelConfig.for_stage(config.stage, LevelConfig.EPISODES_PER_STAGE) \
+		if config.is_demo else config
+	var enemy: Enemy = ENEMY_SCENE.instantiate()
+	entities.add_child(enemy)
+	enemy.setup_enemy(grid, grid.house_center, float(BossCatalog.of_stage(config.stage)["speed"]),
+		TILE_SIZE, maxi(grid.cols, grid.rows), id, fight_config.enemy_health(id))
+	enemy.health.current = 0
+	enemy.set_dead(true)
+	_boss_index = enemies.size()
+	enemies.append(enemy)
+	var folder := BOSS_ENEMIES_PATH % id
+	for strip in ["arrival", "ranged_attack", "death", "warning", "impact", "fade"]:
+		_boss_strips[strip] = load(folder + strip + ".png")
+	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
+		folder + "special_frames.json"))
+	# Même corps à l'écran que sur ses planches de marche : ces poses sont en cases de 256.
+	_boss_scene_scale = float(Bestiary.of(id)["body"]) / float(meta["scene_body"])
+	_boss_scene_offset = Vector2(0.0, float(meta["cell"][1]) * 0.5 - float(meta["scene_feet_y"]))
+	house.set_locked(_house_seals())
+
+
+## Le mage revient à la porte, tout est fait : le gardien surgit.
+func summon_boss() -> void:
+	if boss_is_due():
+		_raise_boss()
+
+
+## Le bouton de la démo : le mage n'a rien à finir avant, et la porte se ferme le temps
+## du combat, comme en partie.
+func call_boss() -> void:
+	if not boss_can_be_called():
+		return
+	_boss_beaten = false
+	_raise_boss()
+	house.set_locked(_house_seals())
+
+
+func _raise_boss() -> void:
+	var cell := _boss_cell_at(BOSS_SPAWN_STEPS)
+	_boss_scene = _boss_scene_at(maze_renderer.cell_to_world(cell))
+	_boss_scene.play(_boss_strips["arrival"], BOSS_ARRIVAL_TIME)
+	_boss_scene.finished.connect(_on_boss_arrived.bind(cell), CONNECT_ONE_SHOT)
+	_spawn_effect(cell, Color("#ff9a7a"), 3.0)
+	boss_appeared.emit(boss_name())
+
+
+func _boss_scene_at(at: Vector2) -> BossStrip:
+	var scene := BossStrip.new()
+	scene.position = at
+	scene.z_index = 10
+	scene.offset = _boss_scene_offset
+	entities.add_child(scene)
+	# APRÈS l'entrée dans `entities` : la vue 2,5D y corrige déjà sa hauteur.
+	scene.scale *= _boss_scene_scale
+	return scene
+
+
+## La case la plus proche de la maison à la bonne distance du mage.
+func _boss_cell_at(steps: int) -> Vector2i:
+	var field := Pathfinder.distance_field(grid, [player.mover.nearest_cell()])
+	var best := grid.house_center
+	var best_gap := 1 << 30
+	for y in grid.rows:
+		for x in grid.cols:
+			var cell := Vector2i(x, y)
+			# Pas sur l'îlot de la maison : il y marcherait sur le dessin du monument.
+			if Pathfinder.value_at(grid, field, cell) != steps or grid.is_house(cell):
+				continue
+			var gap := absi(cell.x - grid.house_center.x) + absi(cell.y - grid.house_center.y)
+			if gap < best_gap:
+				best_gap = gap
+				best = cell
+	return best
+
+
+func _on_boss_arrived(cell: Vector2i) -> void:
+	_boss_scene.queue_free()
+	var enemy := enemies[_boss_index]
+	enemy.revive_at(cell)
+	enemy.player_field = _player_field
+	_boss_fight = BossFight.new(config.stage, cell.x * 31 + cell.y)
+	_boss_gait = BossGait.new(config.stage)
+	_boss_scene = null
+
+
+func _update_boss(delta: float, stopped: bool) -> void:
+	_boss_zones.assign(_boss_zones.filter(func(zone: Variant) -> bool: return is_instance_valid(zone)))
+	for zone in _boss_zones:
+		zone.set_process_mode(PROCESS_MODE_DISABLED if stopped else PROCESS_MODE_INHERIT)
+	if _boss_fight == null or stopped or player == null:
+		return
+	var enemy := enemies[_boss_index]
+	_keep_player_visible(enemy)
+	var at := player.mover.nearest_cell()
+	var free := not (enemy.is_staggered() or enemy.is_blinded())
+	if _boss_fight.tick(delta, grid, at, enemy.mover.nearest_cell(),
+			free and not _boss_gait.is_charging()):
+		_on_boss_alert(enemy)
+	if not _boss_fight.struck.is_empty():
+		_on_boss_strike(enemy)
+	var sheltered := teleport_system != null and teleport_system.is_invulnerable(player.mover)
+	if _boss_fight != null and _boss_fight.on_wall(at) and not sheltered:
+		player_caught.emit()
+	_drive_boss_gait(delta, enemy, at, free)
+
+
+## Le labyrinthe et le mage, c'est le Level qui les voit : `BossGait` ne fait que compter.
+func _drive_boss_gait(delta: float, enemy: Enemy, at: Vector2i, free: bool) -> void:
+	var gait := _boss_gait
+	var from := enemy.mover.decision_cell()
+	match gait.tick(delta, enemy.is_casting() or not free):
+		BossGait.Cue.BLINK:
+			_boss_blink(enemy)
+		BossGait.Cue.WANTS_CHARGE:
+			if ThrowSystem.in_line(grid, from, at, BOSS_CHARGE_SIGHT):
+				gait.start_charge(Vector2i(signi(at.x - from.x), signi(at.y - from.y)))
+				_spawn_effect(from, Color("#ff9a7a"), 2.0)
+	var charge := gait.charge_direction()
+	if charge != Vector2i.ZERO and not grid.is_floor_v(from + charge):
+		gait.end_charge()
+		enemy.stagger(gait.stun)
+		charge = Vector2i.ZERO
+	elif charge != Vector2i.ZERO and from + charge == at:
+		gait.end_charge()
+		charge = Vector2i.ZERO
+	var boss := BossCatalog.of_stage(config.stage)
+	var enraged := enemy.health.ratio() < float(boss.get("enrage_below", 0.0))
+	enemy.gait_factor = gait.factor * (float(boss["enrage_factor"]) if enraged else 1.0)
+	enemy.gait_charge = charge
+	enemy.gait_hold = gait.holding or (gait.keep_away > 0
+		and Pathfinder.value_at(grid, _player_field, enemy.mover.nearest_cell()) <= gait.keep_away)
+
+
+func _boss_blink(enemy: Enemy) -> void:
+	_spawn_effect(enemy.mover.nearest_cell(), Color("#8f7bff"), 2.5)
+	var cell := _boss_cell_at(BOSS_BLINK_STEPS)
+	enemy.mover.teleport_to(cell)
+	enemy.snap_to_mover()
+	_spawn_effect(cell, Color("#8f7bff"), 2.5)
+
+
+## Le boss fait près de deux fois le mage : juste devant lui, il le cacherait entièrement.
+## Le personnage joué n'est jamais masqué, le boss s'efface donc un peu.
+func _keep_player_visible(enemy: Enemy) -> void:
+	var gap := enemy.position - player.position
+	var covers := gap.y > 0.0 and gap.y < TILE_SIZE * BOSS_COVER_TILES \
+		and absf(gap.x) < TILE_SIZE * BOSS_COVER_TILES
+	enemy.modulate.a = BOSS_COVER_ALPHA if covers else 1.0
+
+
+func _on_boss_alert(enemy: Enemy) -> void:
+	var fight := _boss_fight
+	var strips := {"warning": _boss_strips["warning"], "impact": _boss_strips["impact"],
+		"fade": _boss_strips["fade"]}
+	for cell in fight.cells:
+		var zone := BossZone.new()
+		add_child(zone)
+		zone.cell = cell
+		zone.setup(maze_renderer.cell_to_world(cell), TILE_SIZE, strips,
+			fight.alert_time + fight.delay_of(cell), fight.uses_bands(), fight.is_vertical(cell))
+		_boss_zones.append(zone)
+	enemy.play_cast(_boss_strips["ranged_attack"],
+		fight.alert_time + fight.longest_delay() + BossZone.IMPACT_TIME,
+		_boss_scene_scale, _boss_scene_offset)
+
+
+func _on_boss_strike(enemy: Enemy) -> void:
+	var fight := _boss_fight
+	for cell in fight.struck:
+		# La plus ancienne d'abord : le Roi Déchu peut marquer deux fois la même case.
+		for zone in _boss_zones:
+			if is_instance_valid(zone) and zone.cell == cell and not zone.is_striking():
+				zone.strike(fight.linger)
+				break
+	var at := player.mover.nearest_cell()
+	if fight.pattern == "burrow":
+		var out := fight.burrow_exit(at)
+		if out.x >= 0:
+			enemy.mover.teleport_to(out)
+			enemy.snap_to_mover()
+	var sheltered := teleport_system != null and teleport_system.is_invulnerable(player.mover)
+	if at in fight.struck and not sheltered:
+		player_caught.emit()
+		_push_player(at, fight.push)
+
+
+## La vague emporte le mage dans son sens, jusqu'à un mur s'il en trouve un.
+func _push_player(from: Vector2i, direction: Vector2i) -> void:
+	if direction == Vector2i.ZERO:
+		return
+	var to := from
+	for i in BOSS_PUSH_CELLS:
+		if not grid.is_floor_v(to + direction):
+			break
+		to += direction
+	player.cancel_path()
+	player.mover.teleport_to(to)
+	player.snap_to_mover()
+
+
+func _on_boss_killed() -> void:
+	var enemy := enemies[_boss_index]
+	_boss_beaten = true
+	_boss_fight = null
+	_boss_gait = null
+	enemy.gait_factor = 1.0
+	enemy.gait_hold = false
+	enemy.gait_charge = Vector2i.ZERO
+	for zone in _boss_zones:
+		if is_instance_valid(zone) and not zone.is_striking():
+			zone.queue_free()
+	_boss_scene = _boss_scene_at(enemy.position)
+	_boss_scene.play(_boss_strips["death"], BOSS_DEATH_TIME, BOSS_DEATH_FADE)
+	_boss_scene.finished.connect(_on_boss_fallen, CONNECT_ONE_SHOT)
+	enemy.set_dead(true)
+	house.set_locked(_house_seals())
+	enemy_killed.emit()
+	boss_defeated.emit()
+
+
+## Réservé aux outils de développement.
+func debug_kill_boss() -> void:
+	if boss_is_fighting():
+		var enemy := enemies[_boss_index]
+		enemy.health.take(Damage.new(enemy.health.current, Element.Kind.SUPREME, "debug"))
+		_on_enemy_killed(_boss_index)
+
+
+## Le mage peut l'avoir abattu depuis le seuil : il n'y entre plus, il y est déjà.
+func _on_boss_fallen() -> void:
+	_boss_scene.queue_free()
+	_boss_scene = null
+	# En démo, l'abattre n'est pas une fin : le mage reste sur le terrain.
+	if not config.is_demo and player != null and grid.is_house(player.mover.nearest_cell()):
+		player_reached_house.emit()
 
 
 # --- Le Rat, la Gelée et la Vesse ---------------------------------------------------
@@ -2669,7 +3202,14 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id in ["peste", "lumiere"]:
+		if character.id in ["peste", "lumiere", "mort", "etoiles"]:
+			return
+		# Le Feu n'a plus besoin de l'éclat tracé : ses triangles jaunes flottaient
+		# par-dessus les lobes et cassaient leur silhouette.
+		if character.id == "fire":
+			return
+		# Le sceau de l'Invocateur non plus : ses pointes blanches en brouillaient le triangle.
+		if character.id == "invocateur":
 			return
 	elif drawn != null and drawn == _impact_texture and DRAWN_MAGES.has(character.id):
 		_spawn_painted_burst(cell, radius, duration)
@@ -2690,6 +3230,9 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 
 func _spawn_painted_burst(cell: Vector2i, radius: float, duration: float,
 		key: String = "") -> PaintedBurst:
+	# L'explosion du Feu joue quatre temps : trop courte, on n'en voit que le milieu.
+	if key == "" and character.id == "fire" and radius > PaintedBurst.SMALL_HIT_RADIUS:
+		duration = maxf(duration, FIRE_BURST_TIME)
 	var burst := PaintedBurst.new()
 	entities.add_child(burst)
 	burst.position = maze_renderer.cell_to_world(cell)
@@ -2764,7 +3307,7 @@ func _check_capture() -> void:
 			_swings[i] = MeleeSwing.new()
 		var swing: MeleeSwing = _swings[i]
 		if enemy.dead or enemy.ranged_only() or enemy.harmless() or enemy.is_staggered() \
-				or enemy.is_blinded():
+				or enemy.is_blinded() or enemy.is_casting():
 			swing.cancel()
 			continue
 		var gap := enemy.mover.grid_position().distance_to(player_position)

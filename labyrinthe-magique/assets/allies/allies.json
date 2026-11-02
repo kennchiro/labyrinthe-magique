@@ -2,55 +2,60 @@
   "imp": {
     "anchor": "feet",
     "cell": [
-      196,
-      260
+      204,
+      148
     ],
     "mirror_left": true,
+    "grounded": true,
     "directions": {
       "down": {
         "file": "imp_down.png",
-        "idle": 4,
-        "strike": 4
+        "idle": 8,
+        "strike": 8
       },
       "up": {
         "file": "imp_up.png",
-        "idle": 4,
-        "strike": 4
-      },
-      "left": {
-        "file": "imp_left.png",
-        "idle": 4,
-        "strike": 4
+        "idle": 8,
+        "strike": 8
       },
       "right": {
         "file": "imp_right.png",
-        "idle": 4,
-        "strike": 4
+        "idle": 8,
+        "strike": 8
+      },
+      "left": {
+        "file": "imp_left.png",
+        "idle": 8,
+        "strike": 8
       }
-    }
+    },
+    "walk_fps": 12.0
   },
   "gargouille": {
     "anchor": "feet",
     "cell": [
-      284,
+      384,
       153
     ],
     "mirror_left": true,
+    "grounded": false,
     "directions": {
       "down": {
         "file": "gargouille.png",
         "idle": 2,
         "strike": 1
       }
-    }
+    },
+    "idle_fps": 4.0
   },
   "dragon": {
     "anchor": "centre",
     "cell": [
       260,
-      196
+      244
     ],
     "mirror_left": false,
+    "grounded": false,
     "directions": {
       "up": {
         "file": "dragon_up.png",

@@ -1,11 +1,15 @@
 class_name KillSystem
 extends RefCounted
 
-## Compteur d'ennemis éliminés et déblocage de l'Extra Power.
+## Compteur d'ennemis éliminés et charge de l'Extra Power, par les kills ou les potions.
 ##
 ## Le seuil est une DONNÉE, pas une constante : chaque personnage a le sien
 ## (le Sorcier Suprême doit en tuer plus, son ultime est démesuré), et un futur
 ## réglage de difficulté n'aura qu'à changer ce nombre.
+
+## Une potion charge la moitié de la jauge, arrondie au-dessus. Une part et non un
+## nombre fixe : le seuil va de 4 à 8 kills selon le mage.
+const POTION_SHARE := 0.5
 
 signal kill_registered(total: int, needed: int)
 signal ultimate_ready
@@ -25,13 +29,26 @@ func _init(p_needed: int = 5) -> void:
 
 func register_kill() -> void:
 	kills += 1
-	if not charged:
-		progress += 1
-		if progress >= needed:
-			progress = needed
-			charged = true
-			ultimate_ready.emit()
+	_charge(1)
 	kill_registered.emit(kills, needed)
+
+
+## Retourne false si la jauge était déjà pleine : la potion n'a alors rien apporté.
+func drink_potion() -> bool:
+	if charged:
+		return false
+	_charge(ceili(float(needed) * POTION_SHARE))
+	return true
+
+
+func _charge(amount: int) -> void:
+	if charged:
+		return
+	progress += amount
+	if progress >= needed:
+		progress = needed
+		charged = true
+		ultimate_ready.emit()
 
 
 func available() -> bool:

@@ -63,14 +63,19 @@ func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
 	_material.set_shader_parameter("deep_color",
 		Color(tint.r * 0.25, tint.g * 0.45, tint.b * 0.8, 1.0))
 	_material.set_shader_parameter("light_color", tint)
+	_material.set_shader_parameter("noise", PaintedFx.NOISE)
 	_material.set_shader_parameter("phase", 0.0)
 	_material.set_shader_parameter("fade", 1.0)
 	blade.material = _material
 
 	# L'écume vive : elle naît sur la crête et RESTE en arrière, ce qui donne le
 	# sillage sans avoir à le simuler.
-	var foam := FxTextures.flame_emitter(50, 0.45, float(tile_size) * 0.5,
+	var foam := FxTextures.flame_emitter(50, 0.45, float(tile_size) * 0.26,
 		Color(1.0, 1.0, 1.0, 0.75), Color(tint.r, tint.g, tint.b, 0.0), 30.0, 180.0)
+	# ⚠️ Sur TOUTE la largeur de la crête. Émises du seul milieu, les particules
+	# s'empilaient en une tache blanche collée au front, puis abandonnée derrière lui.
+	foam.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	foam.emission_rect_extents = Vector2(span * 0.36, float(tile_size) * 0.12)
 	add_child(foam)
 	foam.local_coords = false
 	foam.initial_velocity_min = float(tile_size) * 0.2

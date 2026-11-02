@@ -262,6 +262,86 @@ MAGES = [
         ],
         "extra": "LES AILES ET L'AURÉOLE gardent la même taille, la même forme et la même place dans les 24 cases, et restent entières DANS la case : jamais déployées, elles ne dépassent pas de plus d'un quart de la largeur du corps de chaque côté. AUCUN RAYON ni halo large autour de lui et aucune colonne de lumière : le jeu dessine lui-même ses sorts. Les ombres du blanc sont BEIGE et BRUN CLAIR, jamais roses ni violettes : aucun reflet du fond magenta sur les plumes.",
     },
+    {
+        "file": "mort", "id": "mort", "name": "Ange de la Mort", "reference": "mort.png",
+        "today": "rien encore, c'est un nouveau personnage",
+        "look": "l'Ange de la Mort, un ange déchu à l'allure un peu démoniaque. Deux GRANDES "
+                "AILES de plumes noires, déchirées et effilochées au bout, à demi repliées dans "
+                "son dos. Deux PETITES CORNES noires courbes sortent de son front, et une "
+                "AURÉOLE BRISÉE rouge braise, ouverte comme un anneau fendu, flotte au-dessus de "
+                "sa tête. Visage pâle couleur d'os, bien visible, aux yeux rouge braise, et "
+                "cheveux noirs mi-longs. Armure sombre gris anthracite à liserés couleur d'os, "
+                "sur une longue robe noire déchirée au bas, bottes noires griffues. Il tient de la "
+                "main droite une grande FAUX au manche d'os, dont la lame noire est bordée de "
+                "rouge braise. Toutes ses formes noires sont cernées d'un fin liseré CLAIR couleur "
+                "d'os, qui les détache des sols sombres.",
+        "legs": "la robe déchirée s'ouvre devant et ses bottes griffues sortent franchement à chaque pas",
+        "hold": "la faux reste dans sa main droite, tenue droite, lame en haut, et les ailes restent à demi repliées dans son dos, sans battre",
+        "strike": [
+            "il ramène la faux en arrière, au-dessus de l'épaule, la lame s'allume de rouge braise",
+            "la faux part vers l'avant en arc de cercle, le buste suit, un filet rouge longe la lame",
+            "LE TIR : la faux à l'horizontale devant lui, bras tendus, un court croissant rouge et noir collé au tranchant",
+            "le croissant s'efface, deux ou trois braises restent près de la lame",
+            "la faux finit son arc, les braises s'éteignent, le tranchant luit encore",
+            "la faux remonte, la lueur de la lame faiblit",
+            "la faux revient presque à la verticale",
+            "il retrouve exactement sa pose de marche",
+        ],
+        "extra": "LES AILES, LES CORNES, L'AURÉOLE BRISÉE ET LA FAUX gardent la même taille, la même forme et la même place dans les 24 cases, et restent entières DANS la case, y compris la lame à l'image du tir : les ailes ne dépassent pas de plus d'un quart de la largeur du corps de chaque côté. AUCUNE FUMÉE, aucune âme et aucune flamme autour de lui : le jeu dessine lui-même ses sorts. Le noir reste NEUTRE ou BLEUTÉ et le rouge reste ORANGÉ, couleur de braise : aucun violet, aucun rose, aucun reflet du fond magenta.",
+    },
+    {
+        "file": "etoiles", "id": "etoiles", "name": "Ange des Étoiles", "reference": "etoiles.png",
+        "today": "rien encore, c'est un nouveau personnage",
+        "look": "l'Ange des Étoiles, une femme adulte, un ange au visage calme et bien visible. "
+                "Deux GRANDES AILES de plumes bleu nuit, semées de petits points blancs comme un "
+                "ciel étoilé, à demi repliées dans son dos. Une COURONNE EN CROISSANT DE LUNE "
+                "argentée flotte au-dessus de sa tête. Longs cheveux argentés attachés en une "
+                "tresse qui tombe dans son dos. Longue robe bleu nuit à manches longues, sobre et "
+                "couvrante, à liserés d'argent, fendue sur le côté, sur des bottines argentées. "
+                "Elle tient de la main droite un fin SCEPTRE d'argent, surmonté d'une étoile "
+                "blanche à quatre branches. Toutes ses formes sombres sont cernées d'un fin liseré "
+                "ARGENTÉ, qui les détache des sols sombres.",
+        "legs": "la robe s'ouvre par sa fente et ses bottines argentées sortent franchement à chaque pas",
+        "hold": "le sceptre reste dans sa main droite, tenu droit, et les ailes restent à demi repliées dans son dos, sans battre",
+        "strike": [
+            "elle ramène le sceptre contre l'épaule, l'étoile du sommet s'éclaire",
+            "le sceptre bascule vers l'avant, un filet de lumière bleu pâle s'enroule autour",
+            "LE TIR : sceptre pointé vers l'avant, un petit éclat d'étoile blanc et bleu pâle jaillit du sommet",
+            "l'éclat s'efface, deux ou trois petits points blancs restent près de l'étoile",
+            "les points s'éteignent, l'étoile brille encore",
+            "le sceptre remonte, la lumière de l'étoile faiblit",
+            "le sceptre revient presque à la verticale",
+            "elle retrouve exactement sa pose de marche",
+        ],
+        "extra": "LES AILES, LA COURONNE, LA TRESSE ET LE SCEPTRE gardent la même taille, la même forme et la même place dans les 24 cases, et restent entiers DANS la case : les ailes ne dépassent pas de plus d'un quart de la largeur du corps de chaque côté. AUCUNE ÉTOILE ni aucun point lumineux HORS de son corps en dehors de l'éclat du tir : le jeu dessine lui-même ses sorts. Le bleu reste un BLEU NUIT franc et l'argent reste NEUTRE ou BLEUTÉ : aucun violet, aucun rose, aucun reflet du fond magenta.",
+    },
+    {
+        "file": "acier", "id": "acier", "name": "Archange d'Acier", "reference": "acier.png",
+        "today": "rien encore, c'est un nouveau personnage",
+        "look": "l'Archange d'Acier, un ange guerrier MASSIF et COSTAUD, très large d'épaules, en "
+                "ARMURE DE PLATES INTÉGRALE gris-bleu, faite de grandes plaques épaisses bien "
+                "visibles : énormes épaulières, plastron bombé, gantelets et grosses bottes de "
+                "métal. HEAUME FERMÉ : aucun visage, seulement une fente horizontale d'où sort une "
+                "lueur orange. De fines fentes orange, couleur de métal chauffé, courent entre les "
+                "plaques du plastron. Deux GRANDES AILES faites entièrement de LAMES D'ACIER "
+                "superposées, sans aucune plume, à demi repliées dans son dos. Il porte de la main "
+                "droite un grand MARTEAU DE GUERRE, à la tête d'acier massive et au manche épais. "
+                "Ses plaques sombres sont cernées d'un fin liseré GRIS CLAIR, qui les détache des "
+                "sols sombres.",
+        "legs": "ses jambes blindées et ses grosses bottes de métal se lèvent franchement à chaque pas, d'une démarche lourde",
+        "hold": "le marteau reste dans sa main droite, posé sur l'épaule, et les ailes de lames restent à demi repliées dans son dos, sans battre",
+        "strike": [
+            "il saisit le marteau à deux mains et l'arme haut derrière l'épaule, les fentes de l'armure s'éclairent",
+            "le marteau monte au-dessus de la tête, le torse se tend, la tête de l'arme rougeoie",
+            "le marteau commence à s'abattre vers l'avant, un arc gris clair suit sa tête",
+            "L'IMPACT : bras tendus, le marteau frappe vers l'avant, un petit éclat blanc et orange jaillit de sa tête",
+            "l'éclat s'efface, deux ou trois petites étincelles orange restent près de la tête du marteau",
+            "le marteau remonte, la lueur de sa tête faiblit",
+            "le marteau revient vers l'épaule",
+            "il retrouve exactement sa pose de marche",
+        ],
+        "extra": "LES AILES, LE HEAUME ET LE MARTEAU gardent la même taille, la même forme et la même place dans les 24 cases, et restent entiers DANS la case, y compris la tête du marteau à l'image de l'impact : les ailes ne dépassent pas de plus d'un quart de la largeur du corps de chaque côté. AUCUNE ÉTINCELLE ni aucune lueur HORS de son corps en dehors de l'éclat de l'impact : le jeu dessine lui-même ses sorts. Le métal reste GRIS-BLEU, à plages nettes, et les seules couleurs chaudes sont les fentes orange : aucun violet, aucun rose, aucun reflet du fond magenta sur le métal.",
+    },
 ]
 
 HEADER = """Feuille de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style cartoon

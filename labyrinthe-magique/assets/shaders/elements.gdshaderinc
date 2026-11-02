@@ -43,26 +43,29 @@ vec4 paint_water(vec2 q, float t, float h) {
 	return vec4(color, smoothstep(0.0, 0.05, heat) * inside(h));
 }
 
+// La terre lit des plaques (canal G de `supreme_noise.png`) : son bord suit leurs arêtes, et
+// elle se casse au lieu de baver. Lue dans du bruit lissé, elle faisait une pâte brune.
 vec4 paint_earth(vec2 q, float t, float h) {
-	float n = texture(noise, q * 0.2).r;
-	float crack = abs(n - 0.5);
-	float shard = texture(noise, q * 0.34 + 0.5).r;
-	float heat = h + (n - 0.5) * 0.9;
-	vec3 color = mix(vec3(0.17, 0.1, 0.05), vec3(0.47, 0.3, 0.13), smoothstep(0.3, 0.7, shard));
-	color = mix(vec3(0.06, 0.035, 0.02), color, smoothstep(0.012, 0.04, crack));
-	color = mix(color, vec3(0.42, 0.78, 0.16), smoothstep(0.7, 0.76, shard));
-	color = mix(color, vec3(0.86, 1.0, 0.42), smoothstep(0.82, 0.86, shard));
+	float plate = texture(noise, q * 1.15 + 0.2).g;
+	float crack = smoothstep(0.62, 0.74, plate);
+	float moss = texture(noise, q * 0.5 + 0.5).r;
+	float heat = h + (plate - 0.36) * 0.9;
+	vec3 color = mix(vec3(0.2, 0.12, 0.06), vec3(0.37, 0.24, 0.11), smoothstep(0.2, 0.24, plate));
+	color = mix(color, vec3(0.55, 0.38, 0.18), smoothstep(0.42, 0.46, plate));
+	color = mix(color, vec3(0.42, 0.78, 0.16), smoothstep(0.76, 0.8, moss) * (1.0 - crack));
+	color = mix(color, vec3(0.86, 1.0, 0.42), smoothstep(0.88, 0.91, moss) * (1.0 - crack));
+	color = mix(color, vec3(0.05, 0.03, 0.015), crack);
 	return vec4(color, smoothstep(0.0, 0.03, heat) * inside(h));
 }
 
+// L'air lit des filets (canal B) qui défilent le long du courant : il laisse voir au travers.
 vec4 paint_air(vec2 q, float t, float h) {
-	float f = fbm(vec2(q.x * 0.08 - t * 0.36, q.y * 0.28));
-	float lines = sin(q.y * 15.0 + f * 13.0);
-	float heat = h + (f - 0.5) * 0.8;
-	vec3 color = mix(vec3(0.42, 0.56, 0.62), vec3(0.74, 0.9, 0.94), smoothstep(-0.5, 0.5, lines));
-	color = mix(color, vec3(1.0), smoothstep(0.62, 0.92, lines));
-	float body = smoothstep(0.0, 0.08, heat);
-	return vec4(color, body * inside(h) * (0.46 + 0.54 * smoothstep(-0.2, 0.7, lines)));
+	float streak = texture(noise, vec2(q.x * 0.2 - t * 0.34, q.y * 0.44)).b;
+	float heat = h + (streak - 0.5) * 0.5;
+	vec3 color = mix(vec3(0.36, 0.5, 0.58), vec3(0.72, 0.88, 0.93), smoothstep(0.34, 0.4, streak));
+	color = mix(color, vec3(1.0), smoothstep(0.66, 0.72, streak));
+	float body = smoothstep(0.0, 0.05, heat);
+	return vec4(color, body * inside(h) * (0.42 + 0.58 * smoothstep(0.26, 0.4, streak)));
 }
 
 vec4 paint_element(int kind, vec2 q, float t, float h) {

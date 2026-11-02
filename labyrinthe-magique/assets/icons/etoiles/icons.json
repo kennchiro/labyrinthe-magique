@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "etoiles_eclat",
+    "etoiles_constellation",
+    "etoiles_pluie",
+    "etoiles_voile",
+    "etoiles_filante",
+    "etoiles_nuit"
+  ],
+  "size": 256
+}

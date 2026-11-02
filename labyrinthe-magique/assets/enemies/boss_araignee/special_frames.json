@@ -1,0 +1,23 @@
+{
+  "cell": [
+    256,
+    256
+  ],
+  "columns": 8,
+  "scene_body": 248.0,
+  "scene_feet_y": 250.0,
+  "scene": [
+    "arrival",
+    "ranged_attack",
+    "death"
+  ],
+  "portee": [
+    "warning",
+    "impact",
+    "fade"
+  ],
+  "source": {
+    "scene": "boss_araignee_scene.png",
+    "portee": "boss_araignee_portee.png"
+  }
+}

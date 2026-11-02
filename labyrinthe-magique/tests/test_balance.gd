@@ -100,7 +100,7 @@ func _init() -> void:
 
 	# Les quatre autres mages sur le même stage : ce qu'on cherche ici n'est pas
 	# l'égalité parfaite, c'est qu'aucun ne soit injouable.
-	print("── Viabilité des onze mages (Stage 2, explorateur)")
+	print("── Viabilité des treize mages (Stage 2, explorateur)")
 	var stage := LevelConfig.for_stage(2)
 	for character in CharacterCatalog.all():
 		if character.id == reference.id:
@@ -205,10 +205,6 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	var combat := CombatSystem.new(grid, character, player_health, rng_seed * 31 + 7)
 	var context := CombatContext.new(grid)
 	var kills := KillSystem.new(character.ultimate_required_kills)
-	# Progression FICTIVE : le bot commence sans sort et les débloque en
-	# ramassant les potions, exactement comme un joueur. La sauvegarde du vrai
-	# joueur n'est jamais touchée.
-	var progress := Progress.new()
 	var teleports := TeleportSystem.new(grid, rng_seed + 7)
 
 	var movers: Array[GridMover] = []
@@ -411,7 +407,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			if kills.available() and combat.use(character.ultimate, context):
 				kills.spend()
 			else:
-				_use_best_ability(combat, character, context, player_health, progress)
+				_use_best_ability(combat, character, context, player_health)
 
 		# Acculé : le portail plutôt que la mort.
 		if threat_here >= 0 and threat_here <= DESPERATION_RADIUS and teleports.can_teleport(player):
@@ -442,7 +438,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		for i in range(potions.size() - 1, -1, -1):
 			if Vector2(potions[i]).distance_to(position) < PICKUP_DISTANCE:
 				potions.remove_at(i)
-				progress.unlock_next_skill()
+				kills.drink_potion()
 				potion_timer = Level.POTION_RESPAWN_DELAY
 		if config.potion_count > 0 and potions.size() < config.potion_count and potion_timer > 0.0:
 			potion_timer -= DT
@@ -573,13 +569,13 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 ## L'ordre de préférence reproduit ce que fait un joueur : se protéger quand on
 ## est bas, sinon frapper le plus fort possible.
 func _use_best_ability(combat: CombatSystem, character: CharacterStats,
-		context: CombatContext, health: Health, progress: Progress) -> void:
+		context: CombatContext, health: Health) -> void:
 	var hurt := health.ratio() <= 0.5
 	var defensive: Array[Ability] = []
 	var offensive: Array[Ability] = []
 	for slot in range(1, character.abilities.size() + 1):
 		var ability: Ability = character.abilities[slot - 1]
-		if not progress.skill_unlocked(slot) or not combat.can_use(ability):
+		if not combat.can_use(ability):
 			continue
 		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS,
 				Ability.Kind.TRANSFUSION]:

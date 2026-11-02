@@ -49,6 +49,8 @@ func _init() -> void:
 	_test_chrono()
 	_test_peste()
 	_test_lumiere()
+	_test_mort()
+	_test_etoiles()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -219,10 +221,10 @@ func _test_catalog() -> void:
 	var characters := CharacterCatalog.all()
 	# 7 mages élémentaires + l'Invocateur (ajouté par la session voisine — il ne
 	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
-	# Porte-Lumière. Le
+	# Porte-Lumière, et l'Ange de la Mort. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 11:
-		_fail("le catalogue contient %d personnages au lieu de 11" % characters.size())
+	if characters.size() != 13:
+		_fail("le catalogue contient %d personnages au lieu de 13" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -361,24 +363,27 @@ func _test_cooldown() -> void:
 	print("recharge : seule limite d'un sort, %.0f s puis il revient" % skill.cooldown)
 
 
-## Le déblocage, lui, est tenu par Progress — et il est DÉFINITIF.
+## L'Extra Power se charge de deux façons : les kills, et les potions.
 func _test_unlocks() -> void:
-	var progress := Progress.new()
-	if progress.skill_unlocked(1):
-		_fail("le premier sort est utilisable avant d'avoir trouvé une potion")
-	if not progress.skill_unlocked(0) or not progress.skill_unlocked(4):
-		_fail("la frappe ou la fuite est verrouillée : elles ne s'achètent pas")
-	if progress.unlock_next_skill() != 1 or not progress.skill_unlocked(1):
-		_fail("la première potion ne débloque pas le premier sort")
-	if progress.skill_unlocked(2):
-		_fail("une seule potion débloque plus d'un sort")
-	progress.unlock_next_skill()
-	progress.unlock_next_skill()
-	if not progress.skill_unlocked(3):
-		_fail("trois potions ne débloquent pas les trois sorts")
-	if progress.unlock_next_skill() != -1:
-		_fail("une quatrième potion débloque un quatrième sort inexistant")
-	print("déblocage : une potion = un sort, acquis définitivement")
+	var kills := KillSystem.new(5)
+	if not kills.drink_potion() or kills.progress != 3:
+		_fail("une potion doit charger la moitié de la jauge, arrondie au-dessus")
+	kills.register_kill()
+	if kills.available():
+		_fail("l'Extra est prêt avant d'avoir rempli sa jauge")
+	kills.register_kill()
+	if not kills.available():
+		_fail("une potion et deux kills ne complètent pas une jauge de 5")
+	if kills.drink_potion():
+		_fail("une jauge pleine accepte encore une potion")
+	var drunk := KillSystem.new(4)
+	drunk.drink_potion()
+	drunk.drink_potion()
+	if not drunk.available():
+		_fail("deux potions ne chargent pas l'Extra à elles seules")
+	if drunk.kills != 0:
+		_fail("une potion compte comme un kill au score")
+	print("extra power : kills ou potions")
 
 
 ## Le trajet du projectile suit les COULOIRS. Un tir qui coupe à travers une
@@ -709,10 +714,19 @@ func _test_summons() -> void:
 	# Les diablotins doivent trouver l'ennemi à 6 cases et l'abattre — bien
 	# avant leurs 30 s de vie. 25 s de marge : à 4,6 cases/s, l'aller dure
 	# moins de 2 s, et 60 PV tombent en 6 coups.
+	# Ils suivent les couloirs : jamais de diagonale à travers le coin d'une haie.
+	var off_axis := {"count": 0}
+	var on_move := func(_id: int, at: Vector2, _facing: Vector2i) -> void:
+		if absf(at.x - round(at.x)) > 0.01 and absf(at.y - round(at.y)) > 0.01:
+			off_axis["count"] += 1
+	combat.summon_moved.connect(on_move)
 	var elapsed := 0.0
 	while context.enemy_health[0].is_alive() and elapsed < 25.0:
 		combat.update(DT, context)
 		elapsed += DT
+	combat.summon_moved.disconnect(on_move)
+	if off_axis["count"] > 0:
+		_fail("%d pas de diablotin hors de l'axe du couloir" % off_axis["count"])
 	if context.enemy_health[0].is_alive():
 		_fail("les diablotins n'ont pas abattu un ennemi immobile en 25 s")
 	if events["kills"] != 1:
@@ -3042,3 +3056,190 @@ func _test_water_geysers() -> void:
 	if tardives["n"] > 0:
 		_fail("%d colonnes sortent après le lancement : ce n'est plus une salve"
 			% tardives["n"])
+
+
+## La Sentence achève, le Glas marque, les âmes se récoltent et chassent, l'Heure dernière prend
+## la moitié des PV de chaque ennemi.
+func _test_mort() -> void:
+	var mort := CharacterCatalog.mort()
+	var moisson: Ability = mort.abilities[0]
+	var glas: Ability = mort.abilities[1]
+	var ames: Ability = mort.abilities[2]
+	# SENTENCE : achevé sous le seuil, intact au-dessus, et jamais un repaire.
+	var parts := _context(mort)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 100)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 100)
+	context.enemy_health[0].current = 25
+	combat._apply_damage(0, mort.attack, context)
+	if context.enemy_alive(0):
+		_fail("sentence : la cible à 9 % n'est pas achevée")
+	combat._apply_damage(1, mort.attack, context)
+	if context.enemy_health[1].current != 100 - mort.attack.damage:
+		_fail("sentence : une cible en bonne santé est touchée à tort")
+	context.enemy_health[1].current = 40
+	context.structures_from = 1
+	combat._apply_damage(1, mort.attack, context)
+	if context.enemy_health[1].current != 40 - mort.attack.damage:
+		_fail("sentence : un repaire est achevé")
+
+	# MOISSON : son seuil monte à 35 %.
+	parts = _context(mort)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	var cell := _cell_at(grid, context.player_field, 1)
+	context.player_facing = cell - context.player_cell
+	_add_enemy(context, cell, 200)
+	context.enemy_health[0].current = 110
+	if not combat.use(moisson, context) or context.enemy_alive(0):
+		_fail("moisson : la cible qu'elle fait passer à 32 % n'est pas achevée")
+
+	# ÂMES : une par victime, trois au plus, et le lâcher les vide.
+	if combat._souls != 1:
+		_fail("âmes : le coup de grâce ne donne pas d'âme (%d)" % combat._souls)
+	combat._souls = CombatSystem.SOUL_MAX
+	combat._gain_soul()
+	if combat._souls != CombatSystem.SOUL_MAX:
+		_fail("âmes : le plafond ne tient pas")
+	var sent := {"count": 0}
+	combat.soul_sent.connect(func(_path: Array, _duration: float) -> void: sent["count"] += 1)
+	if combat.use(ames, context):
+		_fail("âmes : le sort part sans proie à portée")
+	if combat._souls != CombatSystem.SOUL_MAX:
+		_fail("âmes : le sort refusé a coûté ses âmes")
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 500)
+	if not combat.use(ames, context) or int(sent["count"]) != 1 + CombatSystem.SOUL_MAX or combat._souls != 0:
+		_fail("âmes : %d âmes lâchées au lieu de %d" % [int(sent["count"]), 1 + CombatSystem.SOUL_MAX])
+	for i in 120:
+		combat.update(DT, context)
+	if context.enemy_health[1].current != 500 - ames.damage * (1 + CombatSystem.SOUL_MAX):
+		_fail("âmes : les âmes n'ont pas frappé (%d PV)" % context.enemy_health[1].current)
+
+	# GLAS : le marqué prend plus de dégâts, et la marque s'efface.
+	parts = _context(mort)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1000)
+	combat.use(glas, context)
+	for i in 40:
+		combat.update(DT, context)
+	if not combat._marked.has(0):
+		_fail("glas : l'ennemi du cercle n'est pas marqué")
+	var before: int = context.enemy_health[0].current
+	combat._apply_damage(0, mort.attack, context, false, false)
+	var expected := int(round(float(mort.attack.damage) * (1.0 + CombatSystem.MARK_BONUS)))
+	if before - context.enemy_health[0].current != expected:
+		_fail("glas : le marqué prend %d au lieu de %d" % [before - context.enemy_health[0].current, expected])
+
+	# HEURE DERNIÈRE : la moitié des PV, et la Sentence juste après.
+	parts = _context(mort)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 1000)
+	context.enemy_health[1].current = 200
+	combat.use(mort.ultimate, context)
+	for i in int((CombatSystem.HOUR_DELAY + CombatSystem.HOUR_SWEEP) / DT) + 3:
+		combat.update(DT, context)
+	if context.enemy_health[0].current != 500:
+		_fail("heure : %d PV au lieu de 500" % context.enemy_health[0].current)
+	if context.enemy_alive(1):
+		_fail("heure : la cible tombée à 10 % n'est pas achevée")
+	print("ange de la mort : sentence, moisson, âmes, glas et heure dernière : OK")
+
+
+## Le trait explose au troisième coup, les rayons brûlent par-dessus les haies, la Pluie tombe sur
+## les ennemis, le Voile rend intouchable et la traînée brûle le trajet.
+func _test_etoiles() -> void:
+	var etoiles := CharacterCatalog.etoiles()
+	var constellation: Ability = etoiles.abilities[0]
+	var pluie: Ability = etoiles.abilities[1]
+	var voile: Ability = etoiles.abilities[2]
+	# ASTRE : la troisième étoile explose, et les marques repartent de zéro.
+	var parts := _context(etoiles)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1000)
+	var attack := etoiles.attack.damage
+	for i in 2:
+		combat._apply_damage(0, etoiles.attack, context)
+	if context.enemy_health[0].current != 1000 - attack * 2:
+		_fail("astre : l'étoile a explosé trop tôt")
+	combat._apply_damage(0, etoiles.attack, context)
+	if context.enemy_health[0].current != 1000 - attack * 3 - CombatSystem.ASTRE_DAMAGE:
+		_fail("astre : pas d'explosion au troisième coup (%d PV)" % context.enemy_health[0].current)
+	if combat._star_marks.has(0):
+		_fail("astre : les marques ne repartent pas de zéro")
+
+	# CONSTELLATION : trois étoiles au plus, deux sur la même case refusées, et un rayon qui
+	# touche en ligne droite ce qui se tient entre elles, même sans chemin.
+	parts = _context(etoiles)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	var start: Vector2i = context.player_cell
+	if not combat.use(constellation, context):
+		_fail("constellation : la première étoile est refusée")
+	combat._cooldowns.clear()
+	if combat.use(constellation, context):
+		_fail("constellation : deux étoiles sur la même case")
+	var far := start + Vector2i(8, 0)
+	combat._stars.append({"cell": far, "time_left": 10.0, "ability": constellation})
+	_add_enemy(context, start + Vector2i(4, 0), 1000)
+	_add_enemy(context, start + Vector2i(4, 3), 1000)
+	for i in int(1.0 / DT):
+		combat.update(DT, context)
+	if context.enemy_health[0].current >= 1000:
+		_fail("constellation : le rayon ne brûle pas l'ennemi sur sa ligne")
+	if context.enemy_health[1].current != 1000:
+		_fail("constellation : le rayon brûle un ennemi à trois cases de lui")
+	combat._stars[0]["cell"] = start + Vector2i(1, 9)
+	context.player_cell = _cell_at(grid, context.player_field, 3)
+	combat._cooldowns.clear()
+	combat._stars.append({"cell": start + Vector2i(9, 9), "time_left": 10.0, "ability": constellation})
+	combat.use(constellation, context)
+	if combat._stars.size() != CombatSystem.STAR_MAX:
+		_fail("constellation : %d étoiles au lieu de %d" % [combat._stars.size(), CombatSystem.STAR_MAX])
+
+	# PLUIE : ses étoiles tombent d'abord sur les ennemis à portée.
+	parts = _context(etoiles)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1000)
+	if not combat.use(pluie, context) or combat._falling.size() != pluie.star_falls:
+		_fail("pluie : elle ne prépare pas ses %d étoiles" % pluie.star_falls)
+	for i in int((CombatSystem.STAR_FALL_LEAD + 0.1) / DT):
+		combat.update(DT, context)
+	if context.enemy_health[0].current > 1000 - pluie.damage:
+		_fail("pluie : la première étoile n'a pas frappé l'ennemi")
+
+	# VOILE : les coups la traversent.
+	parts = _context(etoiles)
+	combat = parts[1]; context = parts[2]
+	var health: Health = parts[3]
+	combat.use(voile, context)
+	var before := health.current
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != before:
+		_fail("voile : le coup n'est pas traversé")
+
+	# ÉTOILE FILANTE : la traînée brûle ce qui est sur le trajet.
+	parts = _context(etoiles)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	for way: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		if grid.is_floor_v(context.player_cell + way):
+			context.player_facing = way
+			break
+	_add_enemy(context, context.player_cell + context.player_facing, 500)
+	if not combat.use(etoiles.escape, context) or context.enemy_health[0].current != 500 - etoiles.escape.trail_damage:
+		_fail("filante : la traînée ne brûle pas ce qui est sur le trajet")
+
+	# NUIT ÉTERNELLE : une comète sur chaque ennemi, sans aveugler.
+	parts = _context(etoiles)
+	grid = parts[0]; combat = parts[1]; context = parts[2]
+	var blinded := {"count": 0}
+	combat.enemy_blinded.connect(func(_i: int, _d: float) -> void: blinded["count"] += 1)
+	_add_enemy(context, _cell_at(grid, context.player_field, 4), 500)
+	combat.use(etoiles.ultimate, context)
+	for i in int((CombatSystem.DAWN_DELAY + 0.2) / DT):
+		combat.update(DT, context)
+	if context.enemy_health[0].current != 500 - etoiles.ultimate.damage or int(blinded["count"]) != 0:
+		_fail("nuit : %d PV, %d aveuglements" % [context.enemy_health[0].current, int(blinded["count"])])
+	print("ange des étoiles : astre, constellation, pluie, voile, filante et nuit : OK")

@@ -1,0 +1,23 @@
+{
+  "cell": [
+    256,
+    256
+  ],
+  "columns": 8,
+  "scene_body": 224.0,
+  "scene_feet_y": 240.0,
+  "scene": [
+    "arrival",
+    "ranged_attack",
+    "death"
+  ],
+  "portee": [
+    "warning",
+    "impact",
+    "fade"
+  ],
+  "source": {
+    "scene": "boss_behemoth_scene.png",
+    "portee": "boss_behemoth_portee.png"
+  }
+}

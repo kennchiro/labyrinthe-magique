@@ -33,7 +33,7 @@ const CENTREPIECE_MAX_TILES := 3.4
 ## ce qui garde le jeu lisible pendant l'éclat.
 const CENTREPIECE_ALPHA := 0.78
 ## Formes disponibles. Chaque élément pioche la sienne.
-enum Shape { FLAME, DROP, SHARD, RUNE, SPARK }
+enum Shape { FLAME, DROP, SHARD, RUNE, SPARK, ARC }
 
 var tile_size: int = 32
 var element: Element.Kind = Element.Kind.SHADOW
@@ -138,6 +138,15 @@ func _build(rng: RandomNumberGenerator) -> void:
 			palette = [Color("#b06cff"), Color("#e0c4ff"), Color("#7f5cff")]
 			_gravity = -0.1
 			_rings = 2
+		Element.Kind.THUNDER:
+			# ⚠️ Des éclats brisés, jamais des ronds : en additif et en jaune, ils faisaient
+			# des pâtés qui recouvraient le mage et sa cible. Composés normalement, en blanc
+			# bleuté, ils se lisent sur tous les sols.
+			count = 9
+			shape = Shape.ARC
+			palette = [Color("#ffffe6"), Color("#a9bcff")]
+			_additive = false
+			_rings = 1
 		Element.Kind.SUPREME:
 			count = 26
 			palette = [Color("#ff7a1e"), Color("#4fd8ff"), Color("#6faa3c"), Color("#b06cff")]
@@ -282,7 +291,7 @@ func _draw_rings(t: float) -> void:
 		var age := clampf((t - offset) / maxf(0.05, 1.0 - offset), 0.0, 1.0)
 		if age <= 0.0:
 			continue
-		var color := Element.color(element)
+		var color := Color("#7f97ff") if element == Element.Kind.THUNDER else Element.color(element)
 		draw_arc(Vector2.ZERO, tile_size * radius_tiles * (0.12 + 0.95 * age), 0.0, TAU, 44,
 			Color(color.r, color.g, color.b, (1.0 - age) * 0.55), 1.5 + 4.0 * (1.0 - age))
 
@@ -316,6 +325,13 @@ func _draw_shape(shape: int, at: Vector2, size: float, rotation: float, color: C
 				Vector2(-size * 1.7, 0.0), Vector2(0.0, -size * 0.5),
 				Vector2(size * 1.7, 0.0), Vector2(0.0, size * 0.5),
 			], at, rotation), Color(color.r, color.g, color.b, color.a * 0.8))
+		Shape.ARC:
+			# Un petit éclair qui s'en va : trois coudes, le long de sa course.
+			var heading := at.normalized() if at != Vector2.ZERO else Vector2.RIGHT
+			var across := Vector2(-heading.y, heading.x) * size * 0.3
+			draw_polyline(PackedVector2Array([at - heading * size * 0.9,
+				at - heading * size * 0.2 + across, at + heading * size * 0.2 - across,
+				at + heading * size * 0.9]), color, maxf(1.5, size * 0.22))
 		_:
 			draw_circle(at, size * 0.9, color)
 

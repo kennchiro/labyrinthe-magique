@@ -42,6 +42,21 @@ La commande complète, dans l'ordre, et le détail de chaque effet visuel :
 La commande complète, dans l'ordre, et le détail de chaque effet visuel :
 [mages/mage_lumiere](prompts/mages/mage_lumiere.md).
 
+## L'Ange de la Mort — le douzième personnage
+
+La commande complète, dans l'ordre, et le détail de chaque effet visuel :
+[mages/mage_mort](prompts/mages/mage_mort.md).
+
+## L'Ange des Étoiles — le treizième personnage
+
+La commande complète, dans l'ordre, et le détail de chaque effet visuel :
+[mages/mage_etoiles](prompts/mages/mage_etoiles.md).
+
+## L'Archange d'Acier — le quatorzième personnage
+
+La commande complète, dans l'ordre, et le détail de chaque effet visuel :
+[mages/mage_acier](prompts/mages/mage_acier.md).
+
 ## Refonte des huit mages — uniformiser les tailles
 
 La case est commune à tous, mais chacun l'occupe comme il veut : de **60 %**
@@ -92,6 +107,9 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | les icônes de sorts du Chronomancien | [sorts/icones_chrono](prompts/sorts/icones_chrono.md) |
 | les icônes de sorts du Mage de la Peste | [sorts/icones_peste](prompts/sorts/icones_peste.md) |
 | les icônes de sorts du Porte-Lumière | [sorts/icones_lumiere](prompts/sorts/icones_lumiere.md) |
+| les icônes de sorts de l'Ange de la Mort | [sorts/icones_mort](prompts/sorts/icones_mort.md) |
+| les icônes de sorts de l'Ange des Étoiles | [sorts/icones_etoiles](prompts/sorts/icones_etoiles.md) |
+| les icônes de sorts de l'Archange d'Acier | [sorts/icones_acier](prompts/sorts/icones_acier.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol

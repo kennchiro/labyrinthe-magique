@@ -29,6 +29,8 @@ const TRAIT_TEXT := {
 	Element.Kind.THUNDER: "**Arc** — le coup saute à un voisin à %d cases (%d %% des dégâts)",
 	Element.Kind.AIR: "**Bourrasque** — la cible est repoussée de %d cases",
 	Element.Kind.SUPREME: "**Écho** — %d %% des dégâts se répètent %.1f s plus tard",
+	Element.Kind.STARS: "**Astre** — au %de coup sur une cible, ses étoiles explosent pour %d dégâts",
+	Element.Kind.DEATH: "**Sentence** — un ennemi sous %d %% de ses PV après un coup est achevé",
 	Element.Kind.TIME: "**Retard** — la cible ralentit de %d %% pendant %.1f s",
 	Element.Kind.POISON: "**Venin** — jusqu'à %d doses, %d dégâts par seconde chacune pendant %.0f s",
 	Element.Kind.LIGHT: "**Éblouissement** — la cible perd sa trace %.1f s, au plus toutes les %.0f s",
@@ -108,6 +110,10 @@ func _trait_line(element: Element.Kind) -> String:
 				CombatSystem.ECHO_DELAY]
 		Element.Kind.LIGHT:
 			return TRAIT_TEXT[element] % [CombatSystem.GLARE_SECONDS, CombatSystem.BLIND_LOCK]
+		Element.Kind.STARS:
+			return TRAIT_TEXT[element] % [CombatSystem.ASTRE_MARKS, CombatSystem.ASTRE_DAMAGE]
+		Element.Kind.DEATH:
+			return TRAIT_TEXT[element] % int(CombatSystem.SENTENCE_BELOW * 100.0)
 		Element.Kind.POISON:
 			return TRAIT_TEXT[element] % [CombatSystem.VENOM_MAX, CombatSystem.VENOM_DAMAGE,
 				CombatSystem.VENOM_DURATION]

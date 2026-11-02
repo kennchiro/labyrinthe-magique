@@ -165,6 +165,13 @@ MAGES = {
     "lumiere": {"id": "lumiere", "name": "Porte-Lumière", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "despill": True,
             "strike_scale": 1.08},
+    # Sa faux fausse les hauteurs comme la lance du Porte-Lumière : même échelle imposée.
+    "mort": {"id": "mort", "name": "Ange de la Mort", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "despill": True,
+            "strike_scale": 1.0},
+    "etoiles": {"id": "etoiles", "name": "Ange des Étoiles", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,
@@ -202,6 +209,18 @@ def despilled(image: Image.Image) -> Image.Image:
     data[..., 1] = np.where(spill, red * 0.945, green).astype(np.uint8)
     data[..., 2] = np.where(spill, red * 0.72, blue).astype(np.uint8)
     return Image.fromarray(data, "RGBA")
+
+
+def demagenta(image: Image.Image) -> Image.Image:
+    """Retire la seule part de magenta d'un pixel : ce qu'il a de rouge ET de bleu en trop.
+
+    `despilled` repeint en blanc chaud tout ce qui a plus de bleu que de vert : sur un dessin
+    bleu, c'est le dessin qui partirait, et l'Ange des Étoiles virait au beige."""
+    data = np.array(image.convert("RGBA")).astype(float)
+    excess = np.clip(np.minimum(data[..., 0], data[..., 2]) - data[..., 1], 0.0, None)
+    data[..., 0] -= excess
+    data[..., 2] -= excess
+    return Image.fromarray(data.astype(np.uint8), "RGBA")
 
 
 def keyed(cell: Image.Image, keep_enclosed: bool = False) -> Image.Image:
@@ -1117,7 +1136,7 @@ def build(source_name: str, entry: dict) -> str:
             if flip:
                 piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
             strip.alpha_composite(piece, (number * cell_w, 0))
-        (despilled(strip) if entry.get("despill") else strip).save(folder / f"{direction}.png")
+        (demagenta(strip) if entry.get("demagenta") else despilled(strip) if entry.get("despill") else strip).save(folder / f"{direction}.png")
 
     # LES PIEDS SONT LE BAS DE LA MARCHE, et non le bas de la matière. Même
     # raison que le centrage : une traînée de coup qui plonge sous la robe

@@ -35,6 +35,8 @@ const FLASH_DURATION := 1.4
 var touch_mode := false
 
 var _flash_timer := 0.0
+## La barre du boss, créée à sa première apparition : la plupart des niveaux n'en ont pas.
+var _boss_bar: BossBar = null
 
 
 func _ready() -> void:
@@ -91,12 +93,19 @@ func set_level(config: LevelConfig, number: int) -> void:
 
 ## Affiche la barre de visite des décors. Elle n'existe qu'en démo : en partie,
 ## deux flèches qui changent de stage seraient une triche, pas un outil.
-func show_demo_bar(on_step: Callable) -> void:
+func show_demo_bar(on_step: Callable, on_boss: Callable) -> void:
 	demo_bar.visible = true
 	MenuStyle.apply(demo_bar.get_node("Prev"), Color("#9fe8b4"), 22)
 	MenuStyle.apply(demo_bar.get_node("Next"), Color("#9fe8b4"), 22)
 	demo_bar.get_node("Prev").pressed.connect(func() -> void: on_step.call(-1))
 	demo_bar.get_node("Next").pressed.connect(func() -> void: on_step.call(1))
+	MenuStyle.apply(demo_bar.get_node("Boss"), Color("#ff9a7a"), 16)
+	demo_bar.get_node("Boss").pressed.connect(on_boss)
+
+
+## Le bouton laisse sa place à la barre de vie pendant le combat.
+func set_demo_boss_available(available: bool) -> void:
+	demo_bar.get_node("Boss").visible = available
 
 
 func set_health(current: int, maximum: int) -> void:
@@ -107,8 +116,8 @@ func set_shield(amount: int, posed: int = 0) -> void:
 	hud.set_shield(amount, posed)
 
 
-func set_counters(portals: int, unlocked_skills: int) -> void:
-	hud.set_counters(portals, unlocked_skills)
+func set_counters(portals: int) -> void:
+	hud.set_counters(portals)
 
 
 func set_gems(missing: Array[Color], total: int) -> void:
@@ -170,6 +179,9 @@ func touch_reserved(point: Vector2) -> bool:
 		return true
 	if quest_button.visible and quest_button.get_global_rect().has_point(point):
 		return true
+	if demo_bar.visible and (demo_bar.get_global_rect().has_point(point)
+			or demo_bar.get_node("Boss").get_global_rect().has_point(point)):
+		return true
 	# ⚠️ LE CARNET OUVERT RÉSERVE TOUT L'ÉCRAN. Son voile arrête déjà les clics
 	# de l'interface, mais le GameManager, lui, lit les taps SANS passer par les
 	# nœuds : sans cette ligne, un tap sur la page ouverte ferait marcher le mage
@@ -177,6 +189,21 @@ func touch_reserved(point: Vector2) -> bool:
 	if quest_panel.visible:
 		return true
 	return false
+
+
+func show_boss(boss_name: String, ratio: float) -> void:
+	if _boss_bar == null:
+		_boss_bar = BossBar.new()
+		if demo_bar.visible:
+			_boss_bar.top = BossBar.TOP_UNDER_DEMO_BAR
+		add_child(_boss_bar)
+	_boss_bar.visible = true
+	_boss_bar.set_state(boss_name, ratio)
+
+
+func hide_boss() -> void:
+	if _boss_bar != null:
+		_boss_bar.visible = false
 
 
 func _on_controls_toggled() -> void:

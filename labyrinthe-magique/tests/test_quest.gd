@@ -44,7 +44,7 @@ func _test_level(config: LevelConfig) -> void:
 
 	# LES CHIFFRES DU TEXTE VIENNENT DE LA CONFIG, c'est tout l'enjeu du test.
 	var goals := book.objectives(0, 2, false)
-	var expected := 3 if config.must_destroy_lairs else 2
+	var expected := (3 if config.must_destroy_lairs else 2) + (1 if config.has_boss() else 0)
 	if goals.size() != expected:
 		_fail(where, "%d objectifs au lieu de %d" % [goals.size(), expected])
 		return

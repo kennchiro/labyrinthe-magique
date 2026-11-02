@@ -49,6 +49,10 @@ const VENOM_RIM := Color("#1e3a0c")
 const VENOM_SHINE := Color("#f2ff9e")
 const TINT_BLIND := Color(1.5, 1.45, 1.25)
 const BLIND_STAR := Color("#ffcf5a")
+const ASTRE_STAR := Color("#ffffff")
+const ASTRE_RIM := Color("#0a1030")
+const MARK_BELL := Color("#e6dfca")
+const MARK_RIM := Color("#7a1414")
 const BLIND_RIM := Color("#4a2f12")
 const TINT_BURN := Color(1.6, 0.85, 0.55)
 ## Le poison d'ombre : SOMBRE et violacé, là où les autres statuts éclaircissent.
@@ -117,6 +121,14 @@ var _strike := 0.0
 var _strike_facing := Vector2i.DOWN
 var _strike_rest := 0.0
 var _spit_cooldown := 0.0
+var _marked_left := 0.0
+var _astre_marks := 0
+## La démarche d'un boss, posée par le Level à chaque image (`BossGait`).
+var gait_factor := 1.0
+var gait_hold := false
+var gait_charge := Vector2i.ZERO
+## Le geste d'un boss qui attaque de loin : il remplace le dessin et l'immobilise.
+var _cast_strip: BossStrip = null
 ## Cadences de la planche jouée (voir SHEET_TUNING).
 var _tuning: Dictionary = Bestiary.of(Bestiary.FALLBACK)
 
@@ -221,6 +233,35 @@ func phases() -> bool:
 	return bool(_tuning.get("phases", false))
 
 
+func is_boss() -> bool:
+	return bool(_tuning.get("boss", false))
+
+
+func is_casting() -> bool:
+	return _cast_strip != null
+
+
+## Joue le geste de loin d'un boss, de face. Il ne bouge pas tant que dure sa zone : on
+## voit qui lance, et il reste une cible pour celui qui ne fuit pas.
+func play_cast(strip: Texture2D, duration: float, strip_scale: float, strip_offset: Vector2) -> void:
+	_end_cast()
+	_cast_strip = BossStrip.new()
+	_cast_strip.scale = Vector2.ONE * strip_scale
+	_cast_strip.offset = strip_offset
+	add_child(_cast_strip)
+	_cast_strip.play(strip, duration)
+	_cast_strip.finished.connect(_end_cast, CONNECT_ONE_SHOT)
+	sprite.visible = false
+	mover.desired_direction = Vector2i.ZERO
+
+
+func _end_cast() -> void:
+	if _cast_strip != null:
+		_cast_strip.queue_free()
+		_cast_strip = null
+	sprite.visible = true
+
+
 func uses_portals() -> bool:
 	return not bool(_tuning.get("no_portals", false))
 
@@ -308,6 +349,18 @@ func blind(duration: float) -> void:
 	queue_redraw()
 
 
+## Les étoiles du trait de l'Ange des Étoiles : elles tournent autour de lui jusqu'à l'explosion.
+func set_star_marks(count: int) -> void:
+	_astre_marks = count
+	queue_redraw()
+
+
+## La marque du Glas : une petite cloche au-dessus de lui, tant qu'il prend plus de dégâts.
+func mark(duration: float) -> void:
+	_marked_left = maxf(_marked_left, duration)
+	queue_redraw()
+
+
 func is_blinded() -> bool:
 	return ai != null and ai.blind_left > 0.0
 
@@ -333,6 +386,11 @@ func _update_desired(delta: float) -> void:
 	_strike = maxf(0.0, _strike - delta)
 	_strike_rest = maxf(0.0, _strike_rest - delta)
 	_spit_cooldown = maxf(0.0, _spit_cooldown - delta)
+	if _astre_marks > 0:
+		queue_redraw()
+	if _marked_left > 0.0:
+		_marked_left = maxf(0.0, _marked_left - delta)
+		queue_redraw()
 	_soak_left = maxf(0.0, _soak_left - delta)
 	_stagger_left = maxf(0.0, _stagger_left - delta)
 	_frozen_left = maxf(0.0, _frozen_left - delta)
@@ -344,7 +402,7 @@ func _update_desired(delta: float) -> void:
 	_burn_left = maxf(0.0, _burn_left - delta)
 	_poison_left = maxf(0.0, _poison_left - delta)
 	_flash = maxf(0.0, _flash - delta)
-	mover.speed = _base_speed * (_soak_factor if _soak_left > 0.0 else 1.0)
+	mover.speed = _base_speed * gait_factor * (_soak_factor if _soak_left > 0.0 else 1.0)
 	if _soak_left <= 0.0:
 		_soak_factor = SOAK_FACTOR
 	if _stagger_left > 0.0:
@@ -355,6 +413,12 @@ func _update_desired(delta: float) -> void:
 			set_tint(HIT_FLASH)
 		else:
 			_show_state(TINT_FROZEN if _frozen_left > 0.0 else TINT_STAGGER)
+		return
+	if _cast_strip != null:
+		mover.desired_direction = Vector2i.ZERO
+		return
+	if gait_charge != Vector2i.ZERO or gait_hold:
+		mover.desired_direction = gait_charge
 		return
 	var step := _next_step(delta)
 	# Le DERNIER pas est refusé : celui qui ferait monter l'ennemi sur la case du
@@ -445,6 +509,7 @@ func set_dead(value: bool) -> void:
 	visible = not value
 	set_process(not value)
 	if value:
+		_end_cast()
 		# La direction demandée est effacée : sans ça, l'ennemi repartirait à sa
 		# réapparition dans le sens où il courait au moment de sa mort.
 		mover.desired_direction = Vector2i.ZERO
@@ -693,11 +758,14 @@ func _draw() -> void:
 		return
 	_draw_venom()
 	_draw_blind()
+	_draw_mark()
+	_draw_star_marks()
 	# La barre ne s'affiche qu'une fois le premier coup porté : au complet, elle
 	# n'apprend rien et met un bandeau rouge au-dessus de chaque ennemi de la
 	# carte, ce qui noie l'information au moment où elle compte.
 	var ratio := health.ratio()
-	if ratio >= 1.0:
+	# Le boss a sa grande barre, en haut de l'écran.
+	if ratio >= 1.0 or is_boss():
 		return
 
 	var width := tile_size * BAR_WIDTH
@@ -741,6 +809,34 @@ func _draw_venom() -> void:
 		var alpha := (1.0 - life) * 0.95
 		draw_circle(at, radius, Color(VENOM_DROP, alpha))
 		draw_arc(at, radius, 0.0, TAU, 10, Color(VENOM_RIM, alpha), 1.0)
+
+
+func _draw_star_marks() -> void:
+	var clock := float(Time.get_ticks_msec()) * 0.0025
+	for i in _astre_marks:
+		var angle := clock + float(i) * TAU / float(_astre_marks)
+		var at := Vector2(cos(angle) * tile_size * 0.42, -tile_size * 0.55 + sin(angle) * tile_size * 0.14)
+		var star := PackedVector2Array()
+		for point in 8:
+			var length := tile_size * (0.1 if point % 2 == 0 else 0.03)
+			star.append(at + Vector2.from_angle(float(point) * TAU / 8.0) * length)
+		draw_colored_polygon(star, ASTRE_STAR)
+		star.append(star[0])
+		draw_polyline(star, ASTRE_RIM, 1.0)
+
+
+func _draw_mark() -> void:
+	if _marked_left <= 0.0:
+		return
+	var at := Vector2(0.0, -tile_size * (BAR_HEIGHT_ABOVE + 0.32))
+	var span := tile_size * 0.13
+	var bell := PackedVector2Array([at + Vector2(-span * 0.45, -span), at + Vector2(span * 0.45, -span),
+		at + Vector2(span * 0.7, span * 0.4), at + Vector2(span, span * 0.8),
+		at + Vector2(-span, span * 0.8), at + Vector2(-span * 0.7, span * 0.4)])
+	draw_colored_polygon(bell, MARK_BELL)
+	bell.append(bell[0])
+	draw_polyline(bell, MARK_RIM, 1.5)
+	draw_circle(at + Vector2(0.0, span), span * 0.25, MARK_RIM)
 
 
 ## Trois étoiles d'or tournent au-dessus de la barre de vie. Elles s'éteignent une à une

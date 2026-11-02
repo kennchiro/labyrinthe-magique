@@ -1,7 +1,7 @@
 class_name Bestiary
 extends RefCounted
 
-## Les douze créatures du jeu, et ce qui les distingue.
+## Les créatures du jeu, et ce qui les distingue.
 ##
 ## Aucune dépendance au moteur de scène : la simulation d'équilibrage compose
 ## les mêmes rosters que le jeu, avec les mêmes points de vie.
@@ -161,6 +161,59 @@ const SPECIES := {
 		"name": "Seigneur Démon", "toughness": 1.85, "swiftness": 0.94, "height": 62.0, "body": 58.0,
 		"stride": 2.8, "walk_fps": 5.0, "strike": 0.55, "repos": 0.55, "windup": 0.36,
 		"trait": "une lame à deux mains : longue à lever, on la voit venir",
+	},
+	# LES BOSS, UN PAR CHAPITRE (voir `BossCatalog`). Hors de `NEWCOMERS` : ils ne sortent
+	# jamais d'un repaire. Le corps fait 60 px, contre 38 pour le mage. Leur solidité et
+	# leur allure sont des points de départ, qu'aucune simulation n'a mesurés.
+	"boss_sylvain": {
+		"name": "Le Sylvain Ancien", "toughness": 8.00, "height": 81.6, "body": 68.0,
+		"walk_fps": 3.5, "strike": 0.75, "repos": 0.85, "windup": 0.50, "boss": true,
+		"no_portals": true, "trait": "un arbre qui marche : ses racines courent jusqu'au mage",
+	},
+	"boss_oiseau_tonnerre": {
+		"name": "L'Oiseau-Tonnerre", "toughness": 8.00, "height": 74.4, "body": 62.0,
+		"walk_fps": 6.0, "strike": 0.45, "repos": 0.55, "windup": 0.30, "boss": true,
+		"no_portals": true, "trait": "il s'élance par à-coups, la foudre tombe sur tout un couloir",
+	},
+	"boss_scorpion": {
+		"name": "Le Scorpion des Braises", "toughness": 7.70, "height": 69.6, "body": 58.0,
+		"walk_fps": 6.0, "strike": 0.45, "repos": 0.55, "windup": 0.30, "boss": true,
+		"no_portals": true, "trait": "trottine, s'enfouit et ressort sous un tourbillon",
+	},
+	"boss_behemoth": {
+		"name": "Le Béhémoth des Abysses", "toughness": 8.00, "height": 88.8, "body": 74.0,
+		"walk_fps": 3.5, "strike": 0.75, "repos": 0.85, "windup": 0.50, "boss": true,
+		"no_portals": true, "trait": "le plus gros : une vague déferle et repousse le mage",
+	},
+	"boss_araignee": {
+		"name": "La Reine de Cristal", "toughness": 7.40, "height": 72.0, "body": 60.0,
+		"walk_fps": 4.5, "strike": 0.60, "repos": 0.70, "windup": 0.40, "boss": true,
+		"no_portals": true, "trait": "reste à distance, des pointes de cristal sortent en étoile",
+	},
+	"boss_yeti": {
+		"name": "Le Roi Yéti", "toughness": 7.40, "height": 84.0, "body": 70.0,
+		"walk_fps": 4.5, "strike": 0.60, "repos": 0.70, "windup": 0.40, "boss": true,
+		"no_portals": true, "trait": "charge jusqu'au mur et y reste sonné, des blocs de glace tombent",
+	},
+	"boss_mere_ronce": {
+		"name": "La Mère-Ronce", "toughness": 7.40, "height": 76.8, "body": 64.0,
+		"walk_fps": 4.5, "strike": 0.60, "repos": 0.70, "windup": 0.40, "boss": true,
+		"no_portals": true, "trait": "la plus lente : un mur de ronces reste dans le couloir",
+	},
+	"boss_idole": {
+		"name": "L'Idole Éveillée", "toughness": 7.00, "height": 86.4, "body": 72.0,
+		"walk_fps": 3.5, "strike": 0.75, "repos": 0.85, "windup": 0.50, "boss": true,
+		"no_portals": true, "trait": "avance par à-coups raides, son onde part d'elle dans les quatre sens",
+	},
+	"boss_roi_dechu": {
+		"name": "Le Roi Déchu", "toughness": 6.70, "height": 72.0, "body": 60.0,
+		"walk_fps": 4.5, "strike": 0.60, "repos": 0.70, "windup": 0.40, "boss": true,
+		"no_portals": true, "trait": "disparaît et revient, le vide s'ouvre trois fois sous le mage",
+	},
+	"boss_chimere": {
+		"name": "La Chimère d'Or", "toughness": 6.40, "height": 79.2, "body": 66.0,
+		"walk_fps": 6.0, "strike": 0.45, "repos": 0.55, "windup": 0.30, "boss": true,
+		"no_portals": true, "trait": "charge, alterne les lames et l'étoile, plus vite une fois blessée",
 	},
 }
 

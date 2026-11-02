@@ -227,7 +227,7 @@ func set_gems(missing: Array[Color], total: int) -> void:
 	queue_redraw()
 
 
-func set_counters(portals: int, _unlocked_skills: int = 0) -> void:
+func set_counters(portals: int) -> void:
 	counter_label.text = str(portals)
 	queue_redraw()
 

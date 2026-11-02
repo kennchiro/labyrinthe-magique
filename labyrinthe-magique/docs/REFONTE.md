@@ -2302,6 +2302,17 @@ nombre.
   donnait 100 % de victoires sans une seule mort. Le troisième palier (300 PV)
   attend un type d'ennemi « puissant » qui n'existe pas encore.
 
+## 2026-11-01 — l'explosion du Feu, en quatre temps
+
+Inspirée du découpage d'une explosion animée à la main (pack de Duc Vu, regardé comme
+référence, ni acheté ni copié) : un éclair fin, un gonflement en lobes, des trous sombres
+qui les creusent, des filets qui s'effilent (`fire_burst.gdshader`). Elle ne s'estompe
+jamais : elle se réduit, en gardant ses aplats.
+
+⚠️ C'est le TEMPS et la silhouette en lobes qui font l'explosion, pas le bruit. Celui-ci
+ne sert qu'à tordre les lobes, à très basse fréquence.
+À appliquer aux autres mages une fois le Feu validé sur téléphone.
+
 ## 2026-10-31 — les sorts sont peints au shader, un dessin par sort
 
 Les huit mages passent au shader (`PaintedFx`, `MagicOrb.PAINTED`,
@@ -3279,3 +3290,122 @@ Deux points non évidents :
 Couvert par `test_combat._test_rune_drain` : 3 s sur la rune doivent coûter
 ~30 PV et ~180 réarmements d'englu, et la sortie doit tout couper net.
 
+
+## 2026-11-01 — la glace et le geyser de l'Eau, la foudre, et des bruits spécialisés
+
+Un seul bruit (`fire_noise.png`) nourrissait tous les shaders. `tools/build_noise.py`
+génère maintenant `thunder_noise.png` et `ice_noise.png`, chacun avec un canal par usage.
+Essai guidé par la base « Textures for VFX » de Simon Schreibt, comparé effet par effet
+(`tools/preview_thunder.gd`, `tools/preview_water.gd`).
+
+⚠️ **Un bruit dédié n'aide que si le shader le lit autrement, et pas partout.** Foudre :
+gain net sur le nuage (vraies veines), léger sur le flash ; aucun sur l'étoile ; PIRE sur
+le dard, trop petit pour porter des cassures fines. Ces deux derniers gardent l'ancien
+bruit (`PaintedFx.NOISES`). Tester chaque effet avant d'étendre.
+
+**Le Cercle glacé est enfin de la glace** (`water_ice.gdshader`, style `glace_peinte`) :
+il était peint en mare calme alors qu'il se décrit comme une flaque gelée. Le gel part du
+centre, et les plaques cèdent une à une à la fin de la zone. Les plaques sont précalculées
+dans la texture : un Voronoï par pixel sur six cases, dix secondes durant, coûterait
+davantage qu'une lecture.
+⚠️ Le banc de comparaison ne juge pas la taille : à l'échelle du jeu, la première version
+éblouissait et masquait les haies. Translucide, plaques deux fois plus petites.
+
+**Le Geyser ne brûle plus** (`water_geyser.gdshader`) : un cœur blanc au milieu du jet est
+la structure d'une flamme. Corps bleu strié de filets, parasol d'écume, gouttes, flaque.
+⚠️ Il retombe d'un bloc : vidée par le bas, la colonne laissait sa couronne flotter comme
+une méduse, ce que seule une capture en jeu a montré.
+
+**La Vague, l'impact et la pluie, le Courant et le Bouclier, repris dans la foulée.**
+- la Vague : son dos gardait un quart d'opacité au bout du quad et traînait un bord droit. Il
+  s'effiloche maintenant en langues, en trois aplats, avec une écume nette ;
+- ⚠️ son écume partait du seul milieu de la crête et s'empilait en une tache blanche. Seul
+  le vrai nœud l'a montré : le banc ne dessine pas les particules ;
+- l'impact et la pluie : huit gouttes inégales en cloche, une couronne, des ondes en ellipses
+  cassées. Onze ronds réguliers se lisaient comme un cadran ;
+- le Courant : trois bras inégaux qui se referment sur un puits sombre, plus un logo ;
+- le Bouclier : surface qui respire lentement, reflets en croissant sur le bord, centre clair
+  pour laisser voir le mage trente secondes durant.
+Le Jet ne bouge pas : trop petit, même leçon que le dard.
+
+⚠️ **Le Geyser coûte plus cher qu'avant** : mesuré sur M1, 90 colonnes à l'échelle du jeu,
+1,6 ms par image pour l'ancien et 3,9 ms pour le nouveau, après avoir réduit le calcul de ses
+gouttes à un sinus chacune. Le jeu n'en affiche que neuf à la fois, moins d'une seconde. Le
+Mac ne dit rien du téléphone : à mesurer sur iPhone.
+
+## 2026-11-01 — le Mage de la Foudre : Jugement, Champ, Orage, arcs et éclats
+
+La Foudre mélangeait deux palettes : du jaune additif pour ses zones et ses éclats, du blanc
+cerné de bleu pour ses shaders. L'additif brûlait sur l'herbe et la neige et effaçait ses
+propres traits. **Tout est maintenant composé normalement : cœur blanc, cerne bleu.**
+
+- `thunder_crest` : le Jugement au moment où il part. La foudre tombe du ciel sur le mage, le
+  sol noircit et se fend, les ondes s'en vont. C'était deux zigzags dans un cercle ;
+- `thunder_cloud` : ⚠️ une silhouette de lobes et non du bruit seuillé, qui faisait une tache
+  d'encre. Le haut éclairé vient de la même masse décalée vers le bas : un reflet par lobe
+  faisait une grappe de raisin ;
+- `thunder_storm` (nouveau) : le nuage de l'Orage, clair et tournant, distinct du Jugement
+  (un dessin par sort). Il remplace les ronds de `StormCloud`. ⚠️ `HEIGHT` monte à 2,05 : à
+  1,5, le quad peint cachait la tête du mage ;
+- `field.gdshader` : veines par saccades et arc brisé sur le bord. ⚠️ `ZoneEffect._draw` ne
+  doit rien tracer pour le champ, ses anneaux jaunes revenaient par-dessus le shader ;
+- `LightningArc` : milieu brisé sur trois passes, deux fourches, un changement de tracé à
+  mi-vie. Il sert à la Chaîne, à l'Orage, au Jugement, à l'attaque et à la fuite ;
+- `ImpactEffect` : la Foudre a ses éclats brisés (`Shape.ARC`). Ses ronds jaunes recouvraient
+  le mage et sa cible. L'Air garde `SPARK`.
+
+Le dard et l'étoile ne bougent pas. L'onde de choc de l'ultime (`shockwave`), commune aux
+autres mages, n'est pas retouchée et voile encore un peu l'écran.
+
+⚠️ **Le nouveau nuage coûte plus cher** : mesuré sur M1, 90 nuages à l'échelle du jeu, 1,55 ms
+par image pour l'ancien et 3,75 ms pour le nouveau. Le Jugement en pose douze sur la carte, 15 s
+durant, mais seuls ceux à l'écran comptent. À mesurer sur iPhone, avec les geysers de l'Eau.
+
+## 2026-11-01 — le Suprême : une matière par canal, et un premier pack extérieur
+
+`elements.gdshaderinc` nourrit tous ses sorts, d'où le gain pour un seul fichier. La terre
+(une pâte brune) et l'air (des pétales de métal) lisent maintenant `supreme_noise.png` ; le feu
+et l'eau gardent leur dessin, le canal R étant l'ancien bruit agrandi.
+
+Les deux sources viennent du pack « 700+ Noise Textures » de Screaming Brain Studios, CC0
+(`assets/raw/noise/`, exclu de l'export, voir `LICENCE.txt`) : `voronoi_12` pour les plaques
+de la terre, `streak_4` pour les filets de l'air. Seules ces deux-là entrent dans le dépôt.
+⚠️ Les repères de ces shaders sont petits (souvent polaires) : à l'échelle de l'ancien bruit, les
+plaques étaient si grandes que la terre restait lisse. Il a fallu quadrupler la fréquence.
+`tools/preview_supreme.gd` montre chaque matière sur sol sombre et clair.
+
+## 2026-11-01 — le Cercle d'invocation prend du volume
+
+Idées reprises, sans ses images, du pack « Arcane Magic Circles » de DucVu Fx, vu dans la base
+« Textures for VFX » : des pleins plutôt que des traits fins, une colonne de lumière. Le pack
+n'est pas acheté, et le cercle reste tracé au compas, sans bruit, comme le veut ce mage.
+
+`arcane_circle.gdshader` : anneau à pleins et déliés, couronne de marques, triangles aux traits
+effilés, trois lames au cœur, disque sombre et cerne pour tenir sur les sols clairs.
+`arcane_pillar.gdshader` : la colonne jaillit à l'ouverture et n'est plus qu'un voile après 1,3 s,
+car elle passe devant les couloirs. ⚠️ Son pied descend sous le centre du cercle et suit une
+ellipse : coupée droit au centre du quad, elle faisait un rectangle gris.
+
+## 2026-11-01 — les serviteurs de l'Invocateur
+
+- **Gargouille et dragon** : la case d'une bête au sol est symétrique autour des pieds. Le
+  souffle de la gargouille sortait de sa case et son aile s'imprimait sur la pose voisine.
+  L'aile du dragon était coupée à plat par sa rangée (marge `DRAGON_ROW_MARGIN`).
+- **Marcheurs** (`_walk_summon`) : ils vont au centre de la case choisie avant d'en choisir
+  une autre. Ils coupaient le coin des haies (116 pas hors axe dans `test_combat`, zéro
+  maintenant). Vaut aussi pour les ombres de la Faille. Passe rapide d'équilibrage verte.
+- **Diablotin** : le chevalier du premier sort cède la place à un vrai diablotin
+  (`docs/prompts/sorts/diablotin.md`), découpé par `build_invocateur.py` : 8 pas et 8 coups
+  par direction, case 204 x 148. ⚠️ Les deux planches ne dessinent pas tout à fait la même
+  bête : cornes rayées et oreilles plus petites sur l'attaque.
+
+## 2026-11-01 — l'impact et la fuite de l'Invocateur
+
+- **Deux dessins** : l'impact et le Pas du néant partageaient `arcane_sigil`. La fuite a
+  maintenant `arcane_void_step` (un trou noir au sol, cinq bras, des éclats aspirés), et
+  `test_animation` refuse qu'une fuite reprenne le dessin d'un autre effet.
+- **Le sceau** (`arcane_sigil`) : frappé trop grand, écrasé à sa taille, puis il fond en trois
+  éclats. Sans fondu : c'est le trait qui s'amincit. L'éclat tracé ne s'y ajoute plus, ses
+  pointes blanches en brouillaient le triangle.
+- **La traînée** : braises de 0,14 case pour ce mage (`WarpTrail.setup`). À 0,62, entassées sur
+  une case, elles faisaient une tache blanche sur son visage. Les autres mages la gardent.

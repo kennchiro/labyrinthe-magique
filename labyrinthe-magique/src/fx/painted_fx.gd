@@ -9,11 +9,24 @@ extends RefCounted
 ## nœuds, qui en ont besoin pour exister, mais `cover` les rend invisibles.
 
 const NOISE := preload("res://assets/shaders/fire_noise.png")
+## Un éclair lit des tracés et des veines, pas un bruit lissé (`tools/build_noise.py`).
+const THUNDER_NOISE := preload("res://assets/shaders/thunder_noise.png")
+## ⚠️ Essayé puis rendu au bruit commun : le dard, trop petit pour porter une fourche,
+## et l'étoile, qui n'y gagnait rien. Seuls ces deux-là y trouvent un meilleur dessin.
+## Le Suprême : chaque matière lit son canal (`shaders/elements.gdshaderinc`).
+const SUPREME_NOISE := preload("res://assets/shaders/supreme_noise.png")
+const NOISES := {
+	"prism_star": SUPREME_NOISE, "prism_shift": SUPREME_NOISE, "rebirth_aura": SUPREME_NOISE,
+	"convergence_burst": SUPREME_NOISE, "judgement_burst": SUPREME_NOISE,
+	"thunder_strike": THUNDER_NOISE, "thunder_cloud": THUNDER_NOISE,
+	"thunder_storm": THUNDER_NOISE, "thunder_crest": THUNDER_NOISE,
+}
 
 const SHADERS := {
 	"fire_burst": preload("res://assets/shaders/fire_burst.gdshader"),
 	"shadow_collapse": preload("res://assets/shaders/shadow_collapse.gdshader"),
 	"arcane_sigil": preload("res://assets/shaders/arcane_sigil.gdshader"),
+	"arcane_void_step": preload("res://assets/shaders/arcane_void_step.gdshader"),
 	"water_splash": preload("res://assets/shaders/water_splash.gdshader"),
 	"water_swirl": preload("res://assets/shaders/water_swirl.gdshader"),
 	"water_geyser": preload("res://assets/shaders/water_geyser.gdshader"),
@@ -21,6 +34,7 @@ const SHADERS := {
 	"thunder_star": preload("res://assets/shaders/thunder_star.gdshader"),
 	"thunder_strike": preload("res://assets/shaders/thunder_strike.gdshader"),
 	"thunder_cloud": preload("res://assets/shaders/thunder_cloud.gdshader"),
+	"thunder_storm": preload("res://assets/shaders/thunder_storm.gdshader"),
 	"thunder_crest": preload("res://assets/shaders/thunder_crest.gdshader"),
 	"air_slash": preload("res://assets/shaders/air_slash.gdshader"),
 	"air_streaks": preload("res://assets/shaders/air_streaks.gdshader"),
@@ -51,6 +65,16 @@ const SHADERS := {
 	"lumiere_ring": preload("res://assets/shaders/lumiere_ring.gdshader"),
 	"lumiere_dawn": preload("res://assets/shaders/lumiere_dawn.gdshader"),
 	"lumiere_column": preload("res://assets/shaders/lumiere_column.gdshader"),
+	"etoiles_impact": preload("res://assets/shaders/etoiles_impact.gdshader"),
+	"etoiles_dash": preload("res://assets/shaders/etoiles_dash.gdshader"),
+	"etoiles_ring": preload("res://assets/shaders/etoiles_ring.gdshader"),
+	"etoiles_veil": preload("res://assets/shaders/etoiles_veil.gdshader"),
+	"etoiles_comet": preload("res://assets/shaders/etoiles_comet.gdshader"),
+	"etoiles_night": preload("res://assets/shaders/etoiles_night.gdshader"),
+	"mort_cut": preload("res://assets/shaders/mort_cut.gdshader"),
+	"mort_feathers": preload("res://assets/shaders/mort_feathers.gdshader"),
+	"mort_sweep": preload("res://assets/shaders/mort_sweep.gdshader"),
+	"mort_hour": preload("res://assets/shaders/mort_hour.gdshader"),
 }
 
 ## L'éclat au toucher, et la fuite, de chaque mage.
@@ -58,12 +82,12 @@ const IMPACT := {
 	"fire": "fire_burst", "shadow": "shadow_collapse", "invocateur": "arcane_sigil",
 	"water": "water_splash", "thunder": "thunder_star", "air": "air_slash",
 	"earth": "earth_crack", "supreme": "prism_star", "chrono": "chrono_tick",
-	"peste": "peste_splash", "lumiere": "lumiere_star",
+	"peste": "peste_splash", "lumiere": "lumiere_star", "mort": "mort_cut", "etoiles": "etoiles_impact",
 }
 const ESCAPE := {
-	"invocateur": "arcane_sigil", "water": "water_swirl", "thunder": "thunder_strike",
+	"invocateur": "arcane_void_step", "water": "water_swirl", "thunder": "thunder_strike",
 	"air": "air_streaks", "earth": "earth_fissure", "supreme": "prism_shift",
-	"chrono": "chrono_rewind", "peste": "peste_mist", "lumiere": "lumiere_feathers",
+	"chrono": "chrono_rewind", "peste": "peste_mist", "lumiere": "lumiere_feathers", "mort": "mort_feathers", "etoiles": "etoiles_dash",
 }
 ## La couleur de la flamme de chaque sceau du Suprême. Tout autre élément prend l'air.
 const SEAL_KINDS := {
@@ -72,20 +96,22 @@ const SEAL_KINDS := {
 ## Les autres effets de chaque mage, à compiler avec le niveau.
 const EXTRAS := {
 	"water": ["water_geyser", "water_bubble"],
-	"thunder": ["thunder_cloud", "thunder_crest"],
+	"thunder": ["thunder_cloud", "thunder_storm", "thunder_crest"],
 	"air": ["air_gust", "air_veil"],
 	"earth": ["earth_quake"],
 	"supreme": ["rebirth_aura", "seal_flame", "convergence_burst", "judgement_burst"],
 	"chrono": ["chrono_sand", "chrono_stop"],
 	"peste": ["peste_puddle", "peste_heal", "peste_wave", "peste_dissolve"],
 	"lumiere": ["lumiere_wings", "lumiere_ring", "lumiere_dawn", "lumiere_column"],
+	"mort": ["mort_sweep", "mort_hour"],
+	"etoiles": ["etoiles_ring", "etoiles_veil", "etoiles_comet", "etoiles_night"],
 }
 
 
 static func make_material(key: String, seed_value: float = 0.0) -> ShaderMaterial:
 	var shaded := ShaderMaterial.new()
 	shaded.shader = SHADERS[key]
-	shaded.set_shader_parameter("noise", NOISE)
+	shaded.set_shader_parameter("noise", NOISES.get(key, NOISE))
 	shaded.set_shader_parameter("seed", seed_value)
 	return shaded
 

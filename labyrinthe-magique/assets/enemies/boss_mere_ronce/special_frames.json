@@ -1,0 +1,23 @@
+{
+  "cell": [
+    256,
+    256
+  ],
+  "columns": 8,
+  "scene_body": 247.0,
+  "scene_feet_y": 256.0,
+  "scene": [
+    "arrival",
+    "ranged_attack",
+    "death"
+  ],
+  "portee": [
+    "warning",
+    "impact",
+    "fade"
+  ],
+  "source": {
+    "scene": "boss_mere_ronce_scene.png",
+    "portee": "boss_mere_ronce_portee.png"
+  }
+}

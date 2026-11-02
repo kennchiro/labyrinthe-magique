@@ -9,6 +9,7 @@ extends Node2D
 
 const MAX_RADIUS_TILES := 3.2
 const MIN_RADIUS_TILES := 0.9
+const FIRE_SPAN := 0.7
 ## L'explosion de chaque sort de feu vient de son rayon : le trait n'a qu'une gerbe, et
 ## seul l'ultime a des rayons. Sous ce seuil le coup est ordinaire, au-dessus c'est lui.
 const SMALL_HIT_RADIUS := 1.0
@@ -39,6 +40,10 @@ func setup(tile_size: int, radius_tiles: float, duration: float, seed_value: flo
 	# Le front s'arrête aux quatre cinquièmes du quad, et le rayon doit y tomber.
 	var span := clampf(radius_tiles, MIN_RADIUS_TILES, MAX_RADIUS_TILES) * 2.0 \
 		* float(tile_size) / 0.8
+	# Le Feu finit en fumée sombre : au rayon entier du sort, elle couvrait la carte
+	# une seconde durant. L'onde de choc dit déjà jusqu'où le sort porte.
+	if key == "fire_burst":
+		span *= FIRE_SPAN
 	sprite.scale = Vector2(span, span)
 	add_child(sprite)
 

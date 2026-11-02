@@ -31,6 +31,10 @@ enum Kind {
 	PANDEMIC,     ## toute la carte tombe malade
 	BEAM,         ## un rayon qui suit les couloirs vers ses proies et touche tout ce qu'il traverse
 	DAWN,         ## une colonne de lumière sur chaque ennemi de la carte
+	SOULS,        ## lâche les âmes récoltées, qui chassent par les couloirs
+	CONSTELLATION, ## pose une étoile ; des rayons les relient et brûlent ce qui passe
+	STARFALL,     ## des étoiles tombent une à une autour du lanceur
+	LAST_HOUR,    ## une faux traverse l'écran : chaque ennemi perd une part de ses PV
 }
 
 @export var id: String = ""
@@ -491,6 +495,22 @@ enum Kind {
 @export var blind_radius: int = 0
 
 
+## --- L'Ange de la Mort : ce qu'il a blessé, il vient le prendre ------------------------
+
+## Part des PV sous laquelle ce sort achève sa cible. 0 = le seuil du trait.
+@export var execute_below: float = 0.0
+## Secondes de la marque que pose la zone : le marqué prend plus de dégâts.
+@export var mark_seconds: float = 0.0
+
+
+## --- L'Ange des Étoiles : elle dessine ses pièges dans le labyrinthe -------------------
+
+## Nombre d'étoiles que lâche une Pluie.
+@export var star_falls: int = 0
+## Dégâts de la traînée d'une fuite, sur ce qui se tient sur son trajet. 0 = pas de traînée.
+@export var trail_damage: int = 0
+
+
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
 ## Un _init à douze paramètres positionnels serait illisible au point d'être
 ## dangereux — une valeur décalée d'un cran passerait inaperçue.
@@ -612,7 +632,18 @@ func _base_summary() -> String:
 			return "toute la carte empoisonnée %s s · ils éclatent" % _number(duration)
 		Kind.BEAM:
 			return "%d dégâts · rayon de %d cases dans les couloirs" % [damage, range]
+		Kind.SOULS:
+			return "%d dégâts par âme · portée %d" % [damage, range]
+		Kind.LAST_HOUR:
+			return "la moitié des PV de chaque ennemi · achève sous %d %%" \
+				% int(CombatSystem.SENTENCE_BELOW * 100.0)
+		Kind.CONSTELLATION:
+			return "%d dégâts/s · %d étoiles · %s s" % [damage, CombatSystem.STAR_MAX, _number(duration)]
+		Kind.STARFALL:
+			return "%d étoiles de %d dégâts · rayon %s" % [star_falls, damage, _number(radius)]
 		Kind.DAWN:
+			if blind_seconds <= 0.0:
+				return "%d dégâts sur toute la carte" % damage
 			return "%d dégâts sur toute la carte · aveugle %s s" % [damage, _number(blind_seconds)]
 		Kind.WAVE:
 			return "%d dégâts · déferle sur %d cases" % [damage, range]

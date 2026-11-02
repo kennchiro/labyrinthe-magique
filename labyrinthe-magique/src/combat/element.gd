@@ -7,7 +7,7 @@ extends RefCounted
 ## effets et les projectiles la lisent ici. Sans ça, le rouge du Mage de Feu finit
 ## par exister en cinq nuances différentes dans cinq fichiers.
 
-enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT }
+enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS }
 
 const COLORS := {
 	Kind.FIRE: Color("#ff6a2a"),
@@ -20,6 +20,8 @@ const COLORS := {
 	Kind.TIME: Color("#2fd6b8"),
 	Kind.POISON: Color("#b4f02a"),
 	Kind.LIGHT: Color("#fff1b8"),
+	Kind.DEATH: Color("#e2382a"),
+	Kind.STARS: Color("#9db8ff"),
 }
 const NAMES := {
 	Kind.FIRE: "Feu",
@@ -32,6 +34,8 @@ const NAMES := {
 	Kind.TIME: "Temps",
 	Kind.POISON: "Poison",
 	Kind.LIGHT: "Lumière",
+	Kind.DEATH: "Mort",
+	Kind.STARS: "Étoiles",
 }
 
 
@@ -55,6 +59,8 @@ static func trait_name(kind: Kind) -> String:
 		Kind.TIME: return "Retard"
 		Kind.POISON: return "Venin"
 		Kind.LIGHT: return "Éblouissement"
+		Kind.DEATH: return "Sentence"
+		Kind.STARS: return "Astre"
 	return ""
 
 
@@ -70,6 +76,8 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.TIME: return "la cible ralentit un court instant"
 		Kind.POISON: return "chaque coup ajoute une dose de poison, jusqu'à 3"
 		Kind.LIGHT: return "de temps en temps, la cible aveuglée perd sa trace"
+		Kind.DEATH: return "un ennemi presque mort est achevé d'un coup"
+		Kind.STARS: return "chaque coup pose une étoile sur la cible ; à la troisième, elles explosent"
 	return ""
 
 

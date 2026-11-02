@@ -177,6 +177,52 @@ MAGES = [
         "aura": "or pâle au centre et bleu nuit profond",
         "phrase": "Sa lumière aveugle : ils perdent sa trace.",
     },
+    {
+        "id": "mort", "nom": "Ange de la Mort", "element": "Mort",
+        "couleur": "#e2382a",
+        "corps": "un ANGE DÉCHU à l'allure un peu démoniaque, aux deux GRANDES AILES de plumes "
+                 "noires déchirées, largement ouvertes derrière lui. Deux PETITES CORNES noires "
+                 "courbes sortent de son front, et une AURÉOLE BRISÉE rouge braise, ouverte comme "
+                 "un anneau fendu, flotte au-dessus de sa tête. Visage pâle couleur d'os bien "
+                 "VISIBLE, grave et calme, aux yeux rouge braise, cheveux noirs mi-longs, armure "
+                 "gris anthracite à liserés couleur d'os sur une longue robe noire déchirée, "
+                 "bottes griffues. Il tient de la main droite une grande FAUX au manche d'os, dont "
+                 "la lame noire est bordée de rouge braise, et quelques plumes noires et braises "
+                 "flottent autour de lui. Ses formes noires sont cernées d'un fin liseré clair "
+                 "couleur d'os, qui les détache du fond",
+        "aura": "rouge braise au centre et noir bleuté profond",
+        "phrase": "Ce qu'il a blessé, il vient le prendre.",
+    },
+    {
+        "id": "etoiles", "nom": "Ange des Étoiles", "element": "Étoiles",
+        "couleur": "#9db8ff",
+        "corps": "un ANGE, une FEMME ADULTE au visage calme et bien VISIBLE, aux deux GRANDES "
+                 "AILES de plumes bleu nuit, semées de petits points blancs comme un ciel étoilé, "
+                 "largement ouvertes derrière elle. Une COURONNE EN CROISSANT DE LUNE argentée "
+                 "flotte au-dessus de sa tête. Longs cheveux argentés attachés en une tresse, longue "
+                 "robe bleu nuit à manches longues, sobre et couvrante, à liserés d'argent, bottines "
+                 "argentées. Elle tient de la main droite un fin SCEPTRE d'argent surmonté d'une "
+                 "étoile blanche à quatre branches, et trois petites étoiles reliées par de fins "
+                 "traits de lumière flottent près d'elle. Ses formes sombres sont cernées d'un fin "
+                 "liseré argenté, qui les détache du fond",
+        "aura": "bleu pâle au centre et bleu nuit profond",
+        "phrase": "Elle trace dans le labyrinthe les pièges de son ciel.",
+    },
+    {
+        "id": "acier", "nom": "Archange d'Acier", "element": "Acier",
+        "couleur": "#a9b6c6",
+        "corps": "un ANGE GUERRIER MASSIF et COSTAUD, très large d'épaules, en ARMURE DE PLATES "
+                 "INTÉGRALE gris-bleu, faite de grandes plaques épaisses : énormes épaulières, "
+                 "plastron bombé, gantelets et grosses bottes de métal. HEAUME FERMÉ, sans aucun "
+                 "visage, dont la fente horizontale laisse sortir une lueur orange, et de fines "
+                 "fentes orange de métal chauffé courent entre les plaques. Ses deux GRANDES AILES "
+                 "sont faites entièrement de LAMES D'ACIER superposées, sans aucune plume, largement "
+                 "ouvertes derrière lui. Il tient à deux mains un grand MARTEAU DE GUERRE à la tête "
+                 "d'acier massive, posée au sol devant lui. Le métal reste gris-bleu, sans reflet "
+                 "rose ni violet",
+        "aura": "orange de métal chauffé au centre et gris acier sombre",
+        "phrase": "Il va droit au combat, et c'est le combat qui recule.",
+    },
 ]
 
 ENTETE = """> ⚠️ **Fichier GÉNÉRÉ** par `tools/build_prompts_menu.py`. Ne pas l'éditer à

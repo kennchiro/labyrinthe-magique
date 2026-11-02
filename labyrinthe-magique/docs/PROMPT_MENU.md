@@ -31,6 +31,9 @@ et c'est elle qu'on rejoue.
 | Chronomancien | Temps | `#2fd6b8` | [portrait_chrono](prompts/menu/portrait_chrono.md) |
 | Mage de la Peste | Poison | `#b4f02a` | [portrait_peste](prompts/menu/portrait_peste.md) |
 | Porte-Lumière | Lumière | `#fff1b8` | [portrait_lumiere](prompts/menu/portrait_lumiere.md) |
+| Ange de la Mort | Mort | `#e2382a` | [portrait_mort](prompts/menu/portrait_mort.md) |
+| Ange des Étoiles | Étoiles | `#9db8ff` | [portrait_etoiles](prompts/menu/portrait_etoiles.md) |
+| Archange d'Acier | Acier | `#a9b6c6` | [portrait_acier](prompts/menu/portrait_acier.md) |
 
 Plus deux prompts communs :
 

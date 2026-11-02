@@ -151,6 +151,11 @@ func _test_painted_fire() -> void:
 		if seen.has(shown):
 			_fail("%s et %s partagent leur éclat" % [seen[shown], mage.id])
 		seen[shown] = mage.id
+		var fled: String = PaintedFx.ESCAPE.get(mage.id, "")
+		if fled != "":
+			if seen.has(fled):
+				_fail("%s et %s partagent leur fuite" % [seen[fled], mage.id])
+			seen[fled] = mage.id
 		for ability: Ability in [mage.attack] + mage.abilities:
 			for look: String in [ability.projectile_visual, ability.zone_style]:
 				if not (MagicOrb.PAINTED.has(look) or ZoneEffect.PAINTED_STYLES.has(look)):

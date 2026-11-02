@@ -1,0 +1,23 @@
+{
+  "cell": [
+    256,
+    256
+  ],
+  "columns": 8,
+  "scene_body": 237.0,
+  "scene_feet_y": 251.0,
+  "scene": [
+    "arrival",
+    "ranged_attack",
+    "death"
+  ],
+  "portee": [
+    "warning",
+    "impact",
+    "fade"
+  ],
+  "source": {
+    "scene": "boss_idole_scene.png",
+    "portee": "boss_idole_portee.png"
+  }
+}

@@ -141,6 +141,18 @@ signal pandemic_cast(cell: Vector2i)
 signal venom_killed(cell: Vector2i)
 signal enemy_blinded(index: int, duration: float)
 signal beam_fired(from: Vector2i, cells: Array)
+signal enemy_star_marks(index: int, count: int)
+signal astre_burst(cell: Vector2i)
+signal stars_changed(cells: Array)
+signal star_falling(cell: Vector2i, lead: float)
+signal star_trail(from: Vector2i, to: Vector2i)
+signal enemy_sentenced(index: int)
+signal enemy_marked(index: int, duration: float)
+signal souls_changed(count: int)
+signal soul_sent(path: Array, duration: float)
+signal soul_struck(cell: Vector2i)
+signal last_hour_cast(cell: Vector2i)
+signal last_hour_struck(cell: Vector2i)
 signal wings_burst(cell: Vector2i)
 signal dawn_cast(cell: Vector2i)
 signal dawn_struck(cell: Vector2i)
@@ -267,6 +279,30 @@ const VENOM_MAX := 3
 const VENOM_DAMAGE := 7
 const VENOM_DURATION := 5.0
 const VENOM_TICK := 1.0
+## Au troisième coup, les étoiles de la cible explosent pour ces dégâts.
+const ASTRE_MARKS := 3
+const ASTRE_DAMAGE := 26
+## Une quatrième étoile remplace la plus ancienne. Un rayon touche à cette distance, en cases.
+const STAR_MAX := 3
+const STAR_REACH := 0.75
+const STAR_TICK := 0.25
+## L'écart entre deux étoiles qui tombent, et l'avance que prend leur dessin sur leur impact.
+const STAR_FALL_GAP := 0.22
+const STAR_FALL_LEAD := 0.34
+
+## Sous cette part de ses PV, un ennemi touché par l'Ange de la Mort est achevé.
+const SENTENCE_BELOW := 0.15
+## Ce que le marqué du Glas prend de dégâts en plus.
+const MARK_BONUS := 0.4
+const SOUL_MAX := 3
+## Cases parcourues par seconde, et l'écart entre deux âmes lâchées.
+const SOUL_SPEED := 13.0
+const SOUL_GAP := 0.08
+## L'Heure dernière : l'attente avant la faux, sa traversée, et la part de PV qu'elle prend.
+const HOUR_DELAY := 0.95
+const HOUR_SWEEP := 0.7
+const HOUR_SHARE := 0.5
+
 ## L'éblouissement du trait : court, et jamais deux fois de suite sur la même créature.
 ## Le verrou empêche qu'un ennemi reste aveuglé en permanence : il doit pouvoir revenir.
 const GLARE_SECONDS := 1.2
@@ -343,6 +379,14 @@ var _seep_life := 0.0
 var _puddles := {}                     # case -> secondes restantes
 var _blind_locks := {}                 # index -> secondes avant le prochain aveuglement
 var _dawn: Array[Dictionary] = []      # {index, time_left, ability}
+var _star_marks := {}                  # index -> étoiles posées par le trait
+var _stars: Array[Dictionary] = []     # {cell, time_left, ability}
+var _star_tick := 0.0
+var _falling: Array[Dictionary] = []   # {cell, time_left, warned, ability}
+var _souls := 0                        # âmes récoltées par l'Ange de la Mort
+var _marked := {}                      # index -> secondes de marque du Glas
+var _flying: Array[Dictionary] = []    # {index, time_left, ability}
+var _hour: Array[Dictionary] = []      # {index, time_left, ability}
 var _wings: Ability = null             # la coque en place, quand elle aveugle en cédant
 var _wings_cell := Vector2i.ZERO
 
@@ -409,6 +453,8 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_venom(delta, context)
 	_update_puddles(delta, context)
 	_update_light(delta, context)
+	_update_death(delta, context)
+	_update_stars(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -540,6 +586,8 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 				_apply_zone_venom(ability, zone["cell"], context)
 			if ability.blind_seconds > 0.0:
 				_apply_zone_blind(ability, zone["cell"], context)
+			if ability.mark_seconds > 0.0:
+				_apply_zone_mark(ability, zone["cell"], context)
 			if ability.snare > 0.0:
 				_apply_snare(ability, zone["cell"], context)
 			if ability.slow_duration > 0.0 and not ability.slow_sustained:
@@ -744,6 +792,15 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_transfusion(ability, context)
 		Ability.Kind.PANDEMIC:
 			_cast_pandemic(ability, context)
+			fired = true
+		Ability.Kind.CONSTELLATION:
+			fired = _cast_constellation(ability, context)
+		Ability.Kind.STARFALL:
+			fired = _cast_starfall(ability, context)
+		Ability.Kind.SOULS:
+			fired = _cast_souls(ability, context)
+		Ability.Kind.LAST_HOUR:
+			_cast_last_hour(ability, context)
 			fired = true
 		Ability.Kind.BEAM:
 			fired = _cast_beam(ability, context)
@@ -1851,6 +1908,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	blink_performed.emit(context.player_cell, destination)
 	if ability.blind_radius > 0:
 		_blind_around(destination, ability, context)
+	if ability.trail_damage > 0:
+		_burn_trail(context.player_cell, destination, ability, context)
 	return true
 
 
@@ -2139,7 +2198,8 @@ func _update_light(delta: float, context: CombatContext) -> void:
 			continue
 		dawn_struck.emit(context.enemy_cells[index])
 		_apply_damage(index, ability, context, false)
-		_blind(index, ability.blind_seconds, context, true)
+		if ability.blind_seconds > 0.0:
+			_blind(index, ability.blind_seconds, context, true)
 
 
 func _blind_around(cell: Vector2i, ability: Ability, context: CombatContext) -> void:
@@ -2164,7 +2224,6 @@ func _burst_wings(context: CombatContext) -> void:
 	_blind_around(context.player_cell, _wings, context)
 
 
-## TOUT DROIT, et jusqu'au mur : c'est le placement dans le couloir qui fait le sort.
 func _cast_beam(ability: Ability, context: CombatContext) -> bool:
 	var cells := _beam_path(ability.range, context)
 	if cells.is_empty():
@@ -2248,6 +2307,241 @@ func _cast_dawn(ability: Ability, context: CombatContext) -> void:
 		if context.enemy_alive(i) and not context.is_structure(i):
 			_dawn.append({"index": i, "time_left": wait, "ability": ability})
 			wait += DAWN_GAP
+
+
+# --- Les étoiles -------------------------------------------------------------------
+
+func _add_star_mark(index: int, ability: Ability, context: CombatContext) -> void:
+	if not context.enemy_alive(index):
+		return
+	var count := int(_star_marks.get(index, 0)) + 1
+	if count < ASTRE_MARKS:
+		_star_marks[index] = count
+		enemy_star_marks.emit(index, count)
+		return
+	_star_marks.erase(index)
+	enemy_star_marks.emit(index, 0)
+	astre_burst.emit(context.enemy_cells[index])
+	var burst := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+		"damage": ASTRE_DAMAGE})
+	# Sans trait : l'explosion ne doit pas reposer une étoile sur la cible qu'elle vient de vider.
+	_apply_damage(index, burst, context, false, false)
+
+
+func _cast_constellation(ability: Ability, context: CombatContext) -> bool:
+	for star in _stars:
+		if star["cell"] == context.player_cell:
+			use_refused.emit("occupé")
+			return false
+	if _stars.size() >= STAR_MAX:
+		_stars.pop_front()
+	_stars.append({"cell": context.player_cell, "time_left": ability.duration, "ability": ability})
+	_report_stars()
+	return true
+
+
+func _report_stars() -> void:
+	var cells: Array = []
+	for star in _stars:
+		cells.append(star["cell"])
+	stars_changed.emit(cells)
+
+
+func _update_stars(delta: float, context: CombatContext) -> void:
+	for i in range(_falling.size() - 1, -1, -1):
+		var fall: Dictionary = _falling[i]
+		fall["time_left"] = float(fall["time_left"]) - delta
+		if not fall["warned"] and float(fall["time_left"]) <= STAR_FALL_LEAD:
+			fall["warned"] = true
+			star_falling.emit(fall["cell"], STAR_FALL_LEAD)
+		if float(fall["time_left"]) <= 0.0:
+			_falling.remove_at(i)
+			_apply_area(fall["ability"], fall["cell"], context, null, false, false)
+	if _stars.is_empty():
+		return
+	var faded := false
+	for i in range(_stars.size() - 1, -1, -1):
+		_stars[i]["time_left"] = float(_stars[i]["time_left"]) - delta
+		if float(_stars[i]["time_left"]) <= 0.0:
+			_stars.remove_at(i)
+			faded = true
+	if faded:
+		_report_stars()
+	_star_tick -= delta
+	if _star_tick > 0.0 or _stars.is_empty():
+		return
+	_star_tick = STAR_TICK
+	var ability: Ability = _stars[0]["ability"]
+	# Comme une zone : l'usure est exprimée par seconde, et n'a ni trait ni exaltation.
+	var slice := Ability.make({"id": ability.id, "kind": Ability.Kind.ZONE, "element": ability.element,
+		"damage": int(round(float(ability.damage) * STAR_TICK))})
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i) \
+				and _on_star_ray(Vector2(context.enemy_cells[i])):
+			_apply_damage(i, slice, context, false, false)
+
+
+## À vol d'oiseau : les rayons passent par-dessus les haies, et le joueur juge à ce qu'il voit.
+func _on_star_ray(at: Vector2) -> bool:
+	for a in _stars.size():
+		var from := Vector2(_stars[a]["cell"])
+		if at.distance_to(from) <= STAR_REACH:
+			return true
+		for b in range(a + 1, _stars.size()):
+			var closest := Geometry2D.get_closest_point_to_segment(at, from, Vector2(_stars[b]["cell"]))
+			if at.distance_to(closest) <= STAR_REACH:
+				return true
+	return false
+
+
+## Les ennemis à portée d'abord, puis des cases libres du cercle tirées au sort.
+func _cast_starfall(ability: Ability, context: CombatContext) -> bool:
+	var field := _field_from(context.player_cell)
+	var targets: Array[Vector2i] = []
+	for i in context.enemy_cells.size():
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if context.enemy_alive(i) and not context.is_structure(i) \
+				and distance >= 0 and float(distance) <= ability.radius:
+			targets.append(context.enemy_cells[i])
+	var floor_cells: Array[Vector2i] = []
+	var reach := int(ceil(ability.radius))
+	for y in range(-reach, reach + 1):
+		for x in range(-reach, reach + 1):
+			var cell: Vector2i = context.player_cell + Vector2i(x, y)
+			var distance := Pathfinder.value_at(grid, field, cell)
+			if distance > 0 and float(distance) <= ability.radius:
+				floor_cells.append(cell)
+	if floor_cells.is_empty():
+		use_refused.emit("mur")
+		return false
+	var noise := RandomNumberGenerator.new()
+	noise.seed = hash(context.player_cell) + _next_zone_id
+	var hit := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.damage, "radius": 1.0})
+	for n in ability.star_falls:
+		var cell: Vector2i = targets[n] if n < targets.size() \
+			else floor_cells[noise.randi() % floor_cells.size()]
+		_falling.append({"cell": cell, "ability": hit, "warned": false,
+			"time_left": STAR_FALL_LEAD + float(n) * STAR_FALL_GAP})
+	return true
+
+
+func _burn_trail(from: Vector2i, to: Vector2i, ability: Ability, context: CombatContext) -> void:
+	star_trail.emit(from, to)
+	var burn := Ability.make({"id": ability.id, "kind": Ability.Kind.ZONE, "element": ability.element,
+		"damage": ability.trail_damage})
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var at := Vector2(context.enemy_cells[i])
+		var closest := Geometry2D.get_closest_point_to_segment(at, Vector2(from), Vector2(to))
+		if at.distance_to(closest) <= STAR_REACH:
+			_apply_damage(i, burn, context, false, false)
+
+
+# --- La mort ----------------------------------------------------------------------
+
+## Le coup de grâce : sous le seuil du sort, ou du trait s'il n'en a pas, l'ennemi est achevé.
+## Les repaires n'ont pas de vie à prendre, seulement des murs à abattre.
+func _sentence(index: int, ability: Ability, context: CombatContext) -> void:
+	if not context.enemy_alive(index) or context.is_structure(index):
+		return
+	var life: Health = context.enemy_health[index]
+	var below := ability.execute_below if ability.execute_below > 0.0 else SENTENCE_BELOW
+	if float(life.current) > float(life.maximum) * below:
+		return
+	enemy_sentenced.emit(index)
+	enemy_damaged.emit(index, life.take(Damage.new(life.current, ability.element, "player")), ability)
+
+
+func _gain_soul() -> void:
+	if _souls < SOUL_MAX:
+		_souls += 1
+		souls_changed.emit(_souls)
+
+
+func _update_death(delta: float, context: CombatContext) -> void:
+	for index in _marked.keys():
+		_marked[index] = float(_marked[index]) - delta
+		if float(_marked[index]) <= 0.0:
+			_marked.erase(index)
+	for i in range(_flying.size() - 1, -1, -1):
+		var soul: Dictionary = _flying[i]
+		soul["time_left"] = float(soul["time_left"]) - delta
+		if float(soul["time_left"]) > 0.0:
+			continue
+		_flying.remove_at(i)
+		var prey := int(soul["index"])
+		if context.enemy_alive(prey):
+			soul_struck.emit(context.enemy_cells[prey])
+			_apply_damage(prey, soul["ability"], context)
+	for i in range(_hour.size() - 1, -1, -1):
+		var strike: Dictionary = _hour[i]
+		strike["time_left"] = float(strike["time_left"]) - delta
+		if float(strike["time_left"]) <= 0.0:
+			_hour.remove_at(i)
+			_strike_last_hour(int(strike["index"]), strike["ability"], context)
+
+
+func _apply_zone_mark(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var field := _field_from(centre)
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and float(distance) <= ability.radius:
+			_marked[i] = ability.mark_seconds
+			enemy_marked.emit(i, ability.mark_seconds)
+
+
+## Une âme de base et toutes celles récoltées, une par proie, les plus proches d'abord. Sans
+## proie à portée, le sort est refusé et les âmes restent : il ne se gaspille pas dans le vide.
+func _cast_souls(ability: Ability, context: CombatContext) -> bool:
+	var preys: Array[int] = []
+	var distances := {}
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance >= 0 and distance <= ability.range:
+			preys.append(i)
+			distances[i] = distance
+	if preys.is_empty():
+		use_refused.emit("cible")
+		return false
+	preys.sort_custom(func(a: int, b: int) -> bool: return int(distances[a]) < int(distances[b]))
+	for n in 1 + _souls:
+		var prey: int = preys[n % preys.size()]
+		var path := trajectory(context.player_cell, context.enemy_cells[prey])
+		var duration := float(path.size()) / SOUL_SPEED + float(n) * SOUL_GAP
+		_flying.append({"index": prey, "time_left": duration, "ability": ability})
+		soul_sent.emit(path, duration)
+	_souls = 0
+	souls_changed.emit(0)
+	return true
+
+
+func _cast_last_hour(ability: Ability, context: CombatContext) -> void:
+	last_hour_cast.emit(context.player_cell)
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i):
+			var across := float(context.enemy_cells[i].x) / float(maxi(1, grid.cols))
+			_hour.append({"index": i, "ability": ability,
+				"time_left": HOUR_DELAY + HOUR_SWEEP * across})
+
+
+func _strike_last_hour(index: int, ability: Ability, context: CombatContext) -> void:
+	if not context.enemy_alive(index):
+		return
+	var life: Health = context.enemy_health[index]
+	last_hour_struck.emit(context.enemy_cells[index])
+	var share := ceili(float(life.current) * HOUR_SHARE)
+	enemy_damaged.emit(index, life.take(Damage.new(share, ability.element, "player")), ability)
+	_sentence(index, ability, context)
+	if not context.enemy_alive(index):
+		_marked.erase(index)
+		_gain_soul()
+		enemy_killed.emit(index)
 
 
 # --- Invocations ------------------------------------------------------------------
@@ -2502,12 +2796,8 @@ func _advance_summon(summon: Dictionary, stats: Dictionary, target: int,
 				step = -step
 	else:
 		# Les marcheurs descendent le champ des proies, couloir par couloir.
-		var cell := Vector2i(int(round(position.x)), int(round(position.y)))
-		var towards := Pathfinder.step_toward(grid, _summon_field, cell)
-		if towards != Vector2i.ZERO:
-			# Viser le CENTRE de la case suivante : c'est ce qui garde la
-			# créature alignée sur les couloirs sans lui écrire un GridMover.
-			step = (Vector2(cell + towards) - position)
+		_walk_summon(summon, float(stats["speed"]) * delta, context)
+		return
 	if step.length() < 0.05:
 		return
 	step = step.normalized() * minf(float(stats["speed"]) * delta, step.length())
@@ -2517,6 +2807,42 @@ func _advance_summon(summon: Dictionary, stats: Dictionary, target: int,
 	elif step.y != 0.0:
 		summon["facing"] = Vector2i.DOWN if step.y > 0.0 else Vector2i.UP
 	summon_moved.emit(int(summon["id"]), summon["position"], summon["facing"])
+
+
+## Un marcheur va au CENTRE de la case qu'il a choisie avant d'en choisir une autre.
+##
+## Il rechoisissait à chaque image depuis la case la plus proche : passé le milieu d'une
+## case d'angle, il partait en diagonale à travers le coin de la haie, et chaque nouveau
+## champ des proies pouvait le faire revenir sur ses pas au milieu d'un couloir.
+func _walk_summon(summon: Dictionary, travel: float, context: CombatContext) -> void:
+	var position: Vector2 = summon["position"]
+	var heading := Vector2.ZERO
+	# Deux passages au plus : ce qui reste du pas à l'arrivée sert sur la case suivante,
+	# sans quoi une image longue ralentirait la créature.
+	for _i in 2:
+		if not summon.has("next") or position.is_equal_approx(Vector2(summon["next"])):
+			var cell := Vector2i(position.round())
+			var towards := Pathfinder.step_toward(grid, _summon_field, cell)
+			if towards == Vector2i.ZERO:
+				summon.erase("next")
+				break
+			summon["next"] = cell + towards
+		var left: Vector2 = Vector2(summon["next"]) - position
+		var moved := minf(travel, left.length())
+		position = Vector2(summon["next"]) if moved >= left.length() \
+			else position + left.normalized() * moved
+		heading = left
+		travel -= moved
+		if travel <= 0.0:
+			break
+	if heading == Vector2.ZERO:
+		return
+	summon["position"] = position
+	if absf(heading.x) > absf(heading.y):
+		summon["facing"] = Vector2i.RIGHT if heading.x > 0.0 else Vector2i.LEFT
+	else:
+		summon["facing"] = Vector2i.DOWN if heading.y > 0.0 else Vector2i.UP
+	summon_moved.emit(int(summon["id"]), position, summon["facing"])
 
 
 func _refresh_summon_field(context: CombatContext) -> void:
@@ -2556,6 +2882,8 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 	# dégâts dérivés : sinon +10 s'ajouterait à chaque tic de brûlure, à chaque
 	# arc et à chaque écho, et le bonus se multiplierait au lieu de s'ajouter.
 	var power := ability.damage + (_empower_bonus if empowered else 0)
+	if _marked.has(index):
+		power = int(round(float(power) * (1.0 + MARK_BONUS)))
 	var dealt := context.enemy_health[index].take(
 		Damage.new(power, ability.element, "player"))
 	enemy_damaged.emit(index, dealt, ability)
@@ -2563,6 +2891,11 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 			and not context.is_structure(index):
 		_apply_trait(index, dealt, ability, context)
 	if not context.enemy_health[index].is_alive():
+		_marked.erase(index)
+		if _star_marks.erase(index):
+			enemy_star_marks.emit(index, 0)
+		if ability.element == Element.Kind.DEATH:
+			_gain_soul()
 		enemy_killed.emit(index)
 
 
@@ -2595,6 +2928,10 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 			_add_venom(index, context)
 		Element.Kind.LIGHT:
 			_blind(index, GLARE_SECONDS, context)
+		Element.Kind.DEATH:
+			_sentence(index, ability, context)
+		Element.Kind.STARS:
+			_add_star_mark(index, ability, context)
 		Element.Kind.TIME:
 			if context.enemy_alive(index):
 				enemy_soaked.emit(index, RETARD_DURATION, RETARD_FACTOR)

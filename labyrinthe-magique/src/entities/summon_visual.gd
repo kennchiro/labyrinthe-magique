@@ -36,7 +36,7 @@ const CATALOGUE_PATH := ALLIES_PATH + "allies.json"
 ## descend cinquante pixels plus bas que sa fumée au repos. À hauteur de case
 ## égale, elle paraissait donc plus PETITE que la gargouille alors qu'elle est
 ## réglée plus haut. Ces nombres sont des hauteurs de CASE, pas de créature.
-const HEIGHTS := {"imp": 58.0, "gargouille": 52.0, "dragon": 120.0, "ombre": 93.0}
+const HEIGHTS := {"imp": 46.0, "gargouille": 52.0, "dragon": 149.0, "ombre": 93.0}
 ## Créature dont on emprunte les bandes tant que la planche d'une nouvelle n'est
 ## pas découpée, avec sa teinte de remplacement.
 ##
@@ -54,6 +54,8 @@ const BOB_SPEED := 6.0
 const BOB_HEIGHT := 2.4
 ## Durée d'affichage de la pose de coup.
 const STRIKE_FLASH := 0.45
+## Délai sans déplacement au bout duquel une bête au sol s'arrête de marcher.
+const WALK_HOLD := 0.15
 
 var kind_id := "imp"
 var tile_size := 32
@@ -70,6 +72,10 @@ var _time := 0.0
 ## Le nuage de gaz de la créature, s'il y en a un dans son descripteur.
 var _gas: Texture2D = null
 var _gas_frames := 0
+## Une bête AU SOL ne flotte pas : elle ne joue ses pas qu'en se déplaçant.
+var _grounded := false
+var _idle_fps := IDLE_FPS
+var _walk_left := 0.0
 
 
 func setup(p_kind: String, p_tile_size: int) -> void:
@@ -104,6 +110,8 @@ func _load_bands() -> void:
 		return
 	var entry: Dictionary = catalogue[read_id]
 	_mirror_left = bool(entry.get("mirror_left", false))
+	_grounded = bool(entry.get("grounded", false))
+	_idle_fps = float(entry.get("walk_fps", entry.get("idle_fps", IDLE_FPS)))
 	var cell: Array = entry["cell"]
 	_cell = Vector2(float(cell[0]), float(cell[1]))
 	if entry.has("gas"):
@@ -136,6 +144,7 @@ func gas_frames() -> int:
 
 
 func set_facing(facing: Vector2i) -> void:
+	_walk_left = WALK_HOLD
 	if facing != Vector2i.ZERO:
 		_facing = facing
 	_apply_frame()
@@ -150,11 +159,12 @@ func _process(delta: float) -> void:
 	_time += delta
 	_strike_left = maxf(0.0, _strike_left - delta)
 	_bob += delta * BOB_SPEED
+	_walk_left = maxf(0.0, _walk_left - delta)
 	if kind_id == "dragon":
 		queue_redraw()
 	if _sprite == null:
 		return
-	_sprite.position.y = -sin(_bob) * BOB_HEIGHT
+	_sprite.position.y = 0.0 if _grounded else -sin(_bob) * BOB_HEIGHT
 	_apply_frame()
 
 
@@ -188,10 +198,11 @@ func _apply_frame() -> void:
 	if _strike_left > 0.0 and strike > 0:
 		# La pose de coup s'égrène elle aussi quand il y en a plusieurs, mais
 		# sans boucler : on la joue une fois et on tient la dernière.
-		var step := int((STRIKE_FLASH - _strike_left) * IDLE_FPS)
+		var step := int((STRIKE_FLASH - _strike_left) / STRIKE_FLASH * float(strike))
 		_sprite.frame = idle + mini(strike - 1, step)
 	else:
-		_sprite.frame = int(_time * IDLE_FPS) % idle
+		var walking := not _grounded or _walk_left > 0.0
+		_sprite.frame = int(_time * _idle_fps) % idle if walking else 0
 	_sprite.flip_h = _mirror_left and wanted == "left" and not _bands.has("left")
 
 	var factor: float = HEIGHTS.get(kind_id, 44.0) / _cell.y

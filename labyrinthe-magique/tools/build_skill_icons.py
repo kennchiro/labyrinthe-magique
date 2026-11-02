@@ -123,6 +123,19 @@ SHEETS = {
         "lumiere_wings", "lumiere_flight", "lumiere_aube",
     # Le fond se reflète en rose sur son blanc, et le centre du cercle tire au violet.
     ], {"despill": True}),
+    # Relevé case par case : croissant et plumes · faux et son arc · cloche //
+    # trois âmes · plumes et flèche · éclipse. L'ordre demandé.
+    "mage_mort_skills.png": ("mort", [
+        "mort_crescent", "mort_moisson", "mort_glas",
+        "mort_ames", "mort_passage", "mort_heure",
+    ], {"despill": True}),
+    # Relevé case par case : éclat et points · triangle d'étoiles · pluie //
+    # croissant et voile · étoile filante · disque et comète. L'ordre demandé.
+    "mage_etoiles_skills.png": ("etoiles", [
+        "etoiles_eclat", "etoiles_constellation", "etoiles_pluie",
+        "etoiles_voile", "etoiles_filante", "etoiles_nuit",
+    # Pas de `despill` : il prend tout ce qui a plus de bleu que de vert, donc son bleu lui-même.
+    ]),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",

@@ -203,11 +203,11 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
 - ⚠️ Pour mesurer, ne pas lire `delta` : le moteur le lisse sur des multiples de 1/120 s.
   `--bench` prend une vraie horloge, et c'est le p99 qui compte.
 
-## Les onze mages
+## Les treize personnages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien` · `Mage de la Peste` · `Porte-Lumière`.
+`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles`.
 
 Le **Chronomancien** (élément Temps) est né animé et peint au shader : il n'a ni planche
 `SHEETS` ni `impact.png`, `orb.png` ou `warp.png` (`_load_character_fx` met le quad peint à
@@ -226,6 +226,16 @@ fait errer l'ennemi, qui ne frappe plus. `CombatSystem._blind_locks` empêche qu
 permanence, et seule l'Aube passe outre. La Lance (`Kind.BEAM`) suit les couloirs : elle part du côté où regarde le mage, puis vers
 la proie la plus proche, sans repasser sur ses pas (`_beam_path`). ⚠️ `build_enemies.py` fixe l'échelle de son attaque (`strike_scale`) :
 égaliser les hauteurs la faussait à cause de sa lance, et les ailes l'élargissent.
+
+L'**Ange de la Mort** (élément Mort) est fait pareil. Son trait, la Sentence, achève un ennemi
+passé sous un seuil de PV (`SENTENCE_BELOW`, ou `Ability.execute_below`). Les coups mortels de son
+élément donnent des âmes (`_souls`, trois au plus) que `Kind.SOULS` lâche, avec une âme de base :
+le sort n'est donc jamais mort en début de niveau. Le Glas marque (`_marked`) et l'Heure dernière
+passe après un temps, de gauche à droite, comme sa faux à l'écran (`Kind.LAST_HOUR`).
+
+L'**Ange des Étoiles** (élément Étoiles) est fait pareil. Elle pose des étoiles (`_stars`, trois au
+plus) et `_on_star_ray` brûle ce qui passe sur les rayons qui les relient, À VOL D'OISEAU, par-dessus
+les haies. Son trait, Astre, compte les coups (`_star_marks`), et sa Nuit réutilise `Kind.DAWN`.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
@@ -267,6 +277,31 @@ dont le centre tombe dans une autre case, et dont l'essentiel est hors de
 celle-ci, est à quelqu'un d'autre. On ne peut PAS simplement jeter tout ce qui
 n'est pas la forme principale — le bâton du mage de l'Eau et les feuilles du mage
 de la Terre sont détachés du corps et parfaitement légitimes.
+
+## Les boss
+
+Un boss garde la porte du dernier épisode de chaque chapitre (`LevelConfig.has_boss`). Il surgit
+quand le mage revient à sa maison avec tout le reste fait, et la porte ne s'ouvre qu'à sa mort.
+`godot --path . -- --stage 4 --episode 2 --boss` l'appelle sans faire la tournée.
+
+En démo, chaque décor a son boss, avec ses vrais PV et sa vraie vitesse : le bouton « Appeler le
+boss » le fait surgir sans gemme (`Level.call_boss`), et on peut le rappeler après sa mort. Il ne
+ferme la porte que pendant le combat. `--demo --demo-stage 4 --boss` passe par ce bouton.
+
+- `BossCatalog` dit qui garde quel chapitre et la forme de son attaque, `Bestiary` ce qu'il vaut,
+  `BossFight` quand et où tombe sa zone, en RefCounted. `tests/test_boss.gd` vérifie le tout.
+- Il frappe au contact comme tout ennemi. De loin, il marque le sol (`BossZone`) à partir de la case
+  du mage : la zone se voit se remplir, et qui en sort à temps n'a rien.
+- ⚠️ Sa place dans `enemies` est RÉSERVÉE au chargement, comme celle des petites gelées : un ennemi
+  ajouté en pleine partie décalerait les index sous les projectiles en vol. Il est hors de
+  `slot_species`, et donc hors de `test_balance`, qui NE MESURE PAS les combats de boss.
+- Face à lui, la vague s'arrête : ce qui tombe ne revient plus (`_update_respawns`).
+- Les planches passent par `tools/build_bosses.py` : marche et attaque comme tout ennemi, scène et
+  portée en bandes de huit cases de 256. `special_frames.json` porte le corps mesuré, qui garde la
+  même taille à l'écran. L'identifiant `boss_araignee` reste celui de la Reine de Cristal, qui
+  n'est plus une araignée.
+- ⚠️ Sans affichage, une image ne dure pas 1/60 s : pour attendre un de ses gestes dans un test,
+  `create_timer`, jamais un compte d'images.
 
 ## Le mode démo
 
@@ -834,6 +869,11 @@ l'Air.
   mage. Les sprites font une case et demie de haut, ils se chevauchent forcément —
   ce qui compte est que le personnage joué ne soit jamais masqué. Le z-index reste
   la couche (gemmes 4, acteurs 10, orbes 12), le y-sort ne trie qu'à l'intérieur.
+
+- **Les trois sorts sont disponibles dès le début** (2026-11-01). Seul l'Extra Power se
+  mérite, de deux façons : les kills, ou les potions, dont chacune charge la moitié de la
+  jauge (`KillSystem.POTION_SHARE`). Une potion ne compte pas au score. Il y en a dès le
+  stage 1.
 
 ## Pièges connus
 

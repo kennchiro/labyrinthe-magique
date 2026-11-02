@@ -1,22 +1,17 @@
 class_name Progress
 extends RefCounted
 
-## Ce que le joueur a acquis DÉFINITIVEMENT : ses sorts et ses stages ouverts.
+## Ce que le joueur a acquis DÉFINITIVEMENT : ses stages ouverts.
 ##
-## Sauvegardé sur le disque. C'est ce qui distingue une compétence d'un
-## consommable : un sort débloqué reste débloqué, y compris après avoir quitté
-## le jeu. Le mana a disparu avec cette règle — ce sont les recharges qui
-## limitent l'usage, comme dans tout jeu d'action.
+## Sauvegardé sur le disque. Les sorts n'y sont plus : ils sont tous disponibles dès
+## le départ, seules leurs recharges les limitent.
 ##
 ## Aucune dépendance au moteur de scène en dehors de ConfigFile : la simulation
-## d'équilibrage peut donc se fabriquer une progression fictive (« tous les
-## sorts débloqués ») sans toucher au fichier du joueur.
+## d'équilibrage peut donc se fabriquer une progression fictive sans toucher au
+## fichier du joueur.
 
 const PATH := "user://progress.cfg"
 
-## Nombre de sorts débloqués, dans l'ordre de la barre (Skill 1, puis 2, puis 3).
-## La fuite et l'attaque de base ne s'achètent pas : elles sont là dès le départ.
-var unlocked_skills := 0
 ## Index du stage le plus avancé jamais atteint. Le menu n'en propose pas plus.
 var reached_stage := 0
 ## Épisode atteint dans ce stage.
@@ -39,16 +34,14 @@ static func load_saved() -> Progress:
 	var file := ConfigFile.new()
 	progress.persistent = true
 	if file.load(PATH) == OK:
-		progress.unlocked_skills = int(file.get_value("progress", "skills", 0))
 		progress.reached_stage = int(file.get_value("progress", "stage", 0))
 		progress.reached_episode = int(file.get_value("progress", "episode", 0))
 	return progress
 
 
 ## Progression fictive, pour les tests et l'équilibrage : tout est ouvert.
-static func everything(skills: int = 3, stages: int = 99) -> Progress:
+static func everything(stages: int = 99) -> Progress:
 	var progress := Progress.new()
-	progress.unlocked_skills = skills
 	progress.reached_stage = stages
 	return progress
 
@@ -57,26 +50,9 @@ func save() -> void:
 	if not persistent:
 		return
 	var file := ConfigFile.new()
-	file.set_value("progress", "skills", unlocked_skills)
 	file.set_value("progress", "stage", reached_stage)
 	file.set_value("progress", "episode", reached_episode)
 	file.save(PATH)
-
-
-## Le slot de la barre d'action est-il utilisable ? Les slots de sorts sont
-## 1, 2 et 3 ; tout le reste (frappe, fuite, ultime) ne dépend pas de ça.
-func skill_unlocked(slot: int) -> bool:
-	return slot < 1 or slot > 3 or slot <= unlocked_skills
-
-
-## Débloque le sort suivant. Retourne son slot, ou -1 s'ils le sont déjà tous —
-## l'appelant s'en sert pour l'annoncer au joueur.
-func unlock_next_skill() -> int:
-	if unlocked_skills >= 3:
-		return -1
-	unlocked_skills += 1
-	save()
-	return unlocked_skills
 
 
 ## Le stage est-il proposé au menu ?

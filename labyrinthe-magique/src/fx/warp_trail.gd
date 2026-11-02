@@ -15,9 +15,11 @@ extends Node2D
 ## ici », des braises qui filent disent « il est parti par là ».
 
 const LIFETIME := 0.55
+const EMBER_TILES := 0.62
 
 
-func setup(points: PackedVector2Array, tile_size: int, tint: Color) -> void:
+func setup(points: PackedVector2Array, tile_size: int, tint: Color,
+		ember_tiles: float = EMBER_TILES) -> void:
 	if points.size() < 2:
 		queue_free()
 		return
@@ -30,7 +32,7 @@ func setup(points: PackedVector2Array, tile_size: int, tint: Color) -> void:
 	# dans les feuillages : on ne distinguait plus le chemin du mage des
 	# champignons du sol.
 	var embers := FxTextures.flame_emitter(
-		clampi(points.size() * 18, 40, 200), LIFETIME, float(tile_size) * 0.62,
+		clampi(points.size() * 18, 40, 200), LIFETIME, float(tile_size) * ember_tiles,
 		Color(minf(1.0, tint.r + 0.35), minf(1.0, tint.g + 0.25),
 			minf(1.0, tint.b + 0.12), 1.0),
 		Color(tint.r * 0.7, tint.g * 0.32, tint.b * 0.16, 0.0), 46.0, 55.0)

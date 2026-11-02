@@ -52,6 +52,16 @@ SHEET = Path("assets/peso&cover/mages/mage_invocateur.png")
 DRAGON_SHEET = Path("assets/peso&cover/mage_invocateur_dragon_complete.png")
 DRAGON_NO_FIRE_SHEET = Path("assets/peso&cover/mage_invocateur_dragon_no_fire.png")
 KNIGHT_SHEET = Path("assets/peso&cover/mage_invocateur_chevalier_spectral.png")
+## Le serviteur du premier sort, quand ses deux planches sont là. Tant qu'elles
+## manquent, le chevalier reste en place : le sort ne se retrouve jamais sans corps.
+DIABLOTIN_WALK = Path("assets/peso&cover/creatures/diablotin_marche.png")
+DIABLOTIN_STRIKE = Path("assets/peso&cover/creatures/diablotin_attaque.png")
+## Hauteur des cases du diablotin dans ses bandes : 17 poses de 256 px feraient une
+## texture de 4 300 px par direction, pour une créature affichée à 50 px.
+DIABLOTIN_HEIGHT = 128
+## Marge au-dessus d'une rangée du dragon : son aile haute y dépasse, et la case seule
+## la coupait à plat. Ce qui entre par là depuis l'autre rangée touche le bord et part.
+DRAGON_ROW_MARGIN = 48
 OUT_MAGE = Path("assets/characters/invocateur")
 OUT_ALLIES = Path("assets/allies")
 
@@ -130,7 +140,7 @@ SPELL_FX = {
 # vue de face ; leur profil gauche est un miroir, comme avant.
 ALLIES = {
     "imp": {
-        "anchor": "feet", "mirror_left": True,
+        "anchor": "feet", "mirror_left": True, "grounded": True,
         # Ses trois poses d'inaction sont un BATTEMENT D'AILES : 102, 134 puis
         # 148 px d'envergure pour 9 % de hauteur en plus seulement. Jouées en
         # boucle simple, l'aile grande ouverte claquerait d'un coup sur l'aile
@@ -145,7 +155,7 @@ ALLIES = {
     # diablotins et crache le feu : c'est elle qui tient le rôle de la gargouille
     # — « lente mais qui frappe deux fois plus fort ».
     "gargouille": {
-        "anchor": "feet", "mirror_left": True,
+        "anchor": "feet", "mirror_left": True, "idle_fps": 4.0, "main_shape_only": True,
         "directions": {"down": {
             "idle": [(899, 365, 1141, 500), (736, 452, 946, 581)],
             "strike": [(1153, 349, 1433, 498)],  # souffle, dessiné vers la droite
@@ -240,7 +250,7 @@ def dragon_grid_poses(image: Image.Image) -> dict:
     for row, direction in enumerate(directions):
         frames = []
         for column in range(8):
-            box = (column * cell_w, row * cell_h,
+            box = (column * cell_w, max(0, row * cell_h - DRAGON_ROW_MARGIN),
                    (column + 1) * cell_w, (row + 1) * cell_h)
             frames.append(crop_clean(image, box))
         poses[direction] = {"idle": frames[:4], "strike": frames[4:]}
@@ -260,6 +270,50 @@ def knight_grid_poses(image: Image.Image) -> dict:
             frames.append(crop_clean(image, box))
         poses[direction] = {"idle": frames[:4], "strike": frames[4:]}
     return poses
+
+
+def diablotin_poses() -> dict:
+    """Les deux planches commandées, au gabarit des ennemis et par leurs contrôles.
+
+    La première image de marche sert aussi de pose d'arrêt : une bête au sol qui ne
+    bouge pas tient cette image au lieu de piétiner."""
+    from build_enemies import cells_of, steadied
+    walk = cells_of(DIABLOTIN_WALK, 3)
+    strike = cells_of(DIABLOTIN_STRIKE, 3)
+    poses = {}
+    for direction in ("down", "up", "right"):
+        walking, striking = steadied(walk[direction], strike[direction], False, True)
+        poses[direction] = {"idle": [_trimmed(f) for f in walking],
+                            "strike": [_trimmed(f) for f in striking]}
+    # La gauche est le miroir du profil droit, jamais un second dessin.
+    poses["left"] = {key: [f.transpose(Image.FLIP_LEFT_RIGHT) for f in frames]
+                     for key, frames in poses["right"].items()}
+    return poses
+
+
+def _trimmed(frame: Image.Image) -> Image.Image:
+    box = frame.getbbox()
+    frame = frame.crop(box) if box else frame
+    factor = DIABLOTIN_HEIGHT / 256.0
+    return frame.resize((max(1, round(frame.width * factor)),
+                         max(1, round(frame.height * factor))), Image.LANCZOS)
+
+
+def main_shape(frame: Image.Image) -> Image.Image:
+    """Le sujet seul : les traits parasites de la planche survivent à `crop_clean`.
+
+    La gargouille est découpée dans une planche où ses voisines se touchent presque,
+    et leurs bouts d'aile restent dans la boîte sans en toucher le bord. Son souffle
+    est relié à sa gueule : elle peut tout perdre sauf la plus grosse forme."""
+    pixels = np.array(frame)
+    # Sur la matière franche : à l'alpha le plus bas, le halo relie ces traits à l'aile.
+    labels, count = ndimage.label(pixels[..., 3] > 96, structure=np.ones((3, 3)))
+    if count > 0:
+        sizes = ndimage.sum(np.ones_like(labels), labels, range(1, count + 1))
+        kept = ndimage.binary_dilation(labels == int(np.argmax(sizes)) + 1, iterations=3)
+        pixels[..., 3][~kept] = 0
+    out = Image.fromarray(pixels, "RGBA")
+    return out.crop(out.getbbox())
 
 
 ## ⚠️ LE MAGE N'EST PLUS DÉCOUPÉ ICI depuis la refonte du 2026-08-25.
@@ -380,7 +434,11 @@ def build_allies(image: Image.Image, dragon_image: Image.Image,
         # restent découpées depuis la planche Invocateur historique.
         source_image = (dragon_image if name == "dragon"
                 else knight_image if name == "imp" else image)
-        if name == "imp" and source_image.width == 1536 and source_image.height == 1024:
+        extra = {}
+        if name == "imp" and DIABLOTIN_WALK.exists() and DIABLOTIN_STRIKE.exists():
+            cut = diablotin_poses()
+            extra["walk_fps"] = 12.0
+        elif name == "imp" and source_image.width == 1536 and source_image.height == 1024:
             cut = knight_grid_poses(source_image)
         elif name == "dragon" and dragon_image.width == 2048 and dragon_image.height == 768:
             cut = dragon_grid_poses(dragon_image)
@@ -389,11 +447,23 @@ def build_allies(image: Image.Image, dragon_image: Image.Image,
             for direction, poses in entry["directions"].items():
                 cut[direction] = {key: [crop_clean(source_image, box) for box in poses[key]]
                                   for key in ("idle", "strike")}
+        if entry.get("main_shape_only"):
+            cut = {d: {k: [main_shape(f) for f in frames] for k, frames in v.items()}
+                   for d, v in cut.items()}
         # La case est commune à TOUTES les directions d'une créature : le dragon
         # qui pique est plus plat que celui qui monte, et c'est ce rapport-là
         # qu'il faut garder — une case par direction le gommerait.
         every = [f for d in cut.values() for k in d.values() for f in k]
         cell = (max(f.width for f in every) + 4, max(f.height for f in every) + 4)
+        # ⚠️ LA CASE EST SYMÉTRIQUE AUTOUR DES PIEDS. `_place` les pose au milieu : une
+        # pose qui penche d'un côté (le souffle de la gargouille) sortait de sa case
+        # et son aile s'imprimait sur la pose voisine, qu'on voyait donc amputée.
+        if entry["anchor"] == "feet":
+            reach = 0
+            for frame in every:
+                foot = anchor(np.array(frame)[..., 3] > SOLID_ALPHA)[0]
+                reach = max(reach, int(foot) + 1, frame.width - int(foot) + 1)
+            cell = (2 * reach + 4, cell[1])
         directions = {}
         for direction, poses in cut.items():
             frames = poses["idle"] + poses["strike"]
@@ -404,7 +474,10 @@ def build_allies(image: Image.Image, dragon_image: Image.Image,
                                      "strike": len(poses["strike"])}
         catalogue[name] = {"anchor": entry["anchor"], "cell": list(cell),
                            "mirror_left": entry["mirror_left"],
-                           "directions": directions}
+                           "grounded": entry.get("grounded", False),
+                           "directions": directions, **extra}
+        if "idle_fps" in entry:
+            catalogue[name]["idle_fps"] = entry["idle_fps"]
         print(f"{name:11s} case {cell[0]}x{cell[1]} · "
               + " · ".join(f"{d} x{v['idle']}+{v['strike']}"
                            for d, v in directions.items()))

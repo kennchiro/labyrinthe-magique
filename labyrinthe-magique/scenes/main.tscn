@@ -118,6 +118,14 @@ offset_bottom = 54.0
 focus_mode = 0
 text = "›"
 
+[node name="Boss" type="Button" parent="UI/DemoBar"]
+offset_left = 120.0
+offset_top = 60.0
+offset_right = 300.0
+offset_bottom = 104.0
+focus_mode = 0
+text = "Appeler le boss"
+
 [node name="DebugLabel" type="Label" parent="UI"]
 visible = false
 offset_left = 16.0

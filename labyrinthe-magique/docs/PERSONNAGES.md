@@ -3,7 +3,7 @@
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
 > La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-11 mages jouables. La barre d'action a toujours la même forme —
+13 mages jouables. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -22,6 +22,8 @@ comparables d'un personnage à l'autre.
 | **Chronomancien** | Temps | 4 | 5.0 | 5 kills | **Retard** — la cible ralentit de 40 % pendant 1.4 s |
 | **Mage de la Peste** | Poison | 3 | 5.2 | 4 kills | **Venin** — jusqu'à 3 doses, 7 dégâts par seconde chacune pendant 5 s |
 | **Porte-Lumière** | Lumière | 4 | 5.0 | 5 kills | **Éblouissement** — la cible perd sa trace 1.2 s, au plus toutes les 5 s |
+| **Ange de la Mort** | Mort | 3 | 5.2 | 4 kills | **Sentence** — un ennemi sous 15 % de ses PV après un coup est achevé |
+| **Ange des Étoiles** | Étoiles | 4 | 5.1 | 5 kills | **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 dégâts |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
@@ -312,3 +314,55 @@ Trait : **Éblouissement** — la cible perd sa trace 1.2 s, au plus toutes les 
 - **Ailes gardiennes** — Ses ailes absorbent un coup, puis aveuglent ce qui se tient au contact.
 - **Envol** — Il survole les haies, et son atterrissage aveugle les ennemis proches.
 - **L'Aube** — L'écran s'embrase, et une colonne de lumière tombe sur chaque ennemi de la carte, aveuglé 5 s.
+
+---
+
+## Ange de la Mort — Mort
+
+> Ce qu'il a blessé, il vient le prendre : il achève les ennemis presque morts et récolte leurs âmes. Fragile.
+
+`id: mort` · puissance affichée 4/5 · vie 3 · vitesse 5.2 · extra à 4 kills
+
+Trait : **Sentence** — un ennemi sous 15 % de ses PV après un coup est achevé
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Croissant noir** | projectile | 16 dégâts · portée 7 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Moisson** | explosion | 45 dégâts · rayon 3 · recharge 5 s · balaie 150° devant | 5.0 s |
+| SKILL 2 | **Glas** | zone | 6 dégâts/s · rayon 2.6 · 7 s · recharge 15 s | 15.0 s |
+| SKILL 3 | **Âmes captives** | ? | 30 dégâts par âme · portée 14 · recharge 9 s | 9.0 s |
+| FUITE | **Passage** | translation | saut de 5 cases · recharge 8 s · TRAVERSE LES MURS | 8.0 s |
+| EXTRA | **L'Heure dernière** | ? | la moitié des PV de chaque ennemi · achève sous 15 % | 1.0 s |
+
+- **Croissant noir** — La faux lance un croissant de lame qui ne rate jamais.
+- **Moisson** — Un grand coup de faux en arc devant lui, qui achève ce qui est déjà blessé.
+- **Glas** — Une cloche sonne : les ennemis du cercle sont marqués et prennent plus de dégâts.
+- **Âmes captives** — Il lâche une âme et toutes celles de ses victimes : elles chassent dans les couloirs.
+- **Passage** — Il se défait en plumes noires et traverse les haies.
+- **L'Heure dernière** — Éclipse : une faux géante traverse l'écran, et chaque ennemi perd la moitié de ses PV.
+
+---
+
+## Ange des Étoiles — Étoiles
+
+> Elle pose des étoiles dans le labyrinthe : les rayons qui les relient brûlent ce qui passe. C'est le placement qui fait ses dégâts.
+
+`id: etoiles` · puissance affichée 4/5 · vie 4 · vitesse 5.1 · extra à 5 kills
+
+Trait : **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 dégâts
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Éclat stellaire** | projectile | 12 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Constellation** | ? | 28 dégâts/s · 3 étoiles · 16 s · recharge 3 s | 3.0 s |
+| SKILL 2 | **Pluie d'étoiles** | ? | 9 étoiles de 22 dégâts · rayon 3.5 · recharge 11 s | 11.0 s |
+| SKILL 3 | **Voile de lune** | bouclier | INTOUCHABLE 3 s · recharge 15 s | 15.0 s |
+| FUITE | **Étoile filante** | translation | saut de 5 cases · recharge 8 s | 8.0 s |
+| EXTRA | **Nuit éternelle** | ? | 120 dégâts sur toute la carte | 1.0 s |
+
+- **Éclat stellaire** — Un petit trait d'étoile. Au troisième coup, les étoiles de la cible explosent.
+- **Constellation** — Pose une étoile à ses pieds. Des rayons les relient par-dessus les haies et brûlent ce qui passe.
+- **Pluie d'étoiles** — Des étoiles tombent une à une autour d'elle, sur les ennemis d'abord.
+- **Voile de lune** — Pendant un court instant, les coups la traversent.
+- **Étoile filante** — Un saut rapide en ligne droite, qui laisse une traînée brûlante.
+- **Nuit éternelle** — La nuit tombe sur l'écran, et une comète frappe chaque ennemi de la carte.
