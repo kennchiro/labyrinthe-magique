@@ -45,6 +45,7 @@ const MORT := "mort"
 const ETOILES := "etoiles"
 const ACIER := "acier"
 const DEMON := "demon"
+const DISCORDE := "discorde"
 
 const CATEGORY_MAGE := "mage"
 const CATEGORY_ANGE := "ange"
@@ -60,7 +61,7 @@ const CATEGORIES := {
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste(), lumiere(), mort(), etoiles(), acier(), demon()]
+		peste(), lumiere(), mort(), etoiles(), acier(), demon(), discorde()]
 
 
 static func in_category(category: String) -> Array[CharacterStats]:
@@ -1165,6 +1166,64 @@ static func demon() -> CharacterStats:
 		"kind": Ability.Kind.BLAST, "element": Element.Kind.BLOOD,
 		"damage": 60, "radius": 4.0, "cooldown": 1.0, "is_ultimate": true,
 		"last_pact_seconds": 6.0, "last_pact_return": 0.75,
+	})
+	return c
+
+
+# --- La Démone de la Discorde : elle retourne les ennemis les uns contre les autres. --
+
+static func discorde() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = DISCORDE
+	c.display_name = "Démone de la Discorde"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.CHARM
+	c.description = "Elle tire les fils et laisse les autres se battre. Redoutable dans la foule, bien seule face à un seul ennemi."
+	c.power_level = 3
+	c.base_health = 3
+	# Rapide : elle ne frappe pas fort, et doit pouvoir se replacer autour de la foule.
+	c.move_speed = 5.5
+	c.ultimate_required_kills = 4
+	c.attack = Ability.make({
+		"id": "discorde_murmure", "display_name": "Murmure",
+		"description": "Un fil d'argent file de ses doigts. Au troisième, la cible est troublée.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.CHARM,
+		"projectile_visual": "fil_murmure",
+		"damage": 14, "range": 7, "cooldown": 0.5, "projectile_speed": 1.3,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "discorde_oeil", "display_name": "Mauvais Œil",
+			"description": "Un ennemi se retourne contre ses voisins et ne la chasse plus.",
+			"kind": Ability.Kind.POSSESS, "element": Element.Kind.CHARM,
+			"range": 8, "cooldown": 10.0, "possess_seconds": 5.0, "possess_strike": 20,
+		}),
+		Ability.make({
+			"id": "discorde_cercle", "display_name": "Cercle de Discorde",
+			"description": "Un cercle se pose sur l'ennemi le plus proche : plus ils y sont nombreux, plus chacun y souffre.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.CHARM,
+			"damage": 16, "radius": 2.5, "range": 7, "duration": 6.0, "cooldown": 12.0,
+			"discord_bonus": 0.5, "zone_on_prey": true, "zone_style": "toile_peinte",
+		}),
+		Ability.make({
+			"id": "discorde_lien", "display_name": "Lien de Souffrance",
+			"description": "Une chaîne relie trois ennemis proches : la moitié des coups portés à l'un passe aux deux autres.",
+			"kind": Ability.Kind.BOND, "element": Element.Kind.CHARM,
+			"range": 8, "radius": 4.0, "duration": 8.0, "cooldown": 14.0,
+			"bond_count": 3, "bond_share": 0.5,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "discorde_echange", "display_name": "Échange",
+		"description": "Elle prend la place de l'ennemi le plus proche, et lui laisse la sienne.",
+		"kind": Ability.Kind.SWAP, "element": Element.Kind.CHARM,
+		"range": 6, "cooldown": 9.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "discorde_grande", "display_name": "Grande Discorde",
+		"description": "Tous les ennemis à l'écran se battent entre eux, et leurs morts comptent pour elle. Seuls les boss résistent.",
+		"kind": Ability.Kind.POSSESS, "element": Element.Kind.CHARM,
+		"cooldown": 1.0, "is_ultimate": true, "possess_seconds": 6.0, "possess_strike": 22,
 	})
 	return c
 

@@ -149,6 +149,12 @@ SHEETS = {
         "demon_griffe", "demon_pacte", "demon_sillon",
         "demon_festin", "demon_bond", "demon_dernier",
     ], {"undust": 12}),
+    # Relevé case par case : fil et perle · œil aux fils · anneau et toile //
+    # trois nœuds · flèches croisées · grand œil. L'ordre demandé.
+    "mage_discorde_skills.png": ("discorde", [
+        "discorde_murmure", "discorde_oeil", "discorde_cercle",
+        "discorde_lien", "discorde_echange", "discorde_grande",
+    ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",

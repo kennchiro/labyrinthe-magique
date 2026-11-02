@@ -20,6 +20,7 @@ const PAINTED_STYLES := {
 	"sanctuaire_peint": preload("res://assets/shaders/lumiere_sanctuary.gdshader"),
 	"glas_peint": preload("res://assets/shaders/mort_bell.gdshader"),
 	"sillon_peint": preload("res://assets/shaders/demon_sillon.gdshader"),
+	"toile_peinte": preload("res://assets/shaders/discorde_cercle.gdshader"),
 }
 ## La glace lit des plaques et des fissures, pas un bruit lissé (`tools/build_noise.py`).
 const ICE_NOISE := preload("res://assets/shaders/ice_noise.png")

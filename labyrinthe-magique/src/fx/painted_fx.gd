@@ -72,6 +72,10 @@ const SHADERS := {
 	"etoiles_comet": preload("res://assets/shaders/etoiles_comet.gdshader"),
 	"etoiles_night": preload("res://assets/shaders/etoiles_night.gdshader"),
 	"demon_griffure": preload("res://assets/shaders/demon_griffure.gdshader"),
+	"discorde_noeud": preload("res://assets/shaders/discorde_noeud.gdshader"),
+	"discorde_oeil": preload("res://assets/shaders/discorde_oeil.gdshader"),
+	"discorde_echange": preload("res://assets/shaders/discorde_echange.gdshader"),
+	"discorde_grande": preload("res://assets/shaders/discorde_grande.gdshader"),
 	"demon_bond": preload("res://assets/shaders/demon_bond.gdshader"),
 	"demon_pacte": preload("res://assets/shaders/demon_pacte.gdshader"),
 	"demon_festin": preload("res://assets/shaders/demon_festin.gdshader"),
@@ -95,13 +99,13 @@ const IMPACT := {
 	"water": "water_splash", "thunder": "thunder_star", "air": "air_slash",
 	"earth": "earth_crack", "supreme": "prism_star", "chrono": "chrono_tick",
 	"peste": "peste_splash", "lumiere": "lumiere_star", "mort": "mort_cut", "etoiles": "etoiles_impact",
-	"acier": "acier_impact", "demon": "demon_griffure",
+	"acier": "acier_impact", "demon": "demon_griffure", "discorde": "discorde_noeud",
 }
 const ESCAPE := {
 	"invocateur": "arcane_void_step", "water": "water_swirl", "thunder": "thunder_strike",
 	"air": "air_streaks", "earth": "earth_fissure", "supreme": "prism_shift",
 	"chrono": "chrono_rewind", "peste": "peste_mist", "lumiere": "lumiere_feathers", "mort": "mort_feathers", "etoiles": "etoiles_dash",
-	"acier": "acier_dash", "demon": "demon_bond",
+	"acier": "acier_dash", "demon": "demon_bond", "discorde": "discorde_echange",
 }
 ## La couleur de la flamme de chaque sceau du Suprême. Tout autre élément prend l'air.
 const SEAL_KINDS := {
@@ -121,6 +125,7 @@ const EXTRAS := {
 	"etoiles": ["etoiles_ring", "etoiles_veil", "etoiles_comet", "etoiles_night"],
 	"acier": ["acier_ring", "acier_anvil", "acier_rampart", "acier_molten"],
 	"demon": ["demon_pacte", "demon_festin", "demon_dernier", "demon_veil"],
+	"discorde": ["discorde_oeil", "discorde_grande"],
 }
 
 

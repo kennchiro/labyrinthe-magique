@@ -54,6 +54,7 @@ func _init() -> void:
 	_test_etoiles()
 	_test_acier()
 	_test_demon()
+	_test_discorde()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -226,8 +227,8 @@ func _test_catalog() -> void:
 	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
 	# Porte-Lumière, et l'Ange de la Mort. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 15:
-		_fail("le catalogue contient %d personnages au lieu de 15" % characters.size())
+	if characters.size() != 16:
+		_fail("le catalogue contient %d personnages au lieu de 16" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -241,7 +242,7 @@ func _test_catalog() -> void:
 			_fail("%s n'a pas d'ultime" % character.id)
 		# La fuite n'est pas un luxe : sans elle, un couloir bouché est une
 		# impasse et non une erreur du joueur.
-		if character.escape == null or character.escape.kind != Ability.Kind.BLINK:
+		if character.escape == null or not (character.escape.kind in [Ability.Kind.BLINK, Ability.Kind.SWAP]):
 			_fail("%s n'a pas de sort de fuite" % character.id)
 		if character.action_bar().size() != 6:
 			_fail("%s : barre d'action de %d emplacements au lieu de 6" % [
@@ -3212,6 +3213,109 @@ func _test_mort() -> void:
 
 ## Le trait explose au troisième coup, les rayons brûlent par-dessus les haies, la Pluie tombe sur
 ## les ennemis, le Voile rend intouchable et la traînée brûle le trajet.
+func _test_discorde() -> void:
+	var discorde := CharacterCatalog.discorde()
+	var oeil: Ability = discorde.abilities[0]
+	var cercle: Ability = discorde.abilities[1]
+	var lien: Ability = discorde.abilities[2]
+	var parts := _context(discorde)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	var refused := [0]
+	combat.use_refused.connect(func(_reason: String) -> void: refused[0] += 1)
+	# SEULE, ELLE NE PEUT RIEN : aucun sort ne part dans le vide.
+	for ability: Ability in [oeil, cercle, lien, discorde.escape]:
+		if combat.use(ability, context):
+			_fail("discorde : %s part sans aucun ennemi" % ability.id)
+	if refused[0] != 4:
+		_fail("discorde : %d refus au lieu de 4" % refused[0])
+	# UN POSSÉDÉ FRAPPE SON VOISIN, et le voisin riposte.
+	var cell := _cell_at(grid, context.player_field, 2)
+	_add_enemy(context, cell, 5000)
+	_add_enemy(context, cell, 5000)
+	if not combat.use(oeil, context):
+		_fail("discorde : le Mauvais Œil ne part pas")
+	combat._update_discord(0.01, context)
+	for i in 2:
+		if context.enemy_health[i].current != 5000 - oeil.possess_strike:
+			_fail("discorde : la mêlée laisse l'ennemi %d à %d PV" % [i, context.enemy_health[i].current])
+	# SEUL AU MONDE, IL NE FRAPPE PERSONNE : la possession ne fait rien en duel.
+	context.enemy_health[1].current = 0
+	combat._possessed.clear()
+	combat.use(oeil, context)
+	var alone: int = context.enemy_health[0].current
+	combat._update_discord(1.0, context)
+	if context.enemy_health[0].current != alone:
+		_fail("discorde : un possédé seul perd des PV")
+	# UN BOSS NE SE POSSÈDE PAS, et il ne s'échange pas.
+	parts = _context(discorde)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	context.bosses[0] = true
+	if combat.use(oeil, context) or combat.use(discorde.escape, context):
+		_fail("discorde : un boss se laisse retourner")
+	if not combat.use(discorde.ultimate, context) or not combat.possessed_indices().is_empty():
+		_fail("discorde : la Grande Discorde prend le boss")
+	# LE CERCLE MORD SELON LA FOULE.
+	parts = _context(discorde)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	cell = _cell_at(grid, context.player_field, 2)
+	for i in 3:
+		_add_enemy(context, cell, 5000)
+	combat.use(cercle, context)
+	combat._update_zones(0.01, context)
+	var expected := int(round(round(cercle.damage * CombatSystem.ZONE_TICK) * (1.0 + cercle.discord_bonus * 2.0)))
+	if context.enemy_health[0].current != 5000 - expected:
+		_fail("discorde : le cercle fait %d au lieu de %d" % [5000 - context.enemy_health[0].current, expected])
+	# LE LIEN PARTAGE UNE FOIS, sans jamais se relancer.
+	parts = _context(discorde)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	cell = _cell_at(grid, context.player_field, 2)
+	for i in 3:
+		_add_enemy(context, cell, 5000)
+	if not combat.use(lien, context):
+		_fail("discorde : le lien ne part pas")
+	var hit := Ability.make({"id": "x", "kind": Ability.Kind.BLAST, "element": Element.Kind.CHARM, "damage": 100})
+	combat._apply_damage(0, hit, context, false, false)
+	if context.enemy_health[0].current != 4900 or context.enemy_health[1].current != 4950 \
+			or context.enemy_health[2].current != 4950:
+		_fail("discorde : le lien partage mal : %d, %d, %d" % [context.enemy_health[0].current,
+			context.enemy_health[1].current, context.enemy_health[2].current])
+	# L'ÉCHANGE : elle part sur la case de l'ennemi, et lui sur la sienne.
+	parts = _context(discorde)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	cell = _cell_at(grid, context.player_field, 2)
+	_add_enemy(context, cell, 5000)
+	var arrived := [Vector2i(-1, -1)]
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: arrived[0] = to)
+	var home := context.player_cell
+	if not combat.use(discorde.escape, context) or arrived[0] != cell or context.enemy_cells[0] != home:
+		_fail("discorde : l'échange ne croise pas les places")
+	# AU TROISIÈME MURMURE, LA CIBLE EST TROUBLÉE, et sa possession dure plus longtemps.
+	parts = _context(discorde)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	for i in CombatSystem.WHISPER_MARKS:
+		combat._apply_damage(0, discorde.attack, context)
+	var seconds := [0.0]
+	combat.enemy_possessed.connect(func(_index: int, duration: float) -> void: seconds[0] = duration)
+	combat.use(oeil, context)
+	if not is_equal_approx(seconds[0], oeil.possess_seconds + CombatSystem.TROUBLE_BONUS):
+		_fail("discorde : une possession de %s s sur une cible troublée" % seconds[0])
+
+
 func _test_demon() -> void:
 	var demon := CharacterCatalog.demon()
 	var pacte: Ability = demon.abilities[0]

@@ -190,6 +190,10 @@ MAGES = {
     "demon": {"id": "demon", "name": "Démon du Pacte", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
             "walk_body_only": True},
+    # Sa tenue est verte, loin du fond : rien à dégorger.
+    "discorde": {"id": "discorde", "name": "Démone de la Discorde", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,

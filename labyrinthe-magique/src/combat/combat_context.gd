@@ -24,6 +24,8 @@ var enemy_health: Array[Health] = []
 ## le jeu les voit. Le seul écart tient en une règle de ciblage — voir
 ## `CombatSystem.find_target`.
 var structures_from := -1
+## Les index des boss : on ne les possède pas, et ils ne se laissent pas échanger.
+var bosses := {}
 
 
 ## Cette cible est-elle une maison plutôt qu'une créature ?

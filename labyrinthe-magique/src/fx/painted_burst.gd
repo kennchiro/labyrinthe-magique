@@ -48,6 +48,11 @@ func setup(tile_size: int, radius_tiles: float, duration: float, seed_value: flo
 	add_child(sprite)
 
 
+## La durée réelle, pour le shader qui compte en secondes et non en part de sa vie.
+func set_shader_seconds(seconds: float) -> void:
+	_material.set_shader_parameter("seconds", seconds)
+
+
 ## Le rayon réel, au-delà de `MAX_RADIUS_TILES`, pour la seule onde qui doit couvrir l'écran.
 func span_tiles(tile_size: int, tiles: float) -> void:
 	(get_child(0) as Sprite2D).scale = Vector2.ONE * tiles * 2.0 * float(tile_size) / 0.8

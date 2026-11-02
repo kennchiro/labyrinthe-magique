@@ -7,7 +7,7 @@ extends RefCounted
 ## effets et les projectiles la lisent ici. Sans ça, le rouge du Mage de Feu finit
 ## par exister en cinq nuances différentes dans cinq fichiers.
 
-enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD }
+enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM }
 
 const COLORS := {
 	Kind.FIRE: Color("#ff6a2a"),
@@ -24,6 +24,7 @@ const COLORS := {
 	Kind.STARS: Color("#9db8ff"),
 	Kind.STEEL: Color("#a9b6c6"),
 	Kind.BLOOD: Color("#c8143c"),
+	Kind.CHARM: Color("#e8308f"),
 }
 const NAMES := {
 	Kind.FIRE: "Feu",
@@ -40,6 +41,7 @@ const NAMES := {
 	Kind.STARS: "Étoiles",
 	Kind.STEEL: "Acier",
 	Kind.BLOOD: "Sang",
+	Kind.CHARM: "Envoûtement",
 }
 
 
@@ -67,6 +69,7 @@ static func trait_name(kind: Kind) -> String:
 		Kind.STARS: return "Astre"
 		Kind.STEEL: return "Plaques"
 		Kind.BLOOD: return "Rage"
+		Kind.CHARM: return "Trouble"
 	return ""
 
 
@@ -86,6 +89,7 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.STARS: return "chaque coup pose une étoile sur la cible ; à la troisième, elles explosent"
 		Kind.STEEL: return "ses plaques encaissent les coups à la place de ses PV, et ses kills les reforgent"
 		Kind.BLOOD: return "moins il lui reste de PV, plus ses coups sont forts"
+		Kind.CHARM: return "trois murmures troublent la cible : elle ralentit, et sa possession dure plus longtemps"
 	return ""
 
 

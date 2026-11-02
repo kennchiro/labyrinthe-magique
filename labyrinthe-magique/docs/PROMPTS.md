@@ -61,6 +61,10 @@ La commande complète, dans l'ordre, et le détail de chaque effet visuel :
 
 La fiche et la commande complète, dans l'ordre : [mages/mage_demon](prompts/mages/mage_demon.md).
 
+## La Démone de la Discorde — le seizième personnage
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_discorde](prompts/mages/mage_discorde.md).
+
 ## Refonte des huit mages — uniformiser les tailles
 
 La case est commune à tous, mais chacun l'occupe comme il veut : de **60 %**
@@ -115,6 +119,7 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | les icônes de sorts de l'Ange des Étoiles | [sorts/icones_etoiles](prompts/sorts/icones_etoiles.md) |
 | les icônes de sorts de l'Archange d'Acier | [sorts/icones_acier](prompts/sorts/icones_acier.md) |
 | les icônes de sorts du Démon du Pacte | [sorts/icones_demon](prompts/sorts/icones_demon.md) |
+| les icônes de sorts de la Démone de la Discorde | [sorts/icones_discorde](prompts/sorts/icones_discorde.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol

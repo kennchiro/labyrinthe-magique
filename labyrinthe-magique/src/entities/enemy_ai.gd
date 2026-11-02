@@ -25,6 +25,9 @@ var search_duration: float = 3.0
 
 ## Aveuglé : il erre sans chercher le mage, et ne peut pas frapper.
 var blind_left := 0.0
+## Possédé : il reste aveugle au mage et ne peut pas le frapper, mais il marche sur sa proie.
+var possess_left := 0.0
+var possess_field := PackedInt32Array()
 var _search_field := PackedInt32Array()
 var _search_timer := 0.0
 var _patrol_direction := Vector2i.ZERO
@@ -40,12 +43,31 @@ func _init(p_detection_radius: int, rng_seed: int = 0) -> void:
 		_rng.seed = rng_seed
 
 
+func possess(duration: float) -> void:
+	possess_left = duration
+	blind_left = duration
+
+
+func _possessed_step(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
+		delta: float) -> Vector2i:
+	possess_left = maxf(0.0, possess_left - delta)
+	var distance := -1 if possess_field.is_empty() else Pathfinder.value_at(grid, possess_field, from)
+	if distance < 0:
+		return _patrol(grid, from, current_direction)
+	# Au contact, il s'arrête et frappe : monté sur sa proie, on ne verrait plus la mêlée.
+	if distance <= 1:
+		return Vector2i.ZERO
+	return Pathfinder.step_toward(grid, possess_field, from)
+
+
 func decide(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 		player_field: PackedInt32Array, delta: float) -> Vector2i:
 	if blind_left > 0.0:
 		blind_left -= delta
 		state = State.PATROL
 		_search_field = PackedInt32Array()
+		if possess_left > 0.0:
+			return _possessed_step(grid, from, current_direction, delta)
 		return _patrol(grid, from, current_direction)
 	var distance_to_player := Pathfinder.value_at(grid, player_field, from)
 	var detected := distance_to_player >= 0 and distance_to_player <= detection_radius
@@ -86,6 +108,8 @@ func decide_thief(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 	if blind_left > 0.0:
 		blind_left -= delta
 		state = State.PATROL
+		if possess_left > 0.0:
+			return _possessed_step(grid, from, current_direction, delta)
 		return _patrol(grid, from, current_direction)
 	state = State.SEARCH
 	var step := _flee(grid, from, player_field) if carrying \

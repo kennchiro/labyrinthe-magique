@@ -437,6 +437,12 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.molten_started.connect(_on_molten_started)
 	combat.molten_ended.connect(_on_molten_ended)
 	combat.pact_signed.connect(_on_pact_signed)
+	combat.enemy_possessed.connect(_on_enemy_possessed)
+	combat.possession_field.connect(_on_possession_field)
+	combat.great_discord_cast.connect(_on_great_discord)
+	combat.brawl_struck.connect(_on_brawl_struck)
+	combat.bond_struck.connect(_on_bond_struck)
+	combat.enemy_swapped.connect(_on_enemy_swapped)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -549,6 +555,7 @@ func _process(delta: float) -> void:
 	_update_thieves()
 	_update_spores(delta, stopped)
 	_update_rage()
+	_update_discord_threads()
 	_update_boss(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
@@ -765,7 +772,10 @@ func _refresh_context() -> void:
 	combat_context.player_field = _player_field
 	var cells := _enemy_cells()
 	var healths: Array[Health] = []
+	combat_context.bosses.clear()
 	for enemy in enemies:
+		if enemy.is_boss():
+			combat_context.bosses[healths.size()] = true
 		healths.append(enemy.health)
 	# Les repaires destructibles suivent les ennemis dans les MÊMES tableaux, et
 	# tous y figurent — même abattus. Un tableau qui rétrécirait décalerait les
@@ -896,7 +906,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon"]
+	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -1020,7 +1030,7 @@ func _load_character_fx() -> void:
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1605,6 +1615,82 @@ func _update_rage() -> void:
 	var rage := combat.rage_bonus() / CombatSystem.RAGE_MAX
 	_rage_aura.visible = rage > 0.0
 	(_rage_aura.material as ShaderMaterial).set_shader_parameter("rage", rage)
+
+
+# --- La Démone de la Discorde -------------------------------------------------------
+
+const EYE_RADIUS := 0.62
+## L'entrée de l'extra reste autour d'elle : sur toute la carte, elle cachait ce qui se passait.
+const GREAT_DISCORD_RADIUS := 1.7
+const GREAT_DISCORD_TIME := 1.05
+const SWAP_TIME := 0.5
+const BRAWL_TIME := 0.3
+const BRAWL_SCALE := 0.55
+
+var _discord_threads: DiscordThreads = null
+
+
+func _on_enemy_possessed(index: int, duration: float) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	var enemy: Enemy = enemies[index]
+	enemy.possess(duration)
+	if duration <= 0.0:
+		return
+	var eye := PaintedBurst.new()
+	enemy.add_child(eye)
+	eye.setup(TILE_SIZE, EYE_RADIUS, duration, float(index) * 0.37, "discorde_oeil")
+	eye.set_shader_seconds(duration)
+	eye.position = Vector2(0.0, -TILE_SIZE * DiscordThreads.EYE_HEIGHT)
+	eye.z_index = 2
+
+
+func _on_possession_field(field: PackedInt32Array) -> void:
+	for enemy in enemies:
+		if enemy.ai != null:
+			enemy.ai.possess_field = field
+
+
+func _on_great_discord(cell: Vector2i) -> void:
+	var burst := _spawn_painted_burst(cell, GREAT_DISCORD_RADIUS, GREAT_DISCORD_TIME, "discorde_grande")
+	# Il flotte au-dessus d'elle : plein, il la cacherait.
+	burst.position.y -= TILE_SIZE * DiscordThreads.GREAT_EYE_HEIGHT
+	burst.z_index = 11
+	if _discord_threads != null and is_instance_valid(_discord_threads):
+		_discord_threads.launch()
+	_shake_total = 0.16
+	_shake_left = _shake_total
+	_shake_time = 0.0
+
+
+func _on_brawl_struck(cell: Vector2i) -> void:
+	# Petit : une mêlée en fait beaucoup, et de pleine taille ils cachaient les combattants.
+	_spawn_painted_burst(cell, 0.9, BRAWL_TIME, "discorde_noeud").scale = Vector2.ONE * BRAWL_SCALE
+
+
+func _on_bond_struck(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 0.9, BRAWL_TIME * 0.7, "discorde_noeud").scale = Vector2.ONE * BRAWL_SCALE
+
+
+func _on_enemy_swapped(index: int, cell: Vector2i) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	var enemy: Enemy = enemies[index]
+	_spawn_painted_burst(enemy.mover.nearest_cell(), 1.0, SWAP_TIME, "discorde_echange")
+	_spawn_painted_burst(cell, 1.0, SWAP_TIME, "discorde_echange")
+	enemy.mover.teleport_to(cell)
+	enemy.snap_to_mover()
+
+
+func _update_discord_threads() -> void:
+	if character == null or character.id != "discorde":
+		return
+	if _discord_threads == null or not is_instance_valid(_discord_threads) \
+			or _discord_threads.get_parent() != entities:
+		_discord_threads = DiscordThreads.new()
+		entities.add_child(_discord_threads)
+		_discord_threads.z_index = 11
+	_discord_threads.show_state(enemies, combat, TILE_SIZE, player)
 
 
 # --- L'Archange d'Acier -------------------------------------------------------------
@@ -2322,7 +2408,7 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		var flight := LightArc.new()
 		entities.add_child(flight)
 		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
-	elif character.id in ["etoiles", "acier", "demon"]:
+	elif character.id in ["etoiles", "acier", "demon", "discorde"]:
 		pass
 	elif character.id == "mort":
 		var passage := DeathPassage.new()
@@ -3375,7 +3461,7 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon"]:
+		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde"]:
 			return
 		# Le Feu n'a plus besoin de l'éclat tracé : ses triangles jaunes flottaient
 		# par-dessus les lobes et cassaient leur silhouette.

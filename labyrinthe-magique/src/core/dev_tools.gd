@@ -21,6 +21,7 @@ extends Node
 ##   --demo-stage N    en démo, ouvre directement le décor du stage N
 ##   --use-slot N      lance le sort du slot N dès qu'il part (test des invocations)
 ##   --goblin / --hunter  colle cet ennemi au joueur (test de sa pose de coup)
+##   --crowd          regroupe les ennemis autour du joueur (test des sorts de foule)
 ##   --stars          plante trois étoiles autour de l'Ange des Étoiles
 ##   --skill-delay F    attend F secondes avant --skill (le temps que les
 ##                      ennemis arrivent : un sort qui agit SUR EUX ne se
@@ -136,6 +137,7 @@ func apply_command_line() -> void:
 		game.ui.set_kills(game.kills.progress, game.kills.needed, game.kills.available())
 	# Colle un ennemi au joueur : la seule façon de voir sa pose de coup sans
 	# jouer jusqu'à se faire rattraper, donc de pouvoir la capturer en image.
+	_crowd_pending = "--crowd" in args
 	if "--goblin" in args:
 		_cling_enemy("goblin")
 	if "--hunter" in args:
@@ -312,6 +314,7 @@ func _cling_enemy(species: String) -> void:
 
 var _slot_wanted := -1
 var _slot_tries := 0
+var _crowd_pending := false
 var _auto_walk := false
 var _warp_tries := 0
 var _skill_slot := -1
@@ -323,6 +326,23 @@ var _show_fx := false
 var _fx_timer := 0.0
 var _pending_tap := Vector2i(-1, -1)
 var _tap_countdown := 0
+
+
+## Cinq ennemis à trois ou quatre pas du joueur : une foule ne se forme pas toute seule au départ.
+func _gather_crowd() -> void:
+	var level = game.level
+	var grid: MazeGrid = level.enemies[0].mover.grid
+	var from: Vector2i = level.player.mover.nearest_cell()
+	var field := Pathfinder.distance_field(grid, [from] as Array[Vector2i])
+	var spots: Array[Vector2i] = []
+	for y in grid.rows:
+		for x in grid.cols:
+			var distance := Pathfinder.value_at(grid, field, Vector2i(x, y))
+			if distance >= 3 and distance <= 4:
+				spots.append(Vector2i(x, y))
+	for i in mini(5, mini(spots.size(), level.enemies.size())):
+		level.enemies[i].mover.teleport_to(spots[i])
+		level.enemies[i].snap_to_mover()
 
 
 func _process(delta: float) -> void:
@@ -341,6 +361,9 @@ func _process(delta: float) -> void:
 			if not game.level.order_player_walk(screen):
 				push_warning("--tap %s : case injouable" % _pending_tap)
 			_pending_tap = Vector2i(-1, -1)
+	if _crowd_pending and game.level.player != null and not game.level.enemies.is_empty():
+		_crowd_pending = false
+		_gather_crowd()
 	if _warp_tries > 0:
 		_warp_tries -= 1
 		# `use_slot` rend faux quand le sort est refusé ; on retente à la frame

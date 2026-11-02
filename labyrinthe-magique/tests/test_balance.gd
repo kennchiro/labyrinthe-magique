@@ -259,6 +259,15 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	combat.enemy_blinded.connect(func(index: int, duration: float) -> void:
 		brains[index].blind_left = duration
 		swings[index].cancel())
+	combat.enemy_possessed.connect(func(index: int, duration: float) -> void:
+		brains[index].possess(duration)
+		swings[index].cancel())
+	combat.possession_field.connect(func(field: PackedInt32Array) -> void:
+		for brain in brains:
+			brain.possess_field = field)
+	combat.enemy_swapped.connect(func(index: int, cell: Vector2i) -> void:
+		if index < movers.size():
+			movers[index].teleport_to(cell))
 	combat.enemy_staggered.connect(func(index: int, duration: float) -> void:
 		staggered[index] = duration)
 	combat.enemy_pushed.connect(func(index: int, cell: Vector2i) -> void:

@@ -76,6 +76,8 @@ const PAINTED := {
 		"length": 1.3, "height": 0.54, "lead": 0.3, "sparks": 0.0},
 	"croissant_noir": {"shader": preload("res://assets/shaders/mort_crescent.gdshader"),
 		"length": 1.5, "height": 0.8, "lead": 0.3, "sparks": 0.0},
+	"fil_murmure": {"shader": preload("res://assets/shaders/discorde_fil.gdshader"),
+		"length": 1.9, "height": 0.56, "lead": 0.3, "sparks": 0.0},
 	"griffe_sang": {"shader": preload("res://assets/shaders/demon_griffe.gdshader"),
 		"length": 1.45, "height": 0.82, "lead": 0.3, "sparks": 0.0},
 	"onde_marteau": {"shader": preload("res://assets/shaders/acier_wave.gdshader"),

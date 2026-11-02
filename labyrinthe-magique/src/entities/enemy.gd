@@ -48,6 +48,7 @@ const VENOM_DROP := Color("#b4f02a")
 const VENOM_RIM := Color("#1e3a0c")
 const VENOM_SHINE := Color("#f2ff9e")
 const TINT_BLIND := Color(1.5, 1.45, 1.25)
+const TINT_POSSESSED := Color(1.45, 0.75, 1.15)
 const BLIND_STAR := Color("#ffcf5a")
 const ASTRE_STAR := Color("#ffffff")
 const ASTRE_RIM := Color("#0a1030")
@@ -361,6 +362,16 @@ func mark(duration: float) -> void:
 	queue_redraw()
 
 
+## Retourné par la Démone. Zéro le libère : un mort ne doit pas revenir possédé.
+func possess(duration: float) -> void:
+	if ai != null:
+		ai.possess(duration)
+		if duration <= 0.0:
+			ai.possess_field = PackedInt32Array()
+	if duration > 0.0:
+		flash_hit()
+
+
 func is_blinded() -> bool:
 	return ai != null and ai.blind_left > 0.0
 
@@ -452,6 +463,9 @@ func _update_desired(delta: float) -> void:
 		return
 	# Brûlure et trempe passent AVANT les teintes d'état : un statut est une
 	# information de combat, l'état de l'IA n'est qu'une ambiance.
+	if ai.possess_left > 0.0:
+		_show_state(TINT_POSSESSED)
+		return
 	if is_blinded():
 		_show_state(TINT_BLIND)
 		queue_redraw()
@@ -842,7 +856,7 @@ func _draw_mark() -> void:
 ## Trois étoiles d'or tournent au-dessus de la barre de vie. Elles s'éteignent une à une
 ## juste avant qu'il reprenne la poursuite.
 func _draw_blind() -> void:
-	if not is_blinded():
+	if not is_blinded() or ai.possess_left > 0.0:
 		return
 	var lit := mini(3, ceili(ai.blind_left / 0.3))
 	var clock := float(Time.get_ticks_msec()) * 0.004

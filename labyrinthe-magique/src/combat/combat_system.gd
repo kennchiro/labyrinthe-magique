@@ -163,6 +163,13 @@ signal rampart_reflected(cell: Vector2i)
 signal molten_started(duration: float)
 signal molten_ended
 signal pact_signed(cell: Vector2i)
+signal enemy_possessed(index: int, duration: float)
+## Le champ qui mène les possédés à leur proie. Vide, ils errent : ils n'ont personne.
+signal possession_field(field: PackedInt32Array)
+signal great_discord_cast(cell: Vector2i)
+signal brawl_struck(cell: Vector2i)
+signal bond_struck(cell: Vector2i)
+signal enemy_swapped(index: int, cell: Vector2i)
 signal dawn_cast(cell: Vector2i)
 signal dawn_struck(cell: Vector2i)
 
@@ -301,6 +308,15 @@ const STAR_FALL_LEAD := 0.34
 
 ## Le gain de force du Démon du Pacte, atteint à 1 PV quel que soit le stage.
 const RAGE_MAX := 0.5
+## La Démone : un possédé frappe ses voisins à cette cadence, et leur riposte suit.
+const POSSESS_GAP := 0.7
+const POSSESS_FIELD_REFRESH := 0.4
+const WHISPER_MARKS := 3
+const TROUBLE_SECONDS := 4.0
+const TROUBLE_FACTOR := 0.7
+const TROUBLE_BONUS := 2.0
+## L'échangé reste sonné un instant : sinon il frappait à l'arrivée, sans qu'on puisse fuir.
+const SWAP_STUN := 0.7
 ## Sous cette part de ses PV, un ennemi touché par l'Ange de la Mort est achevé.
 const PLATE_MAX := 3
 ## Les kills qu'il faut pour reforger une plaque.
@@ -416,6 +432,13 @@ var _rampart: Ability = null
 var _reflect_waiting := false
 var _reflect_lock := 0.0
 var _molten_left := 0.0
+var _possessed := {}                   # index -> {left, timer, strike}
+var _foyer := -1
+var _foyer_timer := 0.0
+var _whispers := {}                    # index -> murmures reçus, avant le trouble
+var _troubled := {}                    # index -> secondes de trouble
+var _bond := {}                        # {members, left, share}
+var _bond_relaying := false
 var _blast_hits := 0                   # ennemis touchés par le souffle en cours
 var _pact_owed := 0                    # PV rendus à la fin du Dernier Pacte
 var _souls := 0                        # âmes récoltées par l'Ange de la Mort
@@ -497,6 +520,7 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_death(delta, context)
 	_update_stars(delta, context)
 	_update_steel(delta, context)
+	_update_discord(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -619,6 +643,11 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 				"id": ability.id, "kind": ability.kind, "element": ability.element,
 				"damage": int(round(ability.damage * ZONE_TICK)), "radius": ability.radius,
 			})
+			if ability.discord_bonus > 0.0:
+				var crowd := _creatures_within(zone["cell"], ability.radius, context)
+				zone["members"] = crowd
+				slice.damage = int(round(float(slice.damage)
+					* (1.0 + ability.discord_bonus * float(maxi(0, crowd.size() - 1)))))
 			# NI TRAIT NI EXALTATION, exactement comme un tic de brûlure : une
 			# nappe qui ronge n'est pas un coup porté par le mage. C'est une
 			# usure, posée une fois et qui travaille toute seule.
@@ -854,6 +883,12 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.PACT:
 			pact_signed.emit(context.player_cell)
 			fired = true
+		Ability.Kind.POSSESS:
+			fired = _cast_possess(ability, context)
+		Ability.Kind.BOND:
+			fired = _cast_bond(ability, context)
+		Ability.Kind.SWAP:
+			fired = _cast_swap(ability, context)
 		Ability.Kind.BLADES:
 			fired = _cast_blades(ability, context)
 		Ability.Kind.ANVIL:
@@ -1338,10 +1373,17 @@ func _cast_seals(ability: Ability, context: CombatContext) -> bool:
 func _cast_zone(ability: Ability, context: CombatContext) -> bool:
 	if ability.seal_ring > 0:
 		return _cast_seals(ability, context)
+	var centre := context.player_cell
+	if ability.zone_on_prey:
+		var prey := find_target(ability, context)
+		if prey < 0 or context.is_structure(prey):
+			use_refused.emit("cible")
+			return false
+		centre = context.enemy_cells[prey]
 	var id := _next_zone_id
 	_next_zone_id += 1
 	var zone := {
-		"id": id, "ability": ability, "cell": context.player_cell,
+		"id": id, "ability": ability, "cell": centre,
 		"time_left": ability.duration, "tick": 0.0,
 	}
 	# LA TORNADE REMONTE LE COULOIR. Le chemin est calculé D'UN COUP au
@@ -1356,7 +1398,7 @@ func _cast_zone(ability: Ability, context: CombatContext) -> bool:
 		zone["walk"] = float(zone["step"])
 		zone["index"] = 0
 	_zones.append(zone)
-	zone_created.emit(id, ability, context.player_cell)
+	zone_created.emit(id, ability, centre)
 	return true
 
 
@@ -2574,6 +2616,237 @@ func rage_bonus() -> float:
 	return RAGE_MAX * float(health.maximum - health.current) / float(health.maximum - 1)
 
 
+# --- La Démone de la Discorde ---------------------------------------------------------
+
+func _cast_possess(ability: Ability, context: CombatContext) -> bool:
+	if ability.is_ultimate:
+		for i in context.enemy_cells.size():
+			if _possessable(i, context):
+				_possess(i, ability, context)
+		great_discord_cast.emit(context.player_cell)
+		return true
+	var target := _nearest_possessable(ability.range, context)
+	if target < 0:
+		use_refused.emit("cible")
+		return false
+	_possess(target, ability, context)
+	return true
+
+
+func _possessable(index: int, context: CombatContext) -> bool:
+	return context.enemy_alive(index) and not context.is_structure(index) \
+		and not context.bosses.has(index)
+
+
+## Le plus proche qu'on peut retourner. Un déjà possédé ne vaut pas un second sort.
+func _nearest_possessable(reach: int, context: CombatContext) -> int:
+	var best := -1
+	var best_distance := reach + 1
+	for i in context.enemy_cells.size():
+		if not _possessable(i, context) or _possessed.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance >= 0 and distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+func _possess(index: int, ability: Ability, context: CombatContext) -> void:
+	var seconds := ability.possess_seconds + (TROUBLE_BONUS if _troubled.has(index) else 0.0)
+	var strike := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+		"damage": ability.possess_strike})
+	_possessed[index] = {"left": seconds, "timer": 0.0, "strike": strike}
+	_foyer_timer = 0.0
+	enemy_possessed.emit(index, seconds)
+
+
+## Les possédés marchent tous vers un même foyer : un seul champ à calculer, même quand toute la
+## carte est retournée, et une vraie mêlée à regarder.
+func _aim_possessed(context: CombatContext) -> void:
+	var first := int(_possessed.keys()[0])
+	if _foyer == first or not context.enemy_alive(_foyer) or context.is_structure(_foyer):
+		_foyer = -1
+		var field := _field_from(context.enemy_cells[first])
+		var best := -1
+		for i in context.enemy_cells.size():
+			if i == first or not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance >= 0 and (best < 0 or distance < best):
+				best = distance
+				_foyer = i
+	possession_field.emit(PackedInt32Array() if _foyer < 0
+		else _field_from(context.enemy_cells[_foyer]))
+
+
+func _brawl_prey(index: int, context: CombatContext) -> int:
+	var here: Vector2i = context.enemy_cells[index]
+	for i in context.enemy_cells.size():
+		if i == index or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var gap: Vector2i = context.enemy_cells[i] - here
+		if absi(gap.x) + absi(gap.y) <= 1:
+			return i
+	return -1
+
+
+func _update_discord(delta: float, context: CombatContext) -> void:
+	for index in _troubled.keys():
+		_troubled[index] = float(_troubled[index]) - delta
+		if float(_troubled[index]) <= 0.0:
+			_troubled.erase(index)
+	if not _bond.is_empty():
+		_bond["left"] = float(_bond["left"]) - delta
+		if float(_bond["left"]) <= 0.0:
+			_bond.clear()
+	if _possessed.is_empty():
+		_foyer = -1
+		return
+	for index: int in _possessed.keys():
+		if not _possessed.has(index):
+			continue
+		var entry: Dictionary = _possessed[index]
+		entry["left"] = float(entry["left"]) - delta
+		entry["timer"] = float(entry["timer"]) - delta
+		if float(entry["left"]) <= 0.0 or not context.enemy_alive(index):
+			_possessed.erase(index)
+			continue
+		if float(entry["timer"]) > 0.0:
+			continue
+		var prey := _brawl_prey(index, context)
+		if prey < 0:
+			continue
+		entry["timer"] = POSSESS_GAP
+		brawl_struck.emit(context.enemy_cells[prey])
+		var answers := not _possessed.has(prey)
+		_apply_damage(prey, entry["strike"], context, false, false)
+		if answers:
+			_apply_damage(index, entry["strike"], context, false, false)
+	if _possessed.is_empty():
+		possession_field.emit(PackedInt32Array())
+		return
+	_foyer_timer -= delta
+	if _foyer_timer <= 0.0:
+		_foyer_timer = POSSESS_FIELD_REFRESH
+		_aim_possessed(context)
+
+
+func _add_whisper(index: int, context: CombatContext) -> void:
+	if not context.enemy_alive(index):
+		return
+	var count := int(_whispers.get(index, 0)) + 1
+	if count < WHISPER_MARKS:
+		_whispers[index] = count
+		return
+	_whispers.erase(index)
+	_troubled[index] = TROUBLE_SECONDS
+	enemy_soaked.emit(index, TROUBLE_SECONDS, TROUBLE_FACTOR)
+
+
+## Les créatures dans un rayon, par les couloirs. Un repaire ne se bat avec personne.
+func _creatures_within(centre: Vector2i, radius: float, context: CombatContext) -> Array[int]:
+	var field := _field_from(centre)
+	var out: Array[int] = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and float(distance) <= radius:
+			out.append(i)
+	return out
+
+
+func _cast_bond(ability: Ability, context: CombatContext) -> bool:
+	var first := -1
+	var best := ability.range + 1
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance >= 0 and distance < best:
+			best = distance
+			first = i
+	if first < 0:
+		use_refused.emit("cible")
+		return false
+	var field := _field_from(context.enemy_cells[first])
+	var near := _creatures_within(context.enemy_cells[first], ability.radius, context)
+	near.sort_custom(func(a: int, b: int) -> bool:
+		return Pathfinder.value_at(grid, field, context.enemy_cells[a]) \
+			< Pathfinder.value_at(grid, field, context.enemy_cells[b]))
+	near.resize(mini(near.size(), ability.bond_count))
+	# Un seul maillon ne relie rien : le sort reste prêt pour un vrai groupe.
+	if near.size() < 2:
+		use_refused.emit("cible")
+		return false
+	_bond = {"members": near, "left": ability.duration, "share": ability.bond_share,
+		"ability": ability}
+	return true
+
+
+## La part qui passe aux autres. Elle ne relance jamais le lien : sinon trois enchaînés se
+## renverraient le même coup jusqu'à la mort.
+func _relay_bond(index: int, dealt: int, ability: Ability, context: CombatContext) -> void:
+	if _bond.is_empty() or index not in _bond["members"]:
+		return
+	var share := maxi(1, int(round(float(dealt) * float(_bond["share"]))))
+	var relay := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+		"damage": share})
+	_bond_relaying = true
+	for other: int in _bond["members"]:
+		if other != index and context.enemy_alive(other):
+			bond_struck.emit(context.enemy_cells[other])
+			_apply_damage(other, relay, context, false, false)
+	_bond_relaying = false
+
+
+func _cast_swap(ability: Ability, context: CombatContext) -> bool:
+	if player_rooted():
+		use_refused.emit("immobile")
+		return false
+	var target := -1
+	var best := ability.range + 1
+	for i in context.enemy_cells.size():
+		if not _possessable(i, context):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance > 0 and distance < best:
+			best = distance
+			target = i
+	if target < 0:
+		use_refused.emit("cible")
+		return false
+	var from := context.player_cell
+	var to: Vector2i = context.enemy_cells[target]
+	context.enemy_cells[target] = from
+	enemy_swapped.emit(target, from)
+	enemy_staggered.emit(target, SWAP_STUN)
+	blink_performed.emit(from, to)
+	return true
+
+
+## Ce que le jeu dessine : les possédés, les enchaînés et les toiles des cercles.
+func possessed_indices() -> Array:
+	return _possessed.keys()
+
+
+func bond_members() -> Array:
+	return [] if _bond.is_empty() else _bond["members"]
+
+
+func discord_webs() -> Array:
+	var webs := []
+	for zone in _zones:
+		if zone.has("members"):
+			webs.append(zone["members"])
+	return webs
+
+
+func whispers_on(index: int) -> int:
+	return WHISPER_MARKS if _troubled.has(index) else int(_whispers.get(index, 0))
+
+
 func _can_pay(ability: Ability) -> bool:
 	return ability.self_cost <= 0 or health.current > ability.self_cost
 
@@ -3161,8 +3434,14 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 	if with_trait and dealt > 0 and ability.kind != Ability.Kind.ZONE \
 			and not context.is_structure(index):
 		_apply_trait(index, dealt, ability, context)
+	if dealt > 0 and not _bond_relaying:
+		_relay_bond(index, dealt, ability, context)
 	if not context.enemy_health[index].is_alive():
 		_marked.erase(index)
+		_whispers.erase(index)
+		_troubled.erase(index)
+		if _possessed.erase(index):
+			enemy_possessed.emit(index, 0.0)
 		if _star_marks.erase(index):
 			enemy_star_marks.emit(index, 0)
 		if ability.element == Element.Kind.DEATH:
@@ -3205,6 +3484,9 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 			_sentence(index, ability, context)
 		Element.Kind.STARS:
 			_add_star_mark(index, ability, context)
+		Element.Kind.CHARM:
+			if ability == stats.attack:
+				_add_whisper(index, context)
 		Element.Kind.STEEL:
 			if _molten_left > 0.0 and ability == stats.attack and context.enemy_alive(index):
 				_push_away(index, context, MOLTEN_PUSH)

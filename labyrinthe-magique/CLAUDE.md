@@ -278,6 +278,12 @@ bouclier. Le Dernier Pacte réutilise `_immune_left`, et `_pact_owed` rend les P
 noble à l'image : tout ce qui le dit démon est dans ses sorts, jamais dans son corps. ⚠️ Les bots ne cherchent
 jamais à rester à 1 PV : `test_balance` mesure la Rage, pas ce jeu-là. `tools/preview_demon.gd` montre ses effets.
 
+La **Démone de la Discorde** (élément Envoûtement, onglet Démon) ne frappe presque pas : `Kind.POSSESS` retourne les
+ennemis les uns contre les autres. Un possédé est aveuglé (`blind_left`) et suit le champ d'un foyer commun
+(`possession_field`, `EnemyAI.possess_field`). `Kind.BOND` partage les dégâts, `Kind.SWAP` est sa fuite, et les boss
+(`CombatContext.bosses`) ne se possèdent ni ne s'échangent. ⚠️ Sa couleur est celle du fond des planches : aucun rose
+ni violet sur son sprite ou ses icônes, le magenta n'existe que dans ses shaders et `DiscordThreads`.
+
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
   vrai canal alpha, dessin bien plus fin, quatre fois plus de poses). Elle est

@@ -3,7 +3,7 @@
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
 > La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-15 mages jouables. La barre d'action a toujours la même forme —
+16 mages jouables. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -26,6 +26,7 @@ comparables d'un personnage à l'autre.
 | **Ange des Étoiles** | Étoiles | 4 | 5.1 | 5 kills | **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 dégâts |
 | **Archange d'Acier** | Acier | 6 | 4.3 | 7 kills | **Plaques** — 3 plaques encaissent chacune un coup à la place des PV ; 2 kills en reforgent une |
 | **Démon du Pacte** | Sang | 4 | 5.1 | 5 kills | **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum à 1 PV |
+| **Démone de la Discorde** | Envoûtement | 3 | 5.5 | 4 kills | **Trouble** — au 3e murmure, la cible ralentit de 30 % pendant 4.0 s, et sa possession dure 2.0 s de plus |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
@@ -420,3 +421,29 @@ Trait : **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum 
 - **Festin** — Une gueule de sang se referme autour de lui : s'il a touché quelqu'un, il reprend un point de vie.
 - **Bond de soufre** — Il disparaît dans une gerbe de sang et reparaît plus loin dans le couloir.
 - **Dernier Pacte** — Le sceau éclate : il tombe à 1 PV et devient intouchable, puis récupère les trois quarts de ce qu'il a donné.
+
+---
+
+## Démone de la Discorde — Envoûtement
+
+> Elle tire les fils et laisse les autres se battre. Redoutable dans la foule, bien seule face à un seul ennemi.
+
+`id: discorde` · puissance affichée 3/5 · vie 3 · vitesse 5.5 · extra à 4 kills
+
+Trait : **Trouble** — au 3e murmure, la cible ralentit de 30 % pendant 4.0 s, et sa possession dure 2.0 s de plus
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Murmure** | projectile | 14 dégâts · portée 7 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Mauvais Œil** | ? | possède 1 ennemi · portée 8 · 5 s · 20 par coup · recharge 10 s | 10.0 s |
+| SKILL 2 | **Cercle de Discorde** | zone | 16 dégâts/s · +50 % par ennemi en plus · rayon 2.5 · 6 s · recharge 12 s | 12.0 s |
+| SKILL 3 | **Lien de Souffrance** | ? | enchaîne 3 ennemis · portée 8 · 50 % des dégâts · 8 s · recharge 14 s | 14.0 s |
+| FUITE | **Échange** | ? | échange avec un ennemi · portée 6 · recharge 9 s | 9.0 s |
+| EXTRA | **Grande Discorde** | ? | tous les ennemis · 6 s · 22 par coup | 1.0 s |
+
+- **Murmure** — Un fil d'argent file de ses doigts. Au troisième, la cible est troublée.
+- **Mauvais Œil** — Un ennemi se retourne contre ses voisins et ne la chasse plus.
+- **Cercle de Discorde** — Un cercle se pose sur l'ennemi le plus proche : plus ils y sont nombreux, plus chacun y souffre.
+- **Lien de Souffrance** — Une chaîne relie trois ennemis proches : la moitié des coups portés à l'un passe aux deux autres.
+- **Échange** — Elle prend la place de l'ennemi le plus proche, et lui laisse la sienne.
+- **Grande Discorde** — Tous les ennemis à l'écran se battent entre eux, et leurs morts comptent pour elle. Seuls les boss résistent.

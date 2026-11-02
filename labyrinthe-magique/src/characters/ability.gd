@@ -38,6 +38,9 @@ enum Kind {
 	BLADES,       ## une volée de lames part en éventail, puis revient au lanceur
 	ANVIL,        ## une onde court dans les couloirs depuis le lanceur et étourdit
 	PACT,         ## ne fait que payer son prix : sa force vient de l'exaltation qu'il porte
+	POSSESS,      ## la cible se retourne contre ses voisins ; l'ultime possède tout l'écran
+	BOND,         ## enchaîne des ennemis : une part des dégâts de l'un passe aux autres
+	SWAP,         ## le lanceur et l'ennemi le plus proche échangent leurs places
 }
 
 @export var id: String = ""
@@ -524,6 +527,17 @@ enum Kind {
 @export var self_cost: int = 0
 ## Le soin de `heal_self` ne vient que si le souffle a touché un ennemi.
 @export var heal_needs_hit: bool = false
+
+## LA DÉMONE DE LA DISCORDE. Durée d'une possession, et ce que chaque coup porté ou rendu retire.
+@export var possess_seconds: float = 0.0
+@export var possess_strike: int = 0
+## Chaque ennemi en plus dans la zone en augmente les dégâts de cette part.
+@export var discord_bonus: float = 0.0
+## La zone se pose sur l'ennemi le plus proche à portée, et non sous le lanceur.
+@export var zone_on_prey: bool = false
+## Combien d'ennemis le lien enchaîne, et la part des dégâts qui passe aux autres.
+@export var bond_count: int = 0
+@export var bond_share: float = 0.0
 ## Le Dernier Pacte : le lanceur tombe à 1 PV et reste intouchable ce temps-là.
 @export var last_pact_seconds: float = 0.0
 ## La part des PV sacrifiés qu'il retrouve à la fin.
@@ -631,6 +645,19 @@ func _base_summary() -> String:
 			return "%d dégâts · rayon %s" % [damage, _number(radius)]
 		Kind.PACT:
 			return "coûte %d PV · jamais le dernier" % self_cost
+		Kind.POSSESS when is_ultimate:
+			return "tous les ennemis · %s s · %d par coup" % [_number(possess_seconds), possess_strike]
+		Kind.POSSESS:
+			return "possède 1 ennemi · portée %d · %s s · %d par coup" % [
+				range, _number(possess_seconds), possess_strike]
+		Kind.BOND:
+			return "enchaîne %d ennemis · portée %d · %d %% des dégâts · %s s" % [
+				bond_count, range, int(bond_share * 100.0), _number(duration)]
+		Kind.SWAP:
+			return "échange avec un ennemi · portée %d" % range
+		Kind.ZONE when discord_bonus > 0.0:
+			return "%d dégâts/s · +%d %% par ennemi en plus · rayon %s · %s s" % [
+				damage, int(discord_bonus * 100.0), _number(radius), _number(duration)]
 		Kind.ZONE:
 			return "%d dégâts/s · rayon %s · %s s" % [damage, _number(radius), _number(duration)]
 		Kind.SHIELD when reflect_damage > 0:
