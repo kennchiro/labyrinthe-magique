@@ -155,13 +155,31 @@ découpés de `assets/peso&cover/pad_mobile.png` vers `assets/ui/` par
 `tools/build_assets.py` — les deux textures sont recadrées sur le MÊME centre,
 donc le moteur les pose centrées sans connaître de décalage.
 
-Le tactile a un SECOND mode de déplacement, **« toucher le chemin »** (façon
+Les **Réglages** (`SettingsPanel`, ouverts depuis la pause et l'écran-titre, sur écran
+tactile seulement) offrent trois déplacements et l'éditeur de disposition. Tout persiste
+dans `user://settings.cfg` (`Settings`, séparé de `Progress` : une préférence ne s'écrit
+que sur un geste du joueur, elle peut donc s'écrire toujours).
+
+La **croix** est un style de `TouchStick` (`--cross`). ⚠️ Ce ne sont pas quatre carrés à
+viser, le défaut qui avait fait retirer `TouchDPad` : la zone du manche est partagée en
+quatre secteurs, et il suffit de poser le pouce du bon côté.
+
+L'**éditeur** (`TouchLayoutEditor`) déplace, agrandit et estompe chaque commande, ou
+toutes ensemble, et passe le jeu en gaucher. `TouchLayout` ne garde que ce que le joueur
+a changé, en fractions d'écran : le reste suit toujours la géométrie déduite ci-dessus.
+⚠️ `TouchLayout.settle` refuse tout chevauchement et les zones réservées (la barre du mage,
+la pause, le carnet), sinon le placement libre recréerait le défaut de l'éventail.
+`--pause --settings --layout-editor` le capture, `--settings-file F` protège les réglages
+du joueur. `tests/test_touch_layout.gd` passe par ses gestes et par une vraie partie.
+⚠️ Dans un Control construit en code, `set_anchors_and_offsets_preset` et jamais
+`set_anchors_preset` : il garde sa taille nulle, et un test qui pose les tailles à la main
+ne le voit pas.
+
+Le tactile a aussi le mode **« toucher le chemin »** (façon
 Dota) : un tap sur une case praticable donne un ordre de marche — champ BFS
 descendu pas à pas (`Player.walk_to`), marque pulsante sur la case
 (`MoveMarker`), toute entrée manuelle ou téléportation annule l'ordre. Le
-**manche reste le défaut** ; la bascule vit dans l'écran de PAUSE et persiste
-dans `user://settings.cfg` (`Settings`, séparé de `Progress` : une préférence
-ne s'écrit que sur un geste du joueur, elle peut donc s'écrire toujours). La
+**manche reste le défaut**. La
 cible ne peut être qu'une case visible (~11 cases) : ce mode ne résout pas le
 labyrinthe à la place du joueur. Le pad de combat et le bouton de pause lisent
 leurs touches SANS les consommer — le GameManager écarte d'abord tout tap qui

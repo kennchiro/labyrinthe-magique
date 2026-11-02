@@ -9,13 +9,13 @@ signal resume_requested
 signal restart_requested
 signal next_requested
 signal menu_requested
-## Le joueur veut changer de mode de déplacement. L'écran ne sait pas ce que
-## c'est : il rapporte le geste, l'UIManager bascule le réglage et le libellé.
-signal controls_requested
+## Le joueur ouvre ses réglages. L'écran ne sait pas ce que c'est : il rapporte le
+## geste, l'UIManager ouvre le panneau.
+signal settings_requested
 
-## Posé par l'UIManager : le choix du mode de déplacement n'a de sens que sur
-## écran tactile, au clavier le bouton n'apparaît jamais.
-var controls_available := false
+## Posé par l'UIManager : les réglages ne parlent que des commandes tactiles, au
+## clavier le bouton n'apparaît jamais.
+var settings_available := false
 
 @onready var title: Label = $Center/Panel/Title
 @onready var subtitle: Label = $Center/Panel/Subtitle
@@ -24,7 +24,7 @@ var controls_available := false
 @onready var restart_button: Button = $Center/Panel/Buttons/RestartButton
 @onready var next_button: Button = $Center/Panel/Buttons/NextButton
 @onready var menu_button: Button = $Center/Panel/Buttons/MenuButton
-@onready var controls_button: Button = $Center/Panel/ControlsButton
+@onready var settings_button: Button = $Center/Panel/SettingsButton
 
 
 func _ready() -> void:
@@ -33,11 +33,7 @@ func _ready() -> void:
 	restart_button.pressed.connect(func() -> void: restart_requested.emit())
 	next_button.pressed.connect(func() -> void: next_requested.emit())
 	menu_button.pressed.connect(func() -> void: menu_requested.emit())
-	controls_button.pressed.connect(func() -> void: controls_requested.emit())
-
-
-func set_controls_label(text: String) -> void:
-	controls_button.text = text
+	settings_button.pressed.connect(func() -> void: settings_requested.emit())
 
 
 func show_result(title_text: String, subtitle_text: String, stats_text: String,
@@ -51,9 +47,9 @@ func show_result(title_text: String, subtitle_text: String, stats_text: String,
 	stats.visible = not stats_text.is_empty()
 	resume_button.visible = can_resume
 	next_button.visible = can_continue
-	# Sur la PAUSE seulement : changer de mode de déplacement au milieu d'un
-	# écran de victoire n'aurait rien à montrer, le niveau est déjà fini.
-	controls_button.visible = can_resume and controls_available
+	# Sur la PAUSE seulement : changer ses commandes au milieu d'un écran de victoire
+	# n'aurait rien à montrer, le niveau est déjà fini.
+	settings_button.visible = can_resume and settings_available
 	show()
 	# Le bouton par défaut prend le focus : la touche Entrée et la manette
 	# fonctionnent alors sans code de navigation supplémentaire.

@@ -64,7 +64,7 @@ text = "Niveau suivant"
 custom_minimum_size = Vector2(150, 58)
 text = "Menu"
 
-[node name="ControlsButton" type="Button" parent="Center/Panel"]
+[node name="SettingsButton" type="Button" parent="Center/Panel"]
 visible = false
 custom_minimum_size = Vector2(0, 52)
-text = "Déplacement : Manche analogique"
+text = "Réglages"

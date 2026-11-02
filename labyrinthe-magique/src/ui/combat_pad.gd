@@ -24,6 +24,10 @@ signal action_requested(slot: int)
 ## [{slot, label, color, ready, ratio, locked, hint}] — reconstruit à chaque frame
 ## par l'UIManager. La barre ne sait rien du jeu, elle affiche ce qu'on lui donne.
 var entries: Array[Dictionary] = []
+## La disposition du joueur. Sans elle, l'éventail déduit ci-dessous.
+var layout: TouchLayout = null
+## Dessinée dans l'éditeur de disposition : elle se montre, mais ne lance rien.
+var preview := false
 
 var _touches := {}
 var _pressed := -99
@@ -132,6 +136,13 @@ func _fan() -> Dictionary:
 
 
 func _centre(slot_index: int) -> Vector2:
+	var fallback := _fan_centre(slot_index)
+	if layout == null:
+		return fallback
+	return layout.centre_of(TouchLayout.button_id(slot_index), size, fallback, _radius(slot_index))
+
+
+func _fan_centre(slot_index: int) -> Vector2:
 	var fan := _fan()
 	var corner: Vector2 = fan["corner"]
 	if slot_index == 0:
@@ -145,10 +156,11 @@ func _centre(slot_index: int) -> Vector2:
 
 func _radius(slot_index: int) -> float:
 	var fan := _fan()
+	var chosen := layout.scale_of(TouchLayout.button_id(slot_index)) if layout != null else 1.0
 	if slot_index == 0:
-		return float(fan["main"])
+		return float(fan["main"]) * chosen
 	# La fuite est un peu plus grosse que les sorts : on la vise dans l'urgence.
-	return float(fan["skill"]) * (ESCAPE_BONUS if slot_index == 4 else 1.0)
+	return float(fan["skill"]) * (ESCAPE_BONUS if slot_index == 4 else 1.0) * chosen
 
 
 func _slot_at(point: Vector2) -> int:
@@ -169,7 +181,7 @@ func covers(point: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible:
+	if not visible or preview:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -204,12 +216,13 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 	var ready: bool = entry.get("ready", false)
 	var locked: bool = entry.get("locked", false)
 	var ratio: float = clampf(float(entry.get("ratio", 1.0)), 0.0, 1.0)
+	var fade := layout.alpha_of(TouchLayout.button_id(index)) if layout != null else 1.0
 
 	# Fond dense et teinté de l'élément : à 72 % d'un bleu presque noir, les
 	# boutons se lisaient comme des trous percés dans le labyrinthe.
-	draw_circle(centre, radius, Color(0.06, 0.08, 0.14, 0.93))
+	draw_circle(centre, radius, Color(0.06, 0.08, 0.14, 0.93 * fade))
 	draw_circle(centre, radius * 0.94,
-		Color(color.r * 0.30, color.g * 0.30, color.b * 0.30, 0.92 if ready else 0.55))
+		Color(color.r * 0.30, color.g * 0.30, color.b * 0.30, (0.92 if ready else 0.55) * fade))
 	# Le secteur de recharge tourne comme une aiguille : on voit d'un coup d'œil
 	# combien il reste, sans lire de chiffre.
 	# Sans icône, le disque coloré d'origine ; avec icône, seulement la
@@ -217,10 +230,10 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 	var has_icon: bool = entry.get("icon", null) != null
 	if ratio < 1.0:
 		draw_arc(centre, radius * 0.82, -PI * 0.5, -PI * 0.5 + TAU * ratio, 32,
-			Color(color.r, color.g, color.b, 0.55), radius * 0.30)
+			Color(color.r, color.g, color.b, 0.55 * fade), radius * 0.30)
 	elif not has_icon:
 		draw_circle(centre, radius * 0.66,
-			Color(color.r, color.g, color.b, 0.55 if ready else 0.18))
+			Color(color.r, color.g, color.b, (0.55 if ready else 0.18) * fade))
 
 	# L'ICÔNE au centre, à la place du disque coloré. Elle est grisée et
 	# assombrie quand le sort n'est pas prêt : c'est la même information que la
@@ -228,13 +241,14 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 	var icon: Texture2D = entry.get("icon", null)
 	if icon != null:
 		var span := radius * 1.5
-		var tint := Color(1, 1, 1, 0.95) if ready else Color(0.78, 0.8, 0.86, 0.8)
+		var tint := Color(1, 1, 1, 0.95 * fade) if ready else Color(0.78, 0.8, 0.86, 0.8 * fade)
 		draw_texture_rect(icon, Rect2(centre - Vector2(span, span) * 0.5,
 			Vector2(span, span)), false, tint)
 
 	var edge := color if ready else Color(0.42, 0.48, 0.62)
 	if _pressed == index:
 		edge = Color(1, 1, 1)
+	edge.a *= fade
 	draw_arc(centre, radius, 0.0, TAU, 40, edge, 3.0 if ready else 2.0)
 
 	# Un ultime chargé pulse : c'est le seul bouton qui doit attirer l'œil au
@@ -242,7 +256,7 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 	if ready and bool(entry.get("highlight", false)):
 		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.005)
 		draw_arc(centre, radius * (1.12 + 0.10 * pulse), 0.0, TAU, 40,
-			Color(color.r, color.g, color.b, 0.45 * pulse), 3.0)
+			Color(color.r, color.g, color.b, 0.45 * pulse * fade), 3.0)
 
 	# Les charges en PASTILLES autour du bouton plutôt qu'en chiffres : sur un
 	# bouton de 33 px sous un pouce, « 3/5 » est illisible, alors qu'on compte
@@ -256,12 +270,12 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 			var at := centre + Vector2(cos(angle), sin(angle)) * radius * 1.28
 			var filled := pip < charges
 			draw_circle(at, radius * 0.11,
-				color if filled else Color(0.30, 0.34, 0.44, 0.85))
+				Color(color, fade) if filled else Color(0.30, 0.34, 0.44, 0.85 * fade))
 
 	if locked:
 		# Cadenas : deux traits suffisent à dire « pas encore » sans police.
 		var bar := radius * 0.30
 		draw_rect(Rect2(centre - Vector2(bar, bar * 0.1), Vector2(bar * 2.0, bar * 1.1)),
-			Color(0.75, 0.80, 0.92, 0.85))
+			Color(0.75, 0.80, 0.92, 0.85 * fade))
 		draw_arc(centre - Vector2(0.0, bar * 0.1), bar * 0.72, PI, TAU, 20,
-			Color(0.75, 0.80, 0.92, 0.85), 3.0)
+			Color(0.75, 0.80, 0.92, 0.85 * fade), 3.0)

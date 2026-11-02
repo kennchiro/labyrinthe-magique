@@ -454,6 +454,33 @@ def build_touch_stick() -> tuple:
     return crop.size, (knob.shape[1], knob.shape[0])
 
 
+## Boîte de la croix bleue, relevée à la main sur la planche. Même famille que le
+## manche : passer de l'un à l'autre ne change pas l'habillage de l'écran.
+PAD_CROSS_BOX = (0, 440, 290, 760)
+
+
+def build_touch_cross() -> tuple:
+    """Détoure la croix directionnelle, recadrée autour de son centre."""
+    from scipy import ndimage
+    crop = Image.open(PAD_SHEET).convert("RGBA").crop(PAD_CROSS_BOX)
+    pixels = np.array(crop)
+    # Comme pour le manche : seule la forme la plus grosse est la croix. La boîte
+    # peut mordre sur ce qui l'entoure sur la planche.
+    labels, count = ndimage.label(pixels[..., 3] > 40, structure=np.ones((3, 3)))
+    sizes = ndimage.sum(np.ones_like(labels), labels, range(1, count + 1))
+    keep = labels == int(np.argmax(sizes)) + 1
+    pixels[~keep, 3] = 0
+    ys, xs = np.nonzero(keep)
+    # Recadrée SYMÉTRIQUEMENT : le moteur la pose centrée, comme le manche, et le
+    # calcul de direction part du même centre que le dessin.
+    cx, cy = (xs.min() + xs.max()) // 2, (ys.min() + ys.max()) // 2
+    half = max(xs.max() - cx, cx - xs.min(), ys.max() - cy, cy - ys.min()) + 2
+    canvas = Image.new("RGBA", (half * 2, half * 2), (0, 0, 0, 0))
+    canvas.paste(Image.fromarray(pixels, "RGBA"), (int(half - cx), int(half - cy)))
+    canvas.save(UI / "cross_base.png")
+    return canvas.size
+
+
 ICON_SHEET = Path("assets/peso&cover/interface/icone.png")
 
 
@@ -685,6 +712,8 @@ def main() -> None:
     if PAD_SHEET.exists():
         base, knob = build_touch_stick()
         print(f"manette : base {base[0]}x{base[1]} + bouton {knob[0]}x{knob[1]}")
+        cross = build_touch_cross()
+        print(f"croix   : {cross[0]}x{cross[1]}")
     print(f"dessinés: {len(GEM_COLORS)} gemmes + potion + orbe + flèche + icône 1024")
 
     build_hedge_sheet().save(TILES / "hedge_sheet.png")

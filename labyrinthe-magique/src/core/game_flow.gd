@@ -68,6 +68,11 @@ func show_title() -> void:
 	screen.start_requested.connect(start_game)
 	screen.journey_requested.connect(show_stages)
 	screen.select_requested.connect(show_select)
+	screen.settings_requested.connect(func() -> void:
+		var panel := SettingsPanel.new()
+		panel.character_id = character_id
+		panel.closed.connect(panel.queue_free)
+		screen.add_child(panel))
 
 
 func show_select() -> void:

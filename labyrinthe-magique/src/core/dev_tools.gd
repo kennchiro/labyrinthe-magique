@@ -28,6 +28,10 @@ extends Node
 ##   --cast             attaque dès qu'une cible est à portée
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
+##   --settings         ouvre aussi les réglages (avec --pause et --touch)
+##   --layout-editor    ouvre aussi l'éditeur de disposition (avec --settings)
+##   --cross            force la croix directionnelle (avec --touch)
+##   --settings-file F  lit et écrit ces réglages-là, pas ceux du joueur
 ##   --bench S          mesure S secondes sans limite d'images, écrit BENCH et quitte
 ##   --2d               l'ancienne vue à plat, au lieu du volume (voir WorldStage)
 ##   --screenshot PATH  capture un PNG puis quitte
@@ -413,6 +417,10 @@ func _apply_outcome(args: PackedStringArray) -> void:
 		# Le rendu continue pendant la pause de l'arbre : la capture différée
 		# de --screenshot montre donc bien l'écran de pause.
 		game.toggle_pause()
+		if "--settings" in args:
+			game.ui.open_settings()
+			if "--layout-editor" in args:
+				game.ui.settings_panel().open_editor()
 	if "--win" in args:
 		# La porte est scellée : sans les gemmes, le signal ne produirait qu'un
 		# « il manque 5 gemmes ». On les ramasse d'abord, par le vrai chemin.

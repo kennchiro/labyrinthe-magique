@@ -1,7 +1,8 @@
 class_name TouchStick
 extends Control
 
-## Manche analogique tactile, à POSITION FIXE.
+## Commande de déplacement tactile, à POSITION FIXE : le manche analogique, ou la
+## croix directionnelle si le joueur la préfère (`Style`).
 ##
 ## Il remplace la croix directionnelle, qui remplaçait elle-même un joystick — et
 ## ce qui n'allait pas dans ce premier joystick, c'était qu'il FLOTTAIT : il
@@ -21,9 +22,17 @@ extends Control
 ##
 ## Le multi-touch est géré par index de doigt : sans ça, poser un second doigt
 ## sur un bouton de sort annulerait le déplacement.
+##
+## ⚠️ LA CROIX N'EST PAS QUATRE CARRÉS. C'est ce qui avait fait retirer la première,
+## `TouchDPad` : quatre zones à viser, en courant. Celle-ci partage tout l'écran du
+## manche en quatre SECTEURS : on pose le pouce sur la bonne moitié, on glisse pour
+## tourner, et elle garde la même zone de saisie que le manche.
+
+enum Style { ANALOG, CROSS }
 
 const BASE_TEXTURE := preload("res://assets/ui/stick_base.png")
 const KNOB_TEXTURE := preload("res://assets/ui/stick_knob.png")
+const CROSS_TEXTURE := preload("res://assets/ui/cross_base.png")
 
 ## Rayon de la base, en pixels de mise en page. Le module de l'interface tactile
 ## (Platform.KEY_SIZE) : la base fait donc deux touches de large.
@@ -42,8 +51,17 @@ const DEAD_ZONE := 0.34
 const GRAB := 1.25
 ## Retour au centre à la levée du doigt, en fraction par seconde.
 const RETURN_SPEED := 18.0
+## La gemme centrale de la croix, en fraction du rayon : le pouce s'y repose sans
+## bouger le mage, le rôle de la zone morte du manche.
+const CROSS_HUB := 0.16
+## Au-delà de 45° du bras tenu on changerait de direction, et il faut ces quelques
+## degrés de plus : un pouce posé sur la diagonale ferait sinon vibrer le mage.
+const CROSS_STICKY := deg_to_rad(8.0)
 
 var direction: Vector2 = Vector2.ZERO
+var style := Style.ANALOG
+## La disposition du joueur. Sans elle, la place déduite.
+var layout: TouchLayout = null
 
 ## Index du doigt qui tient le manche, -1 si aucun.
 var _finger := -1
@@ -67,18 +85,47 @@ func set_enabled(enabled: bool) -> void:
 	queue_redraw()
 
 
+func set_style(new_style: Style) -> void:
+	style = new_style
+	_finger = -1
+	_offset = Vector2.ZERO
+	direction = Vector2.ZERO
+	queue_redraw()
+
+
+## Dessinée dans l'éditeur de disposition : elle se montre, mais ne pilote rien.
+func set_preview() -> void:
+	visible = true
+	set_process_input(false)
+	set_process(false)
+	queue_redraw()
+
+
 func _origin() -> Vector2:
-	return Vector2(margin.x + radius, size.y - margin.y - radius)
+	var fallback := Vector2(margin.x + radius, size.y - margin.y - radius)
+	if layout == null:
+		return fallback
+	return layout.centre_of(TouchLayout.MOVE, size, fallback, visual_radius())
+
+
+## Le rayon à l'écran, réglage du joueur compris.
+func visual_radius() -> float:
+	return radius * (layout.scale_of(TouchLayout.MOVE) if layout != null else 1.0)
+
+
+## Jusqu'où un pouce posé attrape la commande.
+func grab_radius() -> float:
+	return visual_radius() * GRAB
 
 
 func _travel() -> float:
-	return radius * TRAVEL
+	return visual_radius() * TRAVEL
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed:
-			if _finger < 0 and event.position.distance_to(_origin()) <= radius * GRAB:
+			if _finger < 0 and event.position.distance_to(_origin()) <= grab_radius():
 				_finger = event.index
 				_move_to(event.position)
 		elif event.index == _finger:
@@ -90,9 +137,23 @@ func _input(event: InputEvent) -> void:
 
 
 func _move_to(point: Vector2) -> void:
+	if style == Style.CROSS:
+		_aim_cross(point - _origin())
+		return
 	var travel := _travel()
 	_offset = (point - _origin()).limit_length(travel)
 	direction = Vector2.ZERO if _offset.length() < travel * DEAD_ZONE else _offset / travel
+	queue_redraw()
+
+
+## La direction du secteur où est le pouce. Le vecteur est franc : le mage va là où
+## pointe le bras, sans le repli sur l'autre axe qu'a le manche poussé en diagonale.
+func _aim_cross(pull: Vector2) -> void:
+	if pull.length() < visual_radius() * CROSS_HUB:
+		direction = Vector2.ZERO
+	elif direction == Vector2.ZERO or absf(pull.angle_to(direction)) > PI * 0.25 + CROSS_STICKY:
+		direction = Vector2(signf(pull.x), 0.0) if absf(pull.x) >= absf(pull.y) \
+			else Vector2(0.0, signf(pull.y))
 	queue_redraw()
 
 
@@ -109,9 +170,18 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var centre := _origin()
-	var scale_factor := radius * 2.0 / float(BASE_TEXTURE.get_width())
-	_draw_centred(BASE_TEXTURE, centre, scale_factor, 0.72 if _finger < 0 else 0.95)
-	_draw_centred(KNOB_TEXTURE, centre + _offset, scale_factor, 0.88 if _finger < 0 else 1.0)
+	var fade := layout.alpha_of(TouchLayout.MOVE) if layout != null else 1.0
+	if style == Style.CROSS:
+		var factor := visual_radius() * 2.0 / float(CROSS_TEXTURE.get_width())
+		_draw_centred(CROSS_TEXTURE, centre, factor, (0.82 if _finger < 0 else 1.0) * fade)
+		# Le bras tenu s'allume : le pouce le cache, ce halo déborde autour.
+		if direction != Vector2.ZERO:
+			draw_circle(centre + direction * visual_radius() * 0.62, visual_radius() * 0.3,
+				Color(0.75, 0.92, 1.0, 0.4 * fade))
+		return
+	var scale_factor := visual_radius() * 2.0 / float(BASE_TEXTURE.get_width())
+	_draw_centred(BASE_TEXTURE, centre, scale_factor, (0.72 if _finger < 0 else 0.95) * fade)
+	_draw_centred(KNOB_TEXTURE, centre + _offset, scale_factor, (0.88 if _finger < 0 else 1.0) * fade)
 
 
 ## Les deux textures sont recadrées autour du MÊME centre à la génération

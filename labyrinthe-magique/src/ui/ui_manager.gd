@@ -37,6 +37,9 @@ var touch_mode := false
 var _flash_timer := 0.0
 ## La barre du boss, créée à sa première apparition : la plupart des niveaux n'en ont pas.
 var _boss_bar: BossBar = null
+## Le panneau des réglages, créé à son ouverture.
+var _settings: SettingsPanel = null
+var _character_id := CharacterCatalog.default_id()
 
 
 func _ready() -> void:
@@ -49,7 +52,9 @@ func _ready() -> void:
 	# Sans elle, un joueur sur Mac ne voyait aucune de ses six compétences.
 	action_bar.visible = not touch_mode
 	debug_label.visible = false
-	result_screen.controls_available = touch_mode
+	result_screen.settings_available = touch_mode
+	stick.layout = Settings.touch_layout()
+	combat_pad.layout = Settings.touch_layout()
 	_apply_control_scheme()
 	if touch_mode:
 		Platform.apply_ui_scale(get_window())
@@ -68,7 +73,7 @@ func _ready() -> void:
 	result_screen.restart_requested.connect(func() -> void: restart_requested.emit())
 	result_screen.next_requested.connect(func() -> void: next_requested.emit())
 	result_screen.menu_requested.connect(func() -> void: menu_requested.emit())
-	result_screen.controls_requested.connect(_on_controls_toggled)
+	result_screen.settings_requested.connect(open_settings)
 
 
 func _process(delta: float) -> void:
@@ -79,6 +84,7 @@ func _process(delta: float) -> void:
 # --- Bandeau ---------------------------------------------------------------------
 
 func set_character(stats: CharacterStats) -> void:
+	_character_id = stats.id
 	hud.set_character(stats)
 
 
@@ -186,7 +192,7 @@ func touch_reserved(point: Vector2) -> bool:
 	# de l'interface, mais le GameManager, lui, lit les taps SANS passer par les
 	# nœuds : sans cette ligne, un tap sur la page ouverte ferait marcher le mage
 	# derrière elle. C'est le piège déjà payé une fois avec le pad de combat.
-	if quest_panel.visible:
+	if quest_panel.visible or _settings != null:
 		return true
 	return false
 
@@ -206,17 +212,40 @@ func hide_boss() -> void:
 		_boss_bar.visible = false
 
 
-func _on_controls_toggled() -> void:
-	Settings.set_tap_to_move(not Settings.tap_to_move())
+## Ouvre les réglages par-dessus la pause. Les vraies commandes se rangent le temps de
+## les régler : elles lisent leurs touches sans passer par les nœuds, et un doigt
+## posé sur le panneau lancerait un sort derrière lui.
+func open_settings() -> void:
+	if _settings != null:
+		return
+	_settings = SettingsPanel.new()
+	_settings.character_id = _character_id
+	_settings.closed.connect(hide_settings)
+	add_child(_settings)
+	combat_pad.visible = false
+	stick.set_enabled(false)
+
+
+func hide_settings() -> void:
+	if _settings == null:
+		return
+	_settings.queue_free()
+	_settings = null
+	combat_pad.visible = touch_mode
+	combat_pad.queue_redraw()
 	_apply_control_scheme()
 
 
-## Applique le mode de déplacement choisi : le manche ne s'affiche qu'en mode
-## analogique, et le bouton d'options dit toujours le mode COURANT.
+## Le panneau, pour les captures et les tests. Null quand il est fermé.
+func settings_panel() -> SettingsPanel:
+	return _settings
+
+
+## Applique le mode de déplacement choisi : le manche ou la croix, rien au mode tap.
 func _apply_control_scheme() -> void:
+	stick.set_style(TouchStick.Style.CROSS if Settings.move_mode() == Settings.MOVE_CROSS
+		else TouchStick.Style.ANALOG)
 	stick.set_enabled(touch_mode and not Settings.tap_to_move())
-	result_screen.set_controls_label("Déplacement : Toucher le chemin"
-		if Settings.tap_to_move() else "Déplacement : Manche analogique")
 
 
 # --- Écrans ----------------------------------------------------------------------
@@ -267,6 +296,7 @@ func set_quest_available(available: bool) -> void:
 
 
 func hide_result() -> void:
+	hide_settings()
 	result_screen.hide()
 
 

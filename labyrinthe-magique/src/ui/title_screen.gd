@@ -25,6 +25,7 @@ extends Control
 signal start_requested
 signal journey_requested
 signal select_requested
+signal settings_requested
 
 const COVER := preload("res://assets/peso&cover/interface/couverture_paysage.png")
 
@@ -65,6 +66,11 @@ func _ready() -> void:
 	$Buttons/StartButton.pressed.connect(func() -> void: start_requested.emit())
 	$Buttons/JourneyButton.pressed.connect(func() -> void: journey_requested.emit())
 	$Buttons/SelectButton.pressed.connect(func() -> void: select_requested.emit())
+	# À part de la rangée : ce n'est pas une entrée du jeu, et les réglages ne parlent
+	# que des commandes tactiles — au clavier, il n'y aurait rien dedans.
+	$SettingsButton.visible = Platform.touch_ui()
+	MenuStyle.apply($SettingsButton, MenuStyle.EDGE, 15)
+	$SettingsButton.pressed.connect(func() -> void: settings_requested.emit())
 
 	resized.connect(_layout)
 	_layout()
