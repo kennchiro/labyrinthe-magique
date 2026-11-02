@@ -154,6 +154,15 @@ signal soul_struck(cell: Vector2i)
 signal last_hour_cast(cell: Vector2i)
 signal last_hour_struck(cell: Vector2i)
 signal wings_burst(cell: Vector2i)
+signal plates_changed(count: int)
+signal blades_thrown(from: Vector2i, directions: Array, reach: int)
+signal blade_cut(cell: Vector2i)
+## Les liens du parcours en largeur : chacun va de `from` à `to`, à `steps` cases du lanceur.
+signal anvil_struck(cell: Vector2i, links: Array)
+signal rampart_reflected(cell: Vector2i)
+signal molten_started(duration: float)
+signal molten_ended
+signal pact_signed(cell: Vector2i)
 signal dawn_cast(cell: Vector2i)
 signal dawn_struck(cell: Vector2i)
 
@@ -290,7 +299,23 @@ const STAR_TICK := 0.25
 const STAR_FALL_GAP := 0.22
 const STAR_FALL_LEAD := 0.34
 
+## Le gain de force du Démon du Pacte, atteint à 1 PV quel que soit le stage.
+const RAGE_MAX := 0.5
 ## Sous cette part de ses PV, un ennemi touché par l'Ange de la Mort est achevé.
+const PLATE_MAX := 3
+## Les kills qu'il faut pour reforger une plaque.
+const PLATE_KILLS := 2
+const BLADE_OUT := 0.4
+const BLADE_BACK := 0.35
+const BLADE_FAN := 30.0
+const BLADE_REACH := 0.8
+## Cases par seconde de l'onde d'enclume.
+const ANVIL_SPEED := 14.0
+## Le Rempart ne rend qu'un coup à la fois, à ce qui est à sa portée.
+const REFLECT_GAP := 0.3
+const REFLECT_REACH := 2
+const MOLTEN_DAMAGE := 1.5
+const MOLTEN_PUSH := 1
 const SENTENCE_BELOW := 0.15
 ## Ce que le marqué du Glas prend de dégâts en plus.
 const MARK_BONUS := 0.4
@@ -383,6 +408,15 @@ var _star_marks := {}                  # index -> étoiles posées par le trait
 var _stars: Array[Dictionary] = []     # {cell, time_left, ability}
 var _star_tick := 0.0
 var _falling: Array[Dictionary] = []   # {cell, time_left, warned, ability}
+var _forge_kills := 0                  # kills vers la prochaine plaque
+var _volleys: Array[Dictionary] = []   # {from, directions, time, hit, returning, ability}
+var _anvils: Array[Dictionary] = []    # {field, time, hit, ability}
+var _rampart: Ability = null
+var _reflect_waiting := false
+var _reflect_lock := 0.0
+var _molten_left := 0.0
+var _blast_hits := 0                   # ennemis touchés par le souffle en cours
+var _pact_owed := 0                    # PV rendus à la fin du Dernier Pacte
 var _souls := 0                        # âmes récoltées par l'Ange de la Mort
 var _marked := {}                      # index -> secondes de marque du Glas
 var _flying: Array[Dictionary] = []    # {index, time_left, ability}
@@ -400,6 +434,10 @@ func _init(p_grid: MazeGrid, p_stats: CharacterStats, p_health: Health,
 	stats = p_stats
 	health = p_health
 	_rng.seed = p_seed if p_seed != 0 else 60611
+	if stats.element == Element.Kind.STEEL:
+		health.plates = PLATE_MAX
+		health.plate_torn.connect(func() -> void: plates_changed.emit(health.plates))
+		health.deflected.connect(func() -> void: _reflect_waiting = _rampart != null)
 
 
 # --- Ressources ------------------------------------------------------------------
@@ -440,6 +478,8 @@ func cooldown_ratio(ability: Ability) -> float:
 func can_use(ability: Ability) -> bool:
 	if ability == null:
 		return false
+	if not _can_pay(ability):
+		return false
 	return cooldown_left(ability) <= 0.0
 
 
@@ -455,6 +495,7 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_light(delta, context)
 	_update_death(delta, context)
 	_update_stars(delta, context)
+	_update_steel(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -497,6 +538,10 @@ func update(delta: float, context: CombatContext) -> void:
 		_immune_left = maxf(0.0, _immune_left - delta)
 		if _immune_left <= 0.0:
 			health.immune = false
+			_rampart = null
+			if _pact_owed > 0:
+				player_healed.emit(health.heal(_pact_owed))
+				_pact_owed = 0
 			player_immunity_faded.emit()
 	if _shield_left > 0.0:
 		_shield_left = maxf(0.0, _shield_left - delta)
@@ -727,6 +772,9 @@ func use(ability: Ability, context: CombatContext) -> bool:
 	if cooldown_left(ability) > 0.0:
 		use_refused.emit("recharge")
 		return false
+	if not _can_pay(ability):
+		use_refused.emit("pacte")
+		return false
 	var fired := false
 	match ability.kind:
 		Ability.Kind.PROJECTILE:
@@ -744,6 +792,7 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			if ability.immune:
 				health.immune = true
 				_immune_left = ability.duration
+				_rampart = ability if ability.reflect_damage > 0 else null
 				player_made_immune.emit(ability.duration)
 			else:
 				health.add_shield(ability.damage)
@@ -797,6 +846,13 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_constellation(ability, context)
 		Ability.Kind.STARFALL:
 			fired = _cast_starfall(ability, context)
+		Ability.Kind.PACT:
+			pact_signed.emit(context.player_cell)
+			fired = true
+		Ability.Kind.BLADES:
+			fired = _cast_blades(ability, context)
+		Ability.Kind.ANVIL:
+			fired = _cast_anvil(ability, context)
 		Ability.Kind.SOULS:
 			fired = _cast_souls(ability, context)
 		Ability.Kind.LAST_HOUR:
@@ -837,6 +893,7 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			player_shielded.emit(ability.empower_shield, ability.empower_duration)
 	if not fired:
 		return false
+	health.sacrifice(ability.self_cost)
 	if not free_use:
 		_spend(ability)
 	return true
@@ -920,6 +977,7 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 	# ramène doit encore trouver l'explosion en arrivant.
 	if ability.pull_radius > 0.0:
 		_haul_in(ability, context)
+	_blast_hits = 0
 	# Un sort qui PROJETTE ne déclenche pas la poussée de son élément : les deux
 	# s'additionneraient, et la course réelle ne serait plus celle qu'annonce le
 	# sort. Voir l'en-tête de `_apply_area`.
@@ -976,10 +1034,20 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 		_start_quake(ability)
 	if ability.sky_clouds > 0:
 		_gather_sky(ability)
-	if ability.heal_self > 0:
+	if ability.heal_self > 0 and (not ability.heal_needs_hit or _blast_hits > 0):
 		var gained := health.heal(ability.heal_self)
 		if gained > 0:
 			player_healed.emit(gained)
+	if ability.molten_seconds > 0.0:
+		_molten_left = ability.molten_seconds
+		health.plates = PLATE_MAX
+		plates_changed.emit(PLATE_MAX)
+		molten_started.emit(ability.molten_seconds)
+	if ability.last_pact_seconds > 0.0:
+		_pact_owed = ceili(health.sacrifice(health.current - 1) * ability.last_pact_return)
+		health.immune = true
+		_immune_left = ability.last_pact_seconds
+		player_made_immune.emit(ability.last_pact_seconds)
 	return true
 
 
@@ -1636,7 +1704,8 @@ func _plant_of(ability: Ability) -> Ability:
 		"kind": Ability.Kind.ZONE, "element": ability.element,
 		"damage": ability.line_bite, "radius": 0.5, "duration": life,
 		"slow_duration": ability.slow_duration, "slow_factor": ability.slow_factor,
-		"zone_style": "eruption" if ability.spike_anim else "pics",
+		"zone_style": ability.plant_style if ability.plant_style != "" else
+			("eruption" if ability.spike_anim else "pics"),
 	})
 
 
@@ -1880,6 +1949,9 @@ func _nearest_in_reach(cell: Vector2i, reach: int, context: CombatContext) -> in
 ## s'arrêter au premier sol franchi la remettrait dans le couloir d'où elle
 ## vient dès que le mage est collé à une haie.
 func _cast_blink(ability: Ability, context: CombatContext) -> bool:
+	if player_rooted():
+		use_refused.emit("immobile")
+		return false
 	var destination := context.player_cell
 	if ability.rewind_seconds > 0.0:
 		destination = cell_at_past(ability.rewind_seconds)
@@ -2437,6 +2509,146 @@ func _burn_trail(from: Vector2i, to: Vector2i, ability: Ability, context: Combat
 		var closest := Geometry2D.get_closest_point_to_segment(at, Vector2(from), Vector2(to))
 		if at.distance_to(closest) <= STAR_REACH:
 			_apply_damage(i, burn, context, false, false)
+			if ability.blow_cells > 0 and context.enemy_alive(i):
+				_push_away(i, context, ability.blow_cells)
+
+
+# --- Le pacte ---------------------------------------------------------------------
+
+## La force gagnée par le Démon du Pacte : rien à pleine vie, `RAGE_MAX` à 1 PV.
+func rage_bonus() -> float:
+	if stats.element != Element.Kind.BLOOD or health.maximum <= 1:
+		return 0.0
+	return RAGE_MAX * float(health.maximum - health.current) / float(health.maximum - 1)
+
+
+func _can_pay(ability: Ability) -> bool:
+	return ability.self_cost <= 0 or health.current > ability.self_cost
+
+
+# --- L'acier ----------------------------------------------------------------------
+
+## Le Rempart le cloue sur place : le jeu et la simulation lisent tous deux cette réponse.
+func player_rooted() -> bool:
+	return _rampart != null
+
+
+func plates_left() -> int:
+	return health.plates
+
+
+func _forge_plate() -> void:
+	_forge_kills += 1
+	if _forge_kills < PLATE_KILLS:
+		return
+	_forge_kills = 0
+	if health.plates < PLATE_MAX:
+		health.plates += 1
+		plates_changed.emit(health.plates)
+
+
+## La volée est UNE : un ennemi au contact ne prend pas les cinq lames, seulement un coup par
+## passage. Sinon l'éventail, encore serré près du lanceur, ferait cinq fois ses dégâts.
+func _cast_blades(ability: Ability, context: CombatContext) -> bool:
+	var facing := Vector2(context.player_facing)
+	if facing.length() < 0.01:
+		facing = Vector2.DOWN
+	var directions := []
+	for i in ability.blade_count:
+		var turn := (float(i) - float(ability.blade_count - 1) * 0.5) * BLADE_FAN
+		directions.append(facing.rotated(deg_to_rad(turn)))
+	_volleys.append({"from": Vector2(context.player_cell), "directions": directions, "time": 0.0,
+		"hit": {}, "returning": false, "ability": ability})
+	blades_thrown.emit(context.player_cell, directions, ability.range)
+	return true
+
+
+func _cast_anvil(ability: Ability, context: CombatContext) -> bool:
+	var field := _field_from(context.player_cell)
+	var links := []
+	var seen := {context.player_cell: true}
+	var front: Array[Vector2i] = [context.player_cell]
+	for steps in range(1, ability.range + 1):
+		var next_front: Array[Vector2i] = []
+		for cell in front:
+			for direction in MazeGrid.NEIGHBORS:
+				var next: Vector2i = cell + direction
+				if seen.has(next) or not grid.is_floor_v(next):
+					continue
+				seen[next] = true
+				next_front.append(next)
+				links.append({"from": cell, "to": next, "steps": steps})
+		front = next_front
+	_anvils.append({"field": field, "time": 0.0, "hit": {}, "ability": ability})
+	anvil_struck.emit(context.player_cell, links)
+	return true
+
+
+func _update_steel(delta: float, context: CombatContext) -> void:
+	_reflect_lock = maxf(0.0, _reflect_lock - delta)
+	if _reflect_waiting and _rampart != null and _reflect_lock <= 0.0:
+		var attacker := _nearest_in_reach(context.player_cell, REFLECT_REACH, context)
+		if attacker >= 0:
+			_reflect_lock = REFLECT_GAP
+			rampart_reflected.emit(context.enemy_cells[attacker])
+			var answer := Ability.make({"id": _rampart.id, "kind": Ability.Kind.BLAST,
+				"element": _rampart.element, "damage": _rampart.reflect_damage})
+			_apply_damage(attacker, answer, context, false, false)
+	_reflect_waiting = false
+	_update_volleys(delta, context)
+	_update_anvils(delta, context)
+	if _molten_left > 0.0:
+		_molten_left = maxf(0.0, _molten_left - delta)
+		if _molten_left <= 0.0:
+			molten_ended.emit()
+
+
+func _update_volleys(delta: float, context: CombatContext) -> void:
+	for v in range(_volleys.size() - 1, -1, -1):
+		var volley: Dictionary = _volleys[v]
+		volley["time"] = float(volley["time"]) + delta
+		var time: float = volley["time"]
+		var ability: Ability = volley["ability"]
+		if time >= BLADE_OUT and not bool(volley["returning"]):
+			volley["returning"] = true
+			volley["hit"] = {}
+		var reached: float = 1.0 - pow(1.0 - minf(time / BLADE_OUT, 1.0), 2.0)
+		var back: float = clampf((time - BLADE_OUT) / BLADE_BACK, 0.0, 1.0)
+		var hit: Dictionary = volley["hit"]
+		for direction: Vector2 in volley["directions"]:
+			var tip: Vector2 = Vector2(volley["from"]) + direction * float(ability.range) * reached
+			var at := tip.lerp(Vector2(context.player_cell), back * back)
+			for i in context.enemy_cells.size():
+				if hit.has(i) or not context.enemy_alive(i):
+					continue
+				if Vector2(context.enemy_cells[i]).distance_to(at) <= BLADE_REACH:
+					hit[i] = true
+					var cell: Vector2i = context.enemy_cells[i]
+					_apply_damage(i, ability, context)
+					blade_cut.emit(cell)
+		if time >= BLADE_OUT + BLADE_BACK:
+			_volleys.remove_at(v)
+
+
+func _update_anvils(delta: float, context: CombatContext) -> void:
+	for a in range(_anvils.size() - 1, -1, -1):
+		var anvil: Dictionary = _anvils[a]
+		anvil["time"] = float(anvil["time"]) + delta
+		var ability: Ability = anvil["ability"]
+		var front: float = float(anvil["time"]) * ANVIL_SPEED
+		var hit: Dictionary = anvil["hit"]
+		for i in context.enemy_cells.size():
+			if hit.has(i) or not context.enemy_alive(i):
+				continue
+			var steps := Pathfinder.value_at(grid, anvil["field"], context.enemy_cells[i])
+			if steps < 0 or steps > ability.range or float(steps) > front:
+				continue
+			hit[i] = true
+			_apply_damage(i, ability, context)
+			if context.enemy_alive(i) and not context.is_structure(i):
+				enemy_staggered.emit(i, ability.stun_seconds)
+		if front > float(ability.range):
+			_anvils.remove_at(a)
 
 
 # --- La mort ----------------------------------------------------------------------
@@ -2884,6 +3096,13 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 	var power := ability.damage + (_empower_bonus if empowered else 0)
 	if _marked.has(index):
 		power = int(round(float(power) * (1.0 + MARK_BONUS)))
+	if _molten_left > 0.0:
+		power = int(round(float(power) * MOLTEN_DAMAGE))
+	var structure := context.is_structure(index)
+	if empowered and not structure:
+		power = int(round(float(power) * (1.0 + rage_bonus())))
+	if not structure:
+		_blast_hits += 1
 	var dealt := context.enemy_health[index].take(
 		Damage.new(power, ability.element, "player"))
 	enemy_damaged.emit(index, dealt, ability)
@@ -2896,6 +3115,8 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 			enemy_star_marks.emit(index, 0)
 		if ability.element == Element.Kind.DEATH:
 			_gain_soul()
+		if ability.element == Element.Kind.STEEL:
+			_forge_plate()
 		enemy_killed.emit(index)
 
 
@@ -2932,6 +3153,9 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 			_sentence(index, ability, context)
 		Element.Kind.STARS:
 			_add_star_mark(index, ability, context)
+		Element.Kind.STEEL:
+			if _molten_left > 0.0 and ability == stats.attack and context.enemy_alive(index):
+				_push_away(index, context, MOLTEN_PUSH)
 		Element.Kind.TIME:
 			if context.enemy_alive(index):
 				enemy_soaked.emit(index, RETARD_DURATION, RETARD_FACTOR)

@@ -100,13 +100,14 @@ func _init() -> void:
 
 	# Les quatre autres mages sur le même stage : ce qu'on cherche ici n'est pas
 	# l'égalité parfaite, c'est qu'aucun ne soit injouable.
-	print("── Viabilité des treize mages (Stage 2, explorateur)")
-	var stage := LevelConfig.for_stage(2)
-	for character in CharacterCatalog.all():
-		if character.id == reference.id:
-			continue
-		_run_profile(stage, character, true)
-	print("")
+	if not "--sans-viabilite" in OS.get_cmdline_user_args():
+		print("── Viabilité des quinze mages (Stage 2, explorateur)")
+		var stage := LevelConfig.for_stage(2)
+		for character in CharacterCatalog.all():
+			if character.id == reference.id:
+				continue
+			_run_profile(stage, character, true)
+		print("")
 
 	if _failures.is_empty():
 		if _runs < ITERATIONS:
@@ -421,7 +422,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				_hunted_cell(grid, remaining, carried, movers), visits, rng)
 		else:
 			player.desired_direction = _expert(grid, player.decision_cell(), objective_field, enemy_field)
-		player.speed = character.move_speed * spores.speed_factor(player.nearest_cell())
+		player.speed = 0.0 if combat.player_rooted() else character.move_speed * spores.speed_factor(player.nearest_cell())
 		player.update(DT)
 		if combat.time_stop_left() <= 0.0:
 			spores.advance(DT)
@@ -576,6 +577,9 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 	for slot in range(1, character.abilities.size() + 1):
 		var ability: Ability = character.abilities[slot - 1]
 		if not combat.can_use(ability):
+			continue
+		# Un joueur ne signe pas son pacte quand il lui reste à peine de quoi vivre.
+		if ability.self_cost > 0 and hurt:
 			continue
 		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS,
 				Ability.Kind.TRANSFUSION]:

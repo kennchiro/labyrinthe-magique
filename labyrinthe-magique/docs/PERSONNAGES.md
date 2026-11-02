@@ -3,7 +3,7 @@
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
 > La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-13 mages jouables. La barre d'action a toujours la même forme —
+15 mages jouables. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -24,6 +24,8 @@ comparables d'un personnage à l'autre.
 | **Porte-Lumière** | Lumière | 4 | 5.0 | 5 kills | **Éblouissement** — la cible perd sa trace 1.2 s, au plus toutes les 5 s |
 | **Ange de la Mort** | Mort | 3 | 5.2 | 4 kills | **Sentence** — un ennemi sous 15 % de ses PV après un coup est achevé |
 | **Ange des Étoiles** | Étoiles | 4 | 5.1 | 5 kills | **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 dégâts |
+| **Archange d'Acier** | Acier | 6 | 4.3 | 7 kills | **Plaques** — 3 plaques encaissent chacune un coup à la place des PV ; 2 kills en reforgent une |
+| **Démon du Pacte** | Sang | 4 | 5.1 | 5 kills | **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum à 1 PV |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
@@ -366,3 +368,55 @@ Trait : **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 d
 - **Voile de lune** — Pendant un court instant, les coups la traversent.
 - **Étoile filante** — Un saut rapide en ligne droite, qui laisse une traînée brûlante.
 - **Nuit éternelle** — La nuit tombe sur l'écran, et une comète frappe chaque ennemi de la carte.
+
+---
+
+## Archange d'Acier — Acier
+
+> Lent et massif, il frappe le sol de loin : ses plaques d'armure encaissent les coups, et ses kills les reforgent.
+
+`id: acier` · puissance affichée 4/5 · vie 6 · vitesse 4.3 · extra à 7 kills
+
+Trait : **Plaques** — 3 plaques encaissent chacune un coup à la place des PV ; 2 kills en reforgent une
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Coup de marteau** | projectile | 22 dégâts · portée 6 · recharge 0.7 s | 0.7 s |
+| SKILL 1 | **Ailes-lames** | ? | 5 lames · 30 dégâts à l'aller et au retour · portée 5 · recharge 7 s | 7.0 s |
+| SKILL 2 | **Onde d'enclume** | ? | 34 dégâts · étourdit 1.5 s · 7 cases de couloirs · recharge 10 s | 10.0 s |
+| SKILL 3 | **Rempart** | bouclier | INTOUCHABLE 4 s · immobile · renvoie 40 · recharge 18 s | 18.0 s |
+| FUITE | **Charge** | translation | charge de 4 cases · 30 dégâts · renverse · recharge 8 s · projette de 2 cases | 8.0 s |
+| EXTRA | **Acier en fusion** | explosion | 70 dégâts · rayon 3.5 · armure en fusion 10 s | 1.0 s |
+
+- **Coup de marteau** — Le marteau frappe le sol : une onde de choc court jusqu'à sa cible et touche ce qui l'entoure.
+- **Ailes-lames** — Une volée de lames part en éventail par-dessus les haies, puis revient vers lui et retouche au retour.
+- **Onde d'enclume** — Il frappe le sol : l'onde court dans les couloirs et étourdit ce qu'elle touche.
+- **Rempart** — Il se referme dans ses ailes : immobile et intouchable, il renvoie les coups reçus.
+- **Charge** — Il fonce en ligne droite et renverse ce qu'il croise.
+- **Acier en fusion** — Son armure chauffe au rouge : plaques pleines, il grandit, et ses coups plus forts projettent les ennemis.
+
+---
+
+## Démon du Pacte — Sang
+
+> Il a signé avec sa propre vie : moins il lui en reste, plus il frappe fort. Se soigner, ou rester au bord du gouffre ?
+
+`id: demon` · puissance affichée 4/5 · vie 4 · vitesse 5.1 · extra à 5 kills
+
+Trait : **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum à 1 PV
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Griffe de sang** | projectile | 18 dégâts · portée 7 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Pacte de sang** | ? | coûte 1 PV · jamais le dernier · recharge 12 s · +8 dégâts 6 s | 12.0 s |
+| SKILL 2 | **Sillon de soufre** | ligne | 42 dégâts · ligne de 7 cases · recharge 7 s · brûle 3 s à 6/s | 7.0 s |
+| SKILL 3 | **Festin** | explosion | 26 dégâts · rayon 2 · recharge 14 s · +1 PV s'il touche | 14.0 s |
+| FUITE | **Bond de soufre** | translation | saut de 4 cases · recharge 8 s | 8.0 s |
+| EXTRA | **Dernier Pacte** | explosion | 60 dégâts · rayon 4 · 1 PV · INTOUCHABLE 6 s | 1.0 s |
+
+- **Griffe de sang** — D'un geste de la main, trois griffures de sang filent vers leur cible et ne la ratent jamais.
+- **Pacte de sang** — Il sacrifie un point de vie pour renforcer tous ses coups. Le pacte ne prend jamais le dernier.
+- **Sillon de soufre** — Des flammes de sang courent dans le couloir et y restent.
+- **Festin** — Une gueule de sang se referme autour de lui : s'il a touché quelqu'un, il reprend un point de vie.
+- **Bond de soufre** — Il disparaît dans une gerbe de sang et reparaît plus loin dans le couloir.
+- **Dernier Pacte** — Le sceau éclate : il tombe à 1 PV et devient intouchable, puis récupère les trois quarts de ce qu'il a donné.

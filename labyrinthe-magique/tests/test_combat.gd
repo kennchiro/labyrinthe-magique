@@ -51,6 +51,8 @@ func _init() -> void:
 	_test_lumiere()
 	_test_mort()
 	_test_etoiles()
+	_test_acier()
+	_test_demon()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -223,8 +225,8 @@ func _test_catalog() -> void:
 	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
 	# Porte-Lumière, et l'Ange de la Mort. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 13:
-		_fail("le catalogue contient %d personnages au lieu de 13" % characters.size())
+	if characters.size() != 15:
+		_fail("le catalogue contient %d personnages au lieu de 15" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -3149,6 +3151,203 @@ func _test_mort() -> void:
 
 ## Le trait explose au troisième coup, les rayons brûlent par-dessus les haies, la Pluie tombe sur
 ## les ennemis, le Voile rend intouchable et la traînée brûle le trajet.
+func _test_demon() -> void:
+	var demon := CharacterCatalog.demon()
+	var pacte: Ability = demon.abilities[0]
+	var festin: Ability = demon.abilities[2]
+	# LA RAGE : rien à pleine vie, le maximum à 1 PV, jamais sur un repaire.
+	var parts := _context(demon)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	combat._apply_damage(0, demon.attack, context)
+	if context.enemy_health[0].current != 5000 - demon.attack.damage:
+		_fail("rage : un coup à pleine vie fait %d dégâts" % (5000 - context.enemy_health[0].current))
+	health.current = 1
+	var before: int = context.enemy_health[0].current
+	combat._apply_damage(0, demon.attack, context)
+	var full_rage := int(round(float(demon.attack.damage) * (1.0 + CombatSystem.RAGE_MAX)))
+	if before - context.enemy_health[0].current != full_rage:
+		_fail("rage : un coup à 1 PV fait %d dégâts" % (before - context.enemy_health[0].current))
+	before = context.enemy_health[0].current
+	combat._apply_damage(0, demon.attack, context, false, false)
+	if before - context.enemy_health[0].current != demon.attack.damage:
+		_fail("rage : elle s'applique aux dégâts dérivés")
+	context.structures_from = 0
+	before = context.enemy_health[0].current
+	combat._apply_damage(0, demon.attack, context)
+	if before - context.enemy_health[0].current != demon.attack.damage:
+		_fail("rage : elle s'applique à un repaire")
+	# LE PACTE coûte 1 PV, renforce les coups, et ne prend jamais le dernier.
+	parts = _context(demon)
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	if not combat.use(pacte, context) or health.current != health.maximum - pacte.self_cost:
+		_fail("pacte : le prix n'est pas payé")
+	if combat._empower_bonus != pacte.empower_bonus:
+		_fail("pacte : les coups ne sont pas renforcés")
+	parts = _context(demon)
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	health.current = 1
+	if combat.can_use(pacte) or combat.use(pacte, context) or health.current != 1:
+		_fail("pacte : il accepte de prendre le dernier PV")
+	if combat.cooldown_left(pacte) > 0.0:
+		_fail("pacte : un refus le met en recharge")
+	# LE FESTIN ne soigne que s'il a mordu quelqu'un.
+	parts = _context(demon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	health.current = 2
+	combat.use(festin, context)
+	if health.current != 2:
+		_fail("festin : il soigne dans le vide")
+	parts = _context(demon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	health.current = 2
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	combat.use(festin, context)
+	if health.current != 2 + festin.heal_self:
+		_fail("festin : il ne soigne pas après avoir mordu")
+	# LE DERNIER PACTE : 1 PV, intouchable, puis la moitié de ce qu'il a donné.
+	parts = _context(demon)
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.use(demon.ultimate, context)
+	if health.current != 1 or not health.immune:
+		_fail("dernier pacte : %d PV, intouchable %s" % [health.current, health.immune])
+	combat.update(demon.ultimate.last_pact_seconds + 0.1, context)
+	if health.immune:
+		_fail("dernier pacte : il reste intouchable après sa durée")
+	if health.current != 1 + ceili(3 * demon.ultimate.last_pact_return):
+		_fail("dernier pacte : il finit à %d PV sur 4" % health.current)
+
+
+func _test_acier() -> void:
+	var acier := CharacterCatalog.acier()
+	var ailes: Ability = acier.abilities[0]
+	var enclume: Ability = acier.abilities[1]
+	var rempart: Ability = acier.abilities[2]
+	# LES PLAQUES encaissent trois coups entiers avant les PV, et deux kills en reforgent une.
+	var parts := _context(acier)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	for i in CombatSystem.PLATE_MAX:
+		health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != acier.base_health or health.plates != 0:
+		_fail("plaques : %d PV et %d plaques après trois coups" % [health.current, health.plates])
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != acier.base_health - 1:
+		_fail("plaques : le quatrième coup ne touche pas les PV")
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1)
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1)
+	combat._apply_damage(0, acier.attack, context)
+	if health.plates != 0:
+		_fail("plaques : un seul kill en reforge une")
+	combat._apply_damage(1, acier.attack, context)
+	if health.plates != 1:
+		_fail("plaques : deux kills n'en reforgent pas une")
+	# LE MARTEAU : pas de coup dans le vide, et l'onde touche sa cible à portée puis ses voisins.
+	parts = _context(acier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	if combat.use(acier.attack, context):
+		_fail("marteau : il part sans cible")
+	var far_cell := _cell_at(grid, context.player_field, acier.attack.range)
+	_add_enemy(context, far_cell, 500)
+	_add_enemy(context, far_cell, 500)
+	if not combat.use(acier.attack, context):
+		_fail("marteau : il ne part pas vers l'ennemi à portée")
+	for i in 40:
+		combat.update(0.02, context)
+	if context.enemy_health[0].current != 500 - acier.attack.damage \
+			or context.enemy_health[1].current != 500 - acier.attack.damage:
+		_fail("marteau : l'onde ne touche pas sa cible et son voisin")
+	# LES AILES-LAMES touchent une fois à l'aller et une fois au retour, jamais cinq.
+	parts = _context(acier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var next_to: Vector2i = context.player_cell + context.player_facing
+	_add_enemy(context, next_to, 500)
+	combat.use(ailes, context)
+	for i in 60:
+		combat.update(0.02, context)
+	if context.enemy_health[0].current != 500 - ailes.damage * 2:
+		_fail("ailes-lames : %d PV au lieu de %d" % [context.enemy_health[0].current, 500 - ailes.damage * 2])
+	# L'ONDE D'ENCLUME court dans les couloirs : elle atteint et étourdit à portée, pas au-delà.
+	parts = _context(acier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 5), 500)
+	_add_enemy(context, _cell_at(grid, context.player_field, enclume.range + 3), 500)
+	var stunned := {"count": 0}
+	combat.enemy_staggered.connect(func(_index: int, _duration: float) -> void: stunned["count"] += 1)
+	combat.use(enclume, context)
+	combat.update(0.1, context)
+	if context.enemy_health[0].current != 500:
+		_fail("enclume : l'onde frappe avant d'être arrivée")
+	for i in 40:
+		combat.update(0.05, context)
+	if context.enemy_health[0].current != 500 - enclume.damage or int(stunned["count"]) != 1:
+		_fail("enclume : elle n'a pas touché et étourdi l'ennemi à portée")
+	if context.enemy_health[1].current != 500:
+		_fail("enclume : elle frappe au-delà de sa portée")
+	# LE REMPART : immobile, intouchable, il renvoie le coup, et la Charge est refusée.
+	parts = _context(acier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 500)
+	combat.use(rempart, context)
+	if not combat.player_rooted():
+		_fail("rempart : il ne l'immobilise pas")
+	if combat.use(acier.escape, context):
+		_fail("rempart : la Charge part malgré lui")
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	combat.update(0.02, context)
+	if health.plates != CombatSystem.PLATE_MAX or context.enemy_health[0].current != 500 - rempart.reflect_damage:
+		_fail("rempart : le coup n'est pas renvoyé")
+	combat.update(rempart.duration + 0.1, context)
+	if combat.player_rooted():
+		_fail("rempart : il reste immobile après sa durée")
+	# L'ACIER EN FUSION remet les plaques, renforce les coups, et ses coups projettent.
+	parts = _context(acier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	health.plates = 0
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	combat.use(acier.ultimate, context)
+	if health.plates != CombatSystem.PLATE_MAX:
+		_fail("fusion : les plaques ne sont pas pleines")
+	var before: int = context.enemy_health[0].current
+	combat._apply_damage(0, acier.attack, context)
+	var dealt: int = before - context.enemy_health[0].current
+	if dealt != int(round(float(acier.attack.damage) * CombatSystem.MOLTEN_DAMAGE)):
+		_fail("fusion : le coup fait %d dégâts" % dealt)
+	combat.update(acier.ultimate.molten_seconds + 0.1, context)
+	if combat._molten_left > 0.0:
+		_fail("fusion : elle ne s'éteint pas")
+	print("archange d'acier : plaques, marteau, ailes, enclume, rempart et fusion : OK")
+
+
 func _test_etoiles() -> void:
 	var etoiles := CharacterCatalog.etoiles()
 	var constellation: Ability = etoiles.abilities[0]

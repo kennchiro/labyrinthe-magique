@@ -35,6 +35,9 @@ enum Kind {
 	CONSTELLATION, ## pose une étoile ; des rayons les relient et brûlent ce qui passe
 	STARFALL,     ## des étoiles tombent une à une autour du lanceur
 	LAST_HOUR,    ## une faux traverse l'écran : chaque ennemi perd une part de ses PV
+	BLADES,       ## une volée de lames part en éventail, puis revient au lanceur
+	ANVIL,        ## une onde court dans les couloirs depuis le lanceur et étourdit
+	PACT,         ## ne fait que payer son prix : sa force vient de l'exaltation qu'il porte
 }
 
 @export var id: String = ""
@@ -509,6 +512,24 @@ enum Kind {
 @export var star_falls: int = 0
 ## Dégâts de la traînée d'une fuite, sur ce qui se tient sur son trajet. 0 = pas de traînée.
 @export var trail_damage: int = 0
+## Le Rempart : ce qu'il renvoie à chaque coup refusé. Le lanceur ne bouge plus tant qu'il tient.
+@export var reflect_damage: int = 0
+## Le nombre de lames d'une volée.
+@export var blade_count: int = 0
+## L'onde d'enclume : le temps que restent étourdis ceux qu'elle touche.
+@export var stun_seconds: float = 0.0
+## L'armure en fusion : combien de temps elle dure après le coup.
+@export var molten_seconds: float = 0.0
+## Les PV que coûte le lancer. Le sort est refusé s'il prendrait le dernier.
+@export var self_cost: int = 0
+## Le soin de `heal_self` ne vient que si le souffle a touché un ennemi.
+@export var heal_needs_hit: bool = false
+## Le Dernier Pacte : le lanceur tombe à 1 PV et reste intouchable ce temps-là.
+@export var last_pact_seconds: float = 0.0
+## La part des PV sacrifiés qu'il retrouve à la fin.
+@export var last_pact_return: float = 0.0
+## Le dessin de ce qu'une gerbe laisse planté. Vide = les pics de pierre.
+@export var plant_style: String = ""
 
 
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
@@ -558,7 +579,7 @@ func summary() -> String:
 		else:
 			parts.append("englue %s s à %d %%" % [_number(slow_duration), int(slow_factor * 100.0)])
 	if heal_self > 0:
-		parts.append("soigne %d PV" % heal_self)
+		parts.append(("+%d PV s'il touche" if heal_needs_hit else "soigne %d PV") % heal_self)
 	if snare > 0.0:
 		parts.append("cloue %.0f s" % snare)
 	if snare_burn > 0.0:
@@ -581,7 +602,8 @@ func summary() -> String:
 	if zone_carries:
 		parts.append("EMPORTE ce qu'elle attrape")
 	if kind == Kind.LINE and duration > 0.0:
-		parts.append("pics plantés %.0f s à %d dégâts/s" % [duration, line_bite])
+		parts.append(("brûle %.0f s à %d/s" if plant_style != "" else "pics plantés %.0f s à %d dégâts/s")
+			% [duration, line_bite])
 	if quake_duration > 0.0:
 		parts.append("la terre tremble %.0f s · éboulements à %d dégâts"
 			% [quake_duration, quake_damage])
@@ -599,10 +621,20 @@ func _base_summary() -> String:
 	match kind:
 		Kind.PROJECTILE:
 			return "%d dégâts · portée %d" % [damage, range]
+		Kind.BLAST when molten_seconds > 0.0:
+			return "%d dégâts · rayon %s · armure en fusion %s s" % [damage, _number(radius),
+				_number(molten_seconds)]
+		Kind.BLAST when last_pact_seconds > 0.0:
+			return "%d dégâts · rayon %s · 1 PV · INTOUCHABLE %s s" % [
+				damage, _number(radius), _number(last_pact_seconds)]
 		Kind.BLAST:
 			return "%d dégâts · rayon %s" % [damage, _number(radius)]
+		Kind.PACT:
+			return "coûte %d PV · jamais le dernier" % self_cost
 		Kind.ZONE:
 			return "%d dégâts/s · rayon %s · %s s" % [damage, _number(radius), _number(duration)]
+		Kind.SHIELD when reflect_damage > 0:
+			return "INTOUCHABLE %.0f s · immobile · renvoie %d" % [duration, reflect_damage]
 		Kind.SHIELD when immune:
 			return "INTOUCHABLE %.0f s" % duration
 		Kind.SHIELD:
@@ -613,6 +645,8 @@ func _base_summary() -> String:
 			return "bloque %.0f s" % duration
 		Kind.BLINK when rewind_seconds > 0.0:
 			return "revient %s s en arrière" % _number(rewind_seconds)
+		Kind.BLINK when blow_cells > 0:
+			return "charge de %d cases · %d dégâts · renverse" % [range, trail_damage]
 		Kind.BLINK:
 			return "saut de %d cases" % range
 		Kind.ECHO:
@@ -639,6 +673,10 @@ func _base_summary() -> String:
 				% int(CombatSystem.SENTENCE_BELOW * 100.0)
 		Kind.CONSTELLATION:
 			return "%d dégâts/s · %d étoiles · %s s" % [damage, CombatSystem.STAR_MAX, _number(duration)]
+		Kind.BLADES:
+			return "%d lames · %d dégâts à l'aller et au retour · portée %d" % [blade_count, damage, range]
+		Kind.ANVIL:
+			return "%d dégâts · étourdit %s s · %d cases de couloirs" % [damage, _number(stun_seconds), range]
 		Kind.STARFALL:
 			return "%d étoiles de %d dégâts · rayon %s" % [star_falls, damage, _number(radius)]
 		Kind.DAWN:

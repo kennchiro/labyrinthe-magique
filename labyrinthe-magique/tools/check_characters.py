@@ -358,7 +358,8 @@ def check_written_strips() -> list:
 ## La Terre frappe le sol juste devant elle : son manteau déborde derrière autant que
 ## son geste devant, et la mesure ne les sépare pas. Vérifiée à l'œil sur ses planches.
 ## L'Ange de la Mort arme sa faux en grand DERRIÈRE lui, puis frappe bien devant : vu à l'œil.
-ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort"}
+## L'Archange d'Acier frappe devant lui, mais ses ailes débordent déjà derrière au repos : vu à l'œil.
+ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier"}
 
 
 ## Écarts tolérés sur un mage animé, entre la marche et la dernière image d'attaque.
@@ -495,7 +496,7 @@ def main() -> None:
             print(f"✅  {config['id']:8s} {len(DIRECTIONS)} directions x {len(POSES)} poses,"
                   f" toutes cadrées{note}")
     # Ces mages sont nés animés : ils n'ont jamais eu de planche dans `SHEETS`.
-    for mage in ("chrono", "peste", "lumiere", "mort", "etoiles"):
+    for mage in ("chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon"):
         checked += 1
         problems = check_animated(mage)
         if problems:

@@ -136,6 +136,19 @@ SHEETS = {
         "etoiles_voile", "etoiles_filante", "etoiles_nuit",
     # Pas de `despill` : il prend tout ce qui a plus de bleu que de vert, donc son bleu lui-même.
     ]),
+    # Relevé case par case : marteau · éventail de lames · enclume //
+    # bouclier d'ailes · épaulière · heaume en fusion. L'ordre demandé.
+    "mage_acier_skills.png": ("acier", [
+        "acier_marteau", "acier_ailes", "acier_enclume",
+        "acier_rempart", "acier_charge", "acier_fusion",
+    # Des grains isolés restent du fond : ils décentraient le bouclier en élargissant son cadre.
+    ], {"undust": 12}),
+    # Relevé case par case : griffure · sceau et goutte · flammes //
+    # mâchoire · arc · sceau qui éclate. L'ordre demandé.
+    "mage_demon_skills.png": ("demon", [
+        "demon_griffe", "demon_pacte", "demon_sillon",
+        "demon_festin", "demon_bond", "demon_dernier",
+    ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",
@@ -295,6 +308,18 @@ def keyed_on_flat(cell: Image.Image, flood: int) -> Image.Image | None:
     return out.crop(bounds) if bounds else None
 
 
+def undusted(icon: Image.Image, smallest: int) -> Image.Image:
+    """Efface les taches de moins de `smallest` pixels, puis recadre sur ce qui reste."""
+    data = np.array(icon)
+    labels, count = ndimage.label(data[..., 3] > 30)
+    sizes = ndimage.sum(np.ones(labels.shape), labels, range(1, count + 1))
+    for label, size in enumerate(sizes, start=1):
+        if size < smallest:
+            data[labels == label, 3] = 0
+    out = Image.fromarray(data, "RGBA")
+    return out.crop(out.getbbox())
+
+
 def fitted(icon: Image.Image) -> Image.Image:
     """Icône centrée dans un carré, à l'intérieur du CERCLE inscrit.
 
@@ -366,6 +391,8 @@ def main() -> None:
             if cut is None:
                 print(f"  ! {name} : rien après détourage")
                 continue
+            if options.get("undust"):
+                cut = undusted(cut, options["undust"])
             icon = fitted(cut)
             if options.get("despill"):
                 data = np.array(icon)

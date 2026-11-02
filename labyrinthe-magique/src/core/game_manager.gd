@@ -149,6 +149,9 @@ func start_level(index: int) -> void:
 	level.progress = progress
 	level.load_level(config, character, forced_seed)
 	level.player_health.died.connect(_on_player_died)
+	# Les soins et les pactes changent les PV hors de tout coup reçu.
+	level.player_health.healed.connect(_on_player_health_changed)
+	level.player_health.damaged.connect(_on_player_health_changed)
 
 	# LE CARNET DE QUÊTE du niveau. Reconstruit à chaque départ : il ne porte que
 	# la config, et une config recyclée d'un niveau à l'autre mentirait.
@@ -443,8 +446,14 @@ func use_slot(slot: int) -> void:
 	level.use_ability(slot)
 
 
+func _on_player_health_changed(_amount: int, _remaining: int) -> void:
+	ui.set_health(level.player_health.current, level.player_health.maximum)
+
+
 func _on_ability_refused(reason: String) -> void:
 	match reason:
+		"pacte":
+			ui.flash("Le pacte ne prend pas ton dernier souffle", Color("#ff6b82"))
 		"cible":
 			ui.flash("Aucun ennemi à portée", Color("#7b8bb0"))
 		"place":

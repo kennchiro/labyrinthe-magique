@@ -43,20 +43,24 @@ const PESTE := "peste"
 const LUMIERE := "lumiere"
 const MORT := "mort"
 const ETOILES := "etoiles"
+const ACIER := "acier"
+const DEMON := "demon"
 
 const CATEGORY_MAGE := "mage"
 const CATEGORY_ANGE := "ange"
+const CATEGORY_DEMON := "demon"
 ## Les onglets de l'écran de sélection, dans l'ordre. Une famille de plus ne demande
 ## qu'une ligne ici et le champ `category` de ses personnages.
 const CATEGORIES := {
 	CATEGORY_MAGE: {"tab": "Mage", "accent": Color("#9fc4ff")},
 	CATEGORY_ANGE: {"tab": "Ange", "accent": Color("#ffd479")},
+	CATEGORY_DEMON: {"tab": "Démon", "accent": Color("#ff6b82")},
 }
 
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste(), lumiere(), mort(), etoiles()]
+		peste(), lumiere(), mort(), etoiles(), acier(), demon()]
 
 
 static func in_category(category: String) -> Array[CharacterStats]:
@@ -1048,6 +1052,119 @@ static func etoiles() -> CharacterStats:
 		"description": "La nuit tombe sur l'écran, et une comète frappe chaque ennemi de la carte.",
 		"kind": Ability.Kind.DAWN, "element": Element.Kind.STARS,
 		"damage": 120, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+# --- Archange d'Acier : il va au contact, et ses plaques encaissent pour lui. ---------
+
+static func acier() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = ACIER
+	c.display_name = "Archange d'Acier"
+	c.category = CATEGORY_ANGE
+	c.element = Element.Kind.STEEL
+	c.description = "Lent et massif, il frappe le sol de loin : ses plaques d'armure encaissent les coups, et ses kills les reforgent."
+	c.power_level = 4
+	c.base_health = 6
+	c.move_speed = 4.3
+	c.ultimate_required_kills = 7
+	c.attack = Ability.make({
+		"id": "acier_marteau", "display_name": "Coup de marteau",
+		"description": "Le marteau frappe le sol : une onde de choc court jusqu'à sa cible et touche ce qui l'entoure.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.STEEL,
+		"projectile_visual": "onde_marteau",
+		"damage": 22, "radius": 1.5, "range": 6, "cooldown": 0.65, "projectile_speed": 1.1,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "acier_ailes", "display_name": "Ailes-lames",
+			"description": "Une volée de lames part en éventail par-dessus les haies, puis revient vers lui et retouche au retour.",
+			"kind": Ability.Kind.BLADES, "element": Element.Kind.STEEL,
+			"damage": 30, "range": 5, "blade_count": 5, "cooldown": 7.0,
+		}),
+		Ability.make({
+			"id": "acier_enclume", "display_name": "Onde d'enclume",
+			"description": "Il frappe le sol : l'onde court dans les couloirs et étourdit ce qu'elle touche.",
+			"kind": Ability.Kind.ANVIL, "element": Element.Kind.STEEL,
+			"damage": 34, "range": 7, "stun_seconds": 1.5, "cooldown": 10.0,
+		}),
+		Ability.make({
+			"id": "acier_rempart", "display_name": "Rempart",
+			"description": "Il se referme dans ses ailes : immobile et intouchable, il renvoie les coups reçus.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.STEEL,
+			"immune": true, "duration": 4.0, "cooldown": 18.0, "reflect_damage": 40,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "acier_charge", "display_name": "Charge",
+		"description": "Il fonce en ligne droite et renverse ce qu'il croise.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.STEEL,
+		"range": 4, "cooldown": 8.0, "trail_damage": 30, "blow_cells": 2,
+	})
+	c.ultimate = Ability.make({
+		"id": "acier_fusion", "display_name": "Acier en fusion",
+		"description": "Son armure chauffe au rouge : plaques pleines, il grandit, et ses coups plus forts projettent les ennemis.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.STEEL,
+		"damage": 70, "radius": 3.5, "molten_seconds": 10.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+# --- Démon du Pacte : moins il lui reste de vie, plus il frappe fort. ------------------
+
+static func demon() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = DEMON
+	c.display_name = "Démon du Pacte"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.BLOOD
+	c.description = "Il a signé avec sa propre vie : moins il lui en reste, plus il frappe fort. Se soigner, ou rester au bord du gouffre ?"
+	c.power_level = 4
+	c.base_health = 4
+	c.move_speed = 5.1
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "demon_griffe", "display_name": "Griffe de sang",
+		"description": "D'un geste de la main, trois griffures de sang filent vers leur cible et ne la ratent jamais.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.BLOOD,
+		"projectile_visual": "griffe_sang",
+		"damage": 18, "range": 7, "cooldown": 0.5, "projectile_speed": 1.4,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "demon_pacte", "display_name": "Pacte de sang",
+			"description": "Il sacrifie un point de vie pour renforcer tous ses coups. Le pacte ne prend jamais le dernier.",
+			"kind": Ability.Kind.PACT, "element": Element.Kind.BLOOD,
+			"self_cost": 1, "empower_bonus": 8, "empower_duration": 6.0, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "demon_sillon", "display_name": "Sillon de soufre",
+			"description": "Des flammes de sang courent dans le couloir et y restent.",
+			"kind": Ability.Kind.LINE, "element": Element.Kind.BLOOD,
+			"damage": 42, "range": 7, "cooldown": 7.0,
+			"line_speed": 14.0, "radius": 0.6, "duration": 3.0, "line_bite": 6,
+			"plant_style": "sillon_peint",
+		}),
+		Ability.make({
+			"id": "demon_festin", "display_name": "Festin",
+			"description": "Une gueule de sang se referme autour de lui : s'il a touché quelqu'un, il reprend un point de vie.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.BLOOD,
+			"damage": 26, "radius": 2.0, "cooldown": 14.0, "heal_self": 1, "heal_needs_hit": true,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "demon_bond", "display_name": "Bond de soufre",
+		"description": "Il disparaît dans une gerbe de sang et reparaît plus loin dans le couloir.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.BLOOD,
+		"range": 4, "cooldown": 8.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "demon_dernier", "display_name": "Dernier Pacte",
+		"description": "Le sceau éclate : il tombe à 1 PV et devient intouchable, puis récupère les trois quarts de ce qu'il a donné.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.BLOOD,
+		"damage": 60, "radius": 4.0, "cooldown": 1.0, "is_ultimate": true,
+		"last_pact_seconds": 6.0, "last_pact_return": 0.75,
 	})
 	return c
 

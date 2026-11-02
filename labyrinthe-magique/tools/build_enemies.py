@@ -40,6 +40,7 @@ silhouette, le monstre grandirait et rapetisserait d'une image à l'autre, et il
 flotterait — c'est le calage sur les pieds qui le pose au sol.
 """
 
+import tempfile
 from pathlib import Path
 import json
 import sys
@@ -115,6 +116,13 @@ for _entry in HERD.values():
     _entry["align_rows"] = True
 HERD["dragonnet"]["same_scale"] = False
 HERD["serpent"]["same_scale"] = False
+## Son ombre violette est peinte sur la planche, et le jeu pose déjà la sienne.
+HERD["serpent"]["painted_shadow"] = True
+## De profil, son éclat passe sur la case voisine : coupé à la frontière, le bout revenait
+## derrière lui à l'image suivante. Ses planches se rangent donc par formes, sans perdre le
+## violet de sa robe, que `without_magenta_cast` prendrait pour un reflet du fond.
+HERD["spectre"]["strike_shapes"] = True
+HERD["spectre"]["strike_give"] = [((1325, 627), (2, 4))]
 ## La planche du Golem de Givre oublie la créature à la 7e image de profil : il n'y a que
 ## ses cristaux. L'image précédente est tenue, sinon il disparaît au milieu de son coup.
 HERD["golem_givre"]["held_strike"] = {"right": {7: 6}}
@@ -162,16 +170,26 @@ MAGES = {
     # d'attaque, la faussait, et son corps enflait de 20 % à chaque sort. Sans aucun
     # agrandissement, sa tête reste juste, mais la planche d'attaque le dessine plus trapu
     # et son auréole tombait de 12 pixels. 8 % partage le défaut entre les deux.
+    # ⚠️ Corps chibi, qui remplissent leur case : les quatre anges passent d'une rangée à
+    # l'autre, ailes coupées d'un côté et miettes sous les pieds de l'autre (`whole_shapes`).
     "lumiere": {"id": "lumiere", "name": "Porte-Lumière", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "despill": True,
-            "strike_scale": 1.08},
+            "strike_scale": 1.08, "whole_shapes": True},
     # Sa faux fausse les hauteurs comme la lance du Porte-Lumière : même échelle imposée.
     "mort": {"id": "mort", "name": "Ange de la Mort", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "despill": True,
-            "strike_scale": 1.0},
+            "strike_scale": 1.0, "whole_shapes": True},
     "etoiles": {"id": "etoiles", "name": "Ange des Étoiles", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
-            "demagenta": True},
+            "demagenta": True, "whole_shapes": True},
+    # Son marteau levé fausse les hauteurs, comme la faux de la Mort : même échelle imposée.
+    "acier": {"id": "acier", "name": "Archange d'Acier", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
+    # Sa marche de dos a gardé une ombre sous les pieds : prise pour le sol, elle le faisait flotter.
+    "demon": {"id": "demon", "name": "Démon du Pacte", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,
@@ -538,7 +556,7 @@ def without_magenta_cast(data: np.ndarray) -> np.ndarray:
 
 
 def cells_by_shape(sheet: Image.Image, rows: int, keep_enclosed: bool,
-                   erase: list = (), give: list = ()) -> dict:
+                   erase: list = (), give: list = (), keep_cast: bool = False) -> dict:
     """Les cases d'une planche dont les poses sortent de la grille, formes entières.
 
     La découpe à la frontière coupait le corps de la Gelée et l'éclat de la Raie, puis
@@ -547,7 +565,9 @@ def cells_by_shape(sheet: Image.Image, rows: int, keep_enclosed: bool,
     """
     width, height = sheet.size
     cell_w, cell_h = width // COLUMNS, height // rows
-    data = without_magenta_cast(np.array(keyed(sheet, keep_enclosed)))
+    data = np.array(keyed(sheet, keep_enclosed))
+    if not keep_cast:
+        data = without_magenta_cast(data)
     for x0, y0, x1, y1 in erase:
         data[y0:y1, x0:x1, 3] = 0
     labels, count = ndimage.label(data[..., 3] > 24)
@@ -582,13 +602,15 @@ def cells_by_shape(sheet: Image.Image, rows: int, keep_enclosed: bool,
 
 
 def cells_of(path: Path, rows: int, keep_enclosed: bool = False,
-             whole_shapes: bool = False, erase: list = (), give: list = ()) -> dict:
+             whole_shapes: bool = False, erase: list = (), give: list = (),
+             keep_cast: bool = False) -> dict:
     """Découpe une planche en cases détourées, rangée par rangée."""
     with Image.open(path) as image:
         sheet = without_grid(image.convert("RGB"))
     if whole_shapes:
         return {row: mend(line, f"{path.stem} rangée {ROWS.index(row) + 1}")
-                for row, line in cells_by_shape(sheet, rows, keep_enclosed, erase, give).items()}
+                for row, line in cells_by_shape(sheet, rows, keep_enclosed, erase, give,
+                                                keep_cast).items()}
     width, height = sheet.size
     cell_w, cell_h = width / COLUMNS, height / rows
     out = {}
@@ -918,6 +940,8 @@ STEADY_BAND = 0.45
 ## Une miette : moins de 5 % du corps, toute entière dans le dernier huitième de case.
 CRUMB_SIZE_SHARE = 0.05
 CRUMB_EDGE_SHARE = 0.125
+## Une planche de profil refaite : sous cette part du corps, un morceau isolé est une miette.
+SIDE_CRUMB_SHARE = 0.02
 ## Agrandissement maximal de l'attaque. Au-delà, c'est la planche qui est à refaire.
 STEADY_MAX_SCALE = 1.3
 
@@ -953,6 +977,35 @@ def without_edge_crumbs(cell: Image.Image) -> Image.Image:
         near_edge = slices[1].stop <= margin or slices[1].start >= cell.width - margin
         if near_edge and sizes[piece] < biggest * CRUMB_SIZE_SHARE:
             data[..., 3][labels == piece + 1] = 0
+    return Image.fromarray(data, "RGBA")
+
+
+def body_only(cell: Image.Image) -> Image.Image:
+    """La case réduite à sa plus grande forme : pour une marche sans aucun morceau détaché."""
+    alpha = np.asarray(cell)[..., 3] > 24
+    labels, count = ndimage.label(alpha)
+    if count <= 1:
+        return cell
+    biggest = 1 + int(np.argmax(ndimage.sum(alpha, labels, range(1, count + 1))))
+    data = np.array(cell)
+    data[..., 3][ndimage.binary_dilation(labels == biggest, iterations=2) == 0] = 0
+    return Image.fromarray(data, "RGBA")
+
+
+## Sous cette part de sa hauteur, le violet d'une créature qui n'en porte pas est son ombre.
+PAINTED_SHADOW_BAND = 0.18
+
+
+def without_painted_shadow(cell: Image.Image) -> Image.Image:
+    """La case sans l'ombre violette peinte sous la créature."""
+    data = np.array(cell)
+    drawn = np.nonzero((data[..., 3] > 24).any(axis=1))[0]
+    if drawn.size == 0:
+        return cell
+    red, green, blue = (data[..., channel].astype(int) for channel in range(3))
+    purple = (blue > green + 20) & (red > green + 10)
+    purple[:drawn[-1] - int((drawn[-1] - drawn[0]) * PAINTED_SHADOW_BAND)] = False
+    data[..., 3][purple] = 0
     return Image.fromarray(data, "RGBA")
 
 
@@ -998,10 +1051,71 @@ def steadied(walk_line: list, strike_line: list, is_mage: bool, same_scale: bool
     return walk_line, strike_line
 
 
+def _drawn(row: np.ndarray) -> np.ndarray:
+    """Ce qui n'est pas le fond magenta d'une rangée RGB."""
+    return np.linalg.norm(row.astype(float) - (255.0, 0.0, 255.0), axis=-1) >= KEY_DISTANCE
+
+
+def _drawn_height(row: Image.Image, columns: int) -> float:
+    """La hauteur médiane du dessin dans les cases d'une rangée."""
+    drawn = _drawn(np.asarray(row))
+    width = row.width // columns
+    heights = []
+    for column in range(columns):
+        lines = np.nonzero(drawn[:, column * width:(column + 1) * width].any(axis=1))[0]
+        if lines.size:
+            heights.append(int(lines[-1] - lines[0]) + 1)
+    return float(np.median(heights))
+
+
+def _side_cell(cell: Image.Image, scale: float) -> Image.Image:
+    """Une case de profil sans ses miettes, agrandie autour de son centre."""
+    data = np.array(cell)
+    drawn = _drawn(data)
+    labels, count = ndimage.label(drawn)
+    if count > 1:
+        sizes = ndimage.sum(drawn, labels, range(1, count + 1))
+        for piece in np.nonzero(sizes < float(np.max(sizes)) * SIDE_CRUMB_SHARE)[0]:
+            data[labels == piece + 1] = (255, 0, 255)
+    out = Image.fromarray(data, "RGB")
+    grown = out.resize((round(out.width * scale), round(out.height * scale)), Image.LANCZOS)
+    left = (grown.width - out.width) // 2
+    top = (grown.height - out.height) // 2
+    return grown.crop((left, top, left + out.width, top + out.height))
+
+
+def with_new_profile(walk_path: Path, side_path: Path) -> Path:
+    """Une copie de la planche de marche, dont la dernière rangée vient de `side_path`.
+
+    ⚠️ Le profil refait est dessiné de 6 à 13 % plus petit que la rangée qu'il remplace,
+    et l'ange rétrécirait à chaque virage : il reprend donc la hauteur de cette rangée.
+    """
+    with Image.open(walk_path) as walk, Image.open(side_path) as side:
+        sheet = walk.convert("RGB")
+        row_height = sheet.height // len(ROWS)
+        row = side.convert("RGB").resize((sheet.width, row_height), Image.LANCZOS)
+        old_row = sheet.crop((0, sheet.height - row_height, sheet.width, sheet.height))
+        columns = sheet.width // row_height
+        scale = max(1.0, _drawn_height(old_row, columns) / _drawn_height(row, columns))
+        for column in range(columns):
+            box = (column * row_height, 0, (column + 1) * row_height, row_height)
+            sheet.paste(_side_cell(row.crop(box), scale),
+                        (box[0], sheet.height - row_height))
+    merged = Path(tempfile.mkdtemp()) / walk_path.name
+    sheet.save(merged)
+    return merged
+
+
 def build(source_name: str, entry: dict) -> str:
     source_folder = entry.get("source", SOURCE)
     walk_path = source_folder / entry.get("walk_sheet", f"{source_name}_marche.png")
     strike_path = source_folder / f"{source_name}_attaque.png"
+    # LE PROFIL REFAIT À PART remplace la rangée de la planche de marche : la face et le dos restent.
+    # Une marche regénérée APRÈS lui l'emporte : il montrerait un corps qui n'est plus le sien.
+    side_path = source_folder / f"{source_name}_profil.png"
+    if (side_path.exists() and walk_path.exists()
+            and side_path.stat().st_mtime > walk_path.stat().st_mtime):
+        walk_path = with_new_profile(walk_path, side_path)
     walks = entry.get("walks", Bestiary_walks(entry["id"]))
     missing = [p.name for p in (walk_path, strike_path) if not p.exists()]
     if missing:
@@ -1016,14 +1130,21 @@ def build(source_name: str, entry: dict) -> str:
         if complaint:
             return f"{entry['id']} REFUSÉ : {complaint}"
 
-    whole = entry.get("whole_shapes", False)
-    walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False), whole)
+    keep_cast = entry.get("strike_shapes", False)
+    whole = entry.get("whole_shapes", False) or keep_cast
+    walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False), whole,
+                    keep_cast=keep_cast)
     strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False), whole,
-                      entry.get("strike_erase", ()), entry.get("strike_give", ()))
+                      entry.get("strike_erase", ()), entry.get("strike_give", ()), keep_cast)
     is_mage = source_folder == MAGES_SOURCE
     for row, frames in entry.get("held_strike", {}).items():
         for frame, held in frames.items():
             strike[row][frame - 1] = strike[row][held - 1]
+    if entry.get("painted_shadow"):
+        walk = {row: [without_painted_shadow(cell) for cell in walk[row]] for row in ROWS}
+        strike = {row: [without_painted_shadow(cell) for cell in strike[row]] for row in ROWS}
+    if entry.get("walk_body_only"):
+        walk = {row: [body_only(cell) for cell in walk[row]] for row in ROWS}
     # La foulée se juge sur la case d'origine : `steadied` l'élargit.
     original_profile = walk["right"]
     if entry.get("align_rows"):

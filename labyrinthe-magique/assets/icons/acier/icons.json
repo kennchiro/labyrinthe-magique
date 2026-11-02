@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "acier_marteau",
+    "acier_ailes",
+    "acier_enclume",
+    "acier_rempart",
+    "acier_charge",
+    "acier_fusion"
+  ],
+  "size": 256
+}

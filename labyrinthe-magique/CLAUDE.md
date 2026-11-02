@@ -203,11 +203,11 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
 - ⚠️ Pour mesurer, ne pas lire `delta` : le moteur le lisse sur des multiples de 1/120 s.
   `--bench` prend une vraie horloge, et c'est le p99 qui compte.
 
-## Les treize personnages
+## Les quinze personnages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles`.
+`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte`.
 
 Le **Chronomancien** (élément Temps) est né animé et peint au shader : il n'a ni planche
 `SHEETS` ni `impact.png`, `orb.png` ou `warp.png` (`_load_character_fx` met le quad peint à
@@ -236,6 +236,19 @@ passe après un temps, de gauche à droite, comme sa faux à l'écran (`Kind.LAS
 L'**Ange des Étoiles** (élément Étoiles) est fait pareil. Elle pose des étoiles (`_stars`, trois au
 plus) et `_on_star_ray` brûle ce qui passe sur les rayons qui les relient, À VOL D'OISEAU, par-dessus
 les haies. Son trait, Astre, compte les coups (`_star_marks`), et sa Nuit réutilise `Kind.DAWN`.
+
+L'**Archange d'Acier** (élément Acier) est fait pareil. Son attaque est un projectile à rayon, dont le
+visuel `onde_marteau` fend le sol derrière lui (`_spawn_hammer_strike`). Ses plaques (`Health.plates`) encaissent
+chacune un coup entier avant les PV, et `PLATE_KILLS` kills en reforgent une. Le Rempart (un
+`Kind.SHIELD` avec `reflect_damage`) le cloue sur place : le jeu et la simulation lisent
+`player_rooted()`. L'Acier en fusion (`molten_seconds`) renforce et fait projeter ses coups.
+
+Le **Démon du Pacte** (élément Sang, onglet Démon) est fait pareil. Sa Rage (`rage_bonus`) gagne jusqu'à
+`RAGE_MAX` selon les PV perdus, au maximum à 1 PV quel que soit le stage, et seulement sur le coup d'origine.
+`Ability.self_cost` paie en PV par `Health.sacrifice`, qui ne prend jamais le dernier et passe outre le
+bouclier. Le Dernier Pacte réutilise `_immune_left`, et `_pact_owed` rend les PV à la fin. ⚠️ C'est un humain
+noble à l'image : tout ce qui le dit démon est dans ses sorts, jamais dans son corps. ⚠️ Les bots ne cherchent
+jamais à rester à 1 PV : `test_balance` mesure la Rage, pas ce jeu-là. `tools/preview_demon.gd` montre ses effets.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
@@ -616,7 +629,7 @@ l'Air.
   l'UIManager. Les libellés de touche viennent de l'InputMap, pas du code.
   ⚠️ L'action de la frappe s'appelle `teleport` — nom d'origine, d'avant le combat.
 - **L'écran de sélection a un onglet par famille** (`CharacterCatalog.CATEGORIES`,
-  champ `category` de chaque personnage ; le Porte-Lumière est le seul Ange). Ce
+  champ `category` de chaque personnage). Ce
   classement ne touche que le menu, aucune règle de jeu ne le lit. `tests/test_select.gd`
   vérifie que chaque personnage est bien dans un onglet.
 - **La barre du mage est un cadre peint, percé** (`src/ui/hud.gd`). Le jeu remplit

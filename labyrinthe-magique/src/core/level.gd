@@ -428,6 +428,14 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.last_hour_cast.connect(_on_last_hour_cast)
 	combat.last_hour_struck.connect(_on_last_hour_struck)
 	_on_souls_changed(0)
+	combat.plates_changed.connect(_on_plates_changed)
+	combat.blades_thrown.connect(_on_blades_thrown)
+	combat.blade_cut.connect(_on_blade_cut)
+	combat.anvil_struck.connect(_on_anvil_struck)
+	combat.rampart_reflected.connect(_on_blade_cut)
+	combat.molten_started.connect(_on_molten_started)
+	combat.molten_ended.connect(_on_molten_ended)
+	combat.pact_signed.connect(_on_pact_signed)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -472,6 +480,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	player.set_character(character)
 	entities.add_child(player)
 	player.setup(grid, grid.player_spawn, character.move_speed, TILE_SIZE)
+	_on_plates_changed(combat.plates_left())
 	player.mover.cell_entered.connect(_on_player_cell_entered)
 	compass.setup(TILE_SIZE)
 	_player_was_in_house = grid.is_house(grid.player_spawn)
@@ -536,6 +545,7 @@ func _process(delta: float) -> void:
 	_update_enemy_portals()
 	_update_thieves()
 	_update_spores(delta, stopped)
+	_update_rage()
 	_update_boss(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
@@ -876,7 +886,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles"]
+	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -1000,7 +1010,7 @@ func _load_character_fx() -> void:
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1123,6 +1133,8 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
+	if ability.projectile_visual == "onde_marteau":
+		_spawn_hammer_strike(path, points, duration)
 	if not points.is_empty():
 		_cast_target = points[points.size() - 1]
 	# UN ÉCLAIR NE VOYAGE PAS, IL RELIE — MAIS LE DARD, LUI, VOLE.
@@ -1171,6 +1183,8 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 
 
 func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
+	if ability.projectile_visual == "onde_marteau":
+		_spawn_painted_burst(cell, 1.5, 0.45, "acier_dash").z_index = 11
 	if _orbs.has(index):
 		var orb: MagicOrb = _orbs[index]
 		if is_instance_valid(orb):
@@ -1370,6 +1384,12 @@ func _on_player_made_immune(duration: float) -> void:
 	if character.id == "etoiles":
 		_spawn_veil(duration)
 		return
+	if character.id == "acier":
+		_spawn_on_player(duration, "acier_rampart", 1.05)
+		return
+	if character.id == "demon":
+		_spawn_on_player(duration, "demon_veil", 1.1)
+		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.refresh(duration)
 		return
@@ -1503,7 +1523,8 @@ func _on_star_falling(cell: Vector2i, lead: float) -> void:
 func _on_star_trail(from: Vector2i, to: Vector2i) -> void:
 	var trail := StarTrail.new()
 	entities.add_child(trail)
-	trail.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
+	trail.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE,
+		StarTrail.STEEL_COLORS if character.id == "acier" else {})
 
 
 ## La comète descend du ciel jusqu'au sol de sa case, debout dans les deux vues.
@@ -1528,6 +1549,138 @@ func _spawn_night(cell: Vector2i) -> void:
 	var night := _spawn_painted_burst(cell, 1.0, NIGHT_TIME, "etoiles_night")
 	night.scale = Vector2.ONE
 	night.span_tiles(TILE_SIZE, NIGHT_TILES)
+
+
+# --- Le Démon du Pacte --------------------------------------------------------------
+
+const RAGE_AURA_SIZE := Vector2(2.2, 1.4)
+const RAGE_SHADER := preload("res://assets/shaders/demon_rage.gdshader")
+const PACT_TIME := 0.95
+const FESTIN_TIME := 0.6
+const LAST_PACT_TIME := 1.15
+
+var _rage_aura: Sprite2D = null
+
+
+func _on_pact_signed(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.0, PACT_TIME, "demon_pacte")
+
+
+func _spawn_demon_blast(ability: Ability, cell: Vector2i) -> void:
+	# La gueule passe SOUS lui : de la taille du sort, elle le cachait tout entier.
+	var burst := _spawn_painted_burst(cell, ability.radius,
+		LAST_PACT_TIME if ability.is_ultimate else FESTIN_TIME,
+		"demon_dernier" if ability.is_ultimate else "demon_festin")
+	if ability.is_ultimate:
+		burst.z_index = 11
+		_shake_total = 0.32
+		_shake_left = _shake_total
+		_shake_time = 0.0
+
+
+## La Rage se lit sous ses pieds : le cercle grandit à chaque PV perdu, et rien à pleine vie.
+func _update_rage() -> void:
+	if character == null or character.id != "demon" or player == null:
+		return
+	# Le niveau se reconstruit au démarrage, et l'ancien mage n'est pas encore libéré à cet instant.
+	if _rage_aura == null or not is_instance_valid(_rage_aura) or _rage_aura.get_parent() != player:
+		var shaded := ShaderMaterial.new()
+		shaded.shader = RAGE_SHADER
+		_rage_aura = Sprite2D.new()
+		_rage_aura.texture = MagicOrb.painted_quad()
+		_rage_aura.material = shaded
+		_rage_aura.scale = RAGE_AURA_SIZE * float(TILE_SIZE)
+		_rage_aura.show_behind_parent = true
+		player.add_child(_rage_aura)
+	var rage := combat.rage_bonus() / CombatSystem.RAGE_MAX
+	_rage_aura.visible = rage > 0.0
+	(_rage_aura.material as ShaderMaterial).set_shader_parameter("rage", rage)
+
+
+# --- L'Archange d'Acier -------------------------------------------------------------
+
+## Il grandit d'un quart et rougeoie tant que dure l'armure en fusion.
+const MOLTEN_GROWTH := 1.25
+const MOLTEN_TINT := Color(1.3, 0.82, 0.55)
+
+var _plate_pips: PlatePips = null
+var _plates_shown := -1
+var _size_before_molten := Vector2.ONE
+
+
+func _on_plates_changed(count: int) -> void:
+	if character == null or character.id != "acier" or player == null:
+		return
+	# Le niveau se reconstruit au démarrage : l'ancien mage n'est pas encore libéré à cet instant,
+	# et ses plaques sembleraient toujours valides.
+	if _plate_pips == null or not is_instance_valid(_plate_pips) or _plate_pips.get_parent() != player:
+		_plates_shown = -1
+		_plate_pips = PlatePips.new()
+		player.add_child(_plate_pips)
+		_plate_pips.setup(TILE_SIZE, CombatSystem.PLATE_MAX)
+	_plate_pips.set_count(count)
+	if _plates_shown >= 0 and count != _plates_shown:
+		var cell := player.mover.nearest_cell()
+		if count < _plates_shown:
+			_spawn_painted_burst(cell, 1.1, 0.35, "acier_impact").z_index = 11
+		else:
+			_spawn_painted_burst(cell, 1.1, 0.4, "acier_ring").z_index = 11
+	_plates_shown = count
+
+
+## Le coup au sol à ses pieds, et le sol qui se fend derrière l'onde jusqu'à sa cible.
+func _spawn_hammer_strike(path: Array, points: PackedVector2Array, duration: float) -> void:
+	_spawn_painted_burst(path[0], 1.3, 0.35, "acier_impact").z_index = 11
+	var links := []
+	for i in points.size() - 1:
+		links.append({"from": points[i], "to": points[i + 1], "steps": i + 1})
+	var cracks := SteelCracks.new()
+	entities.add_child(cracks)
+	cracks.setup(links, TILE_SIZE, float(points.size() - 1) / maxf(duration, 0.01))
+
+
+func _on_blades_thrown(from: Vector2i, directions: Array, reach: int) -> void:
+	var volley := SteelBlades.new()
+	entities.add_child(volley)
+	volley.setup(maze_renderer.cell_to_world(from), directions, float(reach * TILE_SIZE), TILE_SIZE, player)
+
+
+func _on_blade_cut(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 0.8, 0.28, "acier_impact").z_index = 11
+
+
+func _on_anvil_struck(cell: Vector2i, links: Array) -> void:
+	var drawn := []
+	for link: Dictionary in links:
+		drawn.append({"from": maze_renderer.cell_to_world(link["from"]),
+			"to": maze_renderer.cell_to_world(link["to"]), "steps": link["steps"]})
+	var cracks := SteelCracks.new()
+	entities.add_child(cracks)
+	cracks.setup(drawn, TILE_SIZE)
+	_spawn_painted_burst(cell, 1.05, 0.6, "acier_anvil").z_index = 11
+
+
+func _on_molten_started(duration: float) -> void:
+	_spawn_on_player(duration, "acier_molten", 1.35)
+	_spawn_painted_burst(player.mover.nearest_cell(), 1.6, 0.6, "acier_ring").z_index = 11
+	_size_before_molten = player.scale
+	player.set_tint(MOLTEN_TINT)
+	create_tween().tween_property(player, "scale", _size_before_molten * MOLTEN_GROWTH, 0.4) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _on_molten_ended() -> void:
+	player.set_tint(Color.WHITE)
+	create_tween().tween_property(player, "scale", _size_before_molten, 0.6)
+
+
+## Un effet peint qui vit attaché au mage et le suit dans ses déplacements.
+func _spawn_on_player(duration: float, key: String, radius: float) -> void:
+	var worn := PaintedBurst.new()
+	player.add_child(worn)
+	worn.setup(TILE_SIZE, radius, duration, 0.0, key)
+	worn.position = Vector2(0.0, -TILE_SIZE * 0.55)
+	worn.z_index = 2
 
 
 # --- L'Ange de la Mort -------------------------------------------------------------
@@ -1727,6 +1880,12 @@ func _on_immunity_faded() -> void:
 	if character.id == "etoiles":
 		player.modulate.a = 1.0
 		return
+	if character.id == "demon":
+		# Le sceau se referme : ce qu'il rend revient à cet instant.
+		_spawn_painted_burst(player.mover.nearest_cell(), 1.0, PACT_TIME * 0.6, "demon_pacte")
+		return
+	if character.id == "acier":
+		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.stop()
 	_aegis = null
@@ -1769,6 +1928,9 @@ func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	if character.id == "mort":
 		_spawn_sweep(ability, cell)
+		return
+	if character.id == "demon":
+		_spawn_demon_blast(ability, cell)
 		return
 	# L'éclat prend le RAYON RÉEL du sort : le joueur doit voir jusqu'où il a
 	# porté, sinon il ne peut pas apprendre à s'en servir.
@@ -2150,7 +2312,7 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		var flight := LightArc.new()
 		entities.add_child(flight)
 		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
-	elif character.id == "etoiles":
+	elif character.id in ["etoiles", "acier", "demon"]:
 		pass
 	elif character.id == "mort":
 		var passage := DeathPassage.new()
@@ -3006,9 +3168,9 @@ func _update_spores(delta: float, stopped: bool) -> void:
 	var factor := _spores.speed_factor(player.mover.nearest_cell())
 	if factor < 1.0 and player.mover.speed >= character.move_speed:
 		player.set_tint(TINT_SLOWED)
-	elif factor >= 1.0 and player.mover.speed < character.move_speed:
+	elif factor >= 1.0 and player.mover.speed < character.move_speed and not combat.player_rooted():
 		player.set_tint(Color.WHITE)
-	player.mover.speed = character.move_speed * factor
+	player.mover.speed = 0.0 if combat.player_rooted() else character.move_speed * factor
 
 
 ## La cible bouge pendant le vol : on lui recolle le dernier point du trajet à
@@ -3202,7 +3364,7 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id in ["peste", "lumiere", "mort", "etoiles"]:
+		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon"]:
 			return
 		# Le Feu n'a plus besoin de l'éclat tracé : ses triangles jaunes flottaient
 		# par-dessus les lobes et cassaient leur silhouette.
