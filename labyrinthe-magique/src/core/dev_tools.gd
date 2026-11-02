@@ -113,6 +113,9 @@ func apply_command_line() -> void:
 		# Sans quoi la sortie de maison du début reprendrait : le mage quitterait
 		# le portail pour retraverser le labyrinthe vers sa porte.
 		game.level.player.cancel_path()
+	# Ouvre la maison sans tourner dans le labyrinthe : pour capturer son portail.
+	if "--open-door" in args:
+		game.level.debug_collect_all_gems()
 	if "--potion" in args:
 		game.kills.drink_potion()
 		game.ui.set_kills(game.kills.progress, game.kills.needed, game.kills.available())

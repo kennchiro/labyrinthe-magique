@@ -298,6 +298,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 		# Sur un calque d'écran : dans la texture du sol, elle serait couchée avec lui.
 		(world_stage if world_stage != null else self).add_child(_ambience)
 	_ambience.set_stage_tint(maze_renderer.air_tint())
+	_ambience.set_stage(config.stage)
 	maze_renderer.set_grid(grid)
 	if world_stage != null:
 		world_stage.build(grid, config.stage)
@@ -473,6 +474,8 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	house.position = maze_renderer.cell_to_world(grid.house_center)
 	house.setup(TILE_SIZE, config.stage)
 	house.set_locked(missing_gem_colors().size())
+	if world_stage != null:
+		world_stage.raise_monument(house, grid.house_center)
 
 	player = PLAYER_SCENE.instantiate()
 	# Le personnage est posé AVANT l'entrée dans l'arbre : le _ready du joueur

@@ -67,6 +67,14 @@ const PROP_CHANCE := 12
 const GLOW_CHANCE := 5
 ## Épaisseur de la lisière d'arbres autour du labyrinthe, en cases.
 const FOREST_RING := 4
+const SWAY_SHADER := preload("res://assets/shaders/decor_sway.gdshader")
+const LAYER_STILL := 0
+const LAYER_SWAY := 1
+const LAYER_FLICKER := 2
+const FLICKER_SHADER := preload("res://assets/shaders/decor_flicker.gdshader")
+## Rangs des plantes dans le semis de chaque stage : fleurs, palmiers, coraux, sapins...
+## Les arbres morts et les cactus restent raides.
+const PLANTS := {1: [1, 2, 7, 8], 3: [0, 6], 4: [0, 1, 3], 6: [0], 7: [0, 7], 8: [4], 10: [0, 1]}
 
 var tile_size := 32
 ## [{texture, position, scale, modulate}] — reconstruit à chaque niveau.
@@ -80,6 +88,11 @@ var glowing_positions: Array[Vector2] = []
 var _stage_props: Array[Texture2D] = []
 var _stage_glowing: Array[Texture2D] = []
 var _stage_trees: Array[Texture2D] = []
+## Ce qui balance au vent, dessiné à part pour que les pierres restent immobiles.
+var _swaying_textures: Array[Texture2D] = []
+var _swaying: Node2D = null
+## Ce qui éclaire vacille : dessiné à part, comme ce qui balance.
+var _flickering: Node2D = null
 
 
 ## Charge le décor découpé de la planche du stage. Semer les mêmes champignons
@@ -89,6 +102,25 @@ func set_stage(index: int) -> void:
 	_stage_props = _load_role(index, "semis")
 	_stage_glowing = _load_role(index, "lueur")
 	_stage_trees = _load_role(index, "lisiere")
+	_swaying_textures.clear()
+	if StageMood.of(index).wind > 0.0:
+		_swaying_textures.append_array(_stage_trees)
+	for rank: int in PLANTS.get(index, []):
+		if rank < _stage_props.size():
+			_swaying_textures.append(_stage_props[rank])
+	if _swaying == null:
+		_swaying = _layer(SWAY_SHADER, _draw_items.bind(LAYER_SWAY))
+		_flickering = _layer(FLICKER_SHADER, _draw_items.bind(LAYER_FLICKER))
+
+
+func _layer(shader: Shader, painter: Callable) -> Node2D:
+	var node := Node2D.new()
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	node.material = material
+	add_child(node)
+	node.draw.connect(painter)
+	return node
 
 
 func _load_role(index: int, role: String) -> Array[Texture2D]:
@@ -116,6 +148,9 @@ func build(grid: MazeGrid, p_tile_size: int, rng_seed: int) -> void:
 	_plant_forest(grid, rng)
 	_scatter_props(grid, rng)
 	queue_redraw()
+	if _swaying != null:
+		_swaying.queue_redraw()
+		_flickering.queue_redraw()
 
 
 func _scatter_props(grid: MazeGrid, rng: RandomNumberGenerator) -> void:
@@ -140,7 +175,10 @@ func _scatter_props(grid: MazeGrid, rng: RandomNumberGenerator) -> void:
 		var position := Vector2(cell) * tile_size + Vector2(
 			rng.randf_range(0.3, 0.7), rng.randf_range(0.45, 0.75)) * tile_size
 
-		_add(texture, position, target, Color(1, 1, 1))
+		# Après les tirages : le reste du semis ne change pas d'une case.
+		if House.hides(cell, grid.house_center):
+			continue
+		_add(texture, position, target, Color(1, 1, 1), glowing)
 		if glowing:
 			glowing_positions.append(position)
 
@@ -173,18 +211,36 @@ func _add_tree(rng: RandomNumberGenerator, cell: Vector2) -> void:
 	_add(texture, position, target, Color(shade * 0.9, shade, shade * 0.95))
 
 
-func _add(texture: Texture2D, position: Vector2, target_height: float, modulate: Color) -> void:
+func _add(texture: Texture2D, position: Vector2, target_height: float, modulate: Color,
+		glowing := false) -> void:
+	var layer := LAYER_STILL
+	if glowing:
+		layer = LAYER_FLICKER
+	elif _swaying_textures.has(texture):
+		layer = LAYER_SWAY
 	var scale_factor := target_height / float(texture.get_height())
 	_items.append({
 		"texture": texture,
 		"position": position,
 		"size": Vector2(texture.get_width(), texture.get_height()) * scale_factor,
 		"modulate": modulate,
+		"layer": layer,
 	})
 
 
 func _draw() -> void:
+	_draw_items(LAYER_STILL)
+
+
+func _draw_items(layer: int) -> void:
+	var canvas: CanvasItem = self
+	if layer == LAYER_SWAY:
+		canvas = _swaying
+	elif layer == LAYER_FLICKER:
+		canvas = _flickering
 	for item in _items:
+		if item["layer"] != layer:
+			continue
 		var size: Vector2 = item["size"]
 		var position: Vector2 = item["position"] - Vector2(size.x * 0.5, size.y * 0.85)
-		draw_texture_rect(item["texture"], Rect2(position, size), false, item["modulate"])
+		canvas.draw_texture_rect(item["texture"], Rect2(position, size), false, item["modulate"])

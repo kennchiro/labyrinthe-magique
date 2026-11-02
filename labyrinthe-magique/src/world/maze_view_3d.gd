@@ -12,6 +12,9 @@ extends Node3D
 ## de dessin, quelle que soit la taille du labyrinthe.
 
 const TILES_PATH := "res://assets/tiles/"
+const FLOOR_SHADER := preload("res://assets/shaders/maze_floor.gdshader")
+const WALL_SHADER := preload("res://assets/shaders/maze_wall.gdshader")
+const DRIFT_NOISE := preload("res://assets/shaders/fire_noise.png")
 const PIECE_COLUMNS := 4
 const PIECE_ROWS := 4
 ## Rangées de haies ajoutées autour de la grille : la caméra voit au-delà du bord.
@@ -28,6 +31,14 @@ const WALL_SIDE_TOP_SHADE := 0.60
 const WALL_SIDE_FOOT_SHADE := 0.20
 const CONTACT_WIDTH := 0.20
 const CONTACT_ALPHA := 0.62
+## Les quatre angles d'une case : la diagonale qu'ils regardent et les deux bras
+## (bits de voisins) qui les encadrent.
+const CORNERS: Array[Dictionary] = [
+	{"step": Vector2i(1, -1), "arms": 1 | 2},
+	{"step": Vector2i(1, 1), "arms": 2 | 4},
+	{"step": Vector2i(-1, 1), "arms": 4 | 8},
+	{"step": Vector2i(-1, -1), "arms": 8 | 1},
+]
 
 var triangle_count := 0
 
@@ -39,6 +50,8 @@ var _variants := 1
 var _outlines := {}
 var _mood: StageMood = null
 var _wall_gain := 0.0
+## Côté de l'encoche d'une croix, en fraction de case, mesuré sur l'atlas.
+var _notch := 0.0
 
 
 func build(grid: MazeGrid, stage: int, mood: StageMood) -> void:
@@ -56,6 +69,7 @@ func build(grid: MazeGrid, stage: int, mood: StageMood) -> void:
 	_atlas_image.convert(Image.FORMAT_RGBA8)
 	_piece = atlas.get_width() / PIECE_COLUMNS
 	_variants = maxi(1, atlas.get_height() / (_piece * PIECE_ROWS))
+	_notch = _measure_notch()
 	_outlines.clear()
 	triangle_count = 0
 	_add_floor(floor_sheet)
@@ -85,13 +99,16 @@ func _add_floor(sheet: Texture2D) -> void:
 	for corner in [low, Vector2(high.x, low.y), high, low, high, Vector2(low.x, high.y)]:
 		tool.set_uv(corner / period)
 		tool.add_vertex(Vector3(corner.x, 0.0, corner.y))
-	var material := StandardMaterial3D.new()
-	material.albedo_texture = sheet
+	var material := _drifting(FLOOR_SHADER)
+	material.set_shader_parameter("sheet", sheet)
 	# Le sol reste sombre pour que les haies ressortent, quelle que soit sa planche.
 	var gain := _mood.floor_luma / _luma(sheet.get_image())
-	material.albedo_color = Color(_mood.floor_hue.r * gain, _mood.floor_hue.g * gain, _mood.floor_hue.b * gain)
-	material.texture_repeat = true
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	material.set_shader_parameter("tint",
+		Vector3(_mood.floor_hue.r * gain, _mood.floor_hue.g * gain, _mood.floor_hue.b * gain))
+	material.set_shader_parameter("flow", _mood.flow)
+	material.set_shader_parameter("flow_tint", Vector3(_mood.flow_tint.r, _mood.flow_tint.g, _mood.flow_tint.b))
+	material.set_shader_parameter("flow_scale", _mood.flow_scale)
+	material.set_shader_parameter("flow_speed", _mood.flow_speed)
 	_add_mesh(tool, material, "Floor")
 	triangle_count += 2
 
@@ -106,13 +123,13 @@ func _add_walls(atlas: Texture2D) -> void:
 			if _is_wall_or_outside(col, row):
 				_add_wall_cell(walls, contact, Vector2i(col, row))
 
-	var wall_material := StandardMaterial3D.new()
-	wall_material.albedo_texture = atlas
+	var wall_material := _drifting(WALL_SHADER)
+	wall_material.set_shader_parameter("atlas", atlas)
 	if _wall_gain <= 0.0:
 		_wall_gain = _mood.wall_luma / _luma(_atlas_image)
-	wall_material.albedo_color = Color(_wall_gain, _wall_gain, _wall_gain)
-	wall_material.vertex_color_use_as_albedo = true
-	wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+	wall_material.set_shader_parameter("gain", _wall_gain)
+	wall_material.set_shader_parameter("wind", _mood.wind)
+	wall_material.set_shader_parameter("sparkle", _mood.sparkle)
 	_add_mesh(walls, wall_material, "Walls")
 
 	var contact_material := StandardMaterial3D.new()
@@ -122,6 +139,15 @@ func _add_walls(atlas: Texture2D) -> void:
 	contact_material.no_depth_test = false
 	var shadow := _add_mesh(contact, contact_material, "ContactShadows")
 	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _drifting(shader: Shader) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("drift_noise", DRIFT_NOISE)
+	material.set_shader_parameter("cloud_depth", _mood.cloud_depth)
+	material.set_shader_parameter("flash", _mood.flash)
+	return material
 
 
 ## Luminosité moyenne du dessin, transparence exclue. Une grille de points suffit :
@@ -165,20 +191,40 @@ func _add_wall_cell(walls: SurfaceTool, contact: SurfaceTool, cell: Vector2i) ->
 	var noise := _cell_noise(cell)
 	var variant := (noise / 7) % _variants
 	var shade := 1.0 + (float(noise % 100) / 100.0 - 0.5) * 0.12
-	for outline: PackedVector2Array in outline_of(mask, variant):
+	for outline: PackedVector2Array in outline_of(mask, variant, _closed_corners(cell, mask)):
 		_add_top(walls, cell, mask, variant, outline, shade)
 		_add_sides(walls, contact, cell, mask, variant, outline, shade)
 
 
+## Les angles de la case à refermer, un bit par angle de `CORNERS`. Une encoche de
+## l'atlas n'a de sens que face à du sol : entre deux bras et une case diagonale déjà
+## pleine, elle ferait un puits, et le pointillé sur toute la lisière.
+func _closed_corners(cell: Vector2i, mask: int) -> int:
+	var closed := 0
+	for index in CORNERS.size():
+		var corner: Dictionary = CORNERS[index]
+		var step: Vector2i = corner["step"]
+		var arms: int = corner["arms"]
+		if mask & arms == arms and _is_wall_or_outside(cell.x + step.x, cell.y + step.y):
+			closed |= 1 << index
+	return closed
+
+
 ## Silhouettes d'une pièce, en fractions de case, relevées une fois par pièce.
-func outline_of(mask: int, variant: int) -> Array:
-	# Entourée de haies, la case est un plein : la croix de l'atlas, elle, a quatre
-	# encoches aux angles, qui feraient un pointillé sur toute la lisière.
-	if mask == 15:
-		return [PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])]
-	var key := mask + variant * 16
+func outline_of(mask: int, variant: int, closed := 0) -> Array:
+	var key := mask + variant * 16 + closed * 256
 	if _outlines.has(key):
 		return _outlines[key]
+	if closed != 0:
+		# ⚠️ Une plaque carrée pour toute croix faisait dépasser ses coins des bras
+		# voisins, sans flanc dessous : d'où les triangles et les coins noirs des
+		# carrefours. On ne referme donc que les angles vraiment entourés.
+		var shapes: Array = outline_of(mask, variant)
+		for index in CORNERS.size():
+			if closed & (1 << index):
+				shapes = _with_corner(shapes, index)
+		_outlines[key] = shapes
+		return shapes
 	var region := Rect2i(_piece_origin(mask, variant), Vector2i(_piece, _piece))
 	var piece := _atlas_image.get_region(region)
 	var bitmap := BitMap.new()
@@ -196,6 +242,30 @@ func outline_of(mask: int, variant: int) -> Array:
 		found.append(snapped_points)
 	_outlines[key] = found
 	return found
+
+
+## Le filet de l'atlas referme le fond de l'encoche : son côté se lit donc sur le bord
+## de la pièce, là où le bras commence.
+func _measure_notch() -> float:
+	var origin := _piece_origin(15, 0)
+	for x in _piece / 2:
+		if _atlas_image.get_pixel(origin.x + x, origin.y).a >= 0.5:
+			return float(x) / float(_piece)
+	return 0.0
+
+
+func _with_corner(shapes: Array, index: int) -> Array:
+	var step: Vector2i = CORNERS[index]["step"]
+	var origin := Vector2(0.0 if step.x < 0 else 1.0 - _notch, 0.0 if step.y < 0 else 1.0 - _notch)
+	var patch := PackedVector2Array([origin, origin + Vector2(_notch, 0.0),
+		origin + Vector2(_notch, _notch), origin + Vector2(0.0, _notch)])
+	var merged: Array = []
+	for shape: PackedVector2Array in shapes:
+		for polygon: PackedVector2Array in Geometry2D.merge_polygons(shape, patch):
+			if _signed_area(polygon) < 0.0:
+				polygon.reverse()
+			merged.append(polygon)
+	return merged
 
 
 func _snap_to_piece(point: Vector2) -> Vector2:
@@ -333,6 +403,10 @@ func _atlas_uv(mask: int, variant: int, point: Vector2) -> Vector2:
 	# Un demi-pixel de retrait : le filtrage ne doit pas lire la pièce voisine.
 	var margin := 0.5 / float(_piece)
 	var inside := point.clamp(Vector2(margin, margin), Vector2(1.0 - margin, 1.0 - margin))
+	# Seul un angle refermé atteint le coin de la case. Ce coin est vide dans l'atlas :
+	# il reprend le dessin juste au-delà de l'encoche.
+	if (point.x == 0.0 or point.x == 1.0) and (point.y == 0.0 or point.y == 1.0):
+		inside = inside.clamp(Vector2(_notch, _notch), Vector2(1.0 - _notch, 1.0 - _notch))
 	var origin := Vector2(_piece_origin(mask, variant)) / float(_piece)
 	var total := Vector2(PIECE_COLUMNS, PIECE_ROWS * _variants)
 	return (origin + inside) / total

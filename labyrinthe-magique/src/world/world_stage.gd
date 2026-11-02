@@ -45,6 +45,13 @@ const PORTAL_GLOW := Color(0.25, 0.55, 1.0, 0.55)
 const PORTAL_GLOW_RADIUS := 1.9
 const HOUSE_GLOW := Color(1.0, 0.68, 0.26, 0.55)
 const HOUSE_GLOW_RADIUS := 4.2
+## L'ombre de l'îlot : au sud de son centre, sinon l'îlot la cache à la caméra.
+const MONUMENT_SHADOW := Color(0.0, 0.0, 0.0, 0.62)
+const MONUMENT_SHADOW_SIZE := Vector2(3.2, 2.0)
+const MONUMENT_SHADOW_SOUTH := 0.9
+## Sous la texture du sol : personnages et gemmes restent dessinés devant l'îlot.
+const MONUMENT_PRIORITY := 2
+const MONUMENT_SHADOW_PRIORITY := 1
 
 var maze: MazeView3D = null
 var camera: Camera3D = null
@@ -165,6 +172,34 @@ func _add_glow(cell: Vector2i, radius: float, tint: Color) -> void:
 	glow.position = Vector3(cell.x + 0.5, 0.04, cell.y + 0.5)
 	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_glows.add_child(glow)
+
+
+## Dresse l'îlot face à la caméra, qui ne tourne jamais. Perpendiculaire à la vue, il garde
+## à l'écran la taille de son dessin, et rien ne l'y écrase : il n'a pas à être redressé.
+## Les enfants de `_glows` sont retirés à chaque niveau : l'îlot d'avant part avec eux.
+func raise_monument(house: House, cell: Vector2i) -> void:
+	var panel := Sprite3D.new()
+	panel.shaded = false
+	panel.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	panel.render_priority = MONUMENT_PRIORITY
+	panel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	panel.rotation.x = CameraRules.tilt() - PI * 0.5
+	panel.position = Vector3(cell.x + 0.5, House.PANEL_LIFT, cell.y + 0.5 + House.PANEL_SOUTH)
+	_glows.add_child(panel)
+	house.stand_on(panel)
+
+	var shadow := Sprite3D.new()
+	shadow.texture = SoftTextures.blot()
+	shadow.axis = Vector3.AXIS_Y
+	shadow.shaded = false
+	shadow.material_override = SoftTextures.shade(shadow.texture)
+	shadow.material_override.render_priority = MONUMENT_SHADOW_PRIORITY
+	shadow.modulate = MONUMENT_SHADOW
+	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	shadow.pixel_size = 1.0 / float(shadow.texture.get_width())
+	shadow.scale = Vector3(MONUMENT_SHADOW_SIZE.x, 1.0, MONUMENT_SHADOW_SIZE.y)
+	shadow.position = Vector3(cell.x + 0.5, 0.03, cell.y + 0.5 + MONUMENT_SHADOW_SOUTH)
+	_glows.add_child(shadow)
 
 
 ## Le dessin d'une entité est debout, mais couché ici sur le sol : on lui rend la

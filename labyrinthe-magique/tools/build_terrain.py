@@ -2,6 +2,7 @@
 """Le terrain DESSINÉ des dix stages, découpé des planches d'`peso&cover/terrain/`.
 
     tools/.venv/bin/python tools/build_terrain.py     # DEPUIS LA RACINE
+    tools/.venv/bin/python tools/build_terrain.py --decor   # les objets seuls
 
 Produit, pour chaque stage dont la planche existe :
     assets/tiles/stage_<N>/floor_sheet.png    192x192 = 6x6 cases, SANS COUTURE
@@ -42,6 +43,7 @@ TROIS PLANCHES, TROIS PROBLÈMES SANS RAPPORT
 
 from pathlib import Path
 import json
+import sys
 import numpy as np
 from PIL import Image
 from scipy import ndimage
@@ -184,6 +186,42 @@ KEY_DISTANCE = 78.0
 CHROMA_TOLERANCE = 0.085
 
 
+## Le vert d'un pixel de résidu, rapporté au plus faible du rouge et du bleu.
+RESIDUE_GREEN = 0.62
+## Le bleu du résidu, rapporté à son rouge.
+RESIDUE_BALANCE = 0.55
+## Sous ce niveau, le pixel est un contour peint : la barrière qui protège l'objet.
+RESIDUE_FLOOR = 60.0
+## Une tache enclavée plus petite que ça, en pixels de planche, est une éclaboussure
+## d'ombre entre deux cailloux ; plus grande, c'est un pétale ou une facette.
+RESIDUE_SPECK = 60
+## Au-delà de cette part de l'objet, le magenta EST l'objet : mesuré, le brasero perd
+## 12 % et les rochers violets des stages 2 et 5 en perdraient de 39 à 51 %.
+RESIDUE_MAX_SHARE = 0.20
+
+
+def magenta_residue(pixels: np.ndarray, outside: np.ndarray) -> np.ndarray:
+    """L'ombre et la lueur que le modèle peint sur le fond, et que la clé laisse passer.
+
+    Mêlées à la terre ou à la flamme, elles sortent de la tolérance de chromaticité et
+    restaient en taches roses sous les objets. La teinte seule ne les sépare pas d'une
+    fleur ou d'un cristal rose, mais ceux-là sont CERNÉS d'un contour sombre : on ne prend
+    donc que ce qui rejoint le fond sans franchir de contour, plus les petites taches."""
+    red, green, blue = pixels[..., 0], pixels[..., 1], pixels[..., 2]
+    low, high = np.minimum(red, blue), np.maximum(red, blue)
+    candidate = ((green < low * RESIDUE_GREEN) & (low > high * RESIDUE_BALANCE)
+                 & (low > RESIDUE_FLOOR) & ~outside)
+    parts, count = ndimage.label(candidate | outside)
+    reached = candidate & np.isin(parts, np.unique(parts[outside]))
+    spots, spot_count = ndimage.label(candidate & ~reached)
+    if spot_count > 0:
+        areas = ndimage.sum(np.ones_like(spots), spots, range(1, spot_count + 1))
+        reached = reached | np.isin(spots, np.flatnonzero(areas < RESIDUE_SPECK) + 1)
+    if reached.sum() > (~outside).sum() * RESIDUE_MAX_SHARE:
+        return np.zeros_like(outside)
+    return reached
+
+
 def keyed(cell: Image.Image, crop: bool = True) -> Image.Image | None:
     """L'objet seul, le fond magenta retiré.
 
@@ -244,6 +282,8 @@ def keyed(cell: Image.Image, crop: bool = True) -> Image.Image | None:
     # une tolérance deux fois plus serrée : enclavé, on n'a plus le bord pour
     # garde-fou, et se tromper là coûte un trou dans l'objet.
     outside = outside | ((chroma < CHROMA_TOLERANCE * 0.5) & darker)
+    if crop:
+        outside = outside | magenta_residue(pixels, outside)
 
     data = np.array(cell.convert("RGBA"))
     data[..., 3] = np.where(outside, 0, 255)
@@ -283,10 +323,7 @@ def build_decor(index: int, sheet: Image.Image) -> str:
     # Les props générés par `build_stage_props.py` occupent les mêmes noms. On
     # les efface : en laisser un traîner au rang 4 mêlerait un caillou terne au
     # milieu de dix objets dessinés, et on chercherait longtemps d'où il sort.
-    for folder in (semis, lueur):
-        for stale in folder.glob("*.png"):
-            stale.unlink()
-            stale.with_suffix(".png.import").unlink(missing_ok=True)
+    stale = set(semis.glob("*.png")) | set(lueur.glob("*.png"))
 
     total = DECOR_COLUMNS * DECOR_ROWS
     written = [0, 0]
@@ -302,7 +339,12 @@ def build_decor(index: int, sheet: Image.Image) -> str:
         role = "lueur" if glowing else "semis"
         rank = written[1 if glowing else 0]
         prop.save(out_dir / role / f"{role}_{rank}.png")
+        stale.discard(out_dir / role / f"{role}_{rank}.png")
         written[1 if glowing else 0] += 1
+    # Après coup : un objet réécrit garde son `.import`, et donc son identifiant Godot.
+    for old in stale:
+        old.unlink()
+        old.with_suffix(".png.import").unlink(missing_ok=True)
     return f"décor {written[0]} semis + {written[1]} lueurs"
 
 
@@ -557,6 +599,13 @@ def build_walls(index: int, sheet: Image.Image) -> str:
 
 
 def main() -> None:
+    # `--decor` : les objets seuls, sans réécrire le sol ni les murs des dix stages.
+    if "--decor" in sys.argv:
+        for index in range(1, 11):
+            decor = load(f"terrain_{index}_decor.png")
+            if decor is not None:
+                print(f"stage {index:2d}  " + build_decor(index, decor))
+        return
     for index in range(1, 11):
         rapport = []
         sol = load(f"terrain_{index}_sol.png")

@@ -29,6 +29,31 @@ const TORCH_SHADER := preload("res://assets/shaders/torchlight.gdshader")
 ## ne les compte pas — et c'est du CPUParticles2D, comme tout le reste du jeu :
 ## le rendu doit être identique sur mobile.
 const MOTES := 44
+## Largeur de `SoftTextures.glow()`, pour parler de tailles en pixels.
+const GLOW_SIDE := 128.0
+## L'air de chaque stage : tailles en pixels d'écran, vitesses en pixels par seconde.
+const AIR := {
+	1: {"amount": 26, "life": 8.0, "way": Vector2(1, 0), "spread": 180.0, "speed": Vector2(5, 20),
+		"size": Vector2(7, 16), "colour": Color(0.82, 1.0, 0.42, 0.85), "blink": true},
+	2: {"amount": 24, "life": 3.5, "way": Vector2(1, 0), "spread": 180.0, "speed": Vector2(8, 36),
+		"size": Vector2(4, 9), "colour": Color(0.62, 0.78, 1.0, 0.85), "blink": true},
+	3: {"amount": 30, "life": 6.0, "way": Vector2(0.3, -1), "spread": 28.0, "speed": Vector2(14, 34),
+		"size": Vector2(4, 9), "colour": Color(1.0, 0.56, 0.20, 0.85)},
+	4: {"amount": 24, "life": 8.0, "way": Vector2(0.2, -1), "spread": 35.0, "speed": Vector2(6, 16),
+		"size": Vector2(6, 13), "colour": Color(0.70, 0.92, 1.0, 0.50)},
+	5: {"amount": 28, "life": 9.0, "way": Vector2(0, -1), "spread": 180.0, "speed": Vector2(3, 12),
+		"size": Vector2(5, 12), "colour": Color(0.72, 0.60, 1.0, 0.75), "blink": true},
+	6: {"amount": 60, "life": 8.0, "way": Vector2(-0.45, 1), "spread": 14.0, "speed": Vector2(26, 58),
+		"size": Vector2(4, 11), "colour": Color(1.0, 1.0, 1.0, 0.80)},
+	7: {"amount": 26, "life": 9.0, "way": Vector2(0.3, -1), "spread": 70.0, "speed": Vector2(4, 13),
+		"size": Vector2(5, 11), "colour": Color(0.72, 0.95, 0.70, 0.60), "blink": true},
+	8: {"amount": 34, "life": 9.0, "way": Vector2(0.5, -0.5), "spread": 50.0, "speed": Vector2(4, 14),
+		"size": Vector2(4, 9), "colour": Color(1.0, 0.86, 0.52, 0.65)},
+	9: {"amount": 30, "life": 7.0, "way": Vector2(0, -1), "spread": 22.0, "speed": Vector2(10, 24),
+		"size": Vector2(4, 10), "colour": Color(0.76, 0.46, 1.0, 0.80)},
+	10: {"amount": 26, "life": 9.0, "way": Vector2(0.4, -0.3), "spread": 40.0, "speed": Vector2(6, 18),
+		"size": Vector2(5, 12), "colour": Color(1.0, 0.98, 0.84, 0.70), "blink": true},
+}
 
 var _veil: ColorRect = null
 var _torch: ColorRect = null
@@ -100,17 +125,49 @@ func _build_motes() -> void:
 	_motes.scale_amount_min = 1.0
 	_motes.scale_amount_max = 2.6
 	_motes.color = Color(1.0, 0.96, 0.82, 0.55)
-	# Une mote naît invisible, se montre, et s'éteint : apparaître et disparaître
-	# d'un coup ferait clignoter des points blancs sur le décor.
-	var fade := Gradient.new()
-	fade.set_color(0, Color(1, 1, 1, 0))
-	fade.set_color(1, Color(1, 1, 1, 0))
-	fade.add_point(0.5, Color(1, 1, 1, 1))
-	_motes.color_ramp = fade
+	_motes.color_ramp = _fade()
 	var additive := CanvasItemMaterial.new()
 	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_motes.material = additive
 	add_child(_motes)
+
+
+## L'air de chaque stage. Assez gros pour se lire comme de la neige ou des lucioles, et
+## non comme des pixels morts. Rejoué à chaque niveau : le stage d'avant ne doit rien laisser.
+func set_stage(stage: int) -> void:
+	if _motes == null:
+		return
+	var air: Dictionary = AIR.get(stage, AIR[1])
+	_motes.amount = air["amount"]
+	_motes.lifetime = air["life"]
+	_motes.texture = SoftTextures.glow()
+	_motes.direction = air["way"]
+	_motes.spread = air["spread"]
+	_motes.gravity = Vector2.ZERO
+	_motes.initial_velocity_min = air["speed"].x
+	_motes.initial_velocity_max = air["speed"].y
+	_motes.scale_amount_min = air["size"].x / GLOW_SIDE
+	_motes.scale_amount_max = air["size"].y / GLOW_SIDE
+	_motes.color = air["colour"]
+	_motes.color_ramp = _pulse() if air.get("blink", false) else _fade()
+
+
+## Une mote naît invisible, se montre, et s'éteint : apparaître et disparaître d'un coup
+## ferait clignoter des points sur le décor.
+func _fade() -> Gradient:
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	fade.add_point(0.5, Color(1, 1, 1, 1))
+	return fade
+
+
+func _pulse() -> Gradient:
+	var pulse := Gradient.new()
+	pulse.offsets = [0.0, 0.2, 0.38, 0.56, 0.78, 1.0]
+	pulse.colors = [Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0.2),
+		Color(1, 1, 1, 1), Color(1, 1, 1, 0.3), Color(1, 1, 1, 0)]
+	return pulse
 
 
 func _fit() -> void:

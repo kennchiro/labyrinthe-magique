@@ -32,9 +32,18 @@ func _initialize() -> void:
 	_test_canvas_covers_the_view(world, level)
 	_test_tap_finds_its_cell(world, level)
 	_test_entities_stand_up(level)
+	_test_monument_stands(world, level)
 	_test_wall_rebuild(world, level)
 	print("ÉCHECS : %d" % _failures if _failures > 0 else "TOUS LES TESTS PASSENT")
 	quit(1 if _failures > 0 else 0)
+
+
+func _reaches_corner(outlines: Array) -> bool:
+	for outline: PackedVector2Array in outlines:
+		for point in outline:
+			if (point.x == 0.0 or point.x == 1.0) and (point.y == 0.0 or point.y == 1.0):
+				return true
+	return false
 
 
 func _check(condition: bool, label: String) -> void:
@@ -63,6 +72,12 @@ func _test_every_stage_has_walls() -> void:
 				complete = false
 		_check(complete and view.triangle_count > 500,
 			"stage %d : 16 pièces, %d triangles" % [stage, view.triangle_count])
+		# Une croix face au sol garde ses encoches : une plaque carrée dépasserait des bras
+		# voisins, sans flanc dessous. Entourée de haies, elle se referme.
+		_check(StageMood.MOTION.has(stage) and Ambience.AIR.has(stage),
+			"stage %d : la carte a son mouvement et son air" % stage)
+		_check(not _reaches_corner(view.outline_of(15, 0)) and _reaches_corner(view.outline_of(15, 0, 15)),
+			"stage %d : un carrefour n'a pas de coins en surplomb" % stage)
 		var bar: PackedVector2Array = view.outline_of(5, 0)[0]
 		var inset := 1.0
 		for point in bar:
@@ -117,6 +132,35 @@ func _test_entities_stand_up(level: Level) -> void:
 	_check(is_equal_approx(level.player.scale.y, CameraRules.stand_scale()),
 		"le mage est redressé (x%.2f)" % level.player.scale.y)
 	_check(is_equal_approx(level.player.scale.x, 1.0), "sans être élargi")
+
+
+## L'îlot debout : face à la caméra, sa roche au-dessus du sol, et plus aucun double couché.
+func _test_monument_stands(world: WorldStage, level: Level) -> void:
+	var panel: Sprite3D = null
+	for child in world._glows.get_children():
+		if child is Sprite3D and child.texture == level.house.sprite.texture:
+			panel = child
+	_check(panel != null, "l'îlot est debout dans la scène 3D")
+	if panel == null:
+		return
+	_check(not level.house.sprite.visible, "sans son double couché sur le sol")
+	var facing := panel.global_transform.basis.z.dot(world.camera.global_transform.basis.z)
+	_check(facing > 0.999, "il fait face à la caméra (%.3f)" % facing)
+	var below := (panel.texture.get_height() * 0.5 - panel.offset.y) * panel.pixel_size
+	var lowest := House.PANEL_LIFT - House.BOB_HEIGHT - below * panel.global_transform.basis.y.y
+	_check(lowest > 0.0, "sa roche reste au-dessus du sol (%.2f)" % lowest)
+	var locked_tint := panel.modulate
+	level.house.set_locked(0)
+	_check(panel.modulate == House.TINT_OPEN and locked_tint == House.TINT_LOCKED,
+		"il passe de la teinte scellée à la teinte ouverte")
+	_check(panel.get_child_count() == 1, "son portail est posé sur lui")
+	level.house.set_locked(1)
+	for stage in range(1, 11):
+		var image: Texture2D = load("res://assets/stages/props/stage_%d/maison/maison_0.png" % stage)
+		var portal: Vector4 = House.PORTALS[stage]
+		var bounds := Rect2(Vector2.ZERO, image.get_size())
+		var ellipse := Rect2(portal.x - portal.z, portal.y - portal.w, portal.z * 2.0, portal.w * 2.0)
+		_check(bounds.encloses(ellipse), "le portail du stage %d tombe dans son image" % stage)
 
 
 ## Un mur levé par la Terre doit apparaître en volume, sinon on bute sur du vide.

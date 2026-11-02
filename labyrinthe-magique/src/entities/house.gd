@@ -37,6 +37,33 @@ const ANCHOR_LIFT := 0.30
 ## reste chaleureuse invite à s'en approcher — exactement le contresens à éviter.
 const TINT_LOCKED := Color(0.58, 0.66, 0.86)
 const TINT_OPEN := Color(1.0, 1.0, 1.0)
+## Altitude de l'îlot, en cases. En dessous de 0,5, sa roche passerait sous le sol.
+const PANEL_LIFT := 0.8
+## La perspective fait glisser vers le nord ce qui s'élève, loin du centre de l'écran.
+## Ce recul garde le portail au-dessus de sa clairière, là où le mage entre.
+const PANEL_SOUTH := 0.7
+const BOB_HEIGHT := 0.06
+const BOB_SPEED := 1.6
+const PORTAL_SHADER := preload("res://assets/shaders/monument_portal.gdshader")
+## Portail de chaque îlot, en pixels de son image : centre de la spirale, puis rayons
+## de l'ellipse. Relevés à la main sur `assets/stages/props/stage_N/maison/maison_0.png`.
+const PORTALS := {
+	1: Vector4(126, 200, 26, 36),
+	2: Vector4(130, 188, 28, 40),
+	3: Vector4(145, 135, 26, 40),
+	4: Vector4(129, 158, 28, 38),
+	5: Vector4(143, 188, 30, 40),
+	6: Vector4(163, 188, 28, 44),
+	7: Vector4(144, 175, 26, 38),
+	8: Vector4(152, 170, 28, 42),
+	9: Vector4(152, 170, 34, 46),
+	10: Vector4(166, 195, 24, 34),
+}
+## Tours par seconde, en radians. Assez lent pour rester du décor.
+const PORTAL_SPIN := 0.9
+const PORTAL_OPENING_SPEED := 0.8
+const PORTAL_SEALED := Color(0.26, 0.30, 0.42)
+const PORTAL_PRIORITY := 3
 
 @onready var sprite: Sprite2D = $Sprite2D
 
@@ -46,6 +73,55 @@ var locked := true
 var _time := 0.0
 ## Monte de 0 à 1 quand la porte s'ouvre : sert au flash d'ouverture.
 var _unseal := 0.0
+## L'îlot debout, quand la vue en volume en a dressé un : il remplace le sprite couché.
+var _panel: Sprite3D = null
+var _stage := 0
+var _portal_material: ShaderMaterial = null
+var _portal_phase := 0.0
+var _portal_open := 0.0
+
+
+## Les cases dont le décor passerait devant l'îlot : tout ce qui est peint au sol est
+## dessiné après lui, et il couvre le sol jusqu'à cinq cases au nord de son centre.
+static func hides(cell: Vector2i, centre: Vector2i) -> bool:
+	var offset := cell - centre
+	return absi(offset.x) <= 2 and offset.y >= -6 and offset.y <= -2
+
+
+## Passe le dessin à la scène 3D. Le sprite reste pour ses mesures, mais ne se montre plus.
+func stand_on(panel: Sprite3D) -> void:
+	_panel = panel
+	panel.texture = sprite.texture
+	panel.pixel_size = sprite.scale.x / float(tile_size)
+	# Un Sprite3D compte ses pixels vers le haut, un Sprite2D vers le bas.
+	panel.offset = -sprite.offset
+	panel.modulate = sprite.modulate
+	sprite.visible = false
+	if PORTALS.has(_stage) and sprite.texture != TEXTURE:
+		_add_portal(panel, PORTALS[_stage])
+
+
+## Un quad posé sur l'ouverture, enfant de l'îlot : il flotte avec lui.
+func _add_portal(panel: Sprite3D, portal: Vector4) -> void:
+	var size := panel.texture.get_size()
+	_portal_material = ShaderMaterial.new()
+	_portal_material.shader = PORTAL_SHADER
+	_portal_material.render_priority = PORTAL_PRIORITY
+	_portal_material.set_shader_parameter("island", panel.texture)
+	_portal_material.set_shader_parameter("centre", Vector2(portal.x, portal.y) / size)
+	_portal_material.set_shader_parameter("radii", Vector2(portal.z, portal.w) / size)
+	_portal_material.set_shader_parameter("sealed", Vector3(PORTAL_SEALED.r, PORTAL_SEALED.g, PORTAL_SEALED.b))
+	_portal_open = 0.0 if locked else 1.0
+	_portal_material.set_shader_parameter("open", _portal_open)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(portal.z, portal.w) * 2.0 * panel.pixel_size
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = quad
+	mesh.material_override = _portal_material
+	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh.position = Vector3(portal.x - size.x * 0.5 + panel.offset.x,
+		size.y * 0.5 - portal.y + panel.offset.y, 0.01) * panel.pixel_size
+	panel.add_child(mesh)
 
 
 ## Le MONUMENT du stage remplace la maisonnette quand sa planche en fournit un :
@@ -56,6 +132,7 @@ var _unseal := 0.0
 ## repli — mieux vaut un décor de forêt qu'un trou au centre du labyrinthe.
 func setup(p_tile_size: int, stage: int = 0) -> void:
 	tile_size = p_tile_size
+	_stage = stage
 	var texture := TEXTURE
 	var path := PROPS_PATH + "stage_%d/maison/maison_0.png" % stage
 	if stage > 0 and ResourceLoader.exists(path):
@@ -83,13 +160,28 @@ func set_locked(missing: int) -> void:
 	locked = now_locked
 	if sprite != null:
 		sprite.modulate = TINT_LOCKED if locked else TINT_OPEN
+		if is_instance_valid(_panel):
+			_panel.modulate = sprite.modulate
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	_time += delta
 	_unseal = maxf(0.0, _unseal - delta * 0.8)
+	if is_instance_valid(_panel):
+		_panel.position.y = PANEL_LIFT + sin(_time * BOB_SPEED) * BOB_HEIGHT
+		_turn_portal(delta)
 	queue_redraw()
+
+
+## Scellé, le portail ne tourne pas : ce mouvement est le signe que la porte est ouverte.
+func _turn_portal(delta: float) -> void:
+	if _portal_material == null or (locked and _portal_open == 0.0):
+		return
+	_portal_open = move_toward(_portal_open, 0.0 if locked else 1.0, delta * PORTAL_OPENING_SPEED)
+	_portal_phase = fmod(_portal_phase + delta * PORTAL_SPIN * _portal_open, TAU)
+	_portal_material.set_shader_parameter("open", _portal_open)
+	_portal_material.set_shader_parameter("phase", _portal_phase)
 
 
 func _draw() -> void:
@@ -99,9 +191,8 @@ func _draw() -> void:
 
 	# Halo chaud des fenêtres, dessiné sous le sprite parce que le _draw du nœud
 	# passe avant celui de ses enfants.
-	draw_circle(Vector2.ZERO, s * 2.6, Color(1.0, 0.78, 0.35, 0.05))
-	draw_circle(Vector2.ZERO, s * 1.7, Color(1.0, 0.78, 0.35, 0.07))
-	draw_circle(Vector2.ZERO, s * 1.0, Color(1.0, 0.82, 0.42, 0.07))
+	draw_texture_rect(SoftTextures.glow(), Rect2(Vector2.ONE * -s * 3.0, Vector2.ONE * s * 6.0), false,
+		Color(1.0, 0.78, 0.35, 0.28))
 	if _unseal > 0.0:
 		# Onde d'ouverture : elle part du seuil et s'élargit une seconde durant.
 		var wave := 1.0 - _unseal

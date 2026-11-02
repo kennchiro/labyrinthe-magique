@@ -220,6 +220,16 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
   visibles les effets additifs sur un fond transparent.
 - ⚠️ Pour mesurer, ne pas lire `delta` : le moteur le lisse sur des multiples de 1/120 s.
   `--bench` prend une vraie horloge, et c'est le p99 qui compte.
+- **La carte vit, un mouvement dominant par stage** : `StageMood.MOTION` (vent, nappes,
+  éclats, éclairs, ce qui court au sol ; `maze_wall`, `maze_floor`, `drift.gdshaderinc`),
+  `DecorLayer.PLANTS` (`decor_sway`) et les lueurs (`decor_flicker`), `Ambience.AIR` (lucioles,
+  neige, braises...). Le vent ne déplace aucun sommet : une haie qui bouge ne dirait plus
+  où est le mur. ⚠️ Non mesuré sur iPhone : à faire avec `--bench` avant de conclure.
+- ⚠️ Un carrefour n'est PAS une plaque carrée : ses coins dépassaient des bras voisins,
+  sans flanc dessous. `_closed_corners` ne referme que les angles entourés de haies.
+- Objets de décor seuls : `tools/build_terrain.py --decor`. `magenta_residue` retire
+  l'ombre magenta peinte sur les planches, en s'arrêtant aux contours sombres. Au-delà de
+  20 % de l'objet, il n'y touche pas : ce violet EST l'objet (stages 2 et 5).
 
 ## Les quinze personnages
 
@@ -449,6 +459,23 @@ réalité vers la **DROITE sur sept d'entre elles**. Sept créatures ont donc
 marché à reculons pendant des semaines. C'est ce que déclare `profile` dans
 `build_bestiary.py` (défaut `"right"`, exceptions écrites : l'ombre et le démon
 de cristal). Rien ne l'attrape tout seul — les fichiers existent, les bandes
+**L'îlot debout.** Couché sur la
+texture du sol, il glissait avec elle et paraissait plat à côté des haies. `WorldStage.raise_monument`
+le dresse face à la caméra, avec une ombre fixe au sol, et `House` le fait balancer. La logique
+et la vue `--2d` gardent le `House` 2D, qui ne fait plus que le halo et l'onde d'ouverture.
+
+- La texture du sol reste dessinée APRÈS l'îlot : mage, ennemis et gemmes restent devant,
+  comme avant (z 10 et 6 contre 5). Le décor aussi, d'où `House.hides` qui le retire de ce
+  que l'îlot couvre, sans changer les tirages du reste du semis.
+- ⚠️ Ce qui s'élève glisse vers le nord, d'autant plus qu'on s'éloigne du centre de l'écran :
+  sans `PANEL_SOUTH`, le portail flottait deux cases au-dessus de sa clairière.
+- ⚠️ L'ombre passe par `SoftTextures.blot()` : avec `glow()`, seul le centre se voit, et il
+  est caché par l'îlot. Elle semblait absente quelle que soit sa force.
+- **Le portail** reprend la spirale PEINTE de l'îlot et la tourne (`monument_portal`), dans
+  une ellipse relevée à la main : `House.PORTALS`. Éteint et immobile tant que la porte est
+  scellée, il s'allume et tourne à l'ouverture. `--open-door` l'ouvre pour une capture.
+  Un nouvel îlot demande de relever son ellipse, puis de la revoir porte ouverte.
+
 font la bonne taille, `check_characters.py` ne juge que le CADRAGE et les tests
 headless ne chargent aucune texture. D'où **`tools/check_profiles.py`**, qui
 pose côte à côte la pose de foulée de chaque `left.png` : elles doivent TOUTES
