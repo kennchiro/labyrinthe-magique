@@ -357,7 +357,8 @@ func _process(delta: float) -> void:
 		_drive_player()
 	if _show_fx:
 		_replay_effects(delta)
-	if _auto_cast and game.level.can_use(GameManager.SLOT_ATTACK):
+	if _auto_cast and game.level.can_use(GameManager.SLOT_ATTACK) \
+			and game.level.has_target(GameManager.SLOT_ATTACK):
 		game.level.use_ability(GameManager.SLOT_ATTACK)
 	if not game.ui.debug_label.visible or game.level.grid == null:
 		return

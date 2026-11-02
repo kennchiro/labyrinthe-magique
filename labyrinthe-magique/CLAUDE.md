@@ -856,8 +856,11 @@ l'Air.
   découpés des planches. La règle de découpe : la boîte relevée à la main ne fait
   que DÉSIGNER, les formes sont prises entières — jamais coupées. Deux règles
   précédentes ont été jetées pour avoir amputé des anneaux de flammes.
-- **Attaque** : elle vise et ne rate jamais. Un projectile ratable dans un couloir
-  d'une case serait de la chance, pas de l'adresse.
+- **Attaque** : elle vise et ne rate jamais un ennemi à portée. Un projectile ratable dans
+  un couloir d'une case serait de la chance, pas de l'adresse. Sans ennemi à viser, le mage
+  tire quand même : droit devant, jusqu'à la première haie ou au bout de sa portée, et le
+  tir frappe ce qu'il croise (`_cast_free_shot`). Ceci ne vaut que pour l'attaque de base ;
+  un sort qui vise reste refusé sans cible. Les bots ne tirent jamais dans le vide.
 - **Invocations** (l'Invocateur) : les créatures vivent dans le **CombatSystem**,
   pas dans le Level — la simulation d'équilibrage les fait chasser en headless
   avec les règles du jeu (règle d'architecture n° 1). 2 minutes de vie chacune,

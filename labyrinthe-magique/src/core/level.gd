@@ -703,11 +703,18 @@ func can_use(slot: int) -> bool:
 		return false
 	if not combat.can_use(ability):
 		return false
-	# Un projectile sans cible à portée serait un tir dans le vide : l'interface
-	# doit pouvoir griser le bouton AVANT que le joueur n'appuie.
-	if ability.kind == Ability.Kind.PROJECTILE:
-		return combat.find_target(ability, combat_context) >= 0
+	# Un sort sans cible à portée serait gaspillé : l'interface doit pouvoir griser
+	# le bouton AVANT que le joueur n'appuie. L'attaque de base, elle, part toujours.
+	if ability.kind == Ability.Kind.PROJECTILE and ability != character.attack:
+		return has_target(slot)
 	return true
+
+
+## Un ennemi est-il à portée de ce geste, là, tout de suite ?
+func has_target(slot: int) -> bool:
+	var ability := ability_at(slot)
+	return ability != null and combat != null \
+		and combat.find_target(ability, combat_context) >= 0
 
 
 ## Retourne false si rien n'est parti — et dans ce cas aucune ressource n'a été
@@ -3181,7 +3188,8 @@ func _update_orbs() -> void:
 		if not is_instance_valid(orb):
 			_orbs.erase(index)
 			continue
-		if index < enemies.size():
+		# Un numéro négatif est un tir libre : il ne suit personne.
+		if index >= 0 and index < enemies.size():
 			orb.retarget(enemies[index].position)
 
 

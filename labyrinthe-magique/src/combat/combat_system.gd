@@ -349,6 +349,7 @@ var _charges := {}          # id -> charges restantes (sorts à charges)
 var _refills := {}          # id -> charges à rendre quand la recharge finit
 var _recover := {}          # id -> délai avant la charge suivante
 var _in_flight: Array[Dictionary] = []
+var _last_free_shot := 0
 var _summon_projectiles: Array[Dictionary] = []
 var _zones: Array[Dictionary] = []
 var _walls: Array[Dictionary] = []
@@ -572,6 +573,10 @@ func update(delta: float, context: CombatContext) -> void:
 func _update_projectiles(delta: float, context: CombatContext) -> void:
 	for i in range(_in_flight.size() - 1, -1, -1):
 		_in_flight[i]["time_left"] = float(_in_flight[i]["time_left"]) - delta
+		if _in_flight[i].has("path"):
+			if _fly_free_shot(_in_flight[i], context):
+				_in_flight.remove_at(i)
+			continue
 		if float(_in_flight[i]["time_left"]) > 0.0:
 			continue
 		var shot: Dictionary = _in_flight[i]
@@ -956,6 +961,8 @@ func _already_targeted(index: int) -> bool:
 func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	var target := find_target(ability, context)
 	if target < 0:
+		if ability == stats.attack:
+			return _cast_free_shot(ability, context)
 		use_refused.emit("cible")
 		return false
 	var path := trajectory(context.player_cell, context.enemy_cells[target])
@@ -968,6 +975,51 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	var duration := float(path.size() - 1) / speed
 	_in_flight.append({"ability": ability, "target": target, "time_left": duration})
 	projectile_launched.emit(ability, target, path, duration)
+	return true
+
+
+## Personne à viser : l'attaque de base part quand même, droit devant le mage, jusqu'à
+## la première haie ou au bout de sa portée. Elle frappe ce qu'elle croise en chemin.
+## Son numéro est négatif : il ne désigne aucun ennemi, seulement le tir en vol.
+func _cast_free_shot(ability: Ability, context: CombatContext) -> bool:
+	var path: Array[Vector2i] = [context.player_cell]
+	while path.size() <= ability.range and grid.is_floor_v(path[-1] + context.player_facing):
+		path.append(path[-1] + context.player_facing)
+	var landing: Vector2i = path[-1]
+	# Collé à une haie, le tir s'y écrase : le geste reste visible.
+	if path.size() < 2:
+		path.append(landing + context.player_facing)
+	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
+	var duration := float(path.size() - 1) / speed
+	_last_free_shot -= 1
+	_in_flight.append({"ability": ability, "target": _last_free_shot, "time_left": duration,
+		"duration": duration, "path": path, "landing": landing, "from": 0})
+	projectile_launched.emit(ability, _last_free_shot, path, duration)
+	return true
+
+
+## Avance un tir libre, et dit s'il est fini. La case où il se trouve est relue à chaque
+## image : un ennemi qui y entre après lui se fait quand même toucher.
+func _fly_free_shot(shot: Dictionary, context: CombatContext) -> bool:
+	var ability: Ability = shot["ability"]
+	var path: Array[Vector2i] = shot["path"]
+	var left := maxf(0.0, float(shot["time_left"]))
+	var reached := roundi((1.0 - left / float(shot["duration"])) * (path.size() - 1))
+	for step in range(int(shot["from"]), reached + 1):
+		for index in context.enemy_cells.size():
+			if context.enemy_alive(index) and context.enemy_cells[index] == path[step]:
+				projectile_hit.emit(ability, int(shot["target"]), path[step])
+				if ability.radius > 0.0:
+					_apply_area(ability, path[step], context)
+				else:
+					_apply_damage(index, ability, context)
+				return true
+	shot["from"] = reached
+	if left > 0.0:
+		return false
+	projectile_hit.emit(ability, int(shot["target"]), path[-1])
+	if ability.radius > 0.0:
+		_apply_area(ability, shot["landing"], context)
 	return true
 
 

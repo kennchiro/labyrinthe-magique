@@ -357,7 +357,7 @@ func _action_state() -> Dictionary:
 		"teleport_ratio": _teleport_ratio(),
 		"on_portal": level.player_on_portal(),
 		"gamble": level.player_teleport_is_gamble(),
-		"can_attack": level.can_use(SLOT_ATTACK),
+		"can_attack": level.can_use(SLOT_ATTACK) and level.has_target(SLOT_ATTACK),
 		"ultimate_ready": kills.available(),
 	}
 

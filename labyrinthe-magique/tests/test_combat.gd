@@ -25,6 +25,7 @@ func _init() -> void:
 	_test_trajectory()
 	_test_projectile_damage()
 	_test_refusal_costs_nothing()
+	_test_free_shot()
 	_test_blast_respects_walls()
 	_test_zone_damages_over_time()
 	_test_wall_and_blink()
@@ -468,19 +469,79 @@ func _test_refusal_costs_nothing() -> void:
 	var combat: CombatSystem = parts[1]
 	var context: CombatContext = parts[2]
 
-	# Aucun ennemi : le tir ne part pas et ne coûte rien.
-	if combat.use(stats.attack, context):
-		_fail("un projectile part sans le moindre ennemi")
-	if combat.cooldown_left(stats.attack) > 0.0:
+	# Aucun ennemi : un sort qui vise ne part pas et ne coûte rien.
+	var fire := CharacterCatalog.fire()
+	var fire_parts := _context(fire)
+	var aimed: Ability = fire.abilities[0]
+	if aimed.kind != Ability.Kind.PROJECTILE:
+		_fail("le premier sort du Feu n'est plus un projectile, ce test ne vérifie plus rien")
+	if fire_parts[1].use(aimed, fire_parts[2]):
+		_fail("un sort qui vise part sans le moindre ennemi")
+	if fire_parts[1].cooldown_left(aimed) > 0.0:
 		_fail("un tir refusé a quand même déclenché la recharge")
 	var skill: Ability = stats.abilities[0]
-	# La rune est une ZONE : elle part même sans cible, c'est un piège. En
-	# revanche l'attaque, elle, exige une cible. On vérifie la distinction.
+	# La rune est une ZONE : elle part même sans cible, c'est un piège.
 	if not combat.use(skill, context):
 		_fail("une zone refuse de se poser faute de cible, alors que c'est un piège")
 	if combat.cooldown_left(skill) <= 0.0:
 		_fail("une zone posée ne déclenche pas sa recharge")
 	print("geste refusé : aucune recharge déclenchée : OK")
+
+
+## L'attaque de base part sans cible, droit devant, et frappe ce qu'elle croise.
+func _test_free_shot() -> void:
+	var stats := CharacterCatalog.shadow()
+	var parts := _context(stats)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var flights := {"path": []}
+	combat.projectile_launched.connect(func(_a: Ability, target: int, path: Array, _d: float) -> void:
+		flights["target"] = target
+		flights["path"] = path)
+	var hits := {"count": 0}
+	combat.projectile_hit.connect(func(_a: Ability, _t: int, _c: Vector2i) -> void: hits["count"] += 1)
+
+	# Un couloir droit de trois cases au moins devant le mage.
+	for cell in grid.all_floor_cells():
+		for direction in MazeGrid.NEIGHBORS:
+			if grid.is_floor_v(cell + direction) and grid.is_floor_v(cell + direction * 2) \
+					and grid.is_floor_v(cell + direction * 3):
+				context.player_cell = cell
+				context.player_facing = direction
+				break
+		if grid.is_floor_v(context.player_cell + context.player_facing * 3):
+			break
+	context.player_field = Pathfinder.distance_field(grid, [context.player_cell] as Array[Vector2i])
+
+	if not combat.use(stats.attack, context):
+		_fail("l'attaque de base refuse de partir sans ennemi")
+	if combat.cooldown_left(stats.attack) <= 0.0:
+		_fail("un tir libre ne déclenche pas la recharge")
+	if int(flights["target"]) >= 0:
+		_fail("un tir libre porte le numéro d'un ennemi")
+	for step in flights["path"].size():
+		var expected: Vector2i = context.player_cell + context.player_facing * step
+		if flights["path"][step] != expected:
+			_fail("un tir libre ne part pas droit devant : %s" % str(flights["path"]))
+	if flights["path"].size() - 1 > stats.attack.range:
+		_fail("un tir libre dépasse sa portée")
+
+	# Un ennemi entre dans le couloir après le départ : il prend le coup.
+	_add_enemy(context, context.player_cell + context.player_facing * 2, 100)
+	for i in 300:
+		combat.update(DT, context)
+	if context.enemy_health[0].current != 100 - stats.attack.damage:
+		_fail("un tir libre ne blesse pas l'ennemi croisé (PV %d)" % context.enemy_health[0].current)
+	if hits["count"] != 1:
+		_fail("%d impacts pour un seul tir libre" % hits["count"])
+
+	# L'ennemi en vue reste visé : le tir suit le chemin jusqu'à lui.
+	if not combat.use(stats.attack, context):
+		_fail("l'attaque de base refuse un ennemi à portée")
+	if int(flights["target"]) != 0:
+		_fail("l'ennemi à portée n'est plus visé")
+	print("tir libre : droit devant, frappe ce qu'il croise, l'ennemi à portée reste visé : OK")
 
 
 func _test_blast_respects_walls() -> void:
@@ -3259,13 +3320,11 @@ func _test_acier() -> void:
 	combat._apply_damage(1, acier.attack, context)
 	if health.plates != 1:
 		_fail("plaques : deux kills n'en reforgent pas une")
-	# LE MARTEAU : pas de coup dans le vide, et l'onde touche sa cible à portée puis ses voisins.
+	# LE MARTEAU : l'onde touche sa cible à portée puis ses voisins.
 	parts = _context(acier)
 	grid = parts[0]
 	combat = parts[1]
 	context = parts[2]
-	if combat.use(acier.attack, context):
-		_fail("marteau : il part sans cible")
 	var far_cell := _cell_at(grid, context.player_field, acier.attack.range)
 	_add_enemy(context, far_cell, 500)
 	_add_enemy(context, far_cell, 500)
