@@ -73,7 +73,7 @@ var _slide: Tween = null
 
 func _ready() -> void:
 	_build_roster_slider()
-	for character in CharacterCatalog.all():
+	for character in CharacterCatalog.roster():
 		var portrait := CharacterPortrait.new()
 		portrait.custom_minimum_size = Vector2(116.0, 142.0)   # recalculé par _layout
 		portrait.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -241,6 +241,8 @@ func select(id: String) -> void:
 	for portrait in _portraits:
 		portrait.set_selected(portrait.stats.id == id)
 
+	# Le Héros d'essai n'a qu'une attaque : il ne lance jamais une vraie partie.
+	$Buttons/PlayButton.disabled = id == CharacterCatalog.TEST
 	name_label.text = stats.display_name
 	name_label.add_theme_color_override("font_color", stats.color())
 	# Les étoiles disent la puissance d'un coup d'œil, là où « 4 » demanderait
@@ -266,7 +268,8 @@ func select(id: String) -> void:
 		slots.append(["SORT %d" % (i + 1), stats.abilities[i]])
 	if stats.escape != null:
 		slots.append(["FUITE", stats.escape])
-	slots.append(["EXTRA", stats.ultimate])
+	if stats.ultimate != null:
+		slots.append(["EXTRA", stats.ultimate])
 
 	# Les cartes sont RECYCLÉES d'un mage à l'autre : les reconstruire à chaque
 	# clic sur une vignette faisait clignoter la fiche entière.
@@ -280,7 +283,7 @@ func select(id: String) -> void:
 		if not card.visible:
 			continue
 		card.fill(str(slots[i][0]), slots[i][1] as Ability, id, stats.color())
-		if i == slots.size() - 1:
+		if i == slots.size() - 1 and stats.ultimate != null:
 			card.mark_ultimate(stats.ultimate_required_kills)
 	_layout()
 	_reveal(id)

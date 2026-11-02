@@ -186,10 +186,29 @@ MAGES = {
     "acier": {"id": "acier", "name": "Archange d'Acier", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
             "demagenta": True, "whole_shapes": True},
+    # Le gabarit d'animation : `every_step` garde ses huit images de course. Son épée déborde sur
+    # les cases voisines, d'où `whole_shapes`.
+    "test": {"id": "test", "name": "Héros d'essai", "source": MAGES_SOURCE,
+             "out": MAGES_OUT, "walks": True, "align_rows": True, "whole_shapes": True,
+             "every_step": True,
+             # `small_steps_right` écarte ses pieds aux images 2 et 3 : c'est là qu'il est au plus bas.
+             "motion": {"side_phase": 0.25},
+             # À l'arrêt de profil, les pieds sont joints : la pose vient de son modèle, la
+             # première image de la course les a écartés. (planche, colonnes, colonne lue)
+             "standing_right": ("assets/peso&cover/refonte/test.png", 3, 2),
+             # De profil, le joueur veut la marche des mages : elle vient du guide de leurs jambes
+             # (`test_profil_course.png` garde la course d'avant). Même alternance que
+             # `SMALL_STEP_FRAMES`, mais cette planche ouvre ses pieds aux images 1 et 5, et non 2 et 6.
+             "small_steps_right": [3, 1, 1, 3, 7, 5, 5, 7]},
     # Sa marche de dos a gardé une ombre sous les pieds : prise pour le sol, elle le faisait flotter.
+    # Premier mage à essayer le gabarit. Sans arme, donc sans arc de lame, et son sort jaillit à l'image 3.
+    # Le joueur a trouvé bizarre le rebond du gabarit : sa marche redevient celle des mages (`WALK_BOB`
+    # de `Player`), sans écrasement, à-coup ni poussière. Seule son attaque garde le gabarit.
     "demon": {"id": "demon", "name": "Démon du Pacte", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
-            "walk_body_only": True},
+            "walk_body_only": True,
+            "motion": {"bob": 1.0, "side_bob": 1.0, "squash": 0.0, "side_squash": 0.0, "kick": 0.0,
+                       "dust": False, "impact_pose": 2, "slash_color": "#00000000"}},
     # Sa tenue est verte, loin du fond : rien à dégorger.
     "discorde": {"id": "discorde", "name": "Démone de la Discorde", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
@@ -1088,6 +1107,54 @@ def _side_cell(cell: Image.Image, scale: float) -> Image.Image:
     return grown.crop((left, top, left + out.width, top + out.height))
 
 
+## Sous cette part de l'écart entre deux images voisines, les images 5 à 8 répètent 1 à 4.
+REPEAT_SHARE = 0.5
+
+
+def repeat_complaint(line: list, label: str) -> str:
+    """Les jambes s'échangent-elles entre les deux moitiés du cycle ?
+
+    ⚠️ Le générateur peut dessiner deux fois le même demi-cycle. Tout passe alors, foulée
+    comprise, et le personnage court sur une seule jambe, comme s'il boitait.
+    """
+    legs = [np.asarray(cell.convert("RGBA"), dtype=float)[cell.height // 2:] for cell in line]
+    half = len(legs) // 2
+    opposite = np.mean([np.abs(legs[i] - legs[i + half]).mean() for i in range(half)])
+    neighbour = np.mean([np.abs(legs[i] - legs[(i + 1) % len(legs)]).mean() for i in range(half)])
+    if opposite >= neighbour * REPEAT_SHARE:
+        return ""
+    return (f"{label} : les images 5 à 8 répètent 1 à 4 ({opposite:.1f} contre {neighbour:.1f})"
+            " — il court sur une seule jambe")
+
+
+def standing_cell(path: str, columns: int, column: int, reference: Image.Image) -> Image.Image:
+    """La pose debout d'une fiche de modèle, à la taille et à la place du corps de `reference`."""
+    with Image.open(path) as sheet:
+        sheet = sheet.convert("RGBA")
+        width = sheet.width // columns
+        figure = keyed(sheet.crop((column * width, 0, (column + 1) * width, sheet.height)))
+    goal = bounds(reference)
+    figure = figure.crop(bounds(figure))
+    # ⚠️ L'ÉCHELLE SE PREND SUR LA TÊTE, pas sur la hauteur : sa course est plus basse que sa
+    # pose debout, et à hauteur égale il rétrécissait de 10 % à chaque arrêt.
+    def head_width(image: Image.Image) -> int:
+        alpha = np.asarray(image)[:, :, 3] > 24
+        rows = np.nonzero(alpha.any(axis=1))[0]
+        columns = np.nonzero(alpha[rows[0]:rows[0] + (rows[-1] - rows[0]) // 3].any(axis=0))[0]
+        return int(columns[-1] - columns[0]) + 1
+    scale = head_width(reference) / head_width(figure)
+    figure = figure.resize((max(1, round(figure.width * scale)),
+                            max(1, round(figure.height * scale))), Image.LANCZOS)
+    out = Image.new("RGBA", reference.size, (0, 0, 0, 0))
+    # Posée sur la ligne de sol de la course.
+    out.alpha_composite(figure, ((reference.width - figure.width) // 2, goal[3] - figure.height))
+    # Le haut du corps se superpose à celui de la course : seule la position des pieds change.
+    top = goal[3] - figure.height
+    band = (top, top + int(figure.height * STEADY_BAND))
+    reference_band = np.asarray(reference)[band[0]:band[1], :, 3] > 24
+    return _moved(out, _best_dx(reference_band, out, band), 0)
+
+
 def with_new_profile(walk_path: Path, side_path: Path) -> Path:
     """Une copie de la planche de marche, dont la dernière rangée vient de `side_path`.
 
@@ -1156,8 +1223,10 @@ def build(source_name: str, entry: dict) -> str:
             walk[row], strike[row] = steadied(walk[row], strike[row], is_mage,
                                               entry.get("same_scale", True),
                                               entry.get("strike_scale", 0.0))
-            if is_mage:
+            if is_mage and not entry.get("every_step"):
                 walk[row] = [walk[row][number - 1] for number in SMALL_STEP_FRAMES]
+        if entry.get("small_steps_right"):
+            walk["right"] = [walk["right"][number - 1] for number in entry["small_steps_right"]]
 
     # On DÉCOUPE QUAND MÊME après cette plainte : elle porte sur le dessin, pas
     # sur le format, donc les bandes produites restent regardables. Mais elle
@@ -1183,6 +1252,10 @@ def build(source_name: str, entry: dict) -> str:
     # ombre glisse : leur « pied avant » ne veut rien dire, et le contrôle les
     # accusait toutes les trois. La liste est celle du bestiaire, qui déclare
     # déjà une `stride` pour les bêtes qui marchent — une seule source.
+    if entry.get("every_step"):
+        repeated = repeat_complaint(original_profile, f"{walk_path.stem} profil")
+        if repeated:
+            print(f"   ⚠️  À FAIRE REDESSINER — {repeated}")
     if walks:
         strideless = stride_complaint(original_profile, f"{walk_path.stem} profil")
         if strideless:
@@ -1250,7 +1323,10 @@ def build(source_name: str, entry: dict) -> str:
         # poses, et le monstre marcherait à l'envers.
         read = "right" if direction == "left" else direction
         flip = direction == "left"
-        line = [walk[read][0]] + walk[read] + strike[read]
+        rest = walk[read][0]
+        if read == "right" and "standing_right" in entry:
+            rest = standing_cell(*entry["standing_right"], rest)
+        line = [rest] + walk[read] + strike[read]
         strip = Image.new("RGBA", (cell_w * len(poses), FRAME_HEIGHT),
                           (0, 0, 0, 0))
         for number, cell in enumerate(line):
@@ -1274,7 +1350,10 @@ def build(source_name: str, entry: dict) -> str:
     # dès que ce nombre est positif, et un battement d'ailes mesuré comme un pied
     # priverait le Dragonnet de la cadence en secondes qu'il doit garder.
     travel = foot_travel(walk["right"]) if walks else 0.0
+    # Le gabarit d'animation, s'il en a un : voir `MotionProfile`.
+    motion = {"motion": entry["motion"]} if "motion" in entry else {}
     (folder / "frames.json").write_text(json.dumps({
+        **motion,
         "cell": [cell_w, FRAME_HEIGHT],
         "feet_y": round(feet_y, 1),
         "foot_travel": round(travel, 4),

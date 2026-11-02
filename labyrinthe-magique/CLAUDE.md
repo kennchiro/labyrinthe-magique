@@ -354,6 +354,35 @@ ferme la porte que pendant le combat. `--demo --demo-stage 4 --boss` passe par c
 - ⚠️ Sans affichage, une image ne dure pas 1/60 s : pour attendre un de ses gestes dans un test,
   `create_timer`, jamais un compte d'images.
 
+## Le gabarit d'animation
+
+Le **Héros d'essai** (`test`, onglet Essai de la sélection, puis DÉMO) sert à régler le mouvement.
+`--demo --character test` y va directement. Il est dans `CharacterCatalog.roster()`, que lit l'écran de
+sélection, mais hors de `all()`, donc hors de `test_balance` et des fiches. JOUER est grisé pour lui.
+
+- La clé `motion` de `frames.json` active `MotionProfile` dans `Player`. Sans elle, le code d'avant
+  joue tel quel. `build_enemies.py` l'écrit depuis la clé `motion` de son entrée, `every_step` y garde
+  les huit images de course au lieu de `SMALL_STEP_FRAMES`.
+- Les planches portent les membres, la penchée et les poses clés. Le code ajoute le rebond,
+  l'écrasement, les durées inégales de l'attaque, la poussée et `SlashArc`, sans toucher à la grille.
+- Prompts et guides : `docs/prompts/template/heros_test.md`, `tools/build_template_guides.py`. Planche
+  de contrôle : `tools/preview_motion.gd`. `tests/test_motion.gd` vérifie aussi que personne d'autre
+  n'a de gabarit hors de sa liste `WITH_MOTION` : le Démon du Pacte, premier mage à l'essayer, sans arc de lame
+  (`slash_color` transparent) et avec `impact_pose` sur l'image où jaillit son sort.
+- ⚠️ Sur un mage, le joueur a trouvé bizarre la marche du gabarit : le Démon garde le rebond des mages
+  (`bob` à 1, soit `WALK_BOB`), sans écrasement, à-coup ni poussière. Seule son attaque garde le gabarit.
+- ⚠️ Les planches `test_repos` et `test_gestes` ne sont encore lues par aucun outil.
+- ⚠️ Le générateur peut répéter son demi-cycle : même foulée mesurée, mais il court sur une seule jambe.
+  `repeat_complaint` le signale (planches `every_step` seulement). `test_profil.png` remplace la rangée.
+  ⚠️ De profil, le joueur veut la marche des mages, pas une course : `test_profil.png` est dessinée
+  sur `mages_animes/guide_profil.png`, et `small_steps_right` choisit ses images. Il garde le rebond du
+  haut et du bas (`side_bob`, `side_squash`). `side_phase` cale ce rebond : au plus bas, pieds écartés.
+  À recaler si l'ordre des images change. ⚠️ Les images d'écart maximal changent d'une planche à l'autre :
+  mesurer l'écart à l'écran contre un mage avant de choisir (0,2 de la hauteur joints, 0,55 ouverts).
+  Resserrer les jambes à la découpe a été essayé et rejeté : c'est le pas qu'il faut redessiner.
+- De profil, l'arrêt vient de la fiche de modèle (`standing_right`) : la première image de course a les
+  pieds écartés. Son échelle se prend sur la tête, sinon il rétrécit à chaque arrêt.
+
 ## Le mode démo
 
 Lancé par le bouton **ESSAI** de la sélection des mages (ou `--demo`). Il sert à

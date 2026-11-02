@@ -1,11 +1,21 @@
 {
+  "motion": {
+    "bob": 1.0,
+    "side_bob": 1.0,
+    "squash": 0.0,
+    "side_squash": 0.0,
+    "kick": 0.0,
+    "dust": false,
+    "impact_pose": 2,
+    "slash_color": "#00000000"
+  },
   "cell": [
-    139,
+    140,
     112
   ],
   "feet_y": 108.9,
-  "foot_travel": 0.0557,
-  "body_height": 93.4,
+  "foot_travel": 0.1597,
+  "body_height": 93.5,
   "poses": [
     "idle",
     "walk_1",

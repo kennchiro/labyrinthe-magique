@@ -16,8 +16,8 @@ func _init() -> void:
 		if members.is_empty():
 			failures.append("onglet vide : %s" % category)
 	# Une catégorie mal écrite ferait disparaître le personnage de l'écran, sans erreur.
-	if counted != CharacterCatalog.all().size():
-		failures.append("%d personnages rangés sur %d" % [counted, CharacterCatalog.all().size()])
+	if counted != CharacterCatalog.roster().size():
+		failures.append("%d personnages rangés sur %d" % [counted, CharacterCatalog.roster().size()])
 	if CharacterCatalog.by_id(CharacterCatalog.LUMIERE).category != CharacterCatalog.CATEGORY_ANGE:
 		failures.append("le Porte-Lumière n'est pas un ange")
 
@@ -54,11 +54,23 @@ func _init() -> void:
 	if not (screen._tabs[CharacterCatalog.CATEGORY_ANGE] as Button).button_pressed:
 		failures.append("l'onglet Ange n'est pas marqué")
 
+	# Le Héros d'essai part en DÉMO, jamais en vraie partie.
+	await _click(screen._tabs[CharacterCatalog.CATEGORY_TEST])
+	if screen.character_id != CharacterCatalog.TEST:
+		failures.append("l'onglet Essai ne choisit pas le Héros d'essai : %s" % screen.character_id)
+	var demo_buttons: Dictionary = {"play": screen.get_node("Buttons/PlayButton"),
+		"demo": screen.get_node("Buttons/DemoButton")}
+	if not (demo_buttons["play"] as Button).disabled or (demo_buttons["demo"] as Button).disabled:
+		failures.append("le Héros d'essai doit partir en DÉMO seulement")
+	screen.select(CharacterCatalog.FIRE)
+	if (demo_buttons["play"] as Button).disabled:
+		failures.append("JOUER reste grisé pour les autres")
+
 	# Le titre ne passe pas sous les onglets, sur les tailles d'un téléphone.
 	for width in [960.0, 690.0, 480.0]:
 		screen.size = Vector2(width, 330.0)
 		screen._layout()
-		var last: Button = screen._tabs[CharacterCatalog.CATEGORY_ANGE]
+		var last: Button = screen._tabs[CharacterCatalog.CATEGORY_TEST]
 		if screen.get_node("Heading").position.x < last.position.x + last.size.x:
 			failures.append("titre sous les onglets à %d" % int(width))
 

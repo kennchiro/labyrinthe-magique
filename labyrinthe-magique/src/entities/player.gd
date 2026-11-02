@@ -44,6 +44,8 @@ const HURT_FLASH := 0.14
 const HURT_TINT := Color(1.9, 0.55, 0.5)
 const HURT_BLINK_SPEED := 11.0
 const HURT_BLINK_ALPHA := 0.42
+## Rayon de l'arc de lame, rapporté à la hauteur du corps : la portée de l'épée dessinée.
+const SLASH_RADIUS := 0.8
 
 ## Rempli chaque frame par le manche tactile (voir TouchStick).
 var touch_direction: Vector2 = Vector2.ZERO
@@ -78,6 +80,19 @@ var _attack_left := 0.0
 var _cast_facing := Vector2i.ZERO
 var _hurt_left := 0.0
 var _hurt_total := 1.0
+## Le gabarit d'animation du personnage, null s'il n'en déclare pas (voir `MotionProfile`).
+var _motion: MotionProfile = null
+## Ressorts visuels du gabarit : la penchée, et l'à-coup du départ et de l'arrêt.
+var _lean := 0.0
+var _lean_speed := 0.0
+var _jolt := 0.0
+var _jolt_speed := 0.0
+var _was_moving := false
+var _last_direction := Vector2i.ZERO
+var _last_step := -1
+var _struck := false
+var _slashed := false
+var _dust: FootDust = null
 
 
 ## Appelée par le Level AVANT setup() : la planche à charger dépend du mage.
@@ -112,7 +127,9 @@ func facing() -> Vector2i:
 ## et le dos dès que la cible est sur le côté : ce sont les poses où le geste se
 ## lit, et sur les planches le bras de face part toujours vers la droite.
 func play_cast(target: Variant = null) -> void:
-	_attack_left = ATTACK_DURATION
+	_attack_left = _attack_duration()
+	_struck = false
+	_slashed = false
 	_cast_facing = Vector2i.ZERO
 	if target is Vector2:
 		var toward: Vector2 = target - position
@@ -165,6 +182,7 @@ func _load_character() -> void:
 	_cell = Vector2(float(cell[0]), float(cell[1]))
 	_feet_y = float(data["feet_y"])
 	_poses = data["poses"]
+	_motion = MotionProfile.from_data(data.get("motion"))
 	_display_height = DEFAULT_TARGET_HEIGHT
 	if data.has("body_height"):
 		_display_height = BODY_SCREEN_HEIGHT * _cell.y / float(data["body_height"])
@@ -229,8 +247,10 @@ func _apply_frame() -> void:
 		# Le geste se déroule UNE fois sur sa durée. Il faut garder l'image du tir
 		# tôt dans la bande : le projectile part à la pression de la touche.
 		var done := 1.0 - _attack_left / ATTACK_DURATION
-		index = _attack_poses[mini(int(done * float(_attack_poses.size())),
-			_attack_poses.size() - 1)]
+		var step := int(done * float(_attack_poses.size()))
+		if _motion != null:
+			step = _motion.attack_pose(_attack_elapsed())
+		index = _attack_poses[mini(step, _attack_poses.size() - 1)]
 	elif mover != null and mover.is_moving() and not _walk_poses.is_empty():
 		index = _walk_poses[int(_walk_phase) % _walk_poses.size()]
 	sprite.frame = clampi(index, 0, _poses.size() - 1)
@@ -282,6 +302,9 @@ func _walk_cadence() -> float:
 ## Ce que le dessin ne donne pas : le rebond des appuis, la respiration, l'élan du
 ## sort. Purement visuel, l'origine du nœud et donc les collisions n'en savent rien.
 func _animate_body(delta: float) -> void:
+	if _motion != null:
+		_animate_motion(delta)
+		return
 	sprite.position.y = 0.0
 	if mover.is_moving():
 		sprite.scale = _sprite_scale
@@ -293,6 +316,97 @@ func _animate_body(delta: float) -> void:
 	if _attack_left > 0.0:
 		var punch: float = pow(_attack_left / ATTACK_DURATION, 3.0)
 		sprite.scale = _sprite_scale * (Vector2.ONE + CAST_PUNCH * punch)
+
+
+func _attack_duration() -> float:
+	return _motion.attack_duration() if _motion != null else ATTACK_DURATION
+
+
+func _attack_elapsed() -> float:
+	return _attack_duration() - _attack_left
+
+
+## Vers où regarde le geste en cours.
+func _strike_facing() -> Vector2i:
+	return _cast_facing if _cast_facing != Vector2i.ZERO else _facing
+
+
+## Ce que le gabarit ajoute à la planche. L'origine du sprite est sous les pieds : écraser
+## et pencher ne les déplacent donc pas.
+func _animate_motion(delta: float) -> void:
+	var moving := mover.is_moving()
+	var direction := mover.direction
+	# LES À-COUPS naissent des changements de marche, et le ressort les fait déborder.
+	if moving != _was_moving or (moving and direction != _last_direction and _was_moving):
+		_jolt_speed += _motion.kick if moving else -_motion.kick
+		_step_dust(1.0)
+	_was_moving = moving
+	_last_direction = direction
+
+	var lean_goal := 0.0
+	var body_y := 0.0
+	var squash := 0.0
+	if moving:
+		var cycle := _walk_phase / float(maxi(1, _walk_poses.size()))
+		var sideways := direction.x != 0
+		body_y = -_motion.bob_at(cycle, sideways)
+		squash = _motion.squash_at(cycle, sideways)
+		# Un appui toutes les quatre images, là où le pied touche le sol.
+		var step := int(_walk_phase) / maxi(1, _walk_poses.size() / 2)
+		if step != _last_step:
+			_last_step = step
+			_step_dust(0.7)
+		sprite.scale = _sprite_scale
+	else:
+		_last_step = -1
+		_breathe(delta)
+
+	var offset := Vector2(0.0, body_y)
+	if _attack_left > 0.0:
+		var elapsed := _attack_elapsed()
+		if not _slashed and elapsed >= _motion.slash_time():
+			_slashed = true
+			_spawn_slash()
+		if not _struck and elapsed >= _motion.impact_time():
+			_struck = true
+			_jolt_speed += _motion.kick * 1.4
+		var strike := Vector2(_strike_facing())
+		offset += strike * _motion.lunge_at(elapsed) * _motion.lunge * float(tile_size)
+		lean_goal = strike.x * _motion.strike_lean * (1.0 if _struck else -1.0)
+		if _struck and _hurt_left <= 0.0 and _warp_left <= 0.0 \
+				and elapsed < _motion.impact_time() + 0.07:
+			sprite.modulate = Color(1.35, 1.35, 1.35)
+
+	# Deux ressorts amortis, qui franchissent leur cible avant de s'y poser.
+	_lean_speed += (lean_goal - _lean) * 170.0 * delta - _lean_speed * 17.0 * delta
+	_lean += _lean_speed * delta
+	_jolt_speed += -_jolt * 240.0 * delta - _jolt_speed * 15.0 * delta
+	_jolt += _jolt_speed * delta
+
+	sprite.position = offset
+	sprite.skew = _lean
+	var press := squash + _jolt
+	sprite.scale *= Vector2(1.0 + press, 1.0 - press)
+
+
+func _spawn_slash() -> void:
+	if _motion.slash_color.a <= 0.0:
+		return
+	var arc := SlashArc.new()
+	add_child(arc)
+	# À hauteur de poitrine, et assez large pour dépasser la silhouette.
+	arc.position = Vector2(0.0, -BODY_SCREEN_HEIGHT * 0.5)
+	arc.setup(_strike_facing(), BODY_SCREEN_HEIGHT * SLASH_RADIUS, _motion.slash_color)
+	arc.z_index = 1
+
+
+func _step_dust(strength: float) -> void:
+	if not _motion.dust:
+		return
+	if _dust == null:
+		_dust = FootDust.new()
+		add_child(_dust)
+	_dust.puff(global_position, -Vector2(_facing), float(tile_size) * 0.2 * strength)
 
 
 ## Le Level a validé la case (sol, atteignable) : ici on ne fait qu'obéir.

@@ -1030,7 +1030,7 @@ func _load_character_fx() -> void:
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "test"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -2022,6 +2022,9 @@ func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 
 
 func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
+	# Son coup se voit par le geste et l'arc de lame, que joue `Player`.
+	if character.id == "test":
+		return
 	if character.id == "mort":
 		_spawn_sweep(ability, cell)
 		return

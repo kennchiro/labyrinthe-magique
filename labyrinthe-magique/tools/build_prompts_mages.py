@@ -21,6 +21,7 @@ touche et le geste dure 0,32 s : plus tard, le tir partirait avant la main.
 from pathlib import Path
 from textwrap import fill
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 OUT = Path("docs/prompts/mages_animes")
@@ -534,9 +535,53 @@ def draw_guide() -> None:
     guide.save(GUIDE)
 
 
+## La marche de référence : au Chronomancien, les pieds se rejoignent aux images 3 et 7.
+GUIDE_SIDE = OUT / "guide_profil.png"
+GUIDE_FULL = OUT / "guide_complet.png"
+SIDE_MODEL = Path("assets/peso&cover/mages/chrono_marche.png")
+## Sous cette part de la hauteur du corps, ce sont les jambes : le reste devient un mannequin.
+LEGS_SHARE = 0.34
+
+
+def grey_upper_body(row: np.ndarray) -> np.ndarray:
+    """Une rangée de vraie marche : ses jambes restent, le haut du corps devient un aplat gris."""
+    background = (row[..., 0] > 190) & (row[..., 2] > 190) & (row[..., 1] < 90)
+    for column in range(COLUMNS):
+        cell = row[:, column * CELL:(column + 1) * CELL]
+        body = ~background[:, column * CELL:(column + 1) * CELL]
+        rows_filled = np.where(body.any(axis=1))[0]
+        top, bottom = rows_filled.min(), rows_filled.max()
+        hip = int(bottom - (bottom - top) * LEGS_SHARE)
+        upper = body.copy()
+        upper[hip:] = False
+        cell[upper] = (120, 120, 120)
+    return row
+
+
+def draw_side_guide() -> None:
+    with Image.open(SIDE_MODEL) as model:
+        row = np.array(model.convert("RGB").crop((0, CELL * 2, COLUMNS * CELL, CELL * 3)))
+    Image.fromarray(grey_upper_body(row)).save(GUIDE_SIDE)
+
+
+def draw_full_guide() -> None:
+    """Les trois rangées du Chronomancien, dont la tête garde sa taille d'une rangée à l'autre.
+
+    ⚠️ Une bande de profil générée à part sort plus fine que la face : sur le Démon, sa tête n'y
+    fait que 0,77 de sa largeur de face. La planche se commande donc entière.
+    """
+    with Image.open(SIDE_MODEL) as model:
+        sheet = np.array(model.convert("RGB"))
+    for row in range(ROWS):
+        grey_upper_body(sheet[row * CELL:(row + 1) * CELL])
+    Image.fromarray(sheet).save(GUIDE_FULL)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     draw_guide()
+    draw_side_guide()
+    draw_full_guide()
     for mage in MAGES:
         (OUT / f"{mage['file']}.md").write_text(fiche(mage), encoding="utf-8")
         print(f"  {mage['file']}.md")

@@ -103,6 +103,9 @@ func show_stages() -> void:
 
 
 func start_game(demo: bool = false) -> void:
+	# Revenu au titre après un essai, START ne doit pas partir en vraie partie avec lui.
+	if not demo and character_id == CharacterCatalog.TEST:
+		character_id = CharacterCatalog.default_id()
 	var game: GameManager = GAME_SCENE.instantiate()
 	# Renseigné AVANT l'entrée dans l'arbre : le _ready du GameManager démarre
 	# immédiatement le premier niveau, il lui faut déjà son personnage.

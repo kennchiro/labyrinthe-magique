@@ -46,16 +46,21 @@ const ETOILES := "etoiles"
 const ACIER := "acier"
 const DEMON := "demon"
 const DISCORDE := "discorde"
+## Le gabarit d'animation : il a son onglet, mais il est absent de `all()`, donc de
+## l'équilibrage, des fiches et des tests qui parcourent les vrais personnages.
+const TEST := "test"
 
 const CATEGORY_MAGE := "mage"
 const CATEGORY_ANGE := "ange"
 const CATEGORY_DEMON := "demon"
+const CATEGORY_TEST := "essai"
 ## Les onglets de l'écran de sélection, dans l'ordre. Une famille de plus ne demande
 ## qu'une ligne ici et le champ `category` de ses personnages.
 const CATEGORIES := {
 	CATEGORY_MAGE: {"tab": "Mage", "accent": Color("#9fc4ff")},
 	CATEGORY_ANGE: {"tab": "Ange", "accent": Color("#ffd479")},
 	CATEGORY_DEMON: {"tab": "Démon", "accent": Color("#ff6b82")},
+	CATEGORY_TEST: {"tab": "Essai", "accent": Color("#9fe8b4")},
 }
 
 
@@ -64,15 +69,24 @@ static func all() -> Array[CharacterStats]:
 		peste(), lumiere(), mort(), etoiles(), acier(), demon(), discorde()]
 
 
+## Ce que montre l'écran de sélection : les vrais personnages et le Héros d'essai.
+static func roster() -> Array[CharacterStats]:
+	var out := all()
+	out.append(test_hero())
+	return out
+
+
 static func in_category(category: String) -> Array[CharacterStats]:
 	var out: Array[CharacterStats] = []
-	for character in all():
+	for character in roster():
 		if character.category == category:
 			out.append(character)
 	return out
 
 
 static func by_id(id: String) -> CharacterStats:
+	if id == TEST:
+		return test_hero()
 	for character in all():
 		if character.id == id:
 			return character
@@ -1567,5 +1581,26 @@ static func supreme() -> CharacterStats:
 		# il n'a pas besoin de couvrir toute la pluie — il la suit.
 		"quake_duration": 1.0, "quake_tremor": 6, "quake_interval": 0.5,
 		"quake_radius": 7.0,
+	})
+	return c
+
+
+# --- Héros d'essai : il ne sert qu'à régler le mouvement et le coup. --------------------
+
+static func test_hero() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = TEST
+	c.display_name = "Héros d'essai"
+	c.category = CATEGORY_TEST
+	c.element = Element.Kind.STEEL
+	c.description = "Pour essayer la course et le coup d'épée. Il ne part qu'en DÉMO."
+	c.base_health = 5
+	c.move_speed = 5.1
+	c.ultimate_required_kills = 99
+	c.attack = Ability.make({
+		"id": "test_slash", "display_name": "Coup d'épée",
+		"description": "Un coup d'épée devant lui.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.STEEL,
+		"damage": 30, "radius": 2.0, "arc": 150.0, "cooldown": 0.4,
 	})
 	return c

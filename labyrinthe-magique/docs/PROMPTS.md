@@ -10,6 +10,11 @@ un outil. Les deux vont ensemble : le prompt impose ce que l'outil sait vérifie
 (grille régulière, marges, une taille unique, un côté de profil annoncé), et
 l'outil refuse en silence tout ce que le prompt n'a pas exigé.
 
+## Le Héros d'essai — le gabarit d'animation
+
+Pour régler un mouvement très dynamique sans toucher aux personnages existants. Cinq images,
+dont une course et une attaque guidées : [template/heros_test](prompts/template/heros_test.md).
+
 ## Mages animés — 8 pas et 8 images d'attaque
 
 `docs/prompts/mages_animes/` : une fiche par mage, deux prompts par fiche, générés
@@ -18,6 +23,11 @@ planches dans `assets/peso&cover/mages/<mage>_{marche,attaque}.png`.
 
 Découpage : `tools/build_enemies.py <mage>`, après l'avoir ajouté à `MAGES` dans cet
 outil et à `MAGES_ANIMES` dans `build_characters.py`. **Les huit sont branchés.**
+
+## La marche de profil du Chronomancien, pour tous les mages
+
+Le déplacement horizontal préféré du joueur. Un prompt par mage, à commencer par le Démon du Pacte :
+[mages_animes/marche_chronomancien](prompts/mages_animes/marche_chronomancien.md).
 
 ## Les créatures neuves — quatre fiches, toutes en jeu
 
