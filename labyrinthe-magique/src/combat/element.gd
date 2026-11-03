@@ -7,7 +7,7 @@ extends RefCounted
 ## effets et les projectiles la lisent ici. Sans ça, le rouge du Mage de Feu finit
 ## par exister en cinq nuances différentes dans cinq fichiers.
 
-enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM, EMBER, BLADE, COLDFIRE, SKY }
+enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM, EMBER, BLADE, COLDFIRE, SKY, SACRED, INFERNO }
 
 const COLORS := {
 	Kind.FIRE: Color("#ff6a2a"),
@@ -29,6 +29,8 @@ const COLORS := {
 	Kind.BLADE: Color("#fff6ee"),
 	Kind.COLDFIRE: Color("#16e0e8"),
 	Kind.SKY: Color("#34e07a"),
+	Kind.SACRED: Color("#3d6bff"),
+	Kind.INFERNO: Color("#ff3a14"),
 }
 const NAMES := {
 	Kind.FIRE: "Feu",
@@ -50,6 +52,8 @@ const NAMES := {
 	Kind.BLADE: "Lame",
 	Kind.COLDFIRE: "Flamme froide",
 	Kind.SKY: "Ciel",
+	Kind.SACRED: "Feu sacré",
+	Kind.INFERNO: "Feu infernal",
 }
 
 
@@ -82,6 +86,8 @@ static func trait_name(kind: Kind) -> String:
 		Kind.BLADE: return "Entailles"
 		Kind.COLDFIRE: return "Entraves"
 		Kind.SKY: return "Vue d'en haut"
+		Kind.SACRED: return "Nul n'approche"
+		Kind.INFERNO: return "Terre brûlée"
 	return ""
 
 
@@ -106,6 +112,8 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.BLADE: return "ses coups laissent des entailles, qui éclatent toutes quand il rengaine"
 		Kind.COLDFIRE: return "au troisième poing sur le même ennemi, une entrave le cloue au sol"
 		Kind.SKY: return "ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies"
+		Kind.SACRED: return "chaque coup pose un œil sur l'ennemi ; s'il arrive à son contact, l'œil s'embrase et le brûle"
+		Kind.INFERNO: return "chaque crachat enflamme le sol sous la cible ; dans le feu, il va plus vite"
 	return ""
 
 

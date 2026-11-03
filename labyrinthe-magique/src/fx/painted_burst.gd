@@ -53,6 +53,13 @@ func set_shader_seconds(seconds: float) -> void:
 	_material.set_shader_parameter("seconds", seconds)
 
 
+## Rallume un effet qui dure (le sol en feu du Dragon) : il reprend à `from_progress`, sans
+## repasser par sa naissance, et s'éteint `seconds` plus tard.
+func relight(seconds: float, from_progress: float) -> void:
+	_duration = maxf(0.1, seconds / maxf(0.05, 1.0 - from_progress))
+	_time = _duration * from_progress
+
+
 ## Le rayon réel, au-delà de `MAX_RADIUS_TILES`, pour la seule onde qui doit couvrir l'écran.
 func span_tiles(tile_size: int, tiles: float) -> void:
 	(get_child(0) as Sprite2D).scale = Vector2.ONE * tiles * 2.0 * float(tile_size) / 0.8

@@ -193,6 +193,12 @@ MAGES = {
     "ciel": {"id": "ciel", "name": "Archange du Ciel", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
             "demagenta": True, "whole_shapes": True, "tall_cells": True},
+    # Lin, bronze et saphir : le saphir a plus de vert que de rouge, `demagenta` n'y touche pas,
+    # alors que `despilled` repeindrait le lin et le bleu. Sa roue et son épée levée faussent les
+    # hauteurs comme la lance du Ciel : même échelle imposée.
+    "cherubin": {"id": "cherubin", "name": "Chérubin", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
     # Le gabarit d'animation : `every_step` garde ses huit images de course. Son épée déborde sur
     # les cases voisines, d'où `whole_shapes`.
     "test": {"id": "test", "name": "Héros d'essai", "source": MAGES_SOURCE,
@@ -232,6 +238,11 @@ MAGES = {
     "geolier": {"id": "geolier", "name": "Geôlier", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
             "walk_body_only": True, "tall_cells": True, "body_scale": 1.4},
+    # Grand dragon debout, ailes repliées : il doit dominer les monstres du stage 1. Sa planche
+    # d'attaque le dessine plus grand que sa marche, de 11 % de dos : 0,94 partage l'écart.
+    "dragon": {"id": "dragon", "name": "Dragon des Abysses", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True, "body_scale": 1.3, "strike_scale": 0.94},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,

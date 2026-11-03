@@ -33,6 +33,7 @@ const TRAIT_TEXT := {
 	Element.Kind.STEEL: "**Plaques** — %d plaques encaissent chacune un coup à la place des PV ; %d kills en reforgent une",
 	Element.Kind.BLOOD: "**Rage** — jusqu'à +%d %% de dégâts selon les PV perdus, au maximum à 1 PV",
 	Element.Kind.CHARM: "**Trouble** — au %de murmure, la cible ralentit de %d %% pendant %.1f s, et sa possession dure %.1f s de plus",
+	Element.Kind.INFERNO: "**Terre brûlée** — chaque crachat enflamme la case de sa cible %.0f s, à %d dégâts/s ; dans le feu, il va %d %% plus vite",
 	Element.Kind.COLDFIRE: "**Entraves** — au %de poing sur le même ennemi, il est cloué au sol %.1f s",
 	Element.Kind.BLADE: "**Entailles** — jusqu'à %d par ennemi, %.0f s depuis la dernière ; elles éclatent quand il rengaine",
 	Element.Kind.EMBER: "**Armure vivante** — %d pièces encaissent chacune un coup et blessent pour %d dégâts ; chacune lancée ajoute %.1f de vitesse, et rentre seule après %.0f s",
@@ -41,6 +42,7 @@ const TRAIT_TEXT := {
 	Element.Kind.POISON: "**Venin** — jusqu'à %d doses, %d dégâts par seconde chacune pendant %.0f s",
 	Element.Kind.LIGHT: "**Éblouissement** — la cible perd sa trace %.1f s, au plus toutes les %.0f s",
 	Element.Kind.SKY: "**Vue d'en haut** — ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies",
+	Element.Kind.SACRED: "**Nul n'approche** — chaque coup ouvre un œil ; l'ennemi marqué qui arrive au contact brûle pour %d dégâts, puis %.0f s passent avant un nouvel œil",
 }
 
 
@@ -129,6 +131,9 @@ func _trait_line(element: Element.Kind) -> String:
 				CombatSystem.TROUBLE_BONUS]
 		Element.Kind.COLDFIRE:
 			return TRAIT_TEXT[element] % [CombatSystem.SHACKLE_HITS, CombatSystem.SHACKLE_SECONDS]
+		Element.Kind.INFERNO:
+			return TRAIT_TEXT[element] % [CombatSystem.FIRE_CELL_SECONDS, CombatSystem.FIRE_CELL_DAMAGE,
+				int(CombatSystem.INFERNO_SPEED * 100.0)]
 		Element.Kind.BLADE:
 			return TRAIT_TEXT[element] % [CombatSystem.CUTS_MAX, CombatSystem.CUT_SECONDS]
 		Element.Kind.EMBER:
@@ -144,6 +149,8 @@ func _trait_line(element: Element.Kind) -> String:
 				CombatSystem.RETARD_DURATION]
 		Element.Kind.SKY:
 			return TRAIT_TEXT[element]
+		Element.Kind.SACRED:
+			return TRAIT_TEXT[element] % [CombatSystem.EYE_DAMAGE, CombatSystem.EYE_LOCK]
 	return "—"
 
 
@@ -198,6 +205,14 @@ func _kind_label(kind: Ability.Kind) -> String:
 		Ability.Kind.GAOL: return "geôle"
 		Ability.Kind.BLADES: return "volée"
 		Ability.Kind.FLIGHT: return "envol"
+		Ability.Kind.WHIRL: return "ronde"
+		Ability.Kind.WHEELS: return "roues"
+		Ability.Kind.GARDEN: return "jardin"
+		Ability.Kind.BREATH: return "souffle"
+		Ability.Kind.BITE: return "morsure"
+		Ability.Kind.MAGMA_SCALES: return "carapace"
+		Ability.Kind.WINGBEAT: return "ailes"
+		Ability.Kind.DRAGON_SHADOW: return "ombre"
 		Ability.Kind.GUARD: return "parade"
 		Ability.Kind.SHEATHE: return "éclat"
 		Ability.Kind.CHAIN: return "chaîne"

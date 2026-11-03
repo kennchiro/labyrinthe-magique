@@ -359,7 +359,9 @@ def check_written_strips() -> list:
 ## son geste devant, et la mesure ne les sépare pas. Vérifiée à l'œil sur ses planches.
 ## L'Ange de la Mort arme sa faux en grand DERRIÈRE lui, puis frappe bien devant : vu à l'œil.
 ## L'Archange d'Acier frappe devant lui, mais ses ailes débordent déjà derrière au repos : vu à l'œil.
-ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier"}
+## Le Chérubin arme son épée par-dessus l'épaule et ses quatre ailes débordent derrière (26 px au
+## repos) ; il frappe bien devant à l'image 4 (+30 px). Mesuré le 2026-11-03, vu à l'œil.
+ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier", "cherubin"}
 
 
 ## Écarts tolérés sur un mage animé, entre la marche et la dernière image d'attaque.
@@ -496,7 +498,7 @@ def main() -> None:
             print(f"✅  {config['id']:8s} {len(DIRECTIONS)} directions x {len(POSES)} poses,"
                   f" toutes cadrées{note}")
     # Ces mages sont nés animés : ils n'ont jamais eu de planche dans `SHEETS`.
-    for mage in ("chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel"):
+    for mage in ("chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon"):
         checked += 1
         problems = check_animated(mage)
         if problems:

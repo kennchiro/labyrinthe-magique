@@ -470,10 +470,27 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.soul_chains_cast.connect(_on_soul_chains_cast)
 	combat.gaol_cast.connect(_on_gaol_cast)
 	combat.gaol_ended.connect(_on_gaol_ended)
+	combat.ground_ignited.connect(_on_ground_ignited)
+	combat.breath_cast.connect(_on_breath_cast)
+	combat.dragon_bit.connect(_on_dragon_bit)
+	combat.scales_raised.connect(_on_scales_raised)
+	combat.scales_burst.connect(_on_scales_burst)
+	combat.wings_beaten.connect(_on_wings_beaten)
+	combat.dragon_shadow_cast.connect(_on_dragon_shadow_cast)
+	combat.shadow_column.connect(_on_shadow_column)
+	combat.shadow_ended.connect(_on_shadow_ended)
 	combat.enemies_dazed.connect(_on_enemies_dazed)
 	combat.flight_started.connect(_on_flight_started)
 	combat.flight_ended.connect(_on_flight_ended)
 	combat.flight_landed.connect(_on_flight_landed)
+	combat.enemy_eyed.connect(_on_enemy_eyed)
+	combat.eye_burst.connect(_on_eye_burst)
+	combat.whirl_started.connect(_on_whirl_started)
+	combat.whirl_cut.connect(_on_whirl_cut)
+	combat.veil_repelled.connect(_on_veil_repelled)
+	combat.garden_planted.connect(_on_garden_planted)
+	combat.garden_repelled.connect(_on_garden_repelled)
+	combat.garden_ended.connect(_on_garden_ended)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -589,6 +606,7 @@ func _process(delta: float) -> void:
 	_update_discord_threads()
 	_update_king_armor()
 	_update_gaoler_chains()
+	_update_dragon_aura()
 	_update_boss(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
@@ -945,7 +963,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel"]
+	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -1069,7 +1087,7 @@ func _load_character_fx() -> void:
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "test"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "test"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1193,6 +1211,10 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 		_cast_target = maze_renderer.cell_to_world(path[path.size() - 1])
 		_sky_falls(ability, path[path.size() - 1], duration)
 		return
+	if ability.projectile_visual == "flamme_glaive" and not path.is_empty():
+		_cast_target = maze_renderer.cell_to_world(path[path.size() - 1])
+		_throw_sacred_flame(path, duration)
+		return
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
@@ -1242,6 +1264,8 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 		_arm_fist(orb, BRAISE_PIECES + "gant_ferme.png")
 	elif ability.projectile_visual == "poing_spectral":
 		_arm_fist(orb, GAOLER_PIECES + "poing.png")
+	elif ability.projectile_visual == "crachat_magma":
+		_arm_ball(orb, DRAGON_PIECES + "magma.png")
 	# LE TRAIT DU SUPRÊME CHANGE DE MATIÈRE À CHAQUE TIR, comme le dit sa fiche.
 	if ability.projectile_visual == "trait_prisme":
 		_prism_rank = (_prism_rank + 1) % 4
@@ -1347,6 +1371,10 @@ func _on_player_shielded(amount: int, duration: float) -> void:
 	if player == null:
 		return
 	_shield_max = maxi(1, amount)
+	# Les Écailles de magma ont leurs propres flammes (`_on_scales_raised`) : pas de bulle d'eau.
+	if character.id == "dragon":
+		player_shielded.emit(amount)
+		return
 	if character.id == "lumiere":
 		_spawn_wings(duration)
 		player_shielded.emit(amount)
@@ -1459,6 +1487,10 @@ func _on_player_made_immune(duration: float) -> void:
 		return
 	if character.id == "demon":
 		_spawn_on_player(duration, "demon_veil", 1.1)
+		return
+	if character.id == "cherubin":
+		_spawn_on_player(duration, "cherubin_voile", 0.9)
+		_shake(0.12, 0.3)
 		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.refresh(duration)
@@ -1945,6 +1977,276 @@ func _on_gaol_ended(cells: Array) -> void:
 	_shake(0.45, 0.85)
 
 
+# --- Le Dragon des Abysses ---------------------------------------------------------
+
+const DRAGON_PIECES := "res://assets/characters/dragon/pieces/"
+const DRAGON_PALE := Color("#ffe36a")
+const DRAGON_MAGMA := Color("#ff5a10")
+const DRAGON_RED := Color("#d1200c")
+const DRAGON_BLOOD := Color("#8a160c")
+## Le sol en feu tient dans sa case.
+const FIRE_TILE_RADIUS := 0.62
+## Le souffle court d'une case à la suivante.
+const BREATH_STEP := 0.055
+const BALL_TILES := 0.62
+const BITE_TILES := 1.6
+const SHARD_TILES := 0.55
+const SHARD_TIME := 0.38
+## L'ombre de l'ultime : son envergure, et la distance qu'elle parcourt, en cases.
+const SHADOW_SPAN := 10.0
+const SHADOW_TRAVEL := 22.0
+const DRAGON_VEIL_TILES := 40.0
+
+var _fire_tiles := {}                  # case -> PaintedBurst du sol en feu
+var _dragon_aura: CPUParticles2D = null
+var _scales_shell: PaintedBurst = null
+var _scales_flames: CPUParticles2D = null
+var _dragon_veil: PaintedBurst = null
+
+
+## Ses braises montent sans cesse ; dans le feu, elles redoublent, et c'est là qu'il va plus vite.
+func _update_dragon_aura() -> void:
+	if character == null or character.id != "dragon" or player == null:
+		return
+	if _dragon_aura == null or not is_instance_valid(_dragon_aura) or _dragon_aura.get_parent() != player:
+		_dragon_aura = FxTextures.flame_emitter(18, 0.8, TILE_SIZE * 0.13, Color(DRAGON_PALE, 0.95),
+			Color(DRAGON_RED, 0.0), -TILE_SIZE * 1.5, 35.0)
+		player.add_child(_dragon_aura)
+		_dragon_aura.position = Vector2(0.0, -TILE_SIZE * 0.7)
+		_dragon_aura.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		_dragon_aura.emission_sphere_radius = TILE_SIZE * 0.35
+		_dragon_aura.direction = Vector2.UP
+		_dragon_aura.emitting = true
+	var lit := combat.fire_cells().has(player.mover.nearest_cell())
+	_dragon_aura.speed_scale = 2.0 if lit else 1.0
+	_dragon_aura.modulate = Color(1.4, 1.2, 1.0) if lit else Color.WHITE
+
+
+func _arm_ball(orb: MagicOrb, path: String) -> void:
+	var texture: Texture2D = load(path)
+	var ball := Sprite2D.new()
+	ball.texture = texture
+	var quad := orb.sprite.scale / MagicOrb.PAINTED_BIRTH_SCALE
+	var unit := BALL_TILES * float(TILE_SIZE) / float(texture.get_height())
+	ball.scale = Vector2(unit / quad.x, unit / quad.y)
+	ball.position = Vector2(0.28, 0.0)
+	orb.sprite.add_child(ball)
+	ball.create_tween().set_loops().tween_property(ball, "rotation", TAU, 0.5).from(0.0)
+
+
+func _flame_streak(from: Vector2i, to: Vector2i, seconds: float) -> void:
+	var streak := BladeDash.new()
+	entities.add_child(streak)
+	streak.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE, seconds)
+	streak.tint(DRAGON_PALE, DRAGON_MAGMA, DRAGON_RED)
+
+
+func _dragon_smoke_puff(cell: Vector2i, amount: int) -> void:
+	var smoke := FxTextures.smoke_emitter(amount, 1.1, TILE_SIZE * 0.9, -TILE_SIZE * 0.8)
+	var embers := FxTextures.flame_emitter(amount, 0.6, TILE_SIZE * 0.14, Color(DRAGON_PALE, 0.95),
+		Color(DRAGON_RED, 0.0), -TILE_SIZE * 2.2, 180.0)
+	embers.initial_velocity_min = TILE_SIZE * 0.8
+	embers.initial_velocity_max = TILE_SIZE * 2.6
+	for puff: CPUParticles2D in [smoke, embers]:
+		entities.add_child(puff)
+		puff.position = maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.4)
+		puff.z_index = 11
+		puff.one_shot = true
+		puff.explosiveness = 0.85
+		puff.emitting = true
+		get_tree().create_timer(puff.lifetime + 0.4).timeout.connect(puff.queue_free)
+
+
+## Une case qui brûle déjà repart pour sa nouvelle durée sans se rallumer : pas de clignement.
+func _on_ground_ignited(cells: Array, seconds: float) -> void:
+	for cell: Vector2i in cells:
+		# Non typée : une case éteinte garde une référence libérée, qu'un type refuserait.
+		var old: Variant = _fire_tiles.get(cell)
+		if old != null and is_instance_valid(old):
+			(old as PaintedBurst).relight(seconds, 0.12)
+			continue
+		var fire := _spawn_painted_burst(cell, FIRE_TILE_RADIUS, seconds, "dragon_brasier")
+		fire.z_index = 8
+		_fire_tiles[cell] = fire
+
+
+func _on_breath_cast(from: Vector2i, cells: Array, _seconds: float) -> void:
+	_front_burst(from, 1.1, 0.3, "dragon_choc")
+	if not cells.is_empty():
+		_flame_streak(from, cells[cells.size() - 1], 0.4)
+	for k in cells.size():
+		var cell: Vector2i = cells[k]
+		get_tree().create_timer(BREATH_STEP * float(k)).timeout.connect(func() -> void:
+			_spawn_painted_burst(cell, 1.1, 0.5, "dragon_explosion")
+			_dragon_smoke_puff(cell, 8))
+	_shake(0.4, 0.65)
+
+
+func _on_dragon_bit(_index: int, cell: Vector2i, devoured: bool) -> void:
+	var jaw := Sprite2D.new()
+	jaw.texture = load(DRAGON_PIECES + "gueule.png")
+	entities.add_child(jaw)
+	jaw.position = maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.55)
+	jaw.z_index = 12
+	var unit := BITE_TILES * float(TILE_SIZE) / float(jaw.texture.get_width())
+	var stand := CameraRules.stand_scale()
+	jaw.scale = Vector2(unit * 0.45, unit * 0.45 * stand)
+	var tween := jaw.create_tween()
+	tween.tween_property(jaw, "scale", Vector2(unit, unit * stand), 0.13) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# La gueule se REFERME : elle s'écrase de haut en bas sur la proie.
+	tween.tween_property(jaw, "scale", Vector2(unit * 1.1, unit * 0.12 * stand), 0.09) \
+		.set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void:
+		_front_burst(cell, 1.4, 0.45, "dragon_explosion")
+		_spawn_painted_burst(cell, 1.4, 1.0, "dragon_fissure")
+		_spawn_slow_motion(0.08, 0.25)
+		_shake(0.26, 0.8))
+	tween.tween_property(jaw, "modulate:a", 0.0, 0.12)
+	tween.tween_callback(jaw.queue_free)
+	if devoured and player != null:
+		# La flamme de la proie remonte jusqu'à lui : il se soigne en la dévorant.
+		var home := player.mover.nearest_cell()
+		get_tree().create_timer(0.25).timeout.connect(func() -> void:
+			_flame_streak(cell, home, 0.35)
+			_front_burst(home, 1.2, 0.55, "dragon_choc")
+			_dragon_smoke_puff(home, 12))
+
+
+func _free_scales_shell() -> void:
+	if _scales_shell != null and is_instance_valid(_scales_shell):
+		_scales_shell.queue_free()
+	_scales_shell = null
+	if _scales_flames != null and is_instance_valid(_scales_flames):
+		_scales_flames.emitting = false
+		var flames := _scales_flames
+		get_tree().create_timer(flames.lifetime + 0.2).timeout.connect(func() -> void:
+			if is_instance_valid(flames):
+				flames.queue_free())
+	_scales_flames = null
+
+
+func _on_scales_raised(seconds: float) -> void:
+	if player == null:
+		return
+	_free_scales_shell()
+	# Le sol se fend de lave sous lui, et une couronne de flammes l'enveloppe tant qu'elles tiennent.
+	_scales_shell = PaintedBurst.new()
+	player.add_child(_scales_shell)
+	_scales_shell.setup(TILE_SIZE, 1.2, seconds + 0.2, 0.7, "dragon_fissure")
+	_scales_shell.z_index = -1
+	_scales_flames = FxTextures.flame_emitter(70, 0.6, TILE_SIZE * 0.3, Color(DRAGON_PALE, 0.95),
+		Color(DRAGON_RED, 0.0), -TILE_SIZE * 2.6, 20.0)
+	player.add_child(_scales_flames)
+	_scales_flames.position = Vector2(0.0, -TILE_SIZE * 0.35)
+	_scales_flames.emission_shape = CPUParticles2D.EMISSION_SHAPE_RING
+	_scales_flames.emission_ring_radius = TILE_SIZE * 0.42
+	_scales_flames.emission_ring_inner_radius = TILE_SIZE * 0.3
+	_scales_flames.direction = Vector2.UP
+	_scales_flames.emitting = true
+	var cell := player.mover.nearest_cell()
+	_front_burst(cell, 1.3, 0.45, "dragon_choc")
+	_dragon_smoke_puff(cell, 12)
+	_shake(0.18, 0.45)
+
+
+func _on_scales_burst(cell: Vector2i, count: int, radius: float) -> void:
+	_free_scales_shell()
+	var texture: Texture2D = load(DRAGON_PIECES + "ecaille.png")
+	var centre := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.5)
+	var unit := SHARD_TILES * float(TILE_SIZE) / float(texture.get_height())
+	for k in count:
+		var angle := TAU * float(k) / float(count)
+		var shard := Sprite2D.new()
+		shard.texture = texture
+		entities.add_child(shard)
+		shard.position = centre
+		shard.z_index = 12
+		shard.scale = Vector2(unit, unit)
+		# Dessinée pointe en haut : ce quart de tour la met dans l'axe de sa course.
+		shard.rotation = angle + PI / 2.0
+		var dir := Vector2(cos(angle), sin(angle))
+		var tween := shard.create_tween()
+		tween.tween_property(shard, "position", centre + dir * radius * float(TILE_SIZE), SHARD_TIME) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween.tween_property(shard, "scale", Vector2.ZERO, 0.14)
+		tween.tween_callback(shard.queue_free)
+	_front_burst(cell, 1.6, 0.5, "dragon_explosion")
+	_spawn_wave(cell, radius * 2.4, 0.5, "dragon_onde")
+	_dragon_smoke_puff(cell, 18)
+	_spawn_slow_motion(0.06, 0.3)
+	_shake(0.32, 0.75)
+
+
+## Les ailes de flamme et d'ombre se déploient d'un coup autour de lui, puis s'effacent.
+func _on_wings_beaten(cell: Vector2i, radius: float) -> void:
+	var wings := Sprite2D.new()
+	wings.texture = load(DRAGON_PIECES + "silhouette.png")
+	entities.add_child(wings)
+	wings.position = maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.6)
+	wings.z_index = 8
+	var unit := (radius * 2.0 + 1.4) * float(TILE_SIZE) / float(wings.texture.get_width())
+	wings.scale = Vector2(unit, unit) * 0.35
+	wings.modulate = Color(1.0, 0.6, 0.4, 0.92)
+	var tween := wings.create_tween()
+	tween.tween_property(wings, "scale", Vector2(unit, unit), 0.14) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(wings, "modulate:a", 0.0, 0.32)
+	tween.tween_callback(wings.queue_free)
+	_front_burst(cell, radius + 0.6, 0.5, "dragon_nova")
+	_spawn_wave(cell, radius * 3.0, 0.45, "dragon_onde")
+	_dragon_smoke_puff(cell, 22)
+	_shake(0.3, 0.7)
+
+
+func _on_dragon_shadow_cast(cell: Vector2i, direction: Vector2i, indices: Array, delay: float) -> void:
+	if player == null:
+		return
+	var total := delay + CombatSystem.SHADOW_GAP * float(indices.size()) + 1.0
+	if _dragon_veil != null and is_instance_valid(_dragon_veil):
+		_dragon_veil.queue_free()
+	_dragon_veil = _spawn_painted_burst(cell, 3.0, total, "dragon_voile")
+	_dragon_veil.span_tiles(TILE_SIZE, DRAGON_VEIL_TILES)
+	_dragon_veil.z_index = 3
+	_dragon_veil.position = player.position
+	# Le rugissement : la gorge s'embrase et la caméra tremble. Sous lui, pour ne pas le cacher.
+	_spawn_painted_burst(cell, 1.8, 0.6, "dragon_explosion")
+	_dragon_smoke_puff(cell, 24)
+	_shake(0.8, 1.0)
+	# L'ombre, couchée au sol : elle n'est pas redressée comme un personnage.
+	var shadow := Sprite2D.new()
+	shadow.texture = load(DRAGON_PIECES + "silhouette.png")
+	entities.add_child(shadow)
+	shadow.z_index = 20
+	shadow.modulate = Color(0.03, 0.0, 0.0, 0.62)
+	var unit := SHADOW_SPAN * float(TILE_SIZE) / float(shadow.texture.get_width())
+	shadow.scale = Vector2(unit, unit)
+	var axis := Vector2(direction).normalized()
+	shadow.rotation = axis.angle() + PI / 2.0
+	var centre := player.position
+	shadow.position = centre - axis * SHADOW_TRAVEL * 0.5 * float(TILE_SIZE)
+	var tween := shadow.create_tween()
+	tween.tween_property(shadow, "position", centre + axis * SHADOW_TRAVEL * 0.5 * float(TILE_SIZE),
+		delay * 1.6)
+	tween.tween_callback(shadow.queue_free)
+
+
+func _on_shadow_column(cell: Vector2i, first: bool) -> void:
+	_front_burst(cell, 1.3, 0.9, "dragon_colonne")
+	_front_burst(cell, 1.5, 0.5, "dragon_explosion")
+	_spawn_painted_burst(cell, 1.6, 1.2, "dragon_fissure")
+	_dragon_smoke_puff(cell, 10)
+	_shake(0.22, 0.6)
+	if first:
+		_spawn_slow_motion(0.12, 0.25)
+
+
+func _on_shadow_ended() -> void:
+	if player != null:
+		_spawn_wave(player.mover.nearest_cell(), 18.0, WAVE_TIME, "dragon_onde")
+	_shake(0.4, 0.8)
+
+
 # --- Le Chevalier Écarlate ----------------------------------------------------------
 
 const GUARD_RADIUS := 1.25
@@ -2356,6 +2658,124 @@ func _spawn_on_player(duration: float, key: String, radius: float) -> void:
 	worn.setup(TILE_SIZE, radius, duration, 0.0, key)
 	worn.position = Vector2(0.0, -TILE_SIZE * 0.55)
 	worn.z_index = 2
+
+
+# --- Le Chérubin -----------------------------------------------------------------
+
+const GARDEN_SWORD_SIZE := Vector2(1.4, 3.2)
+const GARDEN_NIGHT_TILES := 40.0
+const EYE_HEIGHT := 1.45
+
+var _eye_marks := {}                   # index d'ennemi -> PaintedBurst de l'œil ouvert
+var _garden_nodes: Array[Node2D] = []
+
+
+func _throw_sacred_flame(path: Array, duration: float) -> void:
+	var points := PackedVector2Array()
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var jet := SacredJet.new()
+	entities.add_child(jet)
+	jet.setup(points, duration, TILE_SIZE)
+
+
+func _roll_wheel(path: Array, duration: float) -> void:
+	var points := PackedVector2Array()
+	points.append(maze_renderer.cell_to_world(player.mover.nearest_cell()))
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var wheel := EzekielWheel.new()
+	entities.add_child(wheel)
+	wheel.setup(points, duration, TILE_SIZE, float(path.size()) * 0.13)
+	_front_burst(player.mover.nearest_cell(), 1.0, 0.3, "cherubin_rejet")
+	_shake(0.1, 0.3)
+
+
+## L'œil reste ouvert au-dessus de l'ennemi tant que le CombatSystem le garde ; il se ferme ici.
+func _on_enemy_eyed(index: int, open: bool) -> void:
+	if _eye_marks.has(index):
+		var old: Node = _eye_marks[index]
+		if is_instance_valid(old):
+			old.queue_free()
+		_eye_marks.erase(index)
+	if not open or _structure_at(index) != null or index >= enemies.size():
+		return
+	var eye := PaintedBurst.new()
+	enemies[index].add_child(eye)
+	eye.setup(TILE_SIZE, 0.9, 600.0, float(index) * 0.29, "cherubin_oeil")
+	(eye.get_child(0) as Sprite2D).scale = Vector2(0.62, 0.42) * TILE_SIZE
+	eye.position = Vector2(0.0, -TILE_SIZE * EYE_HEIGHT)
+	eye.z_index = 3
+	_eye_marks[index] = eye
+
+
+func _on_eye_burst(cell: Vector2i) -> void:
+	var burst := _spawn_painted_burst(cell, 1.0, 0.7, "cherubin_embrasement")
+	var shaft := burst.get_child(0) as Sprite2D
+	shaft.scale = Vector2(1.5, 2.2) * TILE_SIZE
+	shaft.position = Vector2(0.0, -TILE_SIZE * 0.85)
+	burst.z_index = 12
+	_shake(0.1, 0.3)
+
+
+func _on_whirl_started(duration: float, radius: float) -> void:
+	if player == null:
+		return
+	var whirl := PaintedBurst.new()
+	player.add_child(whirl)
+	whirl.setup(TILE_SIZE, radius, duration, 0.0, "cherubin_tournoyant")
+	whirl.set_shader_seconds(duration)
+	whirl.position = Vector2(0.0, -TILE_SIZE * 0.4)
+	whirl.z_index = 2
+	_front_burst(player.mover.nearest_cell(), 1.2, 0.35, "cherubin_rejet")
+
+
+func _on_whirl_cut(cell: Vector2i) -> void:
+	_front_burst(cell, 0.9, 0.3, "cherubin_coupe")
+
+
+func _on_veil_repelled(cell: Vector2i) -> void:
+	_front_burst(cell, 1.0, 0.4, "cherubin_rejet")
+	_shake(0.08, 0.25)
+
+
+## L'éclair : une ligne de flammes reste au sol sur toute la course.
+func _lightning_trail(from: Vector2i, to: Vector2i) -> void:
+	var step := Vector2(to - from).normalized()
+	var length := int(Vector2(to - from).length())
+	for i in range(0, length + 1):
+		var cell := from + Vector2i(roundi(step.x * i), roundi(step.y * i))
+		var flame := _spawn_painted_burst(cell, 0.9, 0.9 + float(i) * 0.05, "cherubin_trainee")
+		flame.z_index = 9
+	_shake(0.14, 0.4)
+
+
+## Le Jardin gardé : le décor s'assombrit, l'épée tombe et se plante, et le mur de flammes jaillit.
+func _on_garden_planted(cell: Vector2i, radius: float, seconds: float) -> void:
+	_on_garden_ended(cell)
+	var night := _spawn_painted_burst(cell, 3.0, 1.6, "cherubin_nuit")
+	night.span_tiles(TILE_SIZE, GARDEN_NIGHT_TILES)
+	var ring := _spawn_painted_burst(cell, radius, seconds, "cherubin_jardin")
+	ring.span_tiles(TILE_SIZE, radius)
+	ring.z_index = 8
+	var sword := _spawn_painted_burst(cell, 1.0, seconds, "cherubin_epee")
+	var shaft := sword.get_child(0) as Sprite2D
+	shaft.scale = GARDEN_SWORD_SIZE * TILE_SIZE
+	shaft.position = Vector2(0.0, -(0.97 - 0.5) * GARDEN_SWORD_SIZE.y * TILE_SIZE)
+	sword.z_index = 10
+	_garden_nodes = [ring, sword]
+	_front_burst(cell, 1.3, 0.6, "cherubin_choc")
+	_spawn_wave(cell, radius, 0.5, "cherubin_rejet")
+	_shake(0.45, 0.9)
+	_spawn_slow_motion(0.12, 0.3)
+
+
+func _on_garden_repelled(cell: Vector2i) -> void:
+	_front_burst(cell, 1.0, 0.4, "cherubin_rejet")
+
+
+func _on_garden_ended(_cell: Vector2i) -> void:
+	_garden_nodes.clear()
 
 
 # --- L'Archange du Ciel -------------------------------------------------------------
@@ -2835,6 +3255,9 @@ func _on_player_calmed() -> void:
 func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 	if player == null:
 		return
+	if ability.kind == Ability.Kind.WHEELS:
+		_roll_wheel(path, duration)
+		return
 	var points := PackedVector2Array()
 	points.append(maze_renderer.cell_to_world(player.mover.nearest_cell()))
 	for cell in path:
@@ -3244,6 +3667,13 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		var flight := LightArc.new()
 		entities.add_child(flight)
 		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
+	elif character.id == "cherubin":
+		_lightning_trail(from, to)
+	elif character.id == "dragon":
+		# Le bond de la Morsure et le recul des ailes : une langue de feu, et le sol se fend au départ.
+		_flame_streak(from, to, 0.3)
+		_spawn_painted_burst(from, 1.3, 1.0, "dragon_fissure")
+		_dragon_smoke_puff(from, 14)
 	elif character.id == "geolier":
 		# Une langue de flamme froide passe à travers la haie, et le givre court des deux côtés.
 		_cold_streak(from, to, 0.45)
@@ -3463,6 +3893,9 @@ func _on_enemy_pushed(index: int, cell: Vector2i) -> void:
 	var enemy: Enemy = enemies[index]
 	enemy.mover.teleport_to(cell)
 	enemy.snap_to_mover()
+	# Le Chérubin rejette dans sa propre flamme (`garden_repelled`, `veil_repelled`).
+	if character.id == "cherubin":
+		return
 	_spawn_impact(cell, Element.Kind.AIR, 0.9, 0.5)
 
 
@@ -4324,7 +4757,7 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel"]:
+		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon"]:
 			return
 		# Le Feu n'a plus besoin de l'éclat tracé : ses triangles jaunes flottaient
 		# par-dessus les lobes et cassaient leur silhouette.

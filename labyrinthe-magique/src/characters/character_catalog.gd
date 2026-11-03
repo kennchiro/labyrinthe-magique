@@ -50,6 +50,8 @@ const BRAISE := "braise"
 const ECARLATE := "ecarlate"
 const GEOLIER := "geolier"
 const CIEL := "ciel"
+const CHERUBIN := "cherubin"
+const DRAGON := "dragon"
 ## Le gabarit d'animation : il est absent de `all()`, donc de l'équilibrage, des fiches et
 ## des tests qui parcourent les vrais personnages. `--demo --character test` y mène.
 const TEST := "test"
@@ -69,7 +71,7 @@ const CATEGORIES := {
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste(), lumiere(), mort(), etoiles(), acier(), ciel(), demon(), discorde(), braise(), ecarlate(), geolier()]
+		peste(), lumiere(), mort(), etoiles(), acier(), ciel(), cherubin(), demon(), discorde(), braise(), ecarlate(), geolier(), dragon()]
 
 
 ## Ce que montre l'écran de sélection. Le Héros d'essai en est caché pour l'instant : pour
@@ -1191,6 +1193,64 @@ static func ciel() -> CharacterStats:
 	return c
 
 
+# --- Chérubin : le gardien d'Éden. Nul n'approche de son épée. -------------------------
+
+## Il garde un LIEU : son trait brûle ce qui arrive à son contact, et son extra plante un cercle où
+## aucun ennemi n'entre. Plus solide et plus lent que la fiche ne le prévoyait (4 PV, 4,9) : à ces
+## chiffres, le Mage de l'Eau le dominait dans `_test_no_dominance`. Réglé sur passe rapide seulement.
+static func cherubin() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = CHERUBIN
+	c.display_name = "Chérubin"
+	c.category = CATEGORY_ANGE
+	c.element = Element.Kind.SACRED
+	c.description = "Le gardien d'Éden, à quatre ailes. Ce qu'il a touché brûle en l'approchant, et son épée plantée ferme un cercle où nul n'entre."
+	c.power_level = 4
+	c.base_health = 5
+	c.move_speed = 4.7
+	c.ultimate_required_kills = 6
+	c.attack = Ability.make({
+		"id": "cherubin_glaive", "display_name": "Flamme du glaive",
+		"description": "Un jet de flamme saphir file dans le couloir jusqu'à sa cible, et brûle tout ce qu'il traverse.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SACRED,
+		"projectile_visual": "flamme_glaive", "pierce_line": true,
+		"damage": 15, "range": 5, "cooldown": 0.5, "projectile_speed": 1.4,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "cherubin_tournoyant", "display_name": "Glaive tournoyant",
+			"description": "Son épée de flamme tourne autour de lui et frappe tout ce qui passe à sa portée.",
+			"kind": Ability.Kind.WHIRL, "element": Element.Kind.SACRED,
+			"damage": 14, "radius": 1.5, "duration": 4.0, "whirl_interval": 0.5, "cooldown": 9.0,
+		}),
+		Ability.make({
+			"id": "cherubin_roues", "display_name": "Roues d'Ézéchiel",
+			"description": "Deux roues de feu couvertes d'yeux roulent dans les couloirs, dans deux sens, et brûlent ce qu'elles croisent.",
+			"kind": Ability.Kind.WHEELS, "element": Element.Kind.SACRED,
+			"damage": 30, "range": 7, "wave_speed": 9.0, "cooldown": 8.0,
+		}),
+		Ability.make({
+			"id": "cherubin_voile", "display_name": "Ailes voilées",
+			"description": "Il se couvre de sa seconde paire d'ailes : intouchable un instant, il repousse ce qui le touche.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.SACRED,
+			"immune": true, "duration": 2.0, "repel_cells": 2, "cooldown": 14.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "cherubin_eclair", "display_name": "Comme l'éclair",
+		"description": "Il file droit devant comme l'éclair, sans tourner, et laisse une traînée de flamme.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.SACRED,
+		"range": 5, "cooldown": 9.0, "trail_damage": 20,
+	})
+	c.ultimate = Ability.make({
+		"id": "cherubin_jardin", "display_name": "Le Jardin gardé",
+		"description": "Il plante son épée : 8 s durant, aucun ennemi n'entre dans le cercle, ceux qui s'y trouvent sont rejetés et brûlent, et il regagne 1 PV. Les boss entrent, et brûlent.",
+		"kind": Ability.Kind.GARDEN, "element": Element.Kind.SACRED,
+		"damage": 15, "radius": 3.0, "duration": 8.0, "heal_self": 1, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
 # --- Démon du Pacte : moins il lui reste de vie, plus il frappe fort. ------------------
 
 static func demon() -> CharacterStats:
@@ -1466,6 +1526,63 @@ static func geolier() -> CharacterStats:
 		"description": "Un cercle de flamme froide s'abat autour de lui : des chaînes clouent au sol chaque ennemi à l'intérieur. Les boss brûlent sans être cloués.",
 		"kind": Ability.Kind.GAOL, "element": Element.Kind.COLDFIRE,
 		"damage": 15, "radius": 6.0, "duration": 5.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+static func dragon() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = DRAGON
+	c.display_name = "Dragon des Abysses"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.INFERNO
+	c.description = "Un dragon-démon qui met le feu au sol. Dans les flammes il va plus vite, et il dévore ce qui brûle."
+	c.power_level = 3
+	# Grand et lourd : il encaisse comme le Geôlier, et marche plus lentement.
+	c.base_health = 5
+	c.move_speed = 4.4
+	c.ultimate_required_kills = 6
+	c.attack = Ability.make({
+		"id": "dragon_crachat", "display_name": "Crachat de magma",
+		"description": "Une boule de lave qui éclate à l'impact et laisse la case en feu.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.INFERNO,
+		"projectile_visual": "crachat_magma",
+		"damage": 26, "range": 5, "cooldown": 0.75, "projectile_speed": 1.0,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "dragon_souffle", "display_name": "Souffle infernal",
+			"description": "Un torrent de flammes court dans le couloir devant lui, et chaque case touchée reste en feu.",
+			"kind": Ability.Kind.BREATH, "element": Element.Kind.INFERNO,
+			"damage": 40, "range": 5, "ground_fire": 5.0, "cooldown": 10.0,
+		}),
+		Ability.make({
+			"id": "dragon_morsure", "display_name": "Morsure",
+			"description": "Il bondit sur l'ennemi le plus proche et le mord. Si la proie brûlait, il la dévore et se soigne.",
+			"kind": Ability.Kind.BITE, "element": Element.Kind.INFERNO,
+			"damage": 55, "range": 3, "bite_heal": 1, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "dragon_ecailles", "display_name": "Écailles de magma",
+			"description": "Ses écailles durcissent : elles encaissent un coup et brûlent qui le touche, puis éclatent en éclats de lave.",
+			"kind": Ability.Kind.MAGMA_SCALES, "element": Element.Kind.INFERNO,
+			"damage": 1, "duration": 4.0, "radius": 3.0, "shard_count": 8, "shard_damage": 20,
+			"burn_dps": 10, "cooldown": 14.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "dragon_ailes", "display_name": "Battement d'ailes",
+		"description": "Il déploie ses ailes : ce qui l'entoure est repoussé et prend feu, et lui recule d'un bond.",
+		"kind": Ability.Kind.WINGBEAT, "element": Element.Kind.INFERNO,
+		"damage": 15, "radius": 2.0, "blow_cells": 2, "range": 2, "burn_dps": 10, "duration": 3.0,
+		"cooldown": 11.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "dragon_ombre", "display_name": "L'Ombre du Dragon",
+		"description": "L'ombre géante d'un dragon traverse l'écran : chaque ennemi prend feu, puis explose en colonne de flammes.",
+		"kind": Ability.Kind.DRAGON_SHADOW, "element": Element.Kind.INFERNO,
+		"damage": 45, "radius": 10.0, "burn_dps": 12, "duration": 4.0, "ground_fire": 4.0,
+		"cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 

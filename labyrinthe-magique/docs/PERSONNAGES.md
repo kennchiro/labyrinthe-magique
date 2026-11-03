@@ -3,7 +3,7 @@
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
 > La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-20 mages jouables. La barre d'action a toujours la même forme —
+22 mages jouables. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -26,11 +26,13 @@ comparables d'un personnage à l'autre.
 | **Ange des Étoiles** | Étoiles | 4 | 5.1 | 5 kills | **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 dégâts |
 | **Archange d'Acier** | Acier | 6 | 4.3 | 7 kills | **Plaques** — 3 plaques encaissent chacune un coup à la place des PV ; 2 kills en reforgent une |
 | **Archange du Ciel** | Ciel | 3 | 5.2 | 4 kills | **Vue d'en haut** — ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies |
+| **Chérubin** | Feu sacré | 5 | 4.7 | 6 kills | **Nul n'approche** — chaque coup ouvre un œil ; l'ennemi marqué qui arrive au contact brûle pour 20 dégâts, puis 3 s passent avant un nouvel œil |
 | **Démon du Pacte** | Sang | 4 | 5.1 | 5 kills | **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum à 1 PV |
 | **Démone de la Discorde** | Envoûtement | 3 | 5.5 | 4 kills | **Trouble** — au 3e murmure, la cible ralentit de 30 % pendant 4.0 s, et sa possession dure 2.0 s de plus |
 | **Roi de Braise** | Braise | 4 | 4.4 | 5 kills | **Armure vivante** — 3 pièces encaissent chacune un coup et blessent pour 16 dégâts ; chacune lancée ajoute 0.4 de vitesse, et rentre seule après 8 s |
 | **Chevalier Écarlate** | Lame | 4 | 5.2 | 5 kills | **Entailles** — jusqu'à 5 par ennemi, 8 s depuis la dernière ; elles éclatent quand il rengaine |
 | **Geôlier** | Flamme froide | 5 | 4.8 | 6 kills | **Entraves** — au 3e poing sur le même ennemi, il est cloué au sol 1.5 s |
+| **Dragon des Abysses** | Feu infernal | 5 | 4.4 | 6 kills | **Terre brûlée** — chaque crachat enflamme la case de sa cible 4 s, à 10 dégâts/s ; dans le feu, il va 20 % plus vite |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
@@ -364,7 +366,7 @@ Trait : **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 d
 | SKILL 1 | **Constellation** | ? | 28 dégâts/s · 3 étoiles · 16 s · recharge 3 s | 3.0 s |
 | SKILL 2 | **Pluie d'étoiles** | ? | 9 étoiles de 22 dégâts · rayon 3.5 · recharge 11 s | 11.0 s |
 | SKILL 3 | **Voile de lune** | bouclier | INTOUCHABLE 3 s · recharge 15 s | 15.0 s |
-| FUITE | **Étoile filante** | translation | saut de 5 cases · recharge 8 s | 8.0 s |
+| FUITE | **Étoile filante** | translation | saut de 5 cases · traînée de 25 dégâts · recharge 8 s | 8.0 s |
 | EXTRA | **Nuit éternelle** | ? | 120 dégâts sur toute la carte | 1.0 s |
 
 - **Éclat stellaire** — Un petit trait d'étoile. Au troisième coup, les étoiles de la cible explosent.
@@ -425,6 +427,32 @@ Trait : **Vue d'en haut** — ses coups visés tombent du ciel : leur portée se
 - **Cloche céleste** — Sa cloche sonne : une onde part de lui, passe les haies et étourdit tout ce qui l'entoure. Les boss ne sont pas étourdis.
 - **Envol** — Il s'élève trois secondes et vole par-dessus les haies sans pouvoir être touché, puis retombe avec une onde. Il ne ramasse rien en vol.
 - **Jugement des Six Ailes** — Six ailes de lumière s'ouvrent dans son dos, et douze épées tombent une à une sur les ennemis de la carte, par-dessus les murs.
+
+---
+
+## Chérubin — Feu sacré
+
+> Le gardien d'Éden, à quatre ailes. Ce qu'il a touché brûle en l'approchant, et son épée plantée ferme un cercle où nul n'entre.
+
+`id: cherubin` · puissance affichée 4/5 · vie 5 · vitesse 4.7 · extra à 6 kills
+
+Trait : **Nul n'approche** — chaque coup ouvre un œil ; l'ennemi marqué qui arrive au contact brûle pour 20 dégâts, puis 3 s passent avant un nouvel œil
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Flamme du glaive** | projectile | 15 dégâts · portée 5 · recharge 0.5 s · brûle tout sur son trajet | 0.5 s |
+| SKILL 1 | **Glaive tournoyant** | ronde | 14 par passage · 2 par seconde · rayon 1.5 · 4 s · recharge 9 s | 9.0 s |
+| SKILL 2 | **Roues d'Ézéchiel** | roues | 2 roues · 30 dégâts · 7 cases de couloir chacune · recharge 8 s | 8.0 s |
+| SKILL 3 | **Ailes voilées** | bouclier | INTOUCHABLE 2 s · repousse de 2 cases · recharge 14 s | 14.0 s |
+| FUITE | **Comme l'éclair** | translation | saut de 5 cases · traînée de 20 dégâts · recharge 9 s | 9.0 s |
+| EXTRA | **Le Jardin gardé** | jardin | rayon 3 · 8 s · aucun ennemi n'entre · 15 dégâts au rejet · soigne 1 PV | 1.0 s |
+
+- **Flamme du glaive** — Un jet de flamme saphir file dans le couloir jusqu'à sa cible, et brûle tout ce qu'il traverse.
+- **Glaive tournoyant** — Son épée de flamme tourne autour de lui et frappe tout ce qui passe à sa portée.
+- **Roues d'Ézéchiel** — Deux roues de feu couvertes d'yeux roulent dans les couloirs, dans deux sens, et brûlent ce qu'elles croisent.
+- **Ailes voilées** — Il se couvre de sa seconde paire d'ailes : intouchable un instant, il repousse ce qui le touche.
+- **Comme l'éclair** — Il file droit devant comme l'éclair, sans tourner, et laisse une traînée de flamme.
+- **Le Jardin gardé** — Il plante son épée : 8 s durant, aucun ennemi n'entre dans le cercle, ceux qui s'y trouvent sont rejetés et brûlent, et il regagne 1 PV. Les boss entrent, et brûlent.
 
 ---
 
@@ -555,3 +583,29 @@ Trait : **Entraves** — au 3e poing sur le même ennemi, il est cloué au sol 1
 - **Souffle glacé** — Une nova de flamme froide déferle autour de lui et fige ce qu'elle touche.
 - **Traversée spectrale** — Il devient flamme et passe à travers une haie, droit devant.
 - **La Geôle** — Un cercle de flamme froide s'abat autour de lui : des chaînes clouent au sol chaque ennemi à l'intérieur. Les boss brûlent sans être cloués.
+
+---
+
+## Dragon des Abysses — Feu infernal
+
+> Un dragon-démon qui met le feu au sol. Dans les flammes il va plus vite, et il dévore ce qui brûle.
+
+`id: dragon` · puissance affichée 3/5 · vie 5 · vitesse 4.4 · extra à 6 kills
+
+Trait : **Terre brûlée** — chaque crachat enflamme la case de sa cible 4 s, à 10 dégâts/s ; dans le feu, il va 20 % plus vite
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Crachat de magma** | projectile | 26 dégâts · portée 5 · recharge 0.8 s | 0.8 s |
+| SKILL 1 | **Souffle infernal** | souffle | 40 dégâts · 5 cases de couloir · en feu 5 s · recharge 10 s | 10.0 s |
+| SKILL 2 | **Morsure** | morsure | 55 dégâts · bond de portée 3 · +1 PV sur une proie en feu · recharge 12 s | 12.0 s |
+| SKILL 3 | **Écailles de magma** | carapace | absorbe 1 · 4 s · brûle qui le touche · 8 éclats à 20 · recharge 14 s | 14.0 s |
+| FUITE | **Battement d'ailes** | ailes | 15 dégâts · rayon 2 · brûle 10/s · recule de 2 cases · recharge 11 s · projette de 2 cases | 11.0 s |
+| EXTRA | **L'Ombre du Dragon** | ombre | tout l'écran · brûle 12/s 4 s · puis colonne de 45 | 1.0 s |
+
+- **Crachat de magma** — Une boule de lave qui éclate à l'impact et laisse la case en feu.
+- **Souffle infernal** — Un torrent de flammes court dans le couloir devant lui, et chaque case touchée reste en feu.
+- **Morsure** — Il bondit sur l'ennemi le plus proche et le mord. Si la proie brûlait, il la dévore et se soigne.
+- **Écailles de magma** — Ses écailles durcissent : elles encaissent un coup et brûlent qui le touche, puis éclatent en éclats de lave.
+- **Battement d'ailes** — Il déploie ses ailes : ce qui l'entoure est repoussé et prend feu, et lui recule d'un bond.
+- **L'Ombre du Dragon** — L'ombre géante d'un dragon traverse l'écran : chaque ennemi prend feu, puis explose en colonne de flammes.

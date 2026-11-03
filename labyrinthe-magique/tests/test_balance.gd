@@ -269,6 +269,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		if index < movers.size():
 			movers[index].teleport_to(to))
 	combat.dash_cut.connect(func(_from: Vector2i, to: Vector2i) -> void: player.teleport_to(to))
+	# La Morsure du Dragon le fait bondir : seul sort hors fuite qui déplace le mage par ce signal.
+	if character.id == CharacterCatalog.DRAGON:
+		combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: player.teleport_to(to))
 	combat.decoy_field.connect(func(field: PackedInt32Array) -> void:
 		for brain in brains:
 			brain.lure_field = field)
@@ -598,7 +601,7 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 		if ability.self_cost > 0 and hurt:
 			continue
 		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS,
-				Ability.Kind.TRANSFUSION, Ability.Kind.GUARD]:
+				Ability.Kind.TRANSFUSION, Ability.Kind.GUARD, Ability.Kind.MAGMA_SCALES]:
 			defensive.append(ability)
 		else:
 			offensive.append(ability)

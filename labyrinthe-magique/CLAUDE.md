@@ -231,11 +231,11 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
   l'ombre magenta peinte sur les planches, en s'arrêtant aux contours sombres. Au-delà de
   20 % de l'objet, il n'y touche pas : ce violet EST l'objet (stages 2 et 5).
 
-## Les vingt personnages
+## Les vingt-deux personnages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte` · `Démone de la Discorde` · `Roi de Braise` · `Chevalier Écarlate` · `Geôlier` · `Archange du Ciel`.
+`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte` · `Démone de la Discorde` · `Roi de Braise` · `Chevalier Écarlate` · `Geôlier` · `Archange du Ciel` · `Chérubin` · `Dragon des Abysses`.
 
 ⚠️ **Pour tout nouveau personnage, n'oublie pas l'effet magique DRAMATIQUE de chaque sort**
 (demande du joueur, 2026-11-03). Les six créneaux (attaque, trois sorts, fuite, extra) ont chacun
@@ -317,6 +317,16 @@ Le **Geôlier** (élément Flamme froide, onglet Démon) flotte, et n'est PAS ch
 `Kind.HOOK` ramène, `Kind.SOUL_CHAINS` et `Kind.GAOL` rongent, et `GaolerChains` dessine les chaînes. Sa fuite traverse une
 haie (`pierces_walls`). ⚠️ Ses planches sont en cases hautes : `tall_cells` dans `build_enemies.py` les remet au carré.
 
+Le **Dragon des Abysses** (élément Feu infernal, onglet Démon) n'est PAS chibi non plus, et il est dessiné 30 % plus
+grand (`body_scale` 1,3). Il brûle le SOL : son trait, Terre brûlée, enflamme la case de chaque cible de son crachat
+(`_fire_cells`), le Souffle (`Kind.BREATH`) enflamme le couloir devant lui, et une case en feu ronge ce qui s'y tient.
+Dans le feu, il va plus vite : c'est `armor_speed()`, que lisent le `Level` et la simulation. La Morsure (`Kind.BITE`)
+le fait bondir par `blink_performed` et le soigne si la proie brûlait. Les Écailles (`Kind.MAGMA_SCALES`) sont une
+coque d'un coup, qui éclate en éclats (`shard_count`). Sa fuite (`Kind.WINGBEAT`) repousse, enflamme et le fait
+reculer ; l'ultime (`Kind.DRAGON_SHADOW`) fait passer la silhouette des pièces sur l'écran, puis des colonnes. Ses
+pièces sortent de `tools/build_dragon_pieces.py`. ⚠️ Sa planche d'attaque le dessine plus grand que sa marche :
+`strike_scale` 0,94.
+
 L'**Archange du Ciel** (élément Ciel, onglet Ange) frappe par-dessus les haies : son trait, Vue d'en haut,
 c'est `Ability.from_sky`. La cible se choisit à vol d'oiseau, le coup tombe après `sky_fall`, et le `Level` dessine
 la chute (`_sky_falls`) au lieu d'un projectile. La Colonne est un tel projectile, avec rayon et `stun_seconds`.
@@ -326,6 +336,15 @@ Son Envol (`Kind.FLIGHT`) le rend intouchable 3 s. Le `Level` passe `GridMover.p
 de sol la plus proche (`_grounded`), puis le repose avant que l'onde d'atterrissage ne frappe (`flight_ended`, puis
 `_land`). En vol, il ne ramasse rien et ne prend aucun portail. `enemies_dazed` distingue ses deux contrôles.
 `tools/preview_ciel.gd` montre ses effets. ⚠️ Son attaque est arrivée en cases hautes : `tall_cells`, comme le Geôlier.
+
+Le **Chérubin** (élément Feu sacré, onglet Ange) garde un lieu. Son trait, Nul n'approche, ouvre un œil par coup
+(`_eyes`) ; l'œil s'embrase quand l'ennemi arrive au contact, puis `EYE_LOCK` passe avant le suivant. Sa flamme
+(`pierce_line`) continue après sa cible jusqu'au bout de sa portée, sinon elle ne brûlerait jamais personne d'autre :
+la cible est toujours la plus proche. `Kind.WHIRL` frappe autour de lui par passages, et `Kind.WHEELS` lance deux
+vagues dans deux sens (`_rolling_path`). Les Ailes voilées sont un `SHIELD` intouchable avec `repel_cells`.
+`Kind.GARDEN` rejette à chaque image tout ennemi du cercle par les couloirs (`_garden_exit`), et ne le brûle qu'une
+fois par `GARDEN_LOCK`. Les boss y entrent, et brûlent. Le rejet passe par `enemy_pushed`, que la simulation applique
+déjà. `SacredJet` et `EzekielWheel` dessinent la flamme et les roues, et `tools/preview_cherubin.gd` montre ses effets.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —

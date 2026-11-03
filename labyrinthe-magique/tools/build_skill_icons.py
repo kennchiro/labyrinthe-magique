@@ -173,11 +173,24 @@ SHEETS = {
         "geolier_poing", "geolier_crochet", "geolier_chaines",
         "geolier_souffle", "geolier_traversee", "geolier_geole",
     ], {"undust": 12}),
+    # Relevé case par case : boule de lave et fumée · tête qui crache · mâchoire //
+    # boule d'écailles · deux ailes et cendres · silhouette sur disque rouge. L'ordre demandé.
+    "mage_dragon_skills.png": ("dragon", [
+        "dragon_crachat", "dragon_souffle", "dragon_morsure",
+        "dragon_ecailles", "dragon_ailes", "dragon_ombre",
+    ], {"undust": 12}),
     # Relevé case par case : lance qui tombe sur son cercle · éventail de cinq plumes · colonne sur
     # anneau d'or // cloche et ses ondes · deux ailes sur une haie · épée et six ailes. L'ordre demandé.
     "mage_ciel_skills.png": ("ciel", [
         "ciel_lance", "ciel_plumes", "ciel_colonne",
         "ciel_cloche", "ciel_envol", "ciel_jugement",
+    ], {"undust": 12}),
+    # Relevé case par case : épée de flamme · épée dans son cercle de feu · deux roues à yeux //
+    # ailes refermées sur trois yeux · éclair et flammèches · épée plantée dans un cercle à yeux.
+    # L'ordre demandé.
+    "mage_cherubin_skills.png": ("cherubin", [
+        "cherubin_glaive", "cherubin_tournoyant", "cherubin_roues",
+        "cherubin_voile", "cherubin_eclair", "cherubin_jardin",
     ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",

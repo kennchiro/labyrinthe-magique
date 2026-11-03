@@ -59,6 +59,8 @@ func _init() -> void:
 	_test_ecarlate()
 	_test_geolier()
 	_test_ciel()
+	_test_cherubin()
+	_test_dragon()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -231,8 +233,8 @@ func _test_catalog() -> void:
 	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
 	# Porte-Lumière, et l'Ange de la Mort. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 20:
-		_fail("le catalogue contient %d personnages au lieu de 20" % characters.size())
+	if characters.size() != 22:
+		_fail("le catalogue contient %d personnages au lieu de 22" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -246,8 +248,9 @@ func _test_catalog() -> void:
 			_fail("%s n'a pas d'ultime" % character.id)
 		# La fuite n'est pas un luxe : sans elle, un couloir bouché est une
 		# impasse et non une erreur du joueur.
+		# Le Battement d'ailes du Dragon le fait reculer d'un bond : c'est une fuite.
 		if character.escape == null or not (character.escape.kind in [Ability.Kind.BLINK, Ability.Kind.SWAP,
-				Ability.Kind.FLIGHT]):
+				Ability.Kind.FLIGHT, Ability.Kind.WINGBEAT]):
 			_fail("%s n'a pas de sort de fuite" % character.id)
 		if character.action_bar().size() != 6:
 			_fail("%s : barre d'action de %d emplacements au lieu de 6" % [
@@ -3931,6 +3934,140 @@ func _test_etoiles() -> void:
 
 
 ## L'ARCHANGE DU CIEL : ses coups passent par-dessus les haies, et l'Envol le rend intouchable.
+func _test_dragon() -> void:
+	var dragon := CharacterCatalog.dragon()
+	var souffle: Ability = dragon.abilities[0]
+	var morsure: Ability = dragon.abilities[1]
+	var ecailles: Ability = dragon.abilities[2]
+	var parts := _context(dragon)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	# RIEN NE PART DANS LE VIDE.
+	if combat.use(morsure, context):
+		_fail("dragon : la morsure part sans ennemi")
+	# TERRE BRÛLÉE : le crachat enflamme la case, la case ronge ce qui s'y tient, et lui y va plus vite.
+	var cell := _cell_at(grid, context.player_field, 4)
+	_add_enemy(context, cell, 5000)
+	combat._apply_damage(0, dragon.attack, context)
+	if not combat.fire_cells().has(cell):
+		_fail("dragon : le crachat n'enflamme pas la case")
+	var before := context.enemy_health[0].current
+	for frame in 62:
+		combat.update(0.016, context)
+	var burnt := before - context.enemy_health[0].current
+	if burnt < CombatSystem.FIRE_CELL_DAMAGE / 2:
+		_fail("dragon : la case en feu ne retire que %d en une seconde" % burnt)
+	context.player_cell = cell
+	combat.update(0.016, context)
+	if not is_equal_approx(combat.armor_speed(), dragon.move_speed * CombatSystem.INFERNO_SPEED):
+		_fail("dragon : dans le feu, il gagne %s de vitesse" % combat.armor_speed())
+	for frame in 260:
+		combat.update(0.016, context)
+	if combat.fire_cells().has(cell) or combat.armor_speed() != 0.0:
+		_fail("dragon : la case brûle encore après %s s" % CombatSystem.FIRE_CELL_SECONDS)
+	# LE SOUFFLE COURT DANS LE COULOIR, blesse ce qu'il croise et laisse ses cases en feu.
+	parts = _context(dragon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + facing):
+			context.player_facing = facing
+			break
+	var lit := {"cells": []}
+	combat.breath_cast.connect(func(_from: Vector2i, cells: Array, _seconds: float) -> void: lit["cells"] = cells)
+	_add_enemy(context, context.player_cell + context.player_facing, 5000)
+	if not combat.use(souffle, context) or lit["cells"].is_empty():
+		_fail("dragon : le souffle ne part pas")
+	elif context.enemy_health[0].current != 5000 - souffle.damage:
+		_fail("dragon : le souffle retire %d" % (5000 - context.enemy_health[0].current))
+	for burning: Vector2i in lit["cells"]:
+		if not combat.fire_cells().has(burning):
+			_fail("dragon : la case %s du souffle ne brûle pas" % burning)
+			break
+	# LA MORSURE BONDIT AU CONTACT, et une proie en feu le soigne.
+	parts = _context(dragon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	var prey := _cell_at(grid, context.player_field, 3)
+	_add_enemy(context, prey, 5000)
+	combat._ignite_cells([prey], 5.0)
+	health.take(Damage.new(1, Element.Kind.FIRE, "enemy"))
+	var landed := {"to": context.player_cell}
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: landed["to"] = to)
+	if not combat.use(morsure, context):
+		_fail("dragon : la morsure ne part pas")
+	var field := Pathfinder.distance_field(grid, [prey] as Array[Vector2i])
+	if Pathfinder.value_at(grid, field, landed["to"]) != 1:
+		_fail("dragon : la morsure le pose à %d cases de sa proie" % Pathfinder.value_at(grid, field, landed["to"]))
+	if context.enemy_health[0].current != 5000 - morsure.damage or health.current != health.maximum:
+		_fail("dragon : la morsure retire %d et rend %d PV" % [5000 - context.enemy_health[0].current,
+			health.current - (health.maximum - 1)])
+	# LES ÉCAILLES ENCAISSENT UN COUP, puis éclatent sur ce qui l'entoure.
+	parts = _context(dragon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	combat.use(ecailles, context)
+	health.take(Damage.new(1, Element.Kind.FIRE, "enemy"))
+	combat.update(0.016, context)
+	combat.update(0.016, context)
+	if health.current != health.maximum or combat.scales_up() \
+			or context.enemy_health[0].current != 5000 - ecailles.shard_damage:
+		_fail("dragon : écailles — %d PV, éclats %d" % [health.current, 5000 - context.enemy_health[0].current])
+	# LE BATTEMENT D'AILES REPOUSSE ET ENFLAMME, sauf le boss qui ne bouge pas ; et lui recule.
+	parts = _context(dragon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var close := _cell_at(grid, context.player_field, 1)
+	var boss_cell := Vector2i(-1, -1)
+	for other in grid.all_floor_cells():
+		if other != close and Pathfinder.value_at(grid, context.player_field, other) == 1:
+			boss_cell = other
+	_add_enemy(context, close, 5000)
+	if boss_cell != Vector2i(-1, -1):
+		_add_enemy(context, boss_cell, 5000)
+		context.bosses[1] = true
+	var burning := {}
+	combat.enemy_burning.connect(func(index: int, _seconds: float) -> void: burning[index] = true)
+	combat.use(dragon.escape, context)
+	if Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0]) <= 1 or not burning.has(0):
+		_fail("dragon : les ailes ne repoussent ni n'enflamment")
+	if boss_cell != Vector2i(-1, -1) and context.enemy_cells[1] != boss_cell:
+		_fail("dragon : les ailes déplacent un boss")
+	# L'OMBRE : tout ce qui est à l'écran brûle, puis explose dans l'ordre de son passage.
+	parts = _context(dragon)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 5), 5000)
+	var columns := {"count": 0}
+	combat.shadow_column.connect(func(_cell: Vector2i, _first: bool) -> void: columns["count"] += 1)
+	combat.use(dragon.ultimate, context)
+	for frame in 120:
+		combat.update(0.016, context)
+	if columns["count"] != 2:
+		_fail("dragon : l'ombre fait jaillir %d colonnes au lieu de 2" % columns["count"])
+	for i in 2:
+		if 5000 - context.enemy_health[i].current < dragon.ultimate.damage:
+			_fail("dragon : l'ombre ne retire que %d" % (5000 - context.enemy_health[i].current))
+	print("dragon des abysses : sol en feu, souffle, morsure, écailles, ailes et ombre : OK")
+
+
 func _test_ciel() -> void:
 	var ciel := CharacterCatalog.ciel()
 	var parts := _context(ciel)
@@ -4037,3 +4174,88 @@ func _test_ciel() -> void:
 		if 5000 - context.enemy_health[i].current != each:
 			_fail("ciel : le Jugement retire %d à l'ennemi %d au lieu de %d" % [
 				5000 - context.enemy_health[i].current, i, each])
+
+
+## LE CHÉRUBIN : sa flamme brûle derrière sa cible, l'œil brûle qui l'approche, et son jardin
+## rejette tout ce qui n'est pas un boss.
+func _test_cherubin() -> void:
+	var cherubin := CharacterCatalog.cherubin()
+	var parts := _context(cherubin)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	# LA FLAMME CONTINUE APRÈS SA CIBLE, et brûle ce qui se tient sur la suite de son trajet.
+	var jet := {"path": []}
+	combat.projectile_launched.connect(func(_a: Ability, _t: int, path: Array, _d: float) -> void:
+		jet["path"] = path)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	_add_enemy(context, Vector2i(-5, -5), 5000)
+	if not combat.use(cherubin.attack, context):
+		_fail("cherubin : la flamme ne part pas")
+	var path: Array = jet["path"]
+	if path.size() <= 3:
+		_fail("cherubin : la flamme s'arrête à sa cible (%d cases)" % path.size())
+	else:
+		context.enemy_cells[1] = path[path.size() - 1]
+	for frame in 60:
+		combat.update(0.016, context)
+	if context.enemy_health[0].current >= 5000 or context.enemy_health[1].current >= 5000:
+		_fail("cherubin : la flamme ne brûle pas derrière sa cible")
+	# L'ŒIL S'OUVRE SUR LA CIBLE, et s'embrase quand elle arrive au contact.
+	if not combat.eyes().has(0):
+		_fail("cherubin : pas d'œil sur la cible")
+	var before := context.enemy_health[0].current
+	context.enemy_cells[0] = _cell_at(grid, context.player_field, 1)
+	combat.update(0.016, context)
+	if before - context.enemy_health[0].current != CombatSystem.EYE_DAMAGE or combat.eyes().has(0):
+		_fail("cherubin : l'œil retire %d au contact" % (before - context.enemy_health[0].current))
+	# LE GLAIVE TOURNOIE et frappe à chaque passage ce qui est à sa portée.
+	before = context.enemy_health[0].current
+	combat.use(cherubin.abilities[0], context)
+	for frame in 70:
+		combat.update(0.016, context)
+	if before - context.enemy_health[0].current < cherubin.abilities[0].damage * 2:
+		_fail("cherubin : le glaive ne retire que %d" % (before - context.enemy_health[0].current))
+	# LES ROUES partent dans deux sens.
+	var wheels := {"count": 0}
+	combat.wave_launched.connect(func(_a: Ability, _p: Array, _d: float) -> void: wheels["count"] += 1)
+	combat.use(cherubin.abilities[1], context)
+	if int(wheels["count"]) != 2:
+		_fail("cherubin : %d roue(s) au lieu de 2" % int(wheels["count"]))
+	# LES AILES VOILÉES : intouchable, et l'ennemi au contact est repoussé.
+	var near := _cell_at(grid, context.player_field, 1)
+	context.enemy_cells[0] = near
+	combat.use(cherubin.abilities[2], context)
+	combat.update(0.016, context)
+	if not health.immune or Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0]) <= 1:
+		_fail("cherubin : les ailes ne repoussent pas")
+	# LE JARDIN : rejette l'ennemi hors du cercle et le brûle, laisse entrer le boss, rend 1 PV.
+	parts = _context(cherubin)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	health.current = health.maximum - 2
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	context.bosses[1] = true
+	var boss_cell := context.enemy_cells[1]
+	if not combat.use(cherubin.ultimate, context):
+		_fail("cherubin : le jardin ne se plante pas")
+	var radius := cherubin.ultimate.radius
+	if Vector2(context.enemy_cells[0] - context.player_cell).length() < radius \
+			or context.enemy_health[0].current >= 5000:
+		_fail("cherubin : le jardin ne rejette pas l'ennemi")
+	if context.enemy_cells[1] != boss_cell:
+		_fail("cherubin : le jardin rejette le boss")
+	if health.current != health.maximum - 1:
+		_fail("cherubin : le jardin ne rend pas 1 PV")
+	for frame in 520:
+		combat.update(0.016, context)
+	if context.enemy_health[1].current >= 5000:
+		_fail("cherubin : le boss ne brûle pas dans le jardin")
+	if not combat.garden().is_empty():
+		_fail("cherubin : le jardin ne se referme pas")

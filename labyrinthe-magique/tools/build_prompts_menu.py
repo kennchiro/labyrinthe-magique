@@ -237,6 +237,22 @@ MAGES = [
         "aura": "émeraude lumineux au centre et vert profond presque noir",
         "phrase": "Il voit le labyrinthe d'en haut, et ses coups tombent du ciel.",
     },
+    {
+        "id": "cherubin", "nom": "Chérubin", "element": "Feu sacré",
+        "couleur": "#3d6bff",
+        "corps": "le CHÉRUBIN de la Bible, gardien d'Éden : un JEUNE ANGE au visage grave et calme, "
+                 "bien VISIBLE, aux yeux bleu saphir. Cheveux d'or foncé courts et bouclés, et derrière "
+                 "sa tête une ROUE D'OR à huit rayons, avec un œil d'or sur sa jante, dessinée comme un "
+                 "objet solide. TUNIQUE COURTE de LIN BLANC qui s'arrête au-dessus des genoux, CUIRASSE "
+                 "de BRONZE POLI, jambières et sandales de bronze, CEINTURE BLEU SAPHIR. QUATRE GRANDES "
+                 "AILES, en DEUX PAIRES, blanches aux pointes saphir, largement ouvertes derrière lui, "
+                 "avec quelques YEUX D'OR stylisés sur les plumes, calmes et jamais inquiétants. Il tient "
+                 "de la main droite une ÉPÉE de bronze dont la lame est une FLAMME BLEU SAPHIR aux "
+                 "langues nettes, levée devant lui. Le bleu est un saphir franc, jamais violet ; le lin "
+                 "reste blanc, ombré de gris-beige, sans reflet rose ni violet",
+        "aura": "bleu saphir lumineux au centre et bleu nuit presque noir",
+        "phrase": "Il garde le chemin d'Éden, et nul n'approche de son épée.",
+    },
 ]
 
 ENTETE = """> ⚠️ **Fichier GÉNÉRÉ** par `tools/build_prompts_menu.py`. Ne pas l'éditer à

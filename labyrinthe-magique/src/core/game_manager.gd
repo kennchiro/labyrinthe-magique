@@ -101,7 +101,7 @@ func _ready() -> void:
 	level.player_shielded.connect(func(amount: int) -> void:
 		ui.set_shield(amount, amount)
 		if amount > 0:
-			ui.flash("Bouclier d'eau — %d absorbés" % amount, Color("#9ef0ff")))
+			ui.flash("%s — %d absorbés" % [_shield_name(), amount], Color("#9ef0ff")))
 	level.player_empowered.connect(func(bonus: int, duration: float) -> void:
 		ui.flash("EXALTÉ — +%d dégâts pendant %.0f s" % [bonus, duration],
 			Color("#9ef0ff")))
@@ -448,6 +448,15 @@ func use_slot(slot: int) -> void:
 
 func _on_player_health_changed(_amount: int, _remaining: int) -> void:
 	ui.set_health(level.player_health.current, level.player_health.maximum)
+
+
+## Le nom du sort qui protège, pour le message : « Bouclier d'eau » valait pour tous avant le Dragon.
+func _shield_name() -> String:
+	if level != null and level.character != null:
+		for ability: Ability in level.character.abilities:
+			if ability.kind == Ability.Kind.MAGMA_SCALES or (ability.kind == Ability.Kind.SHIELD and not ability.immune):
+				return ability.display_name
+	return "Bouclier"
 
 
 func _on_ability_refused(reason: String) -> void:

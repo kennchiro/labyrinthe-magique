@@ -52,6 +52,14 @@ enum Kind {
 	SOUL_CHAINS,  ## enchaîne des ennemis au lanceur : ralentis, ils brûlent de froid
 	GAOL,         ## un cercle cloue au sol tous les ennemis qu'il contient, et les brûle
 	FLIGHT,       ## le lanceur s'élève, survole les haies sans être touché, puis retombe avec une onde
+	WHIRL,        ## une arme tourne autour du lanceur et frappe tout ce qui est à sa portée, par passages
+	WHEELS,       ## deux roues roulent dans les couloirs, dans deux sens, et frappent ce qu'elles croisent
+	GARDEN,       ## un cercle planté au sol : aucun ennemi n'y entre, ceux qui s'y trouvent sont rejetés
+	BREATH,       ## un jet de flammes court dans le couloir devant le lanceur et laisse les cases en feu
+	BITE,         ## bondit sur l'ennemi le plus proche et le mord ; une proie en feu le soigne
+	MAGMA_SCALES, ## absorbe un coup, brûle ce qui le touche, puis éclate en écailles de lave
+	WINGBEAT,     ## repousse et enflamme ce qui l'entoure, et le lanceur recule d'un bond
+	DRAGON_SHADOW, ## une ombre de dragon survole l'écran : tout brûle, puis explose en colonnes
 }
 
 @export var id: String = ""
@@ -579,6 +587,23 @@ enum Kind {
 ## L'Envol : son allure en vol, en multiple de la sienne.
 @export var flight_speed: float = 1.0
 
+## LE CHÉRUBIN. Le projectile brûle aussi tout ce qu'il croise sur son trajet, pas seulement sa cible.
+@export var pierce_line: bool = false
+## Le Glaive tournoyant : secondes entre deux passages de l'arme.
+@export var whirl_interval: float = 0.5
+## Les Ailes voilées : de combien de cases elles repoussent ce qui le touche. Zéro = rien.
+@export var repel_cells: int = 0
+
+## LE DRAGON DES ABYSSES. Secondes de feu laissées sur les cases touchées. Zéro = aucune.
+@export var ground_fire: float = 0.0
+## La Morsure : PV rendus quand la proie brûlait.
+@export var bite_heal: int = 0
+## Les Écailles de magma : combien d'éclats partent quand elles cèdent, et ce que fait chacun.
+@export var shard_count: int = 0
+@export var shard_damage: int = 0
+## Brûlure posée sur les ennemis touchés, en dégâts par seconde, pendant `duration`.
+@export var burn_dps: int = 0
+
 
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
 ## Un _init à douze paramètres positionnels serait illisible au point d'être
@@ -636,6 +661,8 @@ func summary() -> String:
 		parts.append("TRAVERSE LES MURS")
 	if from_sky:
 		parts.append("à vol d'oiseau, par-dessus les haies")
+	if pierce_line:
+		parts.append("brûle tout sur son trajet")
 	if geyser_count > 0:
 		parts.append("%d geysers à %d dégâts" % [geyser_count, geyser_damage])
 	if rain_count > 0:
@@ -675,6 +702,28 @@ func _base_summary() -> String:
 				_number(stun_seconds), range]
 		Kind.PROJECTILE:
 			return "%d dégâts · portée %d" % [damage, range]
+		Kind.WHIRL:
+			return "%d par passage · %s par seconde · rayon %s · %s s" % [damage,
+				_number(1.0 / maxf(0.05, whirl_interval)), _number(radius), _number(duration)]
+		Kind.WHEELS:
+			return "2 roues · %d dégâts · %d cases de couloir chacune" % [damage, range]
+		Kind.GARDEN:
+			return "rayon %s · %s s · aucun ennemi n'entre · %d dégâts au rejet" % [
+				_number(radius), _number(duration), damage]
+		Kind.BREATH:
+			return "%d dégâts · %d cases de couloir · en feu %s s" % [damage, range, _number(ground_fire)]
+		Kind.BITE:
+			return "%d dégâts · bond de portée %d · +%d PV sur une proie en feu" % [damage, range, bite_heal]
+		Kind.MAGMA_SCALES:
+			return "absorbe %d · %s s · brûle qui le touche · %d éclats à %d" % [damage, _number(duration),
+				shard_count, shard_damage]
+		Kind.WINGBEAT:
+			return "%d dégâts · rayon %s · brûle %d/s · recule de %d cases" % [damage,
+				_number(radius), burn_dps, range]
+		Kind.DRAGON_SHADOW:
+			return "tout l'écran · brûle %d/s %s s · puis colonne de %d" % [burn_dps, _number(duration), damage]
+		Kind.SHIELD when repel_cells > 0:
+			return "INTOUCHABLE %s s · repousse de %d cases" % [_number(duration), repel_cells]
 		Kind.FLIGHT:
 			return "vole %s s · INTOUCHABLE · allure x%s · %d dégâts à l'atterrissage" % [
 				_number(duration), _number(flight_speed), damage]
@@ -750,6 +799,8 @@ func _base_summary() -> String:
 			return "revient %s s en arrière" % _number(rewind_seconds)
 		Kind.BLINK when blow_cells > 0:
 			return "charge de %d cases · %d dégâts · renverse" % [range, trail_damage]
+		Kind.BLINK when trail_damage > 0:
+			return "saut de %d cases · traînée de %d dégâts" % [range, trail_damage]
 		Kind.BLINK:
 			return "saut de %d cases" % range
 		Kind.ECHO:

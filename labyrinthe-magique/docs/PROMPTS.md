@@ -90,6 +90,23 @@ voulue est `prompts/ref/geolier_concept.png`.
 La fiche et la commande complète, dans l'ordre : [mages/mage_braise](prompts/mages/mage_braise.md),
 [mages/mage_ecarlate](prompts/mages/mage_ecarlate.md).
 
+## Le Dragon des Abysses — le vingt et unième personnage
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_dragon](prompts/mages/mage_dragon.md). Un dragon-démon
+debout, pas chibi, qui brûle le terrain. Il est jouable.
+
+## Le Chérubin — le vingt-deuxième personnage
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_cherubin](prompts/mages/mage_cherubin.md). Le gardien
+d'Éden de la Bible, à quatre ailes, avec une épée de flamme saphir et une roue d'or à yeux. Il punit ce qui
+l'approche, et son extra ferme un cercle où aucun ennemi n'entre. Pas encore jouable : les images sont à commander.
+
+## Le Croupier des Enfers — démon humain
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_croupier](prompts/mages/mage_croupier.md). Un homme
+élégant, démon joueur, chibi comme les autres démons humains : cartes, dés, pièce et roulette. Pas encore jouable :
+les images sont à commander.
+
 ## Les anges — refaire le sprite comme les mages
 
 Ils étaient élancés, à côté de mages chibi, et ils glissaient de profil. Les images 1, 2 et 3 sont à
@@ -157,6 +174,11 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | les icônes de sorts du Chevalier Écarlate | [sorts/icones_ecarlate](prompts/sorts/icones_ecarlate.md) |
 | les icônes de sorts du Geôlier | [sorts/icones_geolier](prompts/sorts/icones_geolier.md) |
 | les pièces du Geôlier (poing, crochet, maillons) | [sorts/pieces_geolier](prompts/sorts/pieces_geolier.md) |
+| les icônes de sorts du Dragon des Abysses | [sorts/icones_dragon](prompts/sorts/icones_dragon.md) |
+| les pièces du Dragon des Abysses (magma, écaille, gueule, silhouette) | [sorts/pieces_dragon](prompts/sorts/pieces_dragon.md) |
+| les icônes de sorts du Croupier des Enfers | [sorts/icones_croupier](prompts/sorts/icones_croupier.md) |
+| les pièces du Croupier (cartes, dé, pièce, jeton, bille) | [sorts/pieces_croupier](prompts/sorts/pieces_croupier.md) |
+| la Roulette infernale du Croupier | [sorts/roulette_croupier](prompts/sorts/roulette_croupier.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol

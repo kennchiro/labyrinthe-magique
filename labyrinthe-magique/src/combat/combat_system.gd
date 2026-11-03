@@ -210,6 +210,26 @@ signal enemies_dazed(indices: Array, seconds: float, ability: Ability)
 signal flight_started(duration: float, ability: Ability)
 signal flight_ended
 signal flight_landed(cell: Vector2i, ability: Ability)
+## Le Chérubin. Un œil s'ouvre ou se ferme sur un ennemi ; il s'embrase au contact.
+signal enemy_eyed(index: int, open: bool)
+signal eye_burst(cell: Vector2i)
+signal whirl_started(duration: float, radius: float)
+signal whirl_cut(cell: Vector2i)
+signal veil_repelled(cell: Vector2i)
+signal garden_planted(cell: Vector2i, radius: float, seconds: float)
+signal garden_repelled(cell: Vector2i)
+signal garden_ended(cell: Vector2i)
+# Le Dragon des Abysses : le sol qui brûle, et ses cinq sorts.
+signal ground_ignited(cells: Array, seconds: float)
+signal ground_faded(cells: Array)
+signal breath_cast(from: Vector2i, cells: Array, seconds: float)
+signal dragon_bit(index: int, cell: Vector2i, devoured: bool)
+signal scales_raised(seconds: float)
+signal scales_burst(cell: Vector2i, count: int, radius: float)
+signal wings_beaten(cell: Vector2i, radius: float)
+signal dragon_shadow_cast(cell: Vector2i, direction: Vector2i, indices: Array, delay: float)
+signal shadow_column(cell: Vector2i, first: bool)
+signal shadow_ended
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -392,6 +412,24 @@ const SHACKLE_SECONDS := 1.5
 const PLATE_MAX := 3
 ## Les kills qu'il faut pour reforger une plaque.
 const PLATE_KILLS := 2
+## Le Chérubin : ce que brûle l'œil qui s'embrase, à quelle distance, et après combien de temps
+## un nouvel œil peut s'ouvrir sur le même ennemi. Sans ce délai, un ennemi collé à lui brûlerait
+## à chaque coup, et son attaque doublerait au contact.
+const EYE_DAMAGE := 20
+const EYE_REACH := 1.05
+const EYE_LOCK := 3.0
+## Le Jardin gardé ne brûle un même ennemi qu'une fois par ce délai, même s'il revient sans cesse.
+const GARDEN_LOCK := 0.5
+## Les Ailes voilées ne repoussent un même ennemi qu'une fois par ce délai.
+const VEIL_LOCK := 0.6
+## Le Dragon : une case en feu dure FIRE_CELL_SECONDS et ronge FIRE_CELL_DAMAGE par seconde ce
+## qui s'y tient. Lui y gagne INFERNO_SPEED de son allure.
+const FIRE_CELL_SECONDS := 4.0
+const FIRE_CELL_DAMAGE := 10
+const INFERNO_SPEED := 0.2
+## L'Ombre du Dragon : la première colonne attend que l'ombre soit passée, puis elles se suivent.
+const SHADOW_DELAY := 1.2
+const SHADOW_GAP := 0.12
 const BLADE_OUT := 0.4
 const BLADE_BACK := 0.35
 const BLADE_FAN := 30.0
@@ -532,6 +570,19 @@ var _hour: Array[Dictionary] = []      # {index, time_left, ability}
 var _wings: Ability = null             # la coque en place, quand elle aveugle en cédant
 var _wings_cell := Vector2i.ZERO
 var _flight: Ability = null            # l'Envol en cours, nul au sol
+var _eyes := {}                        # index -> vrai : l'œil du Chérubin est ouvert sur lui
+var _eye_locks := {}                   # index -> secondes avant qu'un nouvel œil s'ouvre
+var _whirl := {}                       # {left, tick, ability}
+var _veil: Ability = null              # les Ailes voilées, tant qu'elles tiennent
+var _veil_locks := {}                  # index -> secondes
+var _garden := {}                      # {cell, left, tick, ability}
+var _garden_locks := {}                # index -> secondes
+var _fire_cells := {}                  # case -> secondes de feu restantes
+var _fire_tick := 0.0
+var _scales: Ability = null            # les Écailles de magma, tant qu'elles tiennent
+var _scales_tick := 0.0
+var _shadow: Array[Dictionary] = []    # {index, left, first, ability} : les colonnes à venir
+var _dragon_cell := Vector2i(-1, -1)   # où il se tenait à la dernière mise à jour
 var _flight_left := 0.0
 
 
@@ -618,6 +669,8 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_king(delta, context)
 	_update_blade(delta, context)
 	_update_gaoler(delta, context)
+	_update_cherubin(delta, context)
+	_update_dragon(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -665,6 +718,7 @@ func update(delta: float, context: CombatContext) -> void:
 		if _immune_left <= 0.0:
 			health.immune = false
 			_rampart = null
+			_veil = null
 			_guard = null
 			if _pact_owed > 0:
 				player_healed.emit(health.heal(_pact_owed))
@@ -713,6 +767,12 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 			continue
 		var cell: Vector2i = context.enemy_cells[index]
 		projectile_hit.emit(ability, index, cell)
+		# La flamme du Chérubin brûle aussi ce qu'elle a croisé en chemin, une fois chacun.
+		if shot.has("line"):
+			var line: Array = shot["line"]
+			for other in context.enemy_cells.size():
+				if other != index and context.enemy_alive(other) and line.has(context.enemy_cells[other]):
+					_apply_damage(other, ability, context)
 		# La Colonne du ciel cloue ce qu'elle entoure, AVANT ses dégâts : un ennemi qu'elle tue
 		# ne doit pas être compté parmi les cloués.
 		if ability.stun_seconds > 0.0:
@@ -933,6 +993,7 @@ func use(ability: Ability, context: CombatContext) -> bool:
 				health.immune = true
 				_immune_left = ability.duration
 				_rampart = ability if ability.reflect_damage > 0 else null
+				_veil = ability if ability.repel_cells > 0 else null
 				player_made_immune.emit(ability.duration)
 			else:
 				health.add_shield(ability.damage)
@@ -1031,6 +1092,22 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = true
 		Ability.Kind.FLIGHT:
 			fired = _cast_flight(ability)
+		Ability.Kind.WHIRL:
+			fired = _cast_whirl(ability)
+		Ability.Kind.WHEELS:
+			fired = _cast_wheels(ability, context)
+		Ability.Kind.GARDEN:
+			fired = _cast_garden(ability, context)
+		Ability.Kind.BREATH:
+			fired = _cast_breath(ability, context)
+		Ability.Kind.BITE:
+			fired = _cast_bite(ability, context)
+		Ability.Kind.MAGMA_SCALES:
+			fired = _cast_scales(ability)
+		Ability.Kind.WINGBEAT:
+			fired = _cast_wingbeat(ability, context)
+		Ability.Kind.DRAGON_SHADOW:
+			fired = _cast_dragon_shadow(ability, context)
 
 	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
 	#
@@ -1142,9 +1219,17 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	# La vitesse vient de la COMPÉTENCE : une boule de feu lourde met deux fois
 	# plus de temps à arriver qu'une flèche, et ce délai est jouable — l'ennemi
 	# a le temps de tourner le coin. La simulation le voit comme le joueur.
+	# LA FLAMME DU CHÉRUBIN NE S'ARRÊTE PAS À SA CIBLE : la cible étant la plus proche, personne ne
+	# se tient avant elle. Elle continue le long du couloir jusqu'au bout de sa portée, et brûle
+	# ceux qui se pressent derrière.
+	if ability.pierce_line and path.size() >= 2:
+		path.append_array(_rolling_path(path[-1], path[-1] - path[-2], ability.range - (path.size() - 1)))
 	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
 	var duration := float(path.size() - 1) / speed
-	_in_flight.append({"ability": ability, "target": target, "time_left": duration})
+	var shot := {"ability": ability, "target": target, "time_left": duration}
+	if ability.pierce_line:
+		shot["line"] = path
+	_in_flight.append(shot)
 	projectile_launched.emit(ability, target, path, duration)
 	return true
 
@@ -3285,6 +3370,8 @@ func pieces() -> Array[Dictionary]:
 
 ## Ce que les pièces lancées ajoutent à son allure.
 func armor_speed() -> float:
+	if _fire_cells.has(_dragon_cell):
+		return stats.move_speed * INFERNO_SPEED
 	if _pieces.is_empty():
 		return 0.0
 	return PIECE_SPEED_BONUS * float(PIECES_MAX - health.plates)
@@ -3538,6 +3625,213 @@ func _can_pay(ability: Ability) -> bool:
 
 
 # --- L'acier ----------------------------------------------------------------------
+
+# --- Le Chérubin ------------------------------------------------------------------
+
+## NUL N'APPROCHE : chaque coup ouvre un œil sur l'ennemi. Il s'embrase quand cet ennemi arrive
+## au contact, une fois, puis un délai passe avant qu'un nouvel œil ne s'ouvre sur lui.
+func _add_eye(index: int, context: CombatContext) -> void:
+	if not context.enemy_alive(index) or context.is_structure(index) or _eyes.has(index) \
+			or _eye_locks.has(index):
+		return
+	_eyes[index] = true
+	enemy_eyed.emit(index, true)
+
+
+func eyes() -> Dictionary:
+	return _eyes
+
+
+func _update_cherubin(delta: float, context: CombatContext) -> void:
+	for table: Dictionary in [_eye_locks, _veil_locks, _garden_locks]:
+		for index in table.keys():
+			var left: float = table[index] - delta
+			if left <= 0.0:
+				table.erase(index)
+			else:
+				table[index] = left
+	for index: int in _eyes.keys():
+		if index >= context.enemy_cells.size() or not context.enemy_alive(index):
+			_eyes.erase(index)
+			enemy_eyed.emit(index, false)
+			continue
+		var cell: Vector2i = context.enemy_cells[index]
+		if Vector2(cell - context.player_cell).length() > EYE_REACH:
+			continue
+		_eyes.erase(index)
+		_eye_locks[index] = EYE_LOCK
+		enemy_eyed.emit(index, false)
+		eye_burst.emit(cell)
+		_apply_damage(index, Ability.make({"id": stats.id + "_oeil", "kind": Ability.Kind.BLAST,
+			"element": stats.element, "damage": EYE_DAMAGE}), context, false, false)
+	if not _whirl.is_empty():
+		_spin_whirl(delta, context)
+	if _veil != null and _immune_left > 0.0:
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or context.is_structure(i) or context.bosses.has(i) \
+					or _veil_locks.has(i):
+				continue
+			if Vector2(context.enemy_cells[i] - context.player_cell).length() > EYE_REACH:
+				continue
+			_veil_locks[i] = VEIL_LOCK
+			if _push_away(i, context, _veil.repel_cells) > 0:
+				veil_repelled.emit(context.enemy_cells[i])
+	if not _garden.is_empty():
+		_tend_garden(delta, context)
+
+
+## Le GLAIVE TOURNOYANT. Relancer le remet à neuf : deux glaives doubleraient la cadence en silence.
+func _cast_whirl(ability: Ability) -> bool:
+	_whirl = {"left": ability.duration, "tick": 0.0, "ability": ability}
+	whirl_started.emit(ability.duration, ability.radius)
+	return true
+
+
+func _spin_whirl(delta: float, context: CombatContext) -> void:
+	var ability: Ability = _whirl["ability"]
+	_whirl["left"] = float(_whirl["left"]) - delta
+	_whirl["tick"] = float(_whirl["tick"]) - delta
+	if float(_whirl["tick"]) <= 0.0:
+		_whirl["tick"] = float(_whirl["tick"]) + ability.whirl_interval
+		for i in _creatures_within(context.player_cell, ability.radius, context):
+			var cell: Vector2i = context.enemy_cells[i]
+			_apply_damage(i, ability, context)
+			whirl_cut.emit(cell)
+	if float(_whirl["left"]) <= 0.0:
+		_whirl = {}
+
+
+func whirling() -> bool:
+	return not _whirl.is_empty()
+
+
+## Les ROUES D'ÉZÉCHIEL : deux vagues, l'une vers l'ennemi le plus proche, l'autre dans l'autre
+## sens. Elles suivent le couloir et tournent avec lui, sans jamais revenir sur leurs pas.
+func _cast_wheels(ability: Ability, context: CombatContext) -> bool:
+	var first: Array[Vector2i] = []
+	var target := find_target(ability, context)
+	if target >= 0:
+		var route := trajectory(context.player_cell, context.enemy_cells[target])
+		for i in range(1, mini(route.size(), ability.range + 1)):
+			first.append(route[i])
+	var facing := context.player_facing if context.player_facing != Vector2i.ZERO else Vector2i.DOWN
+	if first.is_empty():
+		first = _rolling_path(context.player_cell, facing, ability.range)
+	var away := -(first[0] - context.player_cell) if not first.is_empty() else -facing
+	var second := _rolling_path(context.player_cell, away, ability.range)
+	if second.is_empty():
+		for side: Vector2i in MazeGrid.NEIGHBORS:
+			if first.is_empty() or side != first[0] - context.player_cell:
+				second = _rolling_path(context.player_cell, side, ability.range)
+				if not second.is_empty():
+					break
+	if first.is_empty() and second.is_empty():
+		use_refused.emit("mur")
+		return false
+	for path: Array[Vector2i] in [first, second]:
+		if path.is_empty():
+			continue
+		var duration := float(path.size()) / maxf(1.0, ability.wave_speed)
+		_waves.append({"ability": ability, "path": path, "index": 0,
+			"step": duration / float(path.size()), "timer": 0.0, "hit": {}})
+		wave_launched.emit(ability, path, duration)
+	return true
+
+
+## Un chemin qui suit le couloir : tout droit tant qu'il peut, et il tourne quand le couloir tourne.
+func _rolling_path(start: Vector2i, direction: Vector2i, reach: int) -> Array[Vector2i]:
+	var path: Array[Vector2i] = []
+	var cell := start
+	var heading := direction
+	var seen := {start: true}
+	for _step in reach:
+		var next := cell + heading
+		if not grid.is_floor_v(next) or seen.has(next):
+			var turned := false
+			for side: Vector2i in MazeGrid.NEIGHBORS:
+				if side == heading or side == -heading:
+					continue
+				if grid.is_floor_v(cell + side) and not seen.has(cell + side):
+					heading = side
+					next = cell + side
+					turned = true
+					break
+			if not turned:
+				break
+		cell = next
+		seen[cell] = true
+		path.append(cell)
+	return path
+
+
+## LE JARDIN GARDÉ. Le cercle reste là où l'épée est plantée. Les boss n'en sont pas rejetés : ils
+## y entrent, et brûlent à chaque seconde.
+func _cast_garden(ability: Ability, context: CombatContext) -> bool:
+	_garden = {"cell": context.player_cell, "left": ability.duration, "tick": 1.0, "ability": ability}
+	_garden_locks.clear()
+	if ability.heal_self > 0:
+		var gained := health.heal(ability.heal_self)
+		if gained > 0:
+			player_healed.emit(gained)
+	garden_planted.emit(context.player_cell, ability.radius, ability.duration)
+	_tend_garden(0.0, context)
+	return true
+
+
+func garden() -> Dictionary:
+	return _garden
+
+
+## Tout ennemi dans le cercle en est rejeté à CHAQUE image, et ne brûle qu'une fois par délai : il
+## ne peut pas avancer d'une case dedans en profitant de son verrou.
+func _tend_garden(delta: float, context: CombatContext) -> void:
+	var ability: Ability = _garden["ability"]
+	var centre: Vector2i = _garden["cell"]
+	_garden["left"] = float(_garden["left"]) - delta
+	_garden["tick"] = float(_garden["tick"]) - delta
+	var burn := float(_garden["tick"]) <= 0.0
+	if burn:
+		_garden["tick"] = float(_garden["tick"]) + 1.0
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var cell: Vector2i = context.enemy_cells[i]
+		if Vector2(cell - centre).length() >= ability.radius:
+			continue
+		if context.bosses.has(i):
+			if burn:
+				_apply_damage(i, ability, context, false)
+			continue
+		var out := _garden_exit(cell, centre, ability.radius)
+		if out != cell:
+			context.enemy_cells[i] = out
+			enemy_pushed.emit(i, out)
+		if not _garden_locks.has(i):
+			_garden_locks[i] = GARDEN_LOCK
+			garden_repelled.emit(out)
+			_apply_damage(i, ability, context, false)
+	if float(_garden["left"]) <= 0.0:
+		garden_ended.emit(centre)
+		_garden = {}
+
+
+## La case libre la plus proche HORS du cercle, par les couloirs : un rejet ne passe pas les haies.
+func _garden_exit(from: Vector2i, centre: Vector2i, radius: float) -> Vector2i:
+	var queue: Array[Vector2i] = [from]
+	var seen := {from: true}
+	var head := 0
+	while head < queue.size() and head < 400:
+		var cell := queue[head]
+		head += 1
+		if Vector2(cell - centre).length() >= radius and not grid.is_occupied(cell):
+			return cell
+		for side: Vector2i in MazeGrid.NEIGHBORS:
+			var next: Vector2i = cell + side
+			if grid.is_floor_v(next) and not seen.has(next):
+				seen[next] = true
+				queue.append(next)
+	return from
+
 
 # --- L'Archange du Ciel ------------------------------------------------------------
 
@@ -3809,6 +4103,225 @@ func _strike_last_hour(index: int, ability: Ability, context: CombatContext) -> 
 		_marked.erase(index)
 		_gain_soul()
 		enemy_killed.emit(index)
+
+
+# --- Le Dragon des Abysses ---------------------------------------------------------
+#
+# Il met le feu au SOL. Ses cases en feu rongent ce qui s'y tient, le font aller plus vite, et
+# une proie qui brûle le soigne quand il la mord. Tout se joue ici, pour que l'équilibrage voie
+# les mêmes règles que le jeu.
+
+func _ignite_cells(cells: Array, seconds: float) -> void:
+	var lit := []
+	for cell: Vector2i in cells:
+		if not grid.is_floor_v(cell):
+			continue
+		_fire_cells[cell] = maxf(float(_fire_cells.get(cell, 0.0)), seconds)
+		lit.append(cell)
+	if not lit.is_empty():
+		ground_ignited.emit(lit, seconds)
+
+
+## La brûlure du Feu, réglée en dégâts par seconde au lieu d'une part du coup.
+func _ignite(index: int, dps: int, seconds: float) -> void:
+	if dps <= 0 or seconds <= 0.0:
+		return
+	var ticks := maxi(1, int(round(seconds / BURN_TICK)))
+	_burning[index] = {"ticks": ticks, "timer": BURN_TICK, "damage": maxi(1, int(round(dps * BURN_TICK)))}
+	enemy_burning.emit(index, ticks * BURN_TICK)
+
+
+func _is_aflame(index: int, context: CombatContext) -> bool:
+	return _burning.has(index) or _fire_cells.has(context.enemy_cells[index])
+
+
+func fire_cells() -> Dictionary:
+	return _fire_cells
+
+
+func scales_up() -> bool:
+	return _scales != null
+
+
+func _update_dragon(delta: float, context: CombatContext) -> void:
+	_dragon_cell = context.player_cell
+	if not _fire_cells.is_empty():
+		var faded := []
+		for cell: Vector2i in _fire_cells.keys():
+			var left: float = float(_fire_cells[cell]) - delta
+			if left <= 0.0:
+				_fire_cells.erase(cell)
+				faded.append(cell)
+			else:
+				_fire_cells[cell] = left
+		if not faded.is_empty():
+			ground_faded.emit(faded)
+		_fire_tick -= delta
+		if _fire_tick <= 0.0:
+			_fire_tick = ZONE_TICK
+			var slice := Ability.make({"id": "terre_brulee", "display_name": "Terre brûlée",
+				"kind": Ability.Kind.ZONE, "element": Element.Kind.INFERNO,
+				"damage": maxi(1, int(round(FIRE_CELL_DAMAGE * ZONE_TICK)))})
+			for i in context.enemy_cells.size():
+				if context.enemy_alive(i) and not context.is_structure(i) \
+						and _fire_cells.has(context.enemy_cells[i]):
+					_apply_damage(i, slice, context, false, false)
+	if _scales != null:
+		# Les écailles brûlent ce qui vient à son contact.
+		_scales_tick -= delta
+		if _scales_tick <= 0.0:
+			_scales_tick = ZONE_TICK
+			for i in _creatures_within(context.player_cell, 1.0, context):
+				if not _burning.has(i):
+					_ignite(i, _scales.burn_dps, FIRE_CELL_SECONDS)
+		# Elles cèdent au premier coup, ou à l'échéance.
+		if health.shield <= 0 or _shield_left <= 0.0:
+			_burst_scales(context)
+	if not _shadow.is_empty():
+		for strike in _shadow.duplicate():
+			strike["left"] = float(strike["left"]) - delta
+			if float(strike["left"]) > 0.0:
+				continue
+			_shadow.erase(strike)
+			var index: int = strike["index"]
+			if not context.enemy_alive(index):
+				continue
+			var ability: Ability = strike["ability"]
+			shadow_column.emit(context.enemy_cells[index], bool(strike["first"]))
+			var column := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST,
+				"element": ability.element, "damage": ability.damage})
+			_apply_damage(index, column, context, false, true)
+		if _shadow.is_empty():
+			shadow_ended.emit()
+
+
+## Le Souffle infernal : un jet qui SUIT le couloir devant lui, comme la vague.
+func _cast_breath(ability: Ability, context: CombatContext) -> bool:
+	var facing := context.player_facing
+	if facing == Vector2i.ZERO:
+		facing = Vector2i.DOWN
+	var path := _corridor_ahead(context.player_cell, facing, ability.range)
+	if path.is_empty():
+		use_refused.emit("mur")
+		return false
+	var cells := []
+	var on_path := {}
+	for cell in path:
+		cells.append(cell)
+		on_path[cell] = true
+	breath_cast.emit(context.player_cell, cells, ability.ground_fire)
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and on_path.has(context.enemy_cells[i]):
+			_apply_damage(i, ability, context)
+	_ignite_cells(cells, ability.ground_fire)
+	return true
+
+
+## La Morsure : il bondit jusqu'au contact de l'ennemi le plus proche, par les couloirs.
+func _cast_bite(ability: Ability, context: CombatContext) -> bool:
+	var field := _field_from(context.player_cell)
+	var target := -1
+	var best := ability.range + 1
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and distance < best:
+			best = distance
+			target = i
+	if target < 0:
+		use_refused.emit("cible")
+		return false
+	if best > 1 and player_rooted():
+		use_refused.emit("immobile")
+		return false
+	var prey: Vector2i = context.enemy_cells[target]
+	var toward := _field_from(prey)
+	var to := context.player_cell
+	while Pathfinder.value_at(grid, toward, to) > 1:
+		to = Pathfinder.step_toward(grid, toward, to) + to
+	if to != context.player_cell:
+		blink_performed.emit(context.player_cell, to)
+	var devoured := _is_aflame(target, context)
+	dragon_bit.emit(target, prey, devoured)
+	_apply_damage(target, ability, context)
+	if devoured:
+		var gained := health.heal(ability.bite_heal)
+		if gained > 0:
+			player_healed.emit(gained)
+	return true
+
+
+func _cast_scales(ability: Ability) -> bool:
+	health.add_shield(ability.damage)
+	_shield_left = ability.duration
+	_scales = ability
+	_scales_tick = 0.0
+	player_shielded.emit(ability.damage, ability.duration)
+	scales_raised.emit(ability.duration)
+	return true
+
+
+func _burst_scales(context: CombatContext) -> void:
+	var ability := _scales
+	_scales = null
+	scales_burst.emit(context.player_cell, ability.shard_count, ability.radius)
+	var shard := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST,
+		"element": ability.element, "damage": ability.shard_damage})
+	for i in _creatures_within(context.player_cell, ability.radius, context):
+		_apply_damage(i, shard, context, false, true)
+
+
+## Le Battement d'ailes : ce qui l'entoure est repoussé et prend feu, et lui recule d'un bond.
+## Les boss brûlent, mais ne bougent pas.
+func _cast_wingbeat(ability: Ability, context: CombatContext) -> bool:
+	wings_beaten.emit(context.player_cell, ability.radius)
+	for i in _creatures_within(context.player_cell, ability.radius, context):
+		_apply_damage(i, ability, context)
+		if not context.enemy_alive(i):
+			continue
+		_ignite(i, ability.burn_dps, ability.duration)
+		if not context.bosses.has(i):
+			_push_away(i, context, ability.blow_cells)
+	if player_rooted():
+		return true
+	var back := -context.player_facing
+	if back == Vector2i.ZERO:
+		back = Vector2i.UP
+	var to := context.player_cell
+	for _step in ability.range:
+		var next: Vector2i = to + back
+		if not grid.is_floor_v(next) or grid.is_occupied(next):
+			break
+		to = next
+	if to != context.player_cell:
+		blink_performed.emit(context.player_cell, to)
+	return true
+
+
+## L'Ombre du Dragon : tout ce qui est à l'écran brûle, puis explose dans l'ordre où l'ombre passe.
+func _cast_dragon_shadow(ability: Ability, context: CombatContext) -> bool:
+	var direction := context.player_facing
+	if direction == Vector2i.ZERO:
+		direction = Vector2i.RIGHT
+	var targets := _creatures_in_sky(context.player_cell, ability.radius, context)
+	var axis := Vector2(direction)
+	targets.sort_custom(func(a: int, b: int) -> bool:
+		return Vector2(context.enemy_cells[a]).dot(axis) < Vector2(context.enemy_cells[b]).dot(axis))
+	var cells := []
+	var indices := []
+	for k in targets.size():
+		var i: int = targets[k]
+		indices.append(i)
+		cells.append(context.enemy_cells[i])
+		_ignite(i, ability.burn_dps, ability.duration)
+		_shadow.append({"index": i, "left": SHADOW_DELAY + SHADOW_GAP * k, "first": k == 0,
+			"ability": ability})
+	dragon_shadow_cast.emit(context.player_cell, direction, indices, SHADOW_DELAY)
+	_ignite_cells(cells, ability.ground_fire)
+	if targets.is_empty():
+		shadow_ended.emit()
+	return true
 
 
 # --- Invocations ------------------------------------------------------------------
@@ -4225,6 +4738,11 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 		Element.Kind.COLDFIRE:
 			if ability == stats.attack:
 				_add_shackle_hit(index, context)
+		Element.Kind.INFERNO:
+			if ability == stats.attack and context.enemy_alive(index):
+				_ignite_cells([context.enemy_cells[index]], FIRE_CELL_SECONDS)
+		Element.Kind.SACRED:
+			_add_eye(index, context)
 		Element.Kind.STEEL:
 			if _molten_left > 0.0 and ability == stats.attack and context.enemy_alive(index):
 				_push_away(index, context, MOLTEN_PUSH)

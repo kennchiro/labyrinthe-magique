@@ -84,6 +84,8 @@ const PAINTED := {
 		"length": 1.25, "height": 1.15, "lead": 0.2, "sparks": 0.0},
 	"poing_braise": {"shader": preload("res://assets/shaders/braise_traine.gdshader"),
 		"length": 1.6, "height": 0.9, "lead": 0.3, "sparks": 0.0},
+	"crachat_magma": {"shader": preload("res://assets/shaders/dragon_traine.gdshader"),
+		"length": 1.6, "height": 0.9, "lead": 0.3, "sparks": 0.0},
 	"griffe_sang": {"shader": preload("res://assets/shaders/demon_griffe.gdshader"),
 		"length": 1.45, "height": 0.82, "lead": 0.3, "sparks": 0.0},
 	"onde_marteau": {"shader": preload("res://assets/shaders/acier_wave.gdshader"),
