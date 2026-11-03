@@ -443,6 +443,37 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.brawl_struck.connect(_on_brawl_struck)
 	combat.bond_struck.connect(_on_bond_struck)
 	combat.enemy_swapped.connect(_on_enemy_swapped)
+	combat.piece_ejected.connect(_on_piece_ejected)
+	combat.piece_struck.connect(_on_piece_struck)
+	combat.piece_recalled.connect(_on_piece_recalled)
+	combat.piece_returned.connect(_on_piece_returned)
+	combat.hunters_cast.connect(_on_hunters_cast)
+	combat.chest_posed.connect(_on_chest_posed)
+	combat.chest_bit.connect(_on_chest_bit)
+	combat.chest_spat.connect(_on_chest_spat)
+	combat.recall_cast.connect(_on_recall_cast)
+	combat.decoy_posed.connect(_on_decoy_posed)
+	combat.decoy_blew.connect(_on_decoy_blew)
+	combat.decoy_field.connect(_on_decoy_field)
+	combat.cages_cast.connect(_on_cages_cast)
+	combat.cages_crushed.connect(_on_cages_crushed)
+	combat.enemy_cuts.connect(_on_enemy_cuts)
+	combat.dash_cut.connect(_on_dash_cut)
+	combat.guard_raised.connect(_on_guard_raised)
+	combat.guard_parried.connect(_on_guard_parried)
+	combat.sheathe_begun.connect(_on_sheathe_begun)
+	combat.cut_burst.connect(_on_cut_burst)
+	combat.sheathe_ended.connect(_on_sheathe_ended)
+	combat.enemy_shackled.connect(_on_enemy_shackled)
+	combat.enemy_hooked.connect(_on_enemy_hooked)
+	combat.enemies_frozen.connect(_on_enemies_frozen)
+	combat.soul_chains_cast.connect(_on_soul_chains_cast)
+	combat.gaol_cast.connect(_on_gaol_cast)
+	combat.gaol_ended.connect(_on_gaol_ended)
+	combat.enemies_dazed.connect(_on_enemies_dazed)
+	combat.flight_started.connect(_on_flight_started)
+	combat.flight_ended.connect(_on_flight_ended)
+	combat.flight_landed.connect(_on_flight_landed)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -556,6 +587,8 @@ func _process(delta: float) -> void:
 	_update_spores(delta, stopped)
 	_update_rage()
 	_update_discord_threads()
+	_update_king_armor()
+	_update_gaoler_chains()
 	_update_boss(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
@@ -590,8 +623,12 @@ func _update_pickups(delta: float) -> void:
 	if player == null:
 		return
 	var player_position := player.mover.grid_position()
+	# En vol, il ne ramasse rien : une gemme survolée reste au sol.
+	var aloft := combat != null and combat.flying()
 
 	for i in range(gems.size() - 1, -1, -1):
+		if aloft:
+			break
 		var gem: Gem = gems[i]
 		if not is_instance_valid(gem):
 			gems.remove_at(i)
@@ -601,6 +638,8 @@ func _update_pickups(delta: float) -> void:
 		_collect_gem(i)
 
 	for i in range(potions.size() - 1, -1, -1):
+		if aloft:
+			break
 		var potion: Potion = potions[i]
 		if not is_instance_valid(potion):
 			potions.remove_at(i)
@@ -767,7 +806,7 @@ func _enemy_cells() -> Array[Vector2i]:
 func _refresh_context() -> void:
 	if combat_context == null or player == null:
 		return
-	combat_context.player_cell = player.mover.nearest_cell()
+	combat_context.player_cell = _grounded(player.mover.nearest_cell())
 	combat_context.player_facing = player.facing()
 	combat_context.player_field = _player_field
 	var cells := _enemy_cells()
@@ -906,7 +945,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde"]
+	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -1030,7 +1069,7 @@ func _load_character_fx() -> void:
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "test"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "test"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1150,6 +1189,10 @@ func _texture_or_null(path: String) -> Texture2D:
 
 
 func _on_projectile_launched(ability: Ability, index: int, path: Array, duration: float) -> void:
+	if ability.from_sky and not path.is_empty():
+		_cast_target = maze_renderer.cell_to_world(path[path.size() - 1])
+		_sky_falls(ability, path[path.size() - 1], duration)
+		return
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
@@ -1195,6 +1238,10 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 		texture, frames, ability.projectile_scale, ability.trail_density,
 		ability.flames, grows, fps, charge)
 	orb.paint(ability.projectile_visual, ability.projectile_scale)
+	if ability.projectile_visual == "poing_braise":
+		_arm_fist(orb, BRAISE_PIECES + "gant_ferme.png")
+	elif ability.projectile_visual == "poing_spectral":
+		_arm_fist(orb, GAOLER_PIECES + "poing.png")
 	# LE TRAIT DU SUPRÊME CHANGE DE MATIÈRE À CHAQUE TIR, comme le dit sa fiche.
 	if ability.projectile_visual == "trait_prisme":
 		_prism_rank = (_prism_rank + 1) % 4
@@ -1203,6 +1250,9 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 
 
 func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
+	if ability.from_sky:
+		_sky_strikes(ability, cell)
+		return
 	if ability.projectile_visual == "onde_marteau":
 		_spawn_painted_burst(cell, 1.5, 0.45, "acier_dash").z_index = 11
 	if _orbs.has(index):
@@ -1619,7 +1669,7 @@ func _update_rage() -> void:
 
 # --- La Démone de la Discorde -------------------------------------------------------
 
-const EYE_RADIUS := 0.62
+const EYE_RADIUS := 0.95
 ## L'entrée de l'extra reste autour d'elle : sur toute la carte, elle cachait ce qui se passait.
 const GREAT_DISCORD_RADIUS := 1.7
 const GREAT_DISCORD_TIME := 1.05
@@ -1693,6 +1743,529 @@ func _update_discord_threads() -> void:
 	_discord_threads.show_state(enemies, combat, TILE_SIZE, player)
 
 
+# --- Le Geôlier --------------------------------------------------------------------
+
+const GAOLER_PIECES := "res://assets/characters/geolier/pieces/"
+const NOVA_RADIUS := 2.7
+const NOVA_TIME := 0.6
+const FROST_RADIUS := 0.9
+const GAOL_RING_TIME_PAD := 0.1
+const SHACKLE_TILES := 0.7
+
+var _gaoler_chains: GaolerChains = null
+var _gaol_flames: Array[PaintedBurst] = []
+var _gaoler_aura: CPUParticles2D = null
+const PALE_COLD := Color("#e6fdff")
+const CYAN_COLD := Color("#16e0e8")
+const DEEP_COLD := Color("#0a6f7a")
+const GAOL_VEIL_TILES := 40.0
+const GAOL_COLUMN_RADIUS := 1.1
+
+
+func _update_gaoler_chains() -> void:
+	if character == null or character.id != "geolier" or player == null:
+		return
+	if _gaoler_chains == null or not is_instance_valid(_gaoler_chains) \
+			or _gaoler_chains.get_parent() != entities:
+		_gaoler_chains = GaolerChains.new()
+		entities.add_child(_gaoler_chains)
+		_gaoler_chains.z_index = 11
+	_gaoler_chains.show_state(enemies, combat, player, TILE_SIZE)
+	_ensure_gaoler_aura()
+
+
+## La flamme froide qui s'échappe de lui en permanence : de petites langues qui montent et s'éteignent.
+func _ensure_gaoler_aura() -> void:
+	if _gaoler_aura != null and is_instance_valid(_gaoler_aura) and _gaoler_aura.get_parent() == player:
+		return
+	_gaoler_aura = CPUParticles2D.new()
+	player.add_child(_gaoler_aura)
+	_gaoler_aura.position = Vector2(0.0, -TILE_SIZE * 0.6)
+	_gaoler_aura.amount = 18
+	_gaoler_aura.lifetime = 0.9
+	_gaoler_aura.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	_gaoler_aura.emission_sphere_radius = TILE_SIZE * 0.35
+	_gaoler_aura.direction = Vector2.UP
+	_gaoler_aura.spread = 25.0
+	_gaoler_aura.gravity = Vector2(0.0, -TILE_SIZE * 1.2)
+	_gaoler_aura.initial_velocity_min = TILE_SIZE * 0.2
+	_gaoler_aura.initial_velocity_max = TILE_SIZE * 0.7
+	_gaoler_aura.scale_amount_min = TILE_SIZE * 0.03
+	_gaoler_aura.scale_amount_max = TILE_SIZE * 0.07
+	var fade := Gradient.new()
+	fade.set_color(0, PALE_COLD)
+	fade.set_color(1, Color(CYAN_COLD, 0.0))
+	_gaoler_aura.color_ramp = fade
+	_gaoler_aura.emitting = true
+
+
+## Une gerbe d'éclats de givre, pour les prises et les bris.
+func _frost_shards(cell: Vector2i, count: int) -> void:
+	var shards := CPUParticles2D.new()
+	entities.add_child(shards)
+	shards.position = maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.5)
+	shards.z_index = 11
+	shards.amount = count
+	shards.lifetime = 0.7
+	shards.one_shot = true
+	shards.explosiveness = 1.0
+	shards.spread = 180.0
+	shards.gravity = Vector2(0.0, TILE_SIZE * 7.0)
+	shards.initial_velocity_min = TILE_SIZE * 2.0
+	shards.initial_velocity_max = TILE_SIZE * 5.5
+	shards.angular_velocity_min = -400.0
+	shards.angular_velocity_max = 400.0
+	shards.scale_amount_min = TILE_SIZE * 0.04
+	shards.scale_amount_max = TILE_SIZE * 0.1
+	shards.color = PALE_COLD
+	shards.finished.connect(shards.queue_free)
+	shards.emitting = true
+
+
+func _cold_streak(from: Vector2i, to: Vector2i, seconds: float) -> void:
+	var streak := BladeDash.new()
+	entities.add_child(streak)
+	streak.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE, seconds)
+	streak.tint(PALE_COLD, CYAN_COLD, DEEP_COLD)
+
+
+func _on_enemy_shackled(index: int, seconds: float) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	var enemy: Enemy = enemies[index]
+	var shackle := Sprite2D.new()
+	shackle.texture = load(GAOLER_PIECES + "manille.png")
+	var unit := SHACKLE_TILES * float(TILE_SIZE) / float(shackle.texture.get_width())
+	shackle.scale = Vector2(unit, unit * 0.5)
+	shackle.z_index = -1
+	shackle.material = KingArmor.metal_material(0.0)
+	enemy.add_child(shackle)
+	get_tree().create_timer(seconds).timeout.connect(func() -> void:
+		if is_instance_valid(shackle):
+			shackle.queue_free())
+	var cell := enemy.mover.nearest_cell()
+	_front_burst(cell, 1.1, 0.4, "geolier_eclat")
+	_spawn_painted_burst(cell, 1.3, 0.9, "geolier_givre")
+	_frost_shards(cell, 12)
+	_shake(0.14, 0.45)
+
+
+func _on_enemy_hooked(index: int, from: Vector2i, to: Vector2i) -> void:
+	if _structure_at(index) != null or index >= enemies.size():
+		return
+	var enemy: Enemy = enemies[index]
+	if _gaoler_chains != null and is_instance_valid(_gaoler_chains):
+		_gaoler_chains.throw_hook(maze_renderer.cell_to_world(from), enemy)
+	_front_burst(from, 1.2, 0.4, "geolier_eclat")
+	_cold_streak(from, to, 0.32)
+	enemy.mover.teleport_to(to)
+	enemy.snap_to_mover()
+	_front_burst(to, 1.5, 0.55, "geolier_eclat")
+	_spawn_painted_burst(to, 1.8, 1.0, "geolier_givre")
+	_frost_shards(to, 16)
+	_spawn_slow_motion(0.08, 0.25)
+	_shake(0.26, 0.7)
+
+
+func _on_enemies_frozen(indices: Array, seconds: float) -> void:
+	# L'Archange du Ciel a ses propres marques, posées par `_on_enemies_dazed`.
+	if character.id == "ciel":
+		return
+	if player != null:
+		var cell := player.mover.nearest_cell()
+		_front_burst(cell, NOVA_RADIUS, NOVA_TIME, "geolier_nova")
+		_spawn_painted_burst(cell, NOVA_RADIUS + 0.4, 1.4, "geolier_givre")
+		_spawn_wave(cell, NOVA_RADIUS * 3.0, 0.5, "geolier_onde")
+		_frost_shards(cell, 22)
+		_spawn_slow_motion(0.08, 0.25)
+	for index: int in indices:
+		if _structure_at(index) != null or index >= enemies.size():
+			continue
+		var enemy: Enemy = enemies[index]
+		var shell := PaintedBurst.new()
+		enemy.add_child(shell)
+		shell.setup(TILE_SIZE, FROST_RADIUS, seconds, float(index) * 0.31, "geolier_gangue")
+		shell.position = Vector2(0.0, -TILE_SIZE * 0.55)
+		shell.z_index = 2
+	_shake(0.28, 0.6)
+
+
+func _on_soul_chains_cast(indices: Array, _seconds: float) -> void:
+	if player != null:
+		_front_burst(player.mover.nearest_cell(), 1.6, 0.5, "geolier_eclat")
+		_spawn_wave(player.mover.nearest_cell(), 7.0, 0.45, "geolier_onde")
+	for index: int in indices:
+		if _structure_at(index) == null and index < enemies.size():
+			var cell: Vector2i = (enemies[index] as Enemy).mover.nearest_cell()
+			_front_burst(cell, 1.1, 0.4, "geolier_choc")
+			_frost_shards(cell, 8)
+	_shake(0.22, 0.5)
+
+
+func _on_gaol_cast(cell: Vector2i, _indices: Array, radius: float, seconds: float) -> void:
+	var veil := _spawn_painted_burst(cell, 3.0, seconds + GAOL_RING_TIME_PAD, "geolier_voile")
+	veil.span_tiles(TILE_SIZE, GAOL_VEIL_TILES)
+	veil.z_index = 3
+	veil.position = player.position
+	var ring := _spawn_painted_burst(cell, 3.0, seconds + GAOL_RING_TIME_PAD, "geolier_cercle")
+	ring.span_tiles(TILE_SIZE, radius * 1.09)
+	ring.z_index = 4
+	ring.position = player.position
+	_spawn_painted_burst(cell, 3.0, 1.6, "geolier_givre")
+	_gaol_flames.clear()
+	for index: int in _indices:
+		if _structure_at(index) != null or index >= enemies.size():
+			continue
+		var enemy: Enemy = enemies[index]
+		var flame := PaintedBurst.new()
+		enemy.add_child(flame)
+		flame.setup(TILE_SIZE, GAOL_COLUMN_RADIUS, seconds, float(index) * 0.21, "geolier_colonne")
+		flame.position = Vector2(0.0, -TILE_SIZE * 0.6)
+		flame.z_index = 2
+		_gaol_flames.append(flame)
+		_frost_shards(enemy.mover.nearest_cell(), 10)
+	_front_burst(cell, 2.4, NOVA_TIME, "geolier_nova")
+	_spawn_wave(cell, radius * 2.6, WAVE_TIME, "geolier_onde")
+	if _gaoler_chains != null and is_instance_valid(_gaoler_chains):
+		_gaoler_chains.raise_gaol()
+	_shake(0.5, 0.9)
+
+
+func _on_gaol_ended(cells: Array) -> void:
+	for flame in _gaol_flames:
+		if is_instance_valid(flame):
+			flame.queue_free()
+	_gaol_flames.clear()
+	for cell: Vector2i in cells:
+		_front_burst(cell, 1.6, 0.7, "geolier_eclat")
+		_frost_shards(cell, 18)
+	if player != null:
+		_spawn_wave(player.mover.nearest_cell(), 18.0, WAVE_TIME, "geolier_onde")
+	_spawn_slow_motion(0.12, 0.2)
+	_shake(0.45, 0.85)
+
+
+# --- Le Chevalier Écarlate ----------------------------------------------------------
+
+const GUARD_RADIUS := 1.25
+const PARRY_RADIUS := 2.6
+const PARRY_TIME := 0.5
+const SHEATHE_RADIUS := 1.6
+## L'éclat grandit avec les entailles : de 1,1 case pour une, à 2,1 pour cinq.
+const CUT_BURST_BASE := 0.85
+const CUT_BURST_STEP := 0.25
+const CUT_BURST_TIME := 0.62
+const DASH_CUT_TIME := 0.36
+## L'image se fige un instant à l'éclat final, comme le souffle retenu du coup de sabre.
+const SHEATHE_SLOW := 0.22
+const SHEATHE_SLOW_SCALE := 0.12
+
+var _guard_ring: PaintedBurst = null
+var _night_layer: CanvasLayer = null
+
+
+func _on_enemy_cuts(index: int, count: int) -> void:
+	if _structure_at(index) == null and index < enemies.size():
+		enemies[index].set_cuts(count)
+
+
+func _on_dash_cut(from: Vector2i, to: Vector2i) -> void:
+	var streak := BladeDash.new()
+	entities.add_child(streak)
+	streak.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE, DASH_CUT_TIME)
+	_shake(0.12, 0.4)
+
+
+func _on_guard_raised(seconds: float) -> void:
+	_on_guard_down()
+	var ring := PaintedBurst.new()
+	player.add_child(ring)
+	ring.setup(TILE_SIZE, GUARD_RADIUS, seconds, 0.3, "ecarlate_garde")
+	ring.position = Vector2(0.0, -TILE_SIZE * 0.45)
+	_guard_ring = ring
+
+
+func _on_guard_down() -> void:
+	if _guard_ring != null and is_instance_valid(_guard_ring):
+		_guard_ring.queue_free()
+	_guard_ring = null
+
+
+func _on_guard_parried(cell: Vector2i) -> void:
+	_on_guard_down()
+	_front_burst(cell, PARRY_RADIUS, PARRY_TIME, "ecarlate_parade")
+	_spawn_slow_motion(0.1, 0.15)
+	_shake(0.26, 0.7)
+
+
+func _on_sheathe_begun(cell: Vector2i, _cells: Array, seconds: float, final: bool) -> void:
+	_front_burst(cell, SHEATHE_RADIUS, seconds, "ecarlate_fourreau")
+	if final:
+		_cover_with_night(seconds)
+		_shake(0.2, 0.5)
+
+
+func _on_cut_burst(cell: Vector2i, count: int) -> void:
+	var burst := _front_burst(cell, CUT_BURST_BASE + CUT_BURST_STEP * float(count), CUT_BURST_TIME, "ecarlate_eclat")
+	(burst.get_child(0) as Sprite2D).material.set_shader_parameter("count", float(count))
+
+
+func _on_sheathe_ended(final: bool) -> void:
+	if final:
+		_lift_night()
+		_spawn_wave_blade()
+		_spawn_slow_motion(SHEATHE_SLOW, SHEATHE_SLOW_SCALE)
+		_shake(0.6, 1.0)
+	else:
+		_spawn_slow_motion(0.08, 0.2)
+		_shake(0.3, 0.7)
+
+
+func _spawn_wave_blade() -> void:
+	if player != null:
+		_front_burst(player.mover.nearest_cell(), 3.0, PARRY_TIME, "ecarlate_parade").span_tiles(TILE_SIZE, WAVE_TILES)
+
+
+func _spawn_slow_motion(seconds: float, factor: float) -> void:
+	Engine.time_scale = factor
+	get_tree().create_timer(seconds, true, false, true).timeout.connect(
+		func() -> void: Engine.time_scale = 1.0)
+
+
+## ⚠️ Sur la fenêtre elle-même : un CanvasLayer enfant du `Level` dessinerait dans la texture du sol.
+func _cover_with_night(seconds: float) -> void:
+	_lift_night()
+	var view := get_tree().root.get_visible_rect().size
+	var veil := ColorRect.new()
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shaded := ShaderMaterial.new()
+	shaded.shader = load("res://assets/shaders/ecarlate_nuit.gdshader")
+	shaded.set_shader_parameter("aspect", view.x / maxf(view.y, 1.0))
+	shaded.set_shader_parameter("seed", 0.37)
+	veil.material = shaded
+	_night_layer = CanvasLayer.new()
+	_night_layer.layer = 1
+	_night_layer.add_child(veil)
+	get_tree().root.add_child(_night_layer)
+	var run := create_tween()
+	run.tween_method(func(value: float) -> void: shaded.set_shader_parameter("progress", value),
+		0.0, 1.0, seconds)
+
+
+func _lift_night() -> void:
+	if _night_layer != null and is_instance_valid(_night_layer):
+		_night_layer.queue_free()
+	_night_layer = null
+
+
+func _exit_tree() -> void:
+	_lift_night()
+
+
+# --- Le Roi de Braise ---------------------------------------------------------------
+
+const BRAISE_PIECES := "res://assets/characters/braise/pieces/"
+const FIST_TILES := 0.82
+const CHEST_BITE_RADIUS := 1.25
+const RECALL_RADIUS := 2.6
+const RECALL_TIME := 0.62
+const HUNTERS_TIME := 0.5
+const CHOC_TIME := 0.32
+## L'explosion du leurre et des cages reste sous ce rayon : plus grande, elle cachait la mêlée.
+const BLAST_TIME := 0.85
+const CRUSH_BLAST_RADIUS := 1.55
+const WAVE_TILES := 16.0
+const WAVE_TIME := 0.8
+const VEIL_TILES := 40.0
+## Le ralenti du dernier instant des cages, en secondes réelles.
+const CRUSH_SLOW := 0.16
+const CRUSH_SLOW_SCALE := 0.2
+
+var _king_armor: KingArmor = null
+var _king_decoy: KingDecoy = null
+var _king_cages: Array[KingCage] = []
+
+
+func _update_king_armor() -> void:
+	if character == null or character.id != "braise" or player == null:
+		return
+	if _king_armor == null or not is_instance_valid(_king_armor) or _king_armor.get_parent() != entities:
+		_king_armor = KingArmor.new()
+		entities.add_child(_king_armor)
+		_king_armor.z_index = 11
+	_king_armor.show_state(combat.pieces(), player, maze_renderer.cell_to_world(Vector2i.ZERO), TILE_SIZE)
+
+
+## Le poing est un dessin posé sur la traînée peinte : il en suit le trajet et la rotation.
+func _arm_fist(orb: MagicOrb, path: String) -> void:
+	var texture: Texture2D = load(path)
+	var fist := Sprite2D.new()
+	fist.texture = texture
+	var quad := orb.sprite.scale / MagicOrb.PAINTED_BIRTH_SCALE
+	var unit := FIST_TILES * float(TILE_SIZE) / float(texture.get_height())
+	fist.scale = Vector2(unit / quad.x, unit / quad.y)
+	# Dessiné poing vers le haut à droite : ce quart de tour le met dans l'axe du vol.
+	fist.rotation = PI / 4.0
+	fist.position = Vector2(0.28, 0.0)
+	fist.material = KingArmor.metal_material(0.25)
+	orb.sprite.add_child(fist)
+
+
+func _shake(seconds: float, power: float) -> void:
+	_shake_total = seconds
+	_shake_left = seconds
+	_shake_time = 0.0
+	_shake_power = power
+
+
+func _front_burst(cell: Vector2i, radius: float, time: float, key: String) -> PaintedBurst:
+	var burst := _spawn_painted_burst(cell, radius, time, key)
+	burst.z_index = 11
+	return burst
+
+
+func _on_piece_ejected(cell: Vector2i) -> void:
+	_front_burst(cell, 1.6, 0.5, "braise_explosion")
+	_spawn_painted_burst(cell, 1.8, 1.0, "braise_fissure")
+	_shake(0.28, 0.5)
+
+
+func _on_piece_struck(cell: Vector2i) -> void:
+	_front_burst(cell, 0.95, CHOC_TIME, "braise_choc")
+	_shake(0.08, 0.2)
+
+
+func _on_piece_recalled(cell: Vector2i) -> void:
+	_front_burst(cell, 0.95, CHOC_TIME, "braise_choc")
+
+
+## La dernière pièce rentre : tout l'écran le sent.
+func _on_piece_returned(recalled: bool) -> void:
+	if not recalled or player == null:
+		return
+	var cell := player.mover.nearest_cell()
+	_front_burst(cell, 1.1, CHOC_TIME, "braise_choc")
+	if combat.plates_left() == CombatSystem.PIECES_MAX:
+		_spawn_painted_burst(cell, 2.4, 1.1, "braise_fissure")
+		_spawn_wave(cell, WAVE_TILES * 0.5, WAVE_TIME * 0.7)
+		_shake(0.3, 0.6)
+
+
+func _spawn_wave(cell: Vector2i, tiles: float, time: float, key: String = "braise_onde") -> void:
+	_front_burst(cell, 3.0, time, key).span_tiles(TILE_SIZE, tiles)
+
+
+func _on_hunters_cast(cell: Vector2i) -> void:
+	_front_burst(cell, 1.4, HUNTERS_TIME, "braise_rappel")
+	_shake(0.12, 0.3)
+
+
+func _on_chest_posed(cell: Vector2i) -> void:
+	_spawn_painted_burst(cell, 1.9, 1.2, "braise_fissure")
+	_spawn_wave(cell, 4.0, 0.45)
+	_shake(0.18, 0.45)
+
+
+func _on_chest_bit(cell: Vector2i, seconds: float) -> void:
+	if seconds > 0.0:
+		_front_burst(cell, CHEST_BITE_RADIUS, seconds, "braise_gueule")
+	_front_burst(cell, 1.3, 0.45, "braise_explosion")
+	_spawn_painted_burst(cell, 1.9, 1.3, "braise_fissure")
+	_shake(0.24, 0.6)
+
+
+func _on_chest_spat(cell: Vector2i) -> void:
+	_front_burst(cell, 1.3, 0.45, "braise_choc")
+
+
+func _on_recall_cast(cell: Vector2i) -> void:
+	_front_burst(cell, RECALL_RADIUS, RECALL_TIME, "braise_rappel")
+	_shake(0.3, 0.4)
+
+
+func _on_decoy_posed(cell: Vector2i, seconds: float) -> void:
+	_on_decoy_gone()
+	_spawn_painted_burst(cell, 1.6, seconds, "braise_sceau")
+	_king_decoy = KingDecoy.new()
+	entities.add_child(_king_decoy)
+	_king_decoy.position = maze_renderer.cell_to_world(cell)
+	_king_decoy.setup(player, seconds)
+
+
+func _on_decoy_gone() -> void:
+	if _king_decoy != null and is_instance_valid(_king_decoy):
+		_king_decoy.queue_free()
+	_king_decoy = null
+
+
+func _on_decoy_blew(cell: Vector2i, radius: float) -> void:
+	_on_decoy_gone()
+	_front_burst(cell, radius, BLAST_TIME, "braise_explosion")
+	_spawn_painted_burst(cell, radius + 0.4, 1.4, "braise_fissure")
+	_spawn_wave(cell, radius * 3.0, 0.5)
+	KingCage.scatter(entities, maze_renderer.cell_to_world(cell), TILE_SIZE)
+	_shake(0.4, 0.8)
+
+
+func _on_decoy_field(field: PackedInt32Array) -> void:
+	for enemy in enemies:
+		if enemy.ai != null and not enemy.is_boss():
+			enemy.ai.lure_field = field
+
+
+func _on_cages_cast(cell: Vector2i, indices: Array, seconds: float) -> void:
+	var veil := _spawn_painted_burst(cell, 3.0, seconds + 0.1, "braise_voile")
+	veil.span_tiles(TILE_SIZE, VEIL_TILES)
+	# Sous les acteurs et les cages, sur le sol : seul ce qui brûle reste éclairé.
+	veil.z_index = 3
+	veil.position = player.position
+	_spawn_wave(cell, WAVE_TILES, WAVE_TIME)
+	_spawn_painted_burst(cell, 2.6, 1.5, "braise_fissure")
+	_front_burst(cell, 1.5, 0.45, "braise_explosion")
+	_shake(0.45, 0.9)
+	_king_cages.clear()
+	var near: Array = indices.duplicate()
+	var from := player.position
+	near.sort_custom(func(a: int, b: int) -> bool:
+		return (enemies[a] as Enemy).position.distance_squared_to(from) \
+			< (enemies[b] as Enemy).position.distance_squared_to(from))
+	var rank := 0
+	for index: int in near:
+		if index >= enemies.size():
+			continue
+		var cage := KingCage.new()
+		entities.add_child(cage)
+		cage.setup(enemies[index], TILE_SIZE, seconds, KingCage.FIRST_FALL + float(rank) * KingCage.FALL_STEP)
+		cage.landed.connect(_on_cage_landed)
+		_king_cages.append(cage)
+		rank += 1
+
+
+func _on_cage_landed(at: Vector2) -> void:
+	var cell := Vector2i(((at - maze_renderer.cell_to_world(Vector2i.ZERO)) / float(TILE_SIZE)).round())
+	_front_burst(cell, 1.1, CHOC_TIME, "braise_choc")
+	_spawn_painted_burst(cell, 1.5, 1.0, "braise_fissure")
+	_shake(0.16, 0.55)
+
+
+func _on_cages_crushed(cells: Array) -> void:
+	for cage in _king_cages:
+		if is_instance_valid(cage):
+			cage.crush()
+	_king_cages.clear()
+	for cell: Vector2i in cells:
+		_front_burst(cell, CRUSH_BLAST_RADIUS, BLAST_TIME, "braise_explosion")
+	if player != null:
+		_spawn_wave(player.mover.nearest_cell(), WAVE_TILES * 1.3, WAVE_TIME)
+	_shake(0.6, 1.0)
+	# L'instant se dilate une fraction de seconde : ce sont les règles qui attendent aussi, mais
+	# ce temps est trop court pour que l'équilibrage le sente.
+	Engine.time_scale = CRUSH_SLOW_SCALE
+	get_tree().create_timer(CRUSH_SLOW, true, false, true).timeout.connect(
+		func() -> void: Engine.time_scale = 1.0)
+
+
 # --- L'Archange d'Acier -------------------------------------------------------------
 
 ## Il grandit d'un quart et rougeoie tant que dure l'armure en fusion.
@@ -1736,12 +2309,18 @@ func _spawn_hammer_strike(path: Array, points: PackedVector2Array, duration: flo
 
 
 func _on_blades_thrown(from: Vector2i, directions: Array, reach: int) -> void:
+	if character.id == "ciel":
+		_throw_feathers(from, directions, reach)
+		return
 	var volley := SteelBlades.new()
 	entities.add_child(volley)
 	volley.setup(maze_renderer.cell_to_world(from), directions, float(reach * TILE_SIZE), TILE_SIZE, player)
 
 
 func _on_blade_cut(cell: Vector2i) -> void:
+	if character.id == "ciel":
+		_front_burst(cell, 0.85, 0.32, "ciel_entaille")
+		return
 	_spawn_painted_burst(cell, 0.8, 0.28, "acier_impact").z_index = 11
 
 
@@ -1777,6 +2356,250 @@ func _spawn_on_player(duration: float, key: String, radius: float) -> void:
 	worn.setup(TILE_SIZE, radius, duration, 0.0, key)
 	worn.position = Vector2(0.0, -TILE_SIZE * 0.55)
 	worn.z_index = 2
+
+
+# --- L'Archange du Ciel -------------------------------------------------------------
+
+const SKY_PALE := Color("#f4fff8")
+const SKY_GOLD := Color("#f2c14e")
+## Ce qui tombe du ciel est dessiné dans un quad haut, (largeur, hauteur) en cases. Le sol y est
+## à `SKY_GROUND` de la hauteur : c'est là que la pointe touche la case visée.
+const LANCE_SIZE := Vector2(1.5, 5.0)
+const SWORD_SIZE := Vector2(1.5, 5.5)
+const PILLAR_SIZE := Vector2(3.6, 7.5)
+const PILLAR_TIME := 1.0
+## La part de `PILLAR_TIME` que met la colonne à toucher le sol (`ciel_colonne`).
+const PILLAR_SLAM := 0.12
+const SKY_GROUND := 0.97
+const BELL_WAVE_TIME := 0.9
+const JUDGEMENT_VEIL_TILES := 40.0
+## L'Envol : de combien de cases le dessin s'élève, et de combien il grandit.
+const FLIGHT_LIFT := 0.55
+const FLIGHT_GROWTH := 1.12
+const FLIGHT_RISE := 0.3
+const FLIGHT_DROP := 0.2
+
+var _flight_feathers: CPUParticles2D = null
+
+
+## La case où il compte pour les ennemis et les sorts. En vol au-dessus d'une haie, c'est la case
+## de sol la plus proche : depuis un mur, aucun champ de distances ne mène nulle part.
+func _grounded(cell: Vector2i) -> Vector2i:
+	if combat == null or not combat.flying() or grid.is_floor_v(cell):
+		return cell
+	return _nearest_floor(cell)
+
+
+func _nearest_floor(cell: Vector2i) -> Vector2i:
+	if grid.is_floor_v(cell):
+		return cell
+	for ring in range(1, 8):
+		var best := Vector2i(-1, -1)
+		var best_gap := INF
+		for dx in range(-ring, ring + 1):
+			for dy in range(-ring, ring + 1):
+				var side := cell + Vector2i(dx, dy)
+				var gap := Vector2(dx, dy).length()
+				if gap < best_gap and grid.is_floor_v(side):
+					best = side
+					best_gap = gap
+		if best.x >= 0:
+			return best
+	return cell
+
+
+## Un coup qui tombe du ciel, debout dans les deux vues : sa pointe touche la case à la fin.
+func _sky_drop(cell: Vector2i, key: String, size: Vector2, seconds: float) -> PaintedBurst:
+	var drop := _spawn_painted_burst(cell, 1.0, seconds, key)
+	var shaft := drop.get_child(0) as Sprite2D
+	shaft.scale = size * TILE_SIZE
+	shaft.position = Vector2(0.0, -(SKY_GROUND - 0.5) * size.y * TILE_SIZE)
+	drop.z_index = 12
+	return drop
+
+
+## Ce qui se voit AVANT le coup : c'est ce qui dit au joueur que le coup a passé la haie.
+func _sky_falls(ability: Ability, cell: Vector2i, duration: float) -> void:
+	if ability.radius > 0.0:
+		_spawn_painted_burst(cell, ability.radius, duration + PILLAR_TIME * 0.3, "ciel_cercle")
+		var slam := create_tween()
+		slam.tween_interval(maxf(0.0, duration - PILLAR_SLAM * PILLAR_TIME))
+		slam.tween_callback(_sky_drop.bind(cell, "ciel_colonne", PILLAR_SIZE, PILLAR_TIME))
+		return
+	_spawn_painted_burst(cell, 0.75, duration + 0.12, "ciel_sceau")
+	_sky_drop(cell, "ciel_lance", LANCE_SIZE, duration)
+
+
+func _sky_strikes(ability: Ability, cell: Vector2i) -> void:
+	if ability.radius > 0.0:
+		_front_burst(cell, 1.7, 0.55, "ciel_choc")
+		_sky_sparks(cell, 22)
+		_shake(0.32, 0.75)
+		_spawn_slow_motion(0.06, 0.3)
+		return
+	_front_burst(cell, 1.0, 0.42, "ciel_choc")
+	_sky_sparks(cell, 6)
+
+
+## Des éclats d'or qui jaillissent du point d'impact et retombent.
+func _sky_sparks(cell: Vector2i, count: int) -> void:
+	var sparks := CPUParticles2D.new()
+	entities.add_child(sparks)
+	sparks.position = maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.3)
+	sparks.z_index = 12
+	sparks.amount = count
+	sparks.lifetime = 0.6
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.spread = 180.0
+	sparks.gravity = Vector2(0.0, TILE_SIZE * 8.0)
+	sparks.initial_velocity_min = TILE_SIZE * 2.0
+	sparks.initial_velocity_max = TILE_SIZE * 5.0
+	sparks.angular_velocity_min = -500.0
+	sparks.angular_velocity_max = 500.0
+	sparks.scale_amount_min = TILE_SIZE * 0.05
+	sparks.scale_amount_max = TILE_SIZE * 0.11
+	sparks.color = SKY_GOLD
+	sparks.finished.connect(sparks.queue_free)
+	sparks.emitting = true
+
+
+func _throw_feathers(from: Vector2i, directions: Array, reach: int) -> void:
+	var volley := SkyFeathers.new()
+	entities.add_child(volley)
+	volley.setup(maze_renderer.cell_to_world(from), directions, float(reach * TILE_SIZE), TILE_SIZE)
+
+
+## La Cloche céleste : la cloche s'illumine à sa ceinture, puis trois anneaux passent les haies.
+func _ring_the_bell(cell: Vector2i, ability: Ability) -> void:
+	var bell := PaintedBurst.new()
+	player.add_child(bell)
+	bell.setup(TILE_SIZE, 0.9, 0.45, 0.0, "ciel_tinte")
+	# À sa hanche, et derrière lui : la cloche sonne, elle ne le cache pas.
+	bell.position = Vector2(TILE_SIZE * 0.35, -TILE_SIZE * 0.45)
+	bell.scale = Vector2.ONE * 0.75
+	bell.z_index = 1
+	_spawn_wave(cell, ability.radius, BELL_WAVE_TIME, "ciel_onde")
+	_shake(0.18, 0.35)
+
+
+## Étourdis par la cloche, ou cloués par la colonne : deux marques différentes.
+func _on_enemies_dazed(indices: Array, seconds: float, ability: Ability) -> void:
+	if character == null or character.id != "ciel":
+		return
+	var pinned := ability.kind == Ability.Kind.PROJECTILE
+	for index: int in indices:
+		if _structure_at(index) != null or index >= enemies.size():
+			continue
+		var enemy: Enemy = enemies[index]
+		var mark := PaintedBurst.new()
+		enemy.add_child(mark)
+		mark.setup(TILE_SIZE, 0.85, seconds, float(index) * 0.37, "ciel_clou" if pinned else "ciel_notes")
+		if pinned:
+			mark.z_index = -1
+		else:
+			mark.position = Vector2(0.0, -TILE_SIZE * 1.3)
+			mark.z_index = 3
+
+
+## Le Jugement : le ciel s'assombrit, six ailes s'ouvrent dans son dos, et l'écran encaisse.
+func _open_six_wings(cell: Vector2i, ability: Ability) -> void:
+	var total := ability.rain_delay + ability.rain_duration + ability.rain_fall + 0.4
+	_spawn_painted_burst(cell, 3.0, total, "ciel_voile").span_tiles(TILE_SIZE, JUDGEMENT_VEIL_TILES)
+	var wings := PaintedBurst.new()
+	player.add_child(wings)
+	wings.setup(TILE_SIZE, 2.4, total, 0.0, "ciel_ailes")
+	wings.position = Vector2(0.0, -TILE_SIZE * 0.75)
+	wings.z_index = -1
+	_front_burst(cell, 1.4, 0.55, "ciel_choc")
+	_sky_sparks(cell, 26)
+	_shake(0.45, 0.9)
+	_spawn_slow_motion(0.12, 0.3)
+
+
+func _sword_incoming(cell: Vector2i, delay: float, ability: Ability) -> void:
+	_spawn_painted_burst(cell, 0.95, delay + 0.1, "ciel_sceau_or")
+	var fall := create_tween()
+	fall.tween_interval(maxf(0.0, delay - ability.rain_fall))
+	fall.tween_callback(_sky_drop.bind(cell, "ciel_epee", SWORD_SIZE, ability.rain_fall))
+
+
+func _sword_landed(cell: Vector2i) -> void:
+	_front_burst(cell, 1.35, 0.45, "ciel_choc")
+	_sky_sparks(cell, 10)
+	_shake(0.12, 0.4)
+
+
+## L'Envol. Seul le dessin s'élève : l'ombre reste au sol et dit où il retombera.
+func _on_flight_started(_duration: float, _ability: Ability) -> void:
+	if player == null:
+		return
+	player.cancel_path()
+	player.mover.phases = true
+	# Ses ailes s'ouvrent DANS SON DOS, à hauteur d'épaules, et l'anneau du shader tombe au sol.
+	var wings := PaintedBurst.new()
+	player.add_child(wings)
+	wings.setup(TILE_SIZE, 1.7, 0.55, 0.0, "ciel_envol")
+	wings.position = Vector2(0.0, -TILE_SIZE * 0.9)
+	wings.z_index = -1
+	var rise := create_tween().set_parallel()
+	rise.tween_property(player, "lift", FLIGHT_LIFT * TILE_SIZE, FLIGHT_RISE) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	rise.tween_property(player, "lift_scale", FLIGHT_GROWTH, FLIGHT_RISE)
+	_flight_feathers = CPUParticles2D.new()
+	player.add_child(_flight_feathers)
+	_flight_feathers.position = Vector2(0.0, -TILE_SIZE * (FLIGHT_LIFT + 0.5))
+	_flight_feathers.z_index = -1
+	_flight_feathers.amount = 14
+	_flight_feathers.lifetime = 0.9
+	_flight_feathers.spread = 70.0
+	_flight_feathers.direction = Vector2(0.0, 1.0)
+	_flight_feathers.gravity = Vector2(0.0, TILE_SIZE * 1.5)
+	_flight_feathers.initial_velocity_min = TILE_SIZE * 0.4
+	_flight_feathers.initial_velocity_max = TILE_SIZE * 1.2
+	_flight_feathers.angular_velocity_min = -200.0
+	_flight_feathers.angular_velocity_max = 200.0
+	_flight_feathers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_flight_feathers.emission_rect_extents = Vector2(TILE_SIZE * 0.5, TILE_SIZE * 0.2)
+	_flight_feathers.scale_amount_min = TILE_SIZE * 0.05
+	_flight_feathers.scale_amount_max = TILE_SIZE * 0.09
+	_flight_feathers.color = SKY_PALE
+	_flight_feathers.emitting = true
+
+
+## Il retombe : posé sur la case de sol la plus proche s'il survolait une haie, AVANT que l'onde
+## ne frappe (`CombatSystem._land` lit la case juste après ce signal).
+func _on_flight_ended() -> void:
+	if player == null:
+		return
+	var cell := player.mover.nearest_cell()
+	var landing := _nearest_floor(cell)
+	if landing != cell or not grid.is_floor_v(player.mover.cell) \
+			or not grid.is_floor_v(player.mover.next_cell):
+		player.mover.teleport_to(landing)
+		player.snap_to_mover()
+	player.mover.phases = false
+	_refresh_context()
+	_refresh_ai()
+	var drop := create_tween().set_parallel()
+	drop.tween_property(player, "lift", 0.0, FLIGHT_DROP).set_trans(Tween.TRANS_QUAD) \
+		.set_ease(Tween.EASE_IN)
+	drop.tween_property(player, "lift_scale", 1.0, FLIGHT_DROP)
+	if _flight_feathers != null and is_instance_valid(_flight_feathers):
+		_flight_feathers.emitting = false
+		var feathers := _flight_feathers
+		get_tree().create_timer(1.0).timeout.connect(func() -> void:
+			if is_instance_valid(feathers):
+				feathers.queue_free())
+	_flight_feathers = null
+
+
+func _on_flight_landed(cell: Vector2i, ability: Ability) -> void:
+	var ring := create_tween()
+	ring.tween_interval(FLIGHT_DROP * 0.8)
+	ring.tween_callback(func() -> void:
+		_front_burst(cell, ability.radius + 0.3, 0.6, "ciel_atterrissage")
+		_shake(0.22, 0.5))
 
 
 # --- L'Ange de la Mort -------------------------------------------------------------
@@ -1838,7 +2661,8 @@ func _spawn_soul(path: Array, duration: float) -> void:
 
 
 func _on_soul_struck(cell: Vector2i) -> void:
-	_spawn_painted_burst(cell, 1.0, 0.35, "mort_cut")
+	_front_burst(cell, 1.6, 0.6, "mort_cut")
+	_shake(0.1, 0.3)
 
 
 func _on_last_hour_cast(cell: Vector2i) -> void:
@@ -2031,6 +2855,12 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	if character.id == "demon":
 		_spawn_demon_blast(ability, cell)
 		return
+	if character.id == "ciel":
+		if ability.is_ultimate:
+			_open_six_wings(cell, ability)
+		else:
+			_ring_the_bell(cell, ability)
+		return
 	# L'éclat prend le RAYON RÉEL du sort : le joueur doit voir jusqu'où il a
 	# porté, sinon il ne peut pas apprendre à s'en servir.
 	#
@@ -2155,6 +2985,9 @@ func _on_seals_cast(cell: Vector2i) -> void:
 ## ciel se prépare. Il dure exactement l'attente que le CombatSystem a imposée
 ## aux météores — les deux ne se parlent pas, ils partagent un nombre.
 func _on_incantation_cast(cell: Vector2i, _ability: Ability) -> void:
+	# Ses six ailes s'ouvrent déjà avec le sort (`_open_six_wings`).
+	if character.id == "ciel":
+		return
 	if PAINTED_MAGES.has(character.id):
 		_spawn_painted_burst(cell, 2.4, 0.8, "judgement_burst")
 		return
@@ -2411,7 +3244,14 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		var flight := LightArc.new()
 		entities.add_child(flight)
 		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
-	elif character.id in ["etoiles", "acier", "demon", "discorde"]:
+	elif character.id == "geolier":
+		# Une langue de flamme froide passe à travers la haie, et le givre court des deux côtés.
+		_cold_streak(from, to, 0.45)
+		_spawn_painted_burst(from, 1.4, 0.9, "geolier_givre")
+		_spawn_painted_burst(to, 1.4, 0.9, "geolier_givre")
+		_frost_shards(to, 12)
+		_shake(0.14, 0.4)
+	elif character.id in ["etoiles", "acier", "demon", "discorde", "braise", "ecarlate"]:
 		pass
 	elif character.id == "mort":
 		var passage := DeathPassage.new()
@@ -2422,8 +3262,15 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 	player.mover.teleport_to(to)
 	player.snap_to_mover()
 	_spawn_warp(to, tint, true)
+	_shake(0.16, 0.45)
 	player.play_warp()
 	_refresh_ai()
+
+
+## La fuite se voit aux deux bouts : à une case et 0,42 s, on ne la voyait plus (revue du
+## 2026-11-03, demande du joueur : un effet magique dramatique pour chaque sort).
+const ESCAPE_RADIUS := 1.7
+const ESCAPE_TIME := 0.7
 
 
 ## LA FUITE DE CHAQUE MAGE EST LA SIENNE : le Feu se défait en braises qui montent,
@@ -2433,15 +3280,16 @@ func _spawn_painted_escape(cell: Vector2i) -> void:
 	var puff: CPUParticles2D = null
 	match character.id:
 		"fire":
-			puff = FxTextures.flame_emitter(26, 0.55, TILE_SIZE * 0.34,
+			puff = FxTextures.flame_emitter(64, 0.75, TILE_SIZE * 0.5,
 				Color(1.0, 0.86, 0.3, 0.95), Color(0.85, 0.15, 0.02, 0.0), -TILE_SIZE * 1.6, 180.0)
 			puff.initial_velocity_min = TILE_SIZE * 0.4
 			puff.initial_velocity_max = TILE_SIZE * 2.4
 		"shadow":
-			puff = FxTextures.smoke_emitter(18, 0.7, TILE_SIZE * 0.9, -TILE_SIZE * 0.5)
-			puff.modulate = Color(0.55, 0.3, 0.85)
+			puff = FxTextures.smoke_emitter(44, 0.9, TILE_SIZE * 1.5, -TILE_SIZE * 0.5)
+			# Plus clair qu'avant : une fumée violet sombre disparaissait sur un sol sombre.
+			puff.modulate = Color(0.85, 0.5, 1.25)
 		_:
-			_spawn_painted_burst(cell, 1.0, 0.42, str(PaintedFx.ESCAPE[character.id]))
+			_spawn_painted_burst(cell, ESCAPE_RADIUS, ESCAPE_TIME, str(PaintedFx.ESCAPE[character.id]))
 			return
 	entities.add_child(puff)
 	puff.position = at
@@ -2457,7 +3305,7 @@ func _spawn_warp(cell: Vector2i, tint: Color, arriving: bool) -> void:
 		_spawn_painted_escape(cell)
 		return
 	if DRAWN_MAGES.has(character.id):
-		_spawn_painted_burst(cell, 1.0, 0.42, str(PaintedFx.ESCAPE[character.id]))
+		_spawn_painted_burst(cell, ESCAPE_RADIUS, ESCAPE_TIME, str(PaintedFx.ESCAPE[character.id]))
 	var effect: WarpEffect = WARP_SCENE.instantiate()
 	entities.add_child(effect)
 	effect.position = maze_renderer.cell_to_world(cell)
@@ -2622,6 +3470,9 @@ func _on_enemy_pushed(index: int, cell: Vector2i) -> void:
 ## exactement le temps que le CombatSystem a fixé — les deux ne se parlent plus
 ## ensuite, ils partagent seulement le même délai.
 func _on_meteor_incoming(cell: Vector2i, delay: float, ability: Ability) -> void:
+	if character.id == "ciel":
+		_sword_incoming(cell, delay, ability)
+		return
 	var meteor: Meteor = METEOR_SCENE.instantiate()
 	entities.add_child(meteor)
 	meteor.position = maze_renderer.cell_to_world(cell)
@@ -2656,6 +3507,9 @@ func _on_meteor_incoming(cell: Vector2i, delay: float, ability: Ability) -> void
 
 
 func _on_meteor_landed(cell: Vector2i, ability: Ability) -> void:
+	if character.id == "ciel":
+		_sword_landed(cell)
+		return
 	# CHAQUE GOUTTE A SA PROPRE ÉCLABOUSSURE quand le mage en a une : trente
 	# gouttes qui tombent doivent se voir tomber, pas seulement compter des
 	# dégâts. Le reste des mages garde l'éclat générique.
@@ -2771,8 +3625,9 @@ func _on_storm_struck(index: int, ability: Ability) -> void:
 	var arc: LightningArc = ARC_SCENE.instantiate()
 	entities.add_child(arc)
 	arc.setup(from, enemies[index].position, Element.color(ability.element),
-		float(TILE_SIZE) * 0.13)
-	_spawn_impact(enemies[index].current_cell(), ability.element, 0.9, 0.4)
+		float(TILE_SIZE) * 0.22, 0.38)
+	_spawn_impact(enemies[index].current_cell(), ability.element, 1.4, 0.6)
+	_shake(0.1, 0.3)
 
 
 ## Le trait qui relie deux maillons de la chaîne. `from_index` vaut -1 quand
@@ -2789,8 +3644,9 @@ func _on_chain_arced(from_index: int, to_index: int) -> void:
 	var arc: LightningArc = ARC_SCENE.instantiate()
 	entities.add_child(arc)
 	arc.setup(start, target.position, Element.color(Element.Kind.THUNDER),
-		float(TILE_SIZE) * 0.15)
-	_spawn_impact(target.current_cell(), Element.Kind.THUNDER, 0.8, 0.4)
+		float(TILE_SIZE) * 0.24, 0.42)
+	_spawn_impact(target.current_cell(), Element.Kind.THUNDER, 1.4, 0.6)
+	_shake(0.12, 0.35)
 
 
 func _on_enemy_killed(index: int) -> void:
@@ -3265,11 +4121,12 @@ func _update_spores(delta: float, stopped: bool) -> void:
 				float(cell.x * 13 + cell.y * 7))
 			_spore_nodes.append(cloud)
 	var factor := _spores.speed_factor(player.mover.nearest_cell())
-	if factor < 1.0 and player.mover.speed >= character.move_speed:
+	var pace := (character.move_speed + combat.armor_speed()) * combat.flight_speed()
+	if factor < 1.0 and player.mover.speed >= pace:
 		player.set_tint(TINT_SLOWED)
-	elif factor >= 1.0 and player.mover.speed < character.move_speed and not combat.player_rooted():
+	elif factor >= 1.0 and player.mover.speed < pace and not combat.player_rooted():
 		player.set_tint(Color.WHITE)
-	player.mover.speed = 0.0 if combat.player_rooted() else character.move_speed * factor
+	player.mover.speed = 0.0 if combat.player_rooted() else pace * factor
 
 
 ## La cible bouge pendant le vol : on lui recolle le dernier point du trajet à
@@ -3326,6 +4183,9 @@ func grant_player_invulnerability(seconds: float) -> void:
 
 func try_teleport_player() -> bool:
 	if player == null or teleport_system == null:
+		return false
+	# En vol, il passe au-dessus des portails sans les prendre.
+	if combat != null and combat.flying():
 		return false
 	return teleport_system.try_teleport_player(player.mover, _enemy_cells(), _objective_field)
 
@@ -3464,7 +4324,7 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde"]:
+		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel"]:
 			return
 		# Le Feu n'a plus besoin de l'éclat tracé : ses triangles jaunes flottaient
 		# par-dessus les lobes et cassaient leur silhouette.
@@ -3525,7 +4385,7 @@ func _update_ai(delta: float) -> void:
 func _update_enemy_target() -> void:
 	if player == null:
 		return
-	var cell := player.mover.nearest_cell()
+	var cell := _grounded(player.mover.nearest_cell())
 	for enemy in enemies:
 		enemy.player_cell = cell
 
@@ -3533,7 +4393,7 @@ func _update_enemy_target() -> void:
 func _refresh_ai() -> void:
 	if player == null:
 		return
-	var sources: Array[Vector2i] = [player.current_cell()]
+	var sources: Array[Vector2i] = [_grounded(player.current_cell())]
 	_player_field = Pathfinder.distance_field(grid, sources)
 	for enemy in enemies:
 		enemy.player_field = _player_field
@@ -3568,8 +4428,9 @@ func _check_capture() -> void:
 		if _swings[i] == null:
 			_swings[i] = MeleeSwing.new()
 		var swing: MeleeSwing = _swings[i]
+		# En vol, il est hors d'atteinte : personne ne lève le bras sur lui.
 		if enemy.dead or enemy.ranged_only() or enemy.harmless() or enemy.is_staggered() \
-				or enemy.is_blinded() or enemy.is_casting():
+				or enemy.is_blinded() or enemy.is_casting() or (combat != null and combat.flying()):
 			swing.cancel()
 			continue
 		var gap := enemy.mover.grid_position().distance_to(player_position)

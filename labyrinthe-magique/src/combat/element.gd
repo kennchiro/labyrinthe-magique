@@ -7,7 +7,7 @@ extends RefCounted
 ## effets et les projectiles la lisent ici. Sans ça, le rouge du Mage de Feu finit
 ## par exister en cinq nuances différentes dans cinq fichiers.
 
-enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM }
+enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM, EMBER, BLADE, COLDFIRE, SKY }
 
 const COLORS := {
 	Kind.FIRE: Color("#ff6a2a"),
@@ -25,6 +25,10 @@ const COLORS := {
 	Kind.STEEL: Color("#a9b6c6"),
 	Kind.BLOOD: Color("#c8143c"),
 	Kind.CHARM: Color("#e8308f"),
+	Kind.EMBER: Color("#ff9a1f"),
+	Kind.BLADE: Color("#fff6ee"),
+	Kind.COLDFIRE: Color("#16e0e8"),
+	Kind.SKY: Color("#34e07a"),
 }
 const NAMES := {
 	Kind.FIRE: "Feu",
@@ -42,6 +46,10 @@ const NAMES := {
 	Kind.STEEL: "Acier",
 	Kind.BLOOD: "Sang",
 	Kind.CHARM: "Envoûtement",
+	Kind.EMBER: "Braise",
+	Kind.BLADE: "Lame",
+	Kind.COLDFIRE: "Flamme froide",
+	Kind.SKY: "Ciel",
 }
 
 
@@ -70,6 +78,10 @@ static func trait_name(kind: Kind) -> String:
 		Kind.STEEL: return "Plaques"
 		Kind.BLOOD: return "Rage"
 		Kind.CHARM: return "Trouble"
+		Kind.EMBER: return "Armure vivante"
+		Kind.BLADE: return "Entailles"
+		Kind.COLDFIRE: return "Entraves"
+		Kind.SKY: return "Vue d'en haut"
 	return ""
 
 
@@ -90,6 +102,10 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.STEEL: return "ses plaques encaissent les coups à la place de ses PV, et ses kills les reforgent"
 		Kind.BLOOD: return "moins il lui reste de PV, plus ses coups sont forts"
 		Kind.CHARM: return "trois murmures troublent la cible : elle ralentit, et sa possession dure plus longtemps"
+		Kind.EMBER: return "ses pièces encaissent les coups et blessent autour d'elles ; plus il en a lancé, plus il court vite"
+		Kind.BLADE: return "ses coups laissent des entailles, qui éclatent toutes quand il rengaine"
+		Kind.COLDFIRE: return "au troisième poing sur le même ennemi, une entrave le cloue au sol"
+		Kind.SKY: return "ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies"
 	return ""
 
 

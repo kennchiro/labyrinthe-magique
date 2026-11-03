@@ -38,8 +38,11 @@ de sa tête. Courts cheveux blonds, visage serein bien visible, armure légère
 blanc ivoire à liserés d'or sur une tunique blanche, bottes d'or. Il tient de
 la main droite une LANCE dorée, surmontée d'une pointe de cristal blanc
 lumineux. Toutes ses formes blanches sont cernées d'un contour BRUN FONCÉ net.
-Corps COMPACT, tête un peu large, silhouette lisible en très petit. L'aura
-reste COLLÉE au corps : pas de halo large, pas de nuage de particules autour.
+MORPHOLOGIE CHIBI, celle des mages : sa hauteur totale vaut 2,5 TÊTES, la tête
+(coiffure ou casque compris) occupe près de 40 % de la hauteur, et les jambes à
+peine un quart. Grosses mains, gros pieds, torse court, jamais de corps élancé
+ni de petite tête. Silhouette lisible en très petit. L'aura reste COLLÉE au
+corps : pas de halo large, pas de nuage de particules autour.
 
 LES TROIS RANGÉES, de haut en bas :
 - rangée 1 : vu DE FACE, il avance vers le bas de l'image
@@ -47,7 +50,9 @@ LES TROIS RANGÉES, de haut en bas :
 - rangée 3 : vu DE PROFIL, TOURNÉ VERS LA DROITE, il avance vers la droite de l'image
 
 SES JAMBES : la tunique courte s'ouvre et ses bottes d'or sortent franchement à
-chaque pas.
+chaque pas. DE PROFIL, les jambes ne gardent jamais la même pose : aux images 3
+et 7, elles sont JOINTES, les deux pieds l'un sur l'autre, sur moins de la
+moitié de la largeur des images 1 et 5.
 SES MAINS : la lance reste dans sa main droite, tenue droite, et les ailes
 restent à demi repliées dans son dos, sans battre.
 
@@ -67,11 +72,12 @@ LES 8 COLONNES de chaque rangée sont UN CYCLE DE MARCHE tranquille, à pas MOYE
 7. PASSAGE : les pieds se croisent, le pied proche levé
 8. le pied proche passe devant : l'image enchaîne sur la première
 
-⚠️ RÈGLE BLOQUANTE — NI GRAND ÉCART NI PIEDS COLLÉS. De profil, aux images 1 et 5, l'écart
-entre les pieds vaut environ UN TIERS DE LA HAUTEUR du personnage, jamais plus. Les deux
-pieds échangent leur place : celui qui est devant à l'image 1 est derrière à l'image 5.
-De face et de dos, les pieds restent sous le corps, sans s'écarter vers les côtés : l'un
-puis l'autre se lève. Pas de jambes en compas, et pas de saut à pieds joints.
+⚠️ RÈGLE BLOQUANTE — POSE DES JAMBES. De profil, aux images 1 et 5, les pieds sont séparés
+d'environ un tiers de la hauteur du personnage, jamais plus, et échangent leur place entre
+les deux poses. Aux images 3 et 7, les jambes sont RAPPROCHÉES et les pieds se chevauchent
+dans la vue de profil ; un pied peut être levé, mais il reste aligné devant ou derrière
+l'autre, sans écart latéral. De face et de dos, les pieds restent sous le corps. Aucun grand
+écart ni saut à pieds joints : les images 3 et 7 sont des poses de passage du cycle.
 
 ⚠️ RÈGLE BLOQUANTE — LE PERSONNAGE EST DESSINÉ DANS LES 24 CASES, sans exception.
 
@@ -116,8 +122,11 @@ de sa tête. Courts cheveux blonds, visage serein bien visible, armure légère
 blanc ivoire à liserés d'or sur une tunique blanche, bottes d'or. Il tient de
 la main droite une LANCE dorée, surmontée d'une pointe de cristal blanc
 lumineux. Toutes ses formes blanches sont cernées d'un contour BRUN FONCÉ net.
-Corps COMPACT, tête un peu large, silhouette lisible en très petit. L'aura
-reste COLLÉE au corps : pas de halo large, pas de nuage de particules autour.
+MORPHOLOGIE CHIBI, celle des mages : sa hauteur totale vaut 2,5 TÊTES, la tête
+(coiffure ou casque compris) occupe près de 40 % de la hauteur, et les jambes à
+peine un quart. Grosses mains, gros pieds, torse court, jamais de corps élancé
+ni de petite tête. Silhouette lisible en très petit. L'aura reste COLLÉE au
+corps : pas de halo large, pas de nuage de particules autour.
 
 ⚠️ MÊMES COULEURS ET SURTOUT MÊME TAILLE QUE LA PLANCHE DE MARCHE : la tête et le
 tronc ont les mêmes dimensions en pixels. Un corps plus petit se verrait comme un

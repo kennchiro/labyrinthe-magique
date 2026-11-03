@@ -34,6 +34,7 @@ et c'est elle qu'on rejoue.
 | Ange de la Mort | Mort | `#e2382a` | [portrait_mort](prompts/menu/portrait_mort.md) |
 | Ange des Étoiles | Étoiles | `#9db8ff` | [portrait_etoiles](prompts/menu/portrait_etoiles.md) |
 | Archange d'Acier | Acier | `#a9b6c6` | [portrait_acier](prompts/menu/portrait_acier.md) |
+| Archange du Ciel | Ciel | `#34e07a` | [portrait_ciel](prompts/menu/portrait_ciel.md) |
 
 Plus deux prompts communs :
 

@@ -7,7 +7,7 @@ Cinq images, **dans cet ordre** : la première sert de modèle aux autres.
 
 | # | image | prompt | à déposer dans `assets/peso&cover/` | images à joindre |
 |---|---|---|---|---|
-| 1 | le modèle du personnage | ci-dessous | `refonte/lumiere.png` | `refonte/peste.png` |
+| 1 | le modèle du personnage | ci-dessous | `refonte/lumiere.png` | `refonte/chrono.png` |
 | 2 | la marche | [mages_animes/lumiere](../mages_animes/lumiere.md), prompt 1 | `mages/lumiere_marche.png` | `refonte/lumiere.png` et `guide_marche.png` |
 | 3 | l'attaque | [mages_animes/lumiere](../mages_animes/lumiere.md), prompt 2 | `mages/lumiere_attaque.png` | `refonte/lumiere.png` |
 | 4 | les six icônes de sorts | [sorts/icones_lumiere](../sorts/icones_lumiere.md) | `sorts/mage_lumiere_skills.png` | aucune |
@@ -23,7 +23,7 @@ comme ceux des autres mages. La dernière partie de cette page les décrit en d�
 
 ## Image 1 — le modèle du personnage
 
-Joindre `assets/peso&cover/refonte/peste.png`, seulement pour le style et la mise en page.
+Joindre `assets/peso&cover/refonte/chrono.png`, pour le style, la mise en page et surtout LES PROPORTIONS.
 
 ```
 Fiche de modèle d'un personnage pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style
@@ -48,7 +48,7 @@ LE PERSONNAGE — le Porte-Lumière, un ange. Deux GRANDES AILES de plumes blanc
 repliées dans son dos. Une AURÉOLE d'or plate flotte au-dessus de sa tête. Courts cheveux
 blonds, visage serein bien visible, armure légère blanc ivoire à liserés d'or sur une tunique
 blanche, bottes d'or. Il tient de la main droite une LANCE dorée, surmontée d'une pointe de
-cristal blanc lumineux. Corps COMPACT, tête un peu large, silhouette lisible en très petit.
+cristal blanc lumineux. Corps CHIBI, très grosse tête, silhouette lisible en très petit.
 L'aura reste COLLÉE au corps : pas de halo large, pas de rayons, pas de particules autour.
 
 ⚠️ RÈGLE BLOQUANTE — LES AILES RESTENT À DEMI REPLIÉES. Jamais déployées. Elles ne dépassent
@@ -65,6 +65,12 @@ domine, sans jaune sur tout le corps.
 ⚠️ RÈGLE BLOQUANTE — MÊME PERSONNAGE dans les trois cases : même taille, mêmes couleurs, mêmes
 ailes, même auréole, même lance, toujours dans la main droite.
 
+⚠️ RÈGLE BLOQUANTE — LA MORPHOLOGIE EST CELLE DE L'IMAGE JOINTE : UN CORPS CHIBI. Sa hauteur totale
+vaut 2,5 TÊTES : la tête (coiffure ou casque compris) occupe près de 40 % de la hauteur, et les
+jambes à peine un quart. Grosses mains, gros pieds, torse court. Jamais de corps élancé, de longues
+jambes ou de petite tête : posé à côté du personnage de l'image jointe, il a la même morphologie.
+
+
 ⚠️ RÈGLE BLOQUANTE — AUCUNE OMBRE PORTÉE, AUCUN CADRE.
 ```
 
@@ -72,6 +78,7 @@ ailes, même auréole, même lance, toujours dans la main droite.
 
 | Défaut | Pourquoi c'est gênant |
 |---|---|
+| Le corps est élancé, ou la tête petite | Il ne ressemblerait pas aux mages : c'est la raison de cette refonte, à regénérer sans attendre |
 | Les ailes sont déployées ou très larges | Il deviendrait bien plus large que les autres mages, et ses ailes passeraient sur les murs |
 | Des ombres roses dans les plumes | Le détourage y ferait des trous |
 | Pas de contour sombre | Il disparaîtrait sur les stages clairs |

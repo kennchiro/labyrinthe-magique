@@ -265,6 +265,13 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	combat.possession_field.connect(func(field: PackedInt32Array) -> void:
 		for brain in brains:
 			brain.possess_field = field)
+	combat.enemy_hooked.connect(func(index: int, _from: Vector2i, to: Vector2i) -> void:
+		if index < movers.size():
+			movers[index].teleport_to(to))
+	combat.dash_cut.connect(func(_from: Vector2i, to: Vector2i) -> void: player.teleport_to(to))
+	combat.decoy_field.connect(func(field: PackedInt32Array) -> void:
+		for brain in brains:
+			brain.lure_field = field)
 	combat.enemy_swapped.connect(func(index: int, cell: Vector2i) -> void:
 		if index < movers.size():
 			movers[index].teleport_to(cell))
@@ -431,7 +438,7 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				_hunted_cell(grid, remaining, carried, movers), visits, rng)
 		else:
 			player.desired_direction = _expert(grid, player.decision_cell(), objective_field, enemy_field)
-		player.speed = 0.0 if combat.player_rooted() else character.move_speed * spores.speed_factor(player.nearest_cell())
+		player.speed = 0.0 if combat.player_rooted() else (character.move_speed + combat.armor_speed()) * spores.speed_factor(player.nearest_cell())
 		player.update(DT)
 		if combat.time_stop_left() <= 0.0:
 			spores.advance(DT)
@@ -591,7 +598,7 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 		if ability.self_cost > 0 and hurt:
 			continue
 		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS,
-				Ability.Kind.TRANSFUSION]:
+				Ability.Kind.TRANSFUSION, Ability.Kind.GUARD]:
 			defensive.append(ability)
 		else:
 			offensive.append(ability)

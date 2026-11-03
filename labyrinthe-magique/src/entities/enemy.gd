@@ -52,6 +52,8 @@ const TINT_POSSESSED := Color(1.45, 0.75, 1.15)
 const BLIND_STAR := Color("#ffcf5a")
 const ASTRE_STAR := Color("#ffffff")
 const ASTRE_RIM := Color("#0a1030")
+const CUT_BLADE := Color("#fff6ee")
+const CUT_RIM := Color("#b81414")
 const MARK_BELL := Color("#e6dfca")
 const MARK_RIM := Color("#7a1414")
 const BLIND_RIM := Color("#4a2f12")
@@ -124,6 +126,7 @@ var _strike_rest := 0.0
 var _spit_cooldown := 0.0
 var _marked_left := 0.0
 var _astre_marks := 0
+var _cut_marks := 0
 ## La démarche d'un boss, posée par le Level à chaque image (`BossGait`).
 var gait_factor := 1.0
 var gait_hold := false
@@ -353,6 +356,12 @@ func blind(duration: float) -> void:
 ## Les étoiles du trait de l'Ange des Étoiles : elles tournent autour de lui jusqu'à l'explosion.
 func set_star_marks(count: int) -> void:
 	_astre_marks = count
+	queue_redraw()
+
+
+## Les entailles du Chevalier Écarlate : autant de traits blancs barrent son corps.
+func set_cuts(count: int) -> void:
+	_cut_marks = count
 	queue_redraw()
 
 
@@ -774,6 +783,7 @@ func _draw() -> void:
 	_draw_blind()
 	_draw_mark()
 	_draw_star_marks()
+	_draw_cuts()
 	# La barre ne s'affiche qu'une fois le premier coup porté : au complet, elle
 	# n'apprend rien et met un bandeau rouge au-dessus de chaque ennemi de la
 	# carte, ce qui noie l'information au moment où elle compte.
@@ -823,6 +833,15 @@ func _draw_venom() -> void:
 		var alpha := (1.0 - life) * 0.95
 		draw_circle(at, radius, Color(VENOM_DROP, alpha))
 		draw_arc(at, radius, 0.0, TAU, 10, Color(VENOM_RIM, alpha), 1.0)
+
+
+func _draw_cuts() -> void:
+	for i in _cut_marks:
+		var row := -tile_size * (0.25 + float(i) * 0.17)
+		var from := Vector2(-tile_size * 0.3, row + tile_size * 0.1)
+		var to := Vector2(tile_size * 0.3, row - tile_size * 0.1)
+		draw_line(from, to, CUT_RIM, tile_size * 0.075)
+		draw_line(from, to, CUT_BLADE, tile_size * 0.035)
 
 
 func _draw_star_marks() -> void:

@@ -14,7 +14,7 @@ extends Node
 ##   --tap X Y          simule un tap sur la case (X,Y) après 3 frames
 ##   --debug            affiche le bandeau d'informations techniques
 ##   --on-portal        démarre le joueur sur un portail
-##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste, lumiere, mort, etoiles, acier, demon, test
+##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste, lumiere, mort, etoiles, acier, demon, discorde, braise, ecarlate, geolier, ciel, test
 ##   --potion           boit une potion : charge l'Extra Power
 ##   --kills N          simule N ennemis éliminés (test de l'Extra Power)
 ##   --fx               rejoue en boucle les cinq éclats élémentaires (contrôle visuel)
@@ -26,6 +26,7 @@ extends Node
 ##   --skill-delay F    attend F secondes avant --skill (le temps que les
 ##                      ennemis arrivent : un sort qui agit SUR EUX ne se
 ##                      capture pas à la frame zéro, le labyrinthe est vide)
+##   --skill-then N F   lance aussi le slot N, F secondes après le début (Rappel du Roi de Braise)
 ##   --cast             attaque dès qu'une cible est à portée
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
@@ -170,6 +171,10 @@ func apply_command_line() -> void:
 	var delay_arg := args.find("--skill-delay")
 	if delay_arg >= 0 and delay_arg + 1 < args.size():
 		_skill_delay = float(args[delay_arg + 1])
+	var then_arg := args.find("--skill-then")
+	if then_arg >= 0 and then_arg + 2 < args.size():
+		_then_slot = int(args[then_arg + 1])
+		_then_delay = float(args[then_arg + 2])
 	var skill_arg := args.find("--skill")
 	if skill_arg >= 0 and skill_arg + 1 < args.size():
 		_skill_slot = int(args[skill_arg + 1])
@@ -321,6 +326,8 @@ var _skill_slot := -1
 var _skill_tries := 0
 ## Attente avant de lancer `--skill`, en secondes.
 var _skill_delay := 0.0
+var _then_slot := -1
+var _then_delay := 0.0
 var _auto_cast := false
 var _show_fx := false
 var _fx_timer := 0.0
@@ -352,6 +359,11 @@ func _process(delta: float) -> void:
 		_skill_tries -= 1
 		if game.level.player != null and game.level.use_ability(_skill_slot):
 			_skill_tries = 0
+
+	if _then_slot >= 0:
+		_then_delay -= delta
+		if _then_delay <= 0.0 and game.level.player != null and game.level.use_ability(_then_slot):
+			_then_slot = -1
 
 	if _pending_tap.x >= 0:
 		_tap_countdown -= 1

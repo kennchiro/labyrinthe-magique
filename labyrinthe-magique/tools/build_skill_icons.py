@@ -155,6 +155,30 @@ SHEETS = {
         "discorde_murmure", "discorde_oeil", "discorde_cercle",
         "discorde_lien", "discorde_echange", "discorde_grande",
     ], {"undust": 12}),
+    # Relevé case par case : poing et traînée · deux gantelets · plastron-four //
+    # trois flèches · armure de cendre · cage couronnée. L'ordre demandé.
+    "mage_braise_skills.png": ("braise", [
+        "braise_poing", "braise_chasseurs", "braise_plastron",
+        "braise_rappel", "braise_coquille", "braise_cages",
+    ], {"undust": 12}),
+    # Relevé case par case : croissant · lame et traits · sabre dans son cercle //
+    # sabre au fourreau · flèche et pétales · coupes croisées. L'ordre demandé.
+    "mage_ecarlate_skills.png": ("ecarlate", [
+        "ecarlate_entaille", "ecarlate_pas", "ecarlate_garde",
+        "ecarlate_rengaine", "ecarlate_volte", "ecarlate_derniere",
+    ], {"undust": 12}),
+    # Relevé case par case : poing et flammes · crochet et chaîne · cœur et trois fers //
+    # anneau de givre · mur traversé · cercle et chaînes. L'ordre demandé.
+    "mage_geolier_skills.png": ("geolier", [
+        "geolier_poing", "geolier_crochet", "geolier_chaines",
+        "geolier_souffle", "geolier_traversee", "geolier_geole",
+    ], {"undust": 12}),
+    # Relevé case par case : lance qui tombe sur son cercle · éventail de cinq plumes · colonne sur
+    # anneau d'or // cloche et ses ondes · deux ailes sur une haie · épée et six ailes. L'ordre demandé.
+    "mage_ciel_skills.png": ("ciel", [
+        "ciel_lance", "ciel_plumes", "ciel_colonne",
+        "ciel_cloche", "ciel_envol", "ciel_jugement",
+    ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",

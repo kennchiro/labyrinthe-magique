@@ -345,6 +345,18 @@ MAGES = [
     },
 ]
 
+## Les anges étaient élancés, à côté de mages chibi : « tête un peu large » ne suffit pas, et
+## chacun avait reçu l'ange précédent comme modèle de style. La proportion est donc chiffrée.
+CHIBI = ("MORPHOLOGIE CHIBI, celle des mages : sa hauteur totale vaut 2,5 TÊTES, la tête (coiffure ou "
+         "casque compris) occupe près de 40 % de la hauteur, et les jambes à peine un quart. Grosses "
+         "mains, gros pieds, torse court, jamais de corps élancé ni de petite tête.")
+STRIDE = (" DE PROFIL, les jambes ne gardent jamais la même pose : aux images 3 et 7, elles sont "
+          "JOINTES, les deux pieds l'un sur l'autre, sur moins de la moitié de la largeur des images 1 et 5")
+for _mage in MAGES:
+    if _mage["id"] in ("lumiere", "mort", "etoiles", "acier"):
+        _mage["look"] += " " + CHIBI
+        _mage["legs"] += "." + STRIDE
+
 HEADER = """Feuille de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style cartoon
 coloré à contours nets, effets lumineux, même facture que les sprites d'un jeu
 de rôle mobile. L'image jointe montre le personnage : garde EXACTEMENT son visage,
@@ -367,6 +379,11 @@ ligne horizontale dans les 24 cases, et rien n'est dessiné plus bas que cette l
 regarde VERS LA DROITE dans les 8 cases."""
 
 
+def compact_for(look: str) -> str:
+    """La consigne de corps, sans « tête un peu large » là où la morphologie est déjà chiffrée."""
+    return COMPACT.replace("Corps COMPACT, tête un peu large, silhouette", "Silhouette") if CHIBI in look else COMPACT
+
+
 def sheet_block(look: str) -> str:
     width, height = COLUMNS * CELL, ROWS * CELL
     return f"""FORMAT, à respecter exactement :
@@ -377,7 +394,7 @@ def sheet_block(look: str) -> str:
 - rien ne dépasse sur la case voisine, et 10 pixels restent vides autour de chaque case
 - aucun texte, aucun chiffre, aucun trait de grille, aucun sol, aucun décor
 
-{fill("LE PERSONNAGE — " + look + " " + COMPACT, 79)}"""
+{fill("LE PERSONNAGE — " + look + " " + compact_for(look), 79)}"""
 
 
 def fiche(mage: dict) -> str:
@@ -535,9 +552,11 @@ def draw_guide() -> None:
     guide.save(GUIDE)
 
 
-## La marche de référence : au Chronomancien, les pieds se rejoignent aux images 3 et 7.
+## Les anges : leur profil glisse, les pieds gardent le même écart sur les 8 images.
+SIDE_REDO = ["lumiere", "mort", "etoiles", "acier"]
 GUIDE_SIDE = OUT / "guide_profil.png"
 GUIDE_FULL = OUT / "guide_complet.png"
+## La marche de référence : au Chronomancien, les pieds se rejoignent aux images 3 et 7.
 SIDE_MODEL = Path("assets/peso&cover/mages/chrono_marche.png")
 ## Sous cette part de la hauteur du corps, ce sont les jambes : le reste devient un mannequin.
 LEGS_SHARE = 0.34
@@ -577,11 +596,88 @@ def draw_full_guide() -> None:
     Image.fromarray(sheet).save(GUIDE_FULL)
 
 
+def side_prompt(mage: dict) -> str:
+    look = fill(f"{mage['look']} {compact_for(mage['look'])}", 92)
+    return f"""## {mage['name']}
+
+Joindre `assets/peso&cover/refonte/{mage['reference']}` et `docs/prompts/mages_animes/guide_profil.png`.
+Déposer le résultat dans `assets/peso&cover/mages/{mage['id']}_profil.png`.
+
+```
+Bande de sprites pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style cartoon coloré à contours
+nets, même facture que les sprites d'un jeu de rôle mobile. La PREMIÈRE image jointe montre le
+personnage : garde EXACTEMENT ses couleurs, ses vêtements et ses proportions, mais PAS sa mise en page.
+
+FORMAT, à respecter exactement :
+- UNE image de {COLUMNS * CELL} x {CELL} pixels
+- UNE SEULE rangée de {COLUMNS} cases de {CELL} x {CELL}
+- fond MAGENTA PUR UNI (#FF00FF) partout : un aplat, sans dégradé ni texture
+- dans chaque case, le personnage est CENTRÉ et occupe environ 80 % de la hauteur
+- rien ne dépasse sur la case voisine
+- aucun texte, aucun chiffre, aucun trait de grille, aucun sol, aucun décor
+
+LE PERSONNAGE — {look}
+
+Il est vu DE PROFIL, TOURNÉ VERS LA DROITE, dans les {COLUMNS} cases, et il marche sur place.
+SES JAMBES : {mage['legs']}.
+SES MAINS : {mage['hold']}.
+
+⚠️ LA DEUXIÈME IMAGE JOINTE EST LE GUIDE DE LA MARCHE. Elle a la même grille que l'image à produire.
+Dans chaque case, recopie EXACTEMENT la position de SES JAMBES et de SES PIEDS. Le corps gris du
+guide et ses bottes ne doivent PAS apparaître : c'est le personnage de la première image qui prend
+ces poses, avec ses propres jambes.
+
+LES {COLUMNS} IMAGES, de gauche à droite :
+1. jambes GRANDES OUVERTES : un pied loin devant, l'autre loin derrière
+2. jambes encore ouvertes, les pieds se rapprochent
+3. ⚠️ JAMBES JOINTES : les deux pieds L'UN SUR L'AUTRE, sous le corps, un seul pied levé
+4. jambes ouvertes de nouveau, les pieds ont ÉCHANGÉ leur place
+5. jambes GRANDES OUVERTES, l'INVERSE de l'image 1
+6. jambes encore ouvertes, les pieds se rapprochent
+7. ⚠️ JAMBES JOINTES : les deux pieds L'UN SUR L'AUTRE, sous le corps, l'autre pied levé
+8. jambes ouvertes de nouveau : l'image enchaîne sur la première
+
+⚠️ RÈGLE BLOQUANTE — C'EST LE DÉFAUT À CORRIGER : LES JAMBES NE GARDENT JAMAIS LA MÊME POSE. Aux
+images 3 et 7, la largeur occupée par les deux pieds est MOINS DE LA MOITIÉ de celle des images 1 et 5.
+Un personnage aux jambes écartées sur les {COLUMNS} images est faux, même si ses pieds bougent un peu.
+
+⚠️ RÈGLE BLOQUANTE — SEULES LES JAMBES BOUGENT. Le tronc, la tête, les ailes et ce qu'il tient se
+superposent exactement d'une case à l'autre, à la même taille, et il regarde toujours VERS LA DROITE.
+
+⚠️ RÈGLE BLOQUANTE — LES PIEDS AU MÊME NIVEAU. Le bas du pied posé touche la même ligne horizontale
+dans les {COLUMNS} cases, et rien n'est dessiné plus bas.
+
+⚠️ RÈGLE BLOQUANTE — AUCUNE OMBRE PORTÉE, AUCUN CADRE, aucun effet ni aucune particule, aucun reflet
+du fond magenta.
+```
+"""
+
+
+def side_page() -> str:
+    prompts = "\n---\n\n".join(side_prompt(mage) for mage in MAGES if mage["id"] in SIDE_REDO)
+    return f"""# Les anges — rattraper une marche de profil
+
+⚠️ **À n'utiliser qu'en secours, et après la refonte du sprite** : la nouvelle planche de marche (fiche
+de chaque ange) demande déjà la bonne foulée. Cette page ne sert que si son profil glisse encore : ses
+pieds gardent le même écart sur les {COLUMNS} images, alors que ceux des mages se rejoignent aux images 3
+et 7. `tools/build_enemies.py` prend le fichier `<id>_profil.png` à la place de la rangée de profil de
+`<id>_marche.png`, sans toucher à cette planche.
+
+Le guide `guide_profil.png` vient de la marche du Chronomancien : ses jambes sont gardées, le haut de
+son corps est peint en gris. **À regarder sur l'image reçue : les images 3 et 7 doivent montrer des
+jambes jointes.** Si elles restent écartées, regénérer avant de déposer.
+
+---
+
+{prompts}"""
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     draw_guide()
     draw_side_guide()
     draw_full_guide()
+    (OUT / "profil_anges.md").write_text(side_page(), encoding="utf-8")
     for mage in MAGES:
         (OUT / f"{mage['file']}.md").write_text(fiche(mage), encoding="utf-8")
         print(f"  {mage['file']}.md")

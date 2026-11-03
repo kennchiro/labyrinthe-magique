@@ -77,6 +77,9 @@ func show_title() -> void:
 
 func show_select() -> void:
 	var screen: CharacterSelect = SELECT_SCENE.instantiate()
+	# Revenu d'un essai du Héros d'essai, qui n'a pas d'onglet : l'écran n'aurait rien à ouvrir.
+	if character_id == CharacterCatalog.TEST:
+		character_id = CharacterCatalog.default_id()
 	screen.character_id = character_id
 	_swap(screen)
 	screen.play_requested.connect(func(id: String) -> void:

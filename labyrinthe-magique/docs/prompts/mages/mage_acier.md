@@ -1,13 +1,13 @@
 # L'Archange d'Acier — images à générer et effets visuels
 
 > Élément **Acier** · teinte du jeu `#a9b6c6` · acier gris-bleu et métal chauffé à l'orange.
-> Lent, massif, au contact : ses plaques d'armure encaissent les coups à la place de ses PV.
+> Lent, massif, son marteau lance une onde à 6 cases : ses plaques d'armure encaissent les coups à la place de ses PV.
 
 Cinq images, **dans cet ordre** : la première sert de modèle aux autres.
 
 | # | image | prompt | à déposer dans `assets/peso&cover/` | images à joindre |
 |---|---|---|---|---|
-| 1 | le modèle du personnage | ci-dessous | `refonte/acier.png` | `refonte/mort.png` |
+| 1 | le modèle du personnage | ci-dessous | `refonte/acier.png` | `refonte/chrono.png` |
 | 2 | la marche | [mages_animes/acier](../mages_animes/acier.md), prompt 1 | `mages/acier_marche.png` | `refonte/acier.png` et `guide_marche.png` |
 | 3 | l'attaque | [mages_animes/acier](../mages_animes/acier.md), prompt 2 | `mages/acier_attaque.png` | `refonte/acier.png` |
 | 4 | les six icônes de sorts | [sorts/icones_acier](../sorts/icones_acier.md) | `sorts/mage_acier_skills.png` | aucune |
@@ -24,7 +24,7 @@ comme ceux des autres mages. La dernière partie de cette page les décrit en d�
 
 ## Image 1 — le modèle du personnage
 
-Joindre `assets/peso&cover/refonte/mort.png`, seulement pour le style et la mise en page.
+Joindre `assets/peso&cover/refonte/chrono.png`, pour le style, la mise en page et surtout LES PROPORTIONS.
 
 ```
 Fiche de modèle d'un personnage pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style
@@ -52,7 +52,7 @@ visage, seulement une fente horizontale d'où sort une lueur orange. De fines fe
 couleur de métal chauffé, courent entre les plaques du plastron. Deux GRANDES AILES faites
 entièrement de LAMES D'ACIER superposées, sans aucune plume, à demi repliées dans son dos. Il
 porte de la main droite un grand MARTEAU DE GUERRE posé sur l'épaule, à la tête d'acier massive
-et au manche épais. Corps COMPACT et TRAPU, tête petite entre les épaulières, silhouette lisible en très petit. Pas de halo, pas de particules, pas d'étincelles
+et au manche épais. Corps CHIBI, très grosse tête, silhouette lisible en très petit. Pas de halo, pas de particules, pas d'étincelles
 autour de lui.
 
 ⚠️ RÈGLE BLOQUANTE — LES AILES RESTENT À DEMI REPLIÉES. Jamais déployées. Elles ne dépassent
@@ -72,6 +72,14 @@ doit rester lisible sur un sol très sombre.
 ⚠️ RÈGLE BLOQUANTE — MÊME PERSONNAGE dans les trois cases : même taille, mêmes couleurs, mêmes
 ailes, même heaume, même marteau, toujours dans la main droite.
 
+⚠️ RÈGLE BLOQUANTE — LA MORPHOLOGIE EST CELLE DE L'IMAGE JOINTE : UN CORPS CHIBI. Sa hauteur totale
+vaut 2,5 TÊTES : la tête (coiffure ou casque compris) occupe près de 40 % de la hauteur, et les
+jambes à peine un quart. Grosses mains, gros pieds, torse court. Jamais de corps élancé, de longues
+jambes ou de petite tête : posé à côté du personnage de l'image jointe, il a la même morphologie.
+Il reste le plus LARGE : ses épaules font presque trois fois la largeur de sa tête, sans le grandir.
+Son heaume est GROS, comme une tête de mage, et son marteau reste assez court pour tenir dans la case.
+
+
 ⚠️ RÈGLE BLOQUANTE — AUCUNE OMBRE PORTÉE, AUCUN CADRE.
 ```
 
@@ -79,6 +87,7 @@ ailes, même heaume, même marteau, toujours dans la main droite.
 
 | Défaut | Pourquoi c'est gênant |
 |---|---|
+| Le corps est élancé, ou la tête petite | Il ne ressemblerait pas aux mages : c'est la raison de cette refonte, à regénérer sans attendre |
 | Des reflets roses sur le métal | Le détourage y ferait des trous, et une frange rose resterait sur l'armure |
 | Les ailes sont déployées ou très larges | Il deviendrait bien plus large que les autres, et ses ailes passeraient sur les murs |
 | Les ailes ont des plumes | Il perdrait ce qui le distingue des autres anges |
@@ -96,14 +105,14 @@ Ce sont les règles que je propose ; les chiffres seront réglés à l'équilibr
 | créneau | sort | ce qu'il fait |
 |---|---|---|
 | Trait | Plaques | 3 plaques d'armure : chaque coup reçu en arrache une avant de toucher ses PV, et ses kills les reforgent |
-| ATTAQUE | Coup de marteau | une frappe large, à courte portée |
+| ATTAQUE | Coup de marteau | il frappe le sol : une onde de choc court jusqu'à sa cible, à 6 cases, et touche ce qui l'entoure |
 | SKILL 1 | Ailes-lames | une volée de lames part en éventail, puis revient vers lui et retouche au retour |
 | SKILL 2 | Onde d'enclume | il frappe le sol : l'onde court dans les couloirs et étourdit les ennemis |
 | SKILL 3 | Rempart | il se referme dans ses ailes, immobile, et renvoie les dégâts reçus |
 | FUITE | Charge | il fonce en ligne droite et renverse ce qu'il croise |
 | EXTRA | Acier en fusion | son armure chauffe au rouge : plaques pleines, taille plus grande, et ses coups projettent les ennemis |
 
-C'est le seul personnage de contact : il doit aller au combat, là où les autres le fuient.
+Il est lent, mais il encaisse et frappe de loin : ses plaques lui laissent le temps de se placer.
 
 ---
 
@@ -128,8 +137,10 @@ l'orange ne fait qu'accentuer**, pour ne pas le confondre avec le Mage du Feu.
 
 ### Coup de marteau (attaque)
 
-- **Frappe, 0,2 s :** un large arc gris clair à bord net, devant lui, qui suit la tête du marteau.
-- **Impact, 0,25 s :** une petite gerbe d'étincelles orange et un bref éclat blanc sur l'ennemi.
+- **Frappe, 0,35 s :** un éclat au sol à ses pieds, avec un anneau d'acier et des étincelles.
+- **Onde :** un grand croissant d'acier bordé d'orange court dans le couloir et arrache des éclats au sol.
+- **Sillage :** le sol se fend derrière lui jusqu'à la cible, puis refroidit de l'orange au gris.
+- **Impact :** un éclat, un anneau et des morceaux d'acier gris qui s'écartent sur la cible.
 
 ### Plaques (le trait)
 

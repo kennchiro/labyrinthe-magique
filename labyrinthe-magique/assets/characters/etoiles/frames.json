@@ -1,11 +1,11 @@
 {
   "cell": [
-    129,
+    171,
     112
   ],
-  "feet_y": 108.6,
-  "foot_travel": 0.0433,
-  "body_height": 101.8,
+  "feet_y": 108.5,
+  "foot_travel": 0.0422,
+  "body_height": 105.0,
   "poses": [
     "idle",
     "walk_1",

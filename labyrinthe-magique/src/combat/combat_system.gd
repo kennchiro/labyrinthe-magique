@@ -170,8 +170,46 @@ signal great_discord_cast(cell: Vector2i)
 signal brawl_struck(cell: Vector2i)
 signal bond_struck(cell: Vector2i)
 signal enemy_swapped(index: int, cell: Vector2i)
+## Le Roi de Braise : ce que le jeu met en scène. Les pièces, elles, se lisent dans `pieces()`.
+signal piece_ejected(cell: Vector2i)
+signal piece_struck(cell: Vector2i)
+signal piece_recalled(cell: Vector2i)
+signal piece_returned(recalled: bool)
+signal chest_posed(cell: Vector2i)
+signal chest_bit(cell: Vector2i, seconds: float)
+signal chest_spat(cell: Vector2i)
+signal recall_cast(cell: Vector2i)
+signal hunters_cast(cell: Vector2i)
+signal decoy_posed(cell: Vector2i, seconds: float)
+signal decoy_blew(cell: Vector2i, radius: float)
+## Le champ qui attire les ennemis vers le leurre. Vide, ils reviennent au mage.
+signal decoy_field(field: PackedInt32Array)
+signal cages_cast(cell: Vector2i, indices: Array, seconds: float)
+signal cages_crushed(cells: Array)
+## Le Chevalier Écarlate.
+signal enemy_cuts(index: int, count: int)
+signal dash_cut(from: Vector2i, to: Vector2i)
+signal guard_raised(seconds: float)
+signal guard_parried(cell: Vector2i)
+signal sheathe_begun(cell: Vector2i, cells: Array, seconds: float, final: bool)
+signal cut_burst(cell: Vector2i, count: int)
+signal sheathe_ended(final: bool)
+## Le Geôlier.
+signal enemy_shackled(index: int, seconds: float)
+signal enemy_hooked(index: int, from: Vector2i, to: Vector2i)
+signal enemies_frozen(indices: Array, seconds: float)
+signal soul_chains_cast(indices: Array, seconds: float)
+signal gaol_cast(cell: Vector2i, indices: Array, radius: float, seconds: float)
+signal gaol_ended(cells: Array)
 signal dawn_cast(cell: Vector2i)
 signal dawn_struck(cell: Vector2i)
+## L'Archange du Ciel. Les ennemis étourdis ou cloués, avec le sort qui l'a fait : ses deux sorts
+## de contrôle ne se dessinent pas pareil, alors que `enemies_frozen` ne dit pas lequel a frappé.
+signal enemies_dazed(indices: Array, seconds: float, ability: Ability)
+## L'Envol : il s'élève, puis retombe. L'atterrissage est rapporté APRÈS que le jeu l'a reposé.
+signal flight_started(duration: float, ability: Ability)
+signal flight_ended
+signal flight_landed(cell: Vector2i, ability: Ability)
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -317,6 +355,39 @@ const TROUBLE_FACTOR := 0.7
 const TROUBLE_BONUS := 2.0
 ## L'échangé reste sonné un instant : sinon il frappait à l'arrivée, sans qu'on puisse fuir.
 const SWAP_STUN := 0.7
+
+enum Piece { ORBIT, HUNT, POSED, BITE, LOOSE, RETURN, RECALL }
+## Deux gantelets et un plastron. Les plaques de `Health` comptent ceux qui sont en orbite.
+const PIECES_MAX := 3
+const GAUNTLETS: Array[int] = [0, 1]
+const CHEST_PIECE := 2
+## Sans ordre, une pièce rentre seule après ce temps : on n'a jamais à aller la chercher.
+const PIECE_AUTO_RETURN := 8.0
+## Ce que chaque pièce lancée ajoute à son allure : de 4,4 à 5,6.
+const PIECE_SPEED_BONUS := 0.4
+const HUNT_SPEED := 7.0
+const HUNT_GAP := 0.7
+const HUNT_REACH := 1.1
+const RETURN_SPEED := 9.0
+const RECALL_SPEED := 13.0
+const RECALL_REACH := 0.9
+const PIECE_HOME := 0.6
+const LOOSE_THROW := 2.5
+## La pièce éjectée par un coup blesse autour de lui, à ce rayon.
+const EJECT_DAMAGE := 16
+const EJECT_RADIUS := 2.0
+## Le boss ne se laisse pas retenir : il prend ce coup, et le plastron repart.
+const CHEST_BOSS_BITE := 40
+
+## Le Chevalier Écarlate : ce qu'un ennemi porte d'entailles, et combien de temps elles tiennent.
+const CUTS_MAX := 5
+const CUT_SECONDS := 8.0
+## Le silence entre le claquement du fourreau et l'éclat : c'est lui qui fait le geste.
+const SHEATHE_SILENCE := 0.28
+
+## Le Geôlier : au troisième poing sur le même ennemi, une entrave le cloue au sol ce temps-là.
+const SHACKLE_HITS := 3
+const SHACKLE_SECONDS := 1.5
 ## Sous cette part de ses PV, un ennemi touché par l'Ange de la Mort est achevé.
 const PLATE_MAX := 3
 ## Les kills qu'il faut pour reforger une plaque.
@@ -439,6 +510,19 @@ var _whispers := {}                    # index -> murmures reçus, avant le trou
 var _troubled := {}                    # index -> secondes de trouble
 var _bond := {}                        # {members, left, share}
 var _bond_relaying := false
+var _pieces: Array[Dictionary] = []
+var _torn_pending := 0
+var _decoy := {}                       # {cell, left, ability}
+var _caged := {}                       # index -> vrai
+var _cage_left := 0.0
+var _cage_ability: Ability = null
+var _cuts := {}                        # index -> {count, left}
+var _guard: Ability = null
+var _parry_pending := false
+var _sheathe := {}                     # {left, targets, ability}
+var _shackle_hits := {}                # index -> poings reçus, avant l'entrave
+var _soul_chains := {}                 # {members, left, tick, ability}
+var _gaol := {}                        # {members, left, tick, ability}
 var _blast_hits := 0                   # ennemis touchés par le souffle en cours
 var _pact_owed := 0                    # PV rendus à la fin du Dernier Pacte
 var _souls := 0                        # âmes récoltées par l'Ange de la Mort
@@ -447,6 +531,8 @@ var _flying: Array[Dictionary] = []    # {index, time_left, ability}
 var _hour: Array[Dictionary] = []      # {index, time_left, ability}
 var _wings: Ability = null             # la coque en place, quand elle aveugle en cédant
 var _wings_cell := Vector2i.ZERO
+var _flight: Ability = null            # l'Envol en cours, nul au sol
+var _flight_left := 0.0
 
 
 ## `p_seed` : la pluie de météores tire au sort ses cases. Le tirage doit être
@@ -462,6 +548,14 @@ func _init(p_grid: MazeGrid, p_stats: CharacterStats, p_health: Health,
 		health.plates = PLATE_MAX
 		health.plate_torn.connect(func() -> void: plates_changed.emit(health.plates))
 		health.deflected.connect(func() -> void: _reflect_waiting = _rampart != null)
+	if stats.element == Element.Kind.BLADE:
+		health.deflected.connect(func() -> void: _parry_pending = _guard != null)
+	if stats.element == Element.Kind.EMBER:
+		health.plates = PIECES_MAX
+		health.plate_torn.connect(func() -> void: _torn_pending += 1)
+		for i in PIECES_MAX:
+			_pieces.append({"state": Piece.ORBIT, "pos": Vector2.ZERO, "left": 0.0, "timer": 0.0,
+				"prey": -1, "hit": {}, "ability": null, "throw": Vector2.ZERO})
 
 
 # --- Ressources ------------------------------------------------------------------
@@ -521,6 +615,9 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_stars(delta, context)
 	_update_steel(delta, context)
 	_update_discord(delta, context)
+	_update_king(delta, context)
+	_update_blade(delta, context)
+	_update_gaoler(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -559,11 +656,16 @@ func update(delta: float, context: CombatContext) -> void:
 		if _empower_left <= 0.0:
 			_empower_bonus = 0
 			player_calmed.emit()
+	if _flight != null:
+		_flight_left = maxf(0.0, _flight_left - delta)
+		if _flight_left <= 0.0:
+			_land(context)
 	if _immune_left > 0.0:
 		_immune_left = maxf(0.0, _immune_left - delta)
 		if _immune_left <= 0.0:
 			health.immune = false
 			_rampart = null
+			_guard = null
 			if _pact_owed > 0:
 				player_healed.emit(health.heal(_pact_owed))
 				_pact_owed = 0
@@ -611,6 +713,10 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 			continue
 		var cell: Vector2i = context.enemy_cells[index]
 		projectile_hit.emit(ability, index, cell)
+		# La Colonne du ciel cloue ce qu'elle entoure, AVANT ses dégâts : un ennemi qu'elle tue
+		# ne doit pas être compté parmi les cloués.
+		if ability.stun_seconds > 0.0:
+			_freeze_around(ability, context, cell)
 		# Un projectile à rayon (boule de feu) explose : il touche aussi les
 		# voisins. À rayon nul, il ne concerne que sa cible.
 		if ability.radius > 0.0:
@@ -889,6 +995,26 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_bond(ability, context)
 		Ability.Kind.SWAP:
 			fired = _cast_swap(ability, context)
+		Ability.Kind.HUNTERS:
+			fired = _cast_hunters(ability, context)
+		Ability.Kind.CHEST:
+			fired = _cast_chest(ability, context)
+		Ability.Kind.RECALL:
+			fired = _cast_recall(ability, context)
+		Ability.Kind.CAGES:
+			fired = _cast_cages(ability, context)
+		Ability.Kind.DASH:
+			fired = _cast_dash(ability, context)
+		Ability.Kind.GUARD:
+			fired = _cast_guard(ability)
+		Ability.Kind.SHEATHE:
+			fired = _cast_sheathe(ability, context)
+		Ability.Kind.HOOK:
+			fired = _cast_hook(ability, context)
+		Ability.Kind.SOUL_CHAINS:
+			fired = _cast_soul_chains(ability, context)
+		Ability.Kind.GAOL:
+			fired = _cast_gaol(ability, context)
 		Ability.Kind.BLADES:
 			fired = _cast_blades(ability, context)
 		Ability.Kind.ANVIL:
@@ -903,6 +1029,8 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.DAWN:
 			_cast_dawn(ability, context)
 			fired = true
+		Ability.Kind.FLIGHT:
+			fired = _cast_flight(ability)
 
 	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
 	#
@@ -963,7 +1091,8 @@ func find_target(ability: Ability, context: CombatContext) -> int:
 	for i in context.enemy_cells.size():
 		if not context.enemy_alive(i) or _already_targeted(i):
 			continue
-		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		var distance := _sky_distance(context.player_cell, context.enemy_cells[i]) \
+			if ability.from_sky else Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
 		if distance < 0 or distance > ability.range:
 			continue
 		# Une maison ne poursuit personne. Entre un ennemi sur les talons et un
@@ -1000,6 +1129,13 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 			return _cast_free_shot(ability, context)
 		use_refused.emit("cible")
 		return false
+	# CE QUI TOMBE DU CIEL ne remonte pas le couloir : il part de lui et tombe sur la cible, après
+	# le même temps de chute à toute distance. Le chemin n'a donc que ses deux bouts.
+	if ability.from_sky:
+		var drop: Array[Vector2i] = [context.player_cell, context.enemy_cells[target]]
+		_in_flight.append({"ability": ability, "target": target, "time_left": ability.sky_fall})
+		projectile_launched.emit(ability, target, drop, ability.sky_fall)
+		return true
 	var path := trajectory(context.player_cell, context.enemy_cells[target])
 	if path.size() < 2:
 		return false
@@ -1026,6 +1162,10 @@ func _cast_free_shot(ability: Ability, context: CombatContext) -> bool:
 		path.append(landing + context.player_facing)
 	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
 	var duration := float(path.size() - 1) / speed
+	# Ce qui tombe du ciel tombe d'un coup au bout de sa course, sans la parcourir.
+	if ability.from_sky:
+		path = [context.player_cell, landing]
+		duration = ability.sky_fall
 	_last_free_shot -= 1
 	_in_flight.append({"ability": ability, "target": _last_free_shot, "time_left": duration,
 		"duration": duration, "path": path, "landing": landing, "from": 0})
@@ -1037,6 +1177,9 @@ func _cast_free_shot(ability: Ability, context: CombatContext) -> bool:
 ## image : un ennemi qui y entre après lui se fait quand même toucher.
 func _fly_free_shot(shot: Dictionary, context: CombatContext) -> bool:
 	var ability: Ability = shot["ability"]
+	# Ce qui tombe du ciel ne frappe qu'en touchant le sol, pas à mi-chute.
+	if ability.from_sky and float(shot["time_left"]) > 0.0:
+		return false
 	var path: Array[Vector2i] = shot["path"]
 	var left := maxf(0.0, float(shot["time_left"]))
 	var reached := roundi((1.0 - left / float(shot["duration"])) * (path.size() - 1))
@@ -1059,6 +1202,8 @@ func _fly_free_shot(shot: Dictionary, context: CombatContext) -> bool:
 
 
 func _cast_blast(ability: Ability, context: CombatContext) -> bool:
+	if ability.stun_seconds > 0.0:
+		_freeze_around(ability, context)
 	blast_fired.emit(ability, context.player_cell)
 	# L'ASPIRATION PASSE AVANT LES DÉGÂTS, sinon elle ne sert à rien : ce qu'elle
 	# ramène doit encore trouver l'explosion en arrivant.
@@ -2047,6 +2192,7 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		use_refused.emit("immobile")
 		return false
 	var destination := context.player_cell
+	var facing := -context.player_facing if ability.backward else context.player_facing
 	if ability.rewind_seconds > 0.0:
 		destination = cell_at_past(ability.rewind_seconds)
 		if destination == context.player_cell:
@@ -2056,13 +2202,13 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		return true
 	if ability.pierces_walls:
 		for step in range(ability.range, 0, -1):
-			var far: Vector2i = context.player_cell + context.player_facing * step
+			var far: Vector2i = context.player_cell + facing * step
 			if grid.is_floor_v(far) and not grid.is_occupied(far):
 				destination = far
 				break
 	else:
 		for step in ability.range:
-			var next: Vector2i = destination + context.player_facing
+			var next: Vector2i = destination + facing
 			if not grid.is_floor_v(next):
 				break
 			destination = next
@@ -2076,6 +2222,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		_blind_around(destination, ability, context)
 	if ability.trail_damage > 0:
 		_burn_trail(context.player_cell, destination, ability, context)
+	if ability.decoy_seconds > 0.0:
+		_pose_decoy(context.player_cell, ability)
 	return true
 
 
@@ -2745,6 +2893,16 @@ func _add_whisper(index: int, context: CombatContext) -> void:
 
 
 ## Les créatures dans un rayon, par les couloirs. Un repaire ne se bat avec personne.
+## Les créatures à vol d'oiseau, par-dessus les haies. Les repaires n'en sont pas.
+func _creatures_in_sky(centre: Vector2i, radius: float, context: CombatContext) -> Array[int]:
+	var out: Array[int] = []
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i) \
+				and Vector2(context.enemy_cells[i] - centre).length() <= radius:
+			out.append(i)
+	return out
+
+
 func _creatures_within(centre: Vector2i, radius: float, context: CombatContext) -> Array[int]:
 	var field := _field_from(centre)
 	var out: Array[int] = []
@@ -2847,11 +3005,580 @@ func whispers_on(index: int) -> int:
 	return WHISPER_MARKS if _troubled.has(index) else int(_whispers.get(index, 0))
 
 
+# --- Le Roi de Braise -----------------------------------------------------------------
+
+## Tout se joue en coordonnées de case, à vol d'oiseau : ses pièces volent par-dessus les haies.
+func _update_king(delta: float, context: CombatContext) -> void:
+	if _pieces.is_empty():
+		return
+	while _torn_pending > 0:
+		_torn_pending -= 1
+		_eject_piece(context)
+	var home := Vector2(context.player_cell)
+	for i in _pieces.size():
+		var piece: Dictionary = _pieces[i]
+		match piece["state"]:
+			Piece.ORBIT:
+				piece["pos"] = home
+			Piece.HUNT:
+				_step_hunter(piece, delta, context)
+			Piece.POSED:
+				_step_chest(piece, delta, context)
+			Piece.BITE:
+				_step_bite(piece, delta, context)
+			Piece.LOOSE:
+				piece["pos"] = (piece["pos"] as Vector2).move_toward(piece["throw"], RECALL_SPEED * delta)
+				_count_down(piece, delta)
+			Piece.RETURN:
+				_fly_home(piece, RETURN_SPEED, delta, home, false, context)
+			Piece.RECALL:
+				_fly_home(piece, RECALL_SPEED, delta, home, true, context)
+	_update_decoy(delta, context)
+	_update_cages(delta, context)
+
+
+func _count_down(piece: Dictionary, delta: float) -> void:
+	piece["left"] = float(piece["left"]) - delta
+	if float(piece["left"]) <= 0.0:
+		piece["state"] = Piece.RETURN
+
+
+## La première pièce en orbite part : un gantelet d'abord, le plastron n'en sort qu'en dernier.
+func _eject_piece(context: CombatContext) -> void:
+	for piece in _pieces:
+		if piece["state"] != Piece.ORBIT:
+			continue
+		var angle := _rng.randf() * TAU
+		piece["state"] = Piece.LOOSE
+		piece["pos"] = Vector2(context.player_cell)
+		piece["throw"] = piece["pos"] + Vector2.from_angle(angle) * LOOSE_THROW
+		piece["left"] = PIECE_AUTO_RETURN
+		_sync_orbit()
+		piece_ejected.emit(context.player_cell)
+		var blow := Ability.make({"id": "braise_eclat", "kind": Ability.Kind.BLAST,
+			"element": stats.element, "damage": EJECT_DAMAGE, "radius": EJECT_RADIUS})
+		_apply_area(blow, context.player_cell, context, null, false, false)
+		return
+
+
+func _nearest_creature(from: Vector2, context: CombatContext, reach: float = INF) -> int:
+	var best := -1
+	var best_distance := reach
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := from.distance_to(Vector2(context.enemy_cells[i]))
+		if distance < best_distance:
+			best_distance = distance
+			best = i
+	return best
+
+
+func _cast_hunters(ability: Ability, context: CombatContext) -> bool:
+	var home := Vector2(context.player_cell)
+	if _nearest_creature(home, context, float(ability.range)) < 0:
+		use_refused.emit("cible")
+		return false
+	var sent := 0
+	for i in GAUNTLETS:
+		var piece: Dictionary = _pieces[i]
+		if piece["state"] == Piece.ORBIT:
+			piece["state"] = Piece.HUNT
+			piece["pos"] = home
+			piece["left"] = ability.duration
+			piece["timer"] = 0.0
+			piece["ability"] = ability
+			sent += 1
+	if sent == 0:
+		use_refused.emit("armure")
+		return false
+	_sync_orbit()
+	hunters_cast.emit(context.player_cell)
+	return true
+
+
+func _step_hunter(piece: Dictionary, delta: float, context: CombatContext) -> void:
+	_count_down(piece, delta)
+	if piece["state"] != Piece.HUNT:
+		return
+	var prey := _nearest_creature(piece["pos"], context)
+	if prey < 0:
+		piece["state"] = Piece.RETURN
+		return
+	var at := Vector2(context.enemy_cells[prey])
+	piece["pos"] = (piece["pos"] as Vector2).move_toward(at, HUNT_SPEED * delta)
+	piece["timer"] = float(piece["timer"]) - delta
+	if float(piece["timer"]) <= 0.0 and (piece["pos"] as Vector2).distance_to(at) <= HUNT_REACH:
+		piece["timer"] = HUNT_GAP
+		piece_struck.emit(context.enemy_cells[prey])
+		_apply_damage(prey, piece["ability"], context, false, true)
+
+
+func _cast_chest(ability: Ability, context: CombatContext) -> bool:
+	var piece: Dictionary = _pieces[CHEST_PIECE]
+	if piece["state"] != Piece.ORBIT:
+		use_refused.emit("armure")
+		return false
+	piece["state"] = Piece.POSED
+	piece["pos"] = Vector2(context.player_cell)
+	piece["left"] = PIECE_AUTO_RETURN
+	piece["ability"] = ability
+	piece["prey"] = -1
+	_sync_orbit()
+	chest_posed.emit(context.player_cell)
+	return true
+
+
+func _step_chest(piece: Dictionary, delta: float, context: CombatContext) -> void:
+	_count_down(piece, delta)
+	if piece["state"] != Piece.POSED:
+		return
+	var at := Vector2i(piece["pos"])
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var gap: Vector2i = context.enemy_cells[i] - at
+		if absi(gap.x) + absi(gap.y) > 1:
+			continue
+		var ability: Ability = piece["ability"]
+		if context.bosses.has(i):
+			chest_bit.emit(context.enemy_cells[i], 0.0)
+			var bite := Ability.make({"id": ability.id, "kind": ability.kind,
+				"element": ability.element, "damage": CHEST_BOSS_BITE})
+			_apply_damage(i, bite, context, false, false)
+			chest_spat.emit(context.enemy_cells[i])
+			piece["state"] = Piece.RETURN
+			return
+		piece["state"] = Piece.BITE
+		piece["prey"] = i
+		piece["left"] = ability.hold_seconds
+		piece["timer"] = 0.0
+		piece["pos"] = Vector2(context.enemy_cells[i])
+		enemy_staggered.emit(i, ability.hold_seconds)
+		chest_bit.emit(context.enemy_cells[i], ability.hold_seconds)
+		return
+
+
+func _step_bite(piece: Dictionary, delta: float, context: CombatContext) -> void:
+	var prey: int = piece["prey"]
+	if not context.enemy_alive(prey):
+		chest_spat.emit(Vector2i(piece["pos"]))
+		piece["state"] = Piece.RETURN
+		return
+	piece["pos"] = Vector2(context.enemy_cells[prey])
+	piece["timer"] = float(piece["timer"]) - delta
+	if float(piece["timer"]) <= 0.0:
+		piece["timer"] = ZONE_TICK
+		var ability: Ability = piece["ability"]
+		var slice := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+			"damage": int(round(ability.damage * ZONE_TICK))})
+		_apply_damage(prey, slice, context, false, false)
+	piece["left"] = float(piece["left"]) - delta
+	if float(piece["left"]) <= 0.0:
+		chest_spat.emit(context.enemy_cells[prey])
+		piece["state"] = Piece.RETURN
+
+
+func _cast_recall(ability: Ability, context: CombatContext) -> bool:
+	var called := 0
+	for piece in _pieces:
+		if piece["state"] == Piece.ORBIT or piece["state"] == Piece.RECALL:
+			continue
+		piece["state"] = Piece.RECALL
+		piece["ability"] = ability
+		piece["hit"] = {}
+		called += 1
+		piece_recalled.emit(Vector2i((piece["pos"] as Vector2).round()))
+	if called == 0:
+		use_refused.emit("armure")
+		return false
+	recall_cast.emit(context.player_cell)
+	return true
+
+
+func _fly_home(piece: Dictionary, speed: float, delta: float, home: Vector2, strikes: bool,
+		context: CombatContext) -> void:
+	piece["pos"] = (piece["pos"] as Vector2).move_toward(home, speed * delta)
+	if strikes:
+		for i in context.enemy_cells.size():
+			if piece["hit"].has(i) or not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			if (piece["pos"] as Vector2).distance_to(Vector2(context.enemy_cells[i])) <= RECALL_REACH:
+				piece["hit"][i] = true
+				piece_struck.emit(context.enemy_cells[i])
+				_apply_damage(i, piece["ability"], context, false, true)
+	if (piece["pos"] as Vector2).distance_to(home) <= PIECE_HOME:
+		piece["state"] = Piece.ORBIT
+		_sync_orbit()
+		piece_returned.emit(strikes)
+
+
+## Les pièces en orbite sont les plaques de `Health` : c'est elles qui encaissent.
+func _sync_orbit() -> void:
+	var count := 0
+	for piece in _pieces:
+		if piece["state"] == Piece.ORBIT:
+			count += 1
+	health.plates = count
+
+
+func _pose_decoy(cell: Vector2i, ability: Ability) -> void:
+	_decoy = {"cell": cell, "left": ability.decoy_seconds, "ability": ability}
+	decoy_field.emit(_field_from(cell))
+	decoy_posed.emit(cell, ability.decoy_seconds)
+
+
+func _update_decoy(delta: float, context: CombatContext) -> void:
+	if _decoy.is_empty():
+		return
+	_decoy["left"] = float(_decoy["left"]) - delta
+	if float(_decoy["left"]) > 0.0:
+		return
+	var ability: Ability = _decoy["ability"]
+	var cell: Vector2i = _decoy["cell"]
+	_decoy = {}
+	decoy_field.emit(PackedInt32Array())
+	var blast := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.damage, "radius": ability.decoy_radius})
+	_apply_area(blast, cell, context, null, false, false)
+	decoy_blew.emit(cell, ability.decoy_radius)
+
+
+func _cast_cages(ability: Ability, context: CombatContext) -> bool:
+	_caged.clear()
+	var indices := []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		_caged[i] = true
+		# Le boss ne se laisse pas enfermer : la cage éclate sur lui, et il prend le coup à la fin.
+		if not context.bosses.has(i):
+			indices.append(i)
+			enemy_staggered.emit(i, ability.duration)
+	_cage_left = ability.duration
+	_cage_ability = ability
+	cages_cast.emit(context.player_cell, indices, ability.duration)
+	return true
+
+
+func _update_cages(delta: float, context: CombatContext) -> void:
+	if _cage_ability == null:
+		return
+	_cage_left -= delta
+	if _cage_left > 0.0:
+		return
+	var ability := _cage_ability
+	_cage_ability = null
+	var cells := []
+	for index: int in _caged.keys():
+		if context.enemy_alive(index):
+			cells.append(context.enemy_cells[index])
+			_apply_damage(index, ability, context, false, false)
+	_caged.clear()
+	cages_crushed.emit(cells)
+
+
+## Ce que le jeu dessine : où est chaque pièce, en cases, et ce qu'elle fait.
+func pieces() -> Array[Dictionary]:
+	return _pieces
+
+
+## Ce que les pièces lancées ajoutent à son allure.
+func armor_speed() -> float:
+	if _pieces.is_empty():
+		return 0.0
+	return PIECE_SPEED_BONUS * float(PIECES_MAX - health.plates)
+
+
+# --- Le Chevalier Écarlate ------------------------------------------------------------
+
+func _add_cuts(index: int, count: int) -> void:
+	var total := mini(CUTS_MAX, int(_cuts.get(index, {}).get("count", 0)) + count)
+	_cuts[index] = {"count": total, "left": CUT_SECONDS}
+	enemy_cuts.emit(index, total)
+
+
+func cuts_on(index: int) -> int:
+	return int(_cuts.get(index, {}).get("count", 0))
+
+
+func _cast_dash(ability: Ability, context: CombatContext) -> bool:
+	if player_rooted():
+		use_refused.emit("immobile")
+		return false
+	var from := context.player_cell
+	var to := from
+	var crossed: Array[Vector2i] = []
+	for step in ability.range:
+		var next: Vector2i = to + context.player_facing
+		if not grid.is_floor_v(next):
+			break
+		to = next
+		crossed.append(to)
+	if to == from:
+		use_refused.emit("mur")
+		return false
+	blink_performed.emit(from, to)
+	dash_cut.emit(from, to)
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i) and context.enemy_cells[i] in crossed:
+			_apply_damage(i, ability, context, false, true)
+	return true
+
+
+func _cast_guard(ability: Ability) -> bool:
+	_guard = ability
+	_parry_pending = false
+	health.immune = true
+	_immune_left = ability.duration
+	guard_raised.emit(ability.duration)
+	return true
+
+
+func _cast_sheathe(ability: Ability, context: CombatContext) -> bool:
+	var targets := []
+	var cells := []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		if ability.is_ultimate:
+			_add_cuts(i, ability.cuts)
+		elif not _cuts.has(i) or not _in_reach(i, ability.range, context):
+			continue
+		targets.append(i)
+		cells.append(context.enemy_cells[i])
+	# Un fourreau qui claque sur rien ne coûte rien : l'ultime, lui, ne se refuse que sans proie.
+	if targets.is_empty():
+		use_refused.emit("cible")
+		return false
+	var seconds := ability.duration if ability.is_ultimate else SHEATHE_SILENCE
+	_sheathe = {"left": seconds, "targets": targets, "ability": ability}
+	sheathe_begun.emit(context.player_cell, cells, seconds, ability.is_ultimate)
+	return true
+
+
+func _in_reach(index: int, reach: int, context: CombatContext) -> bool:
+	var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[index])
+	return distance >= 0 and distance <= reach
+
+
+func _update_blade(delta: float, context: CombatContext) -> void:
+	if _parry_pending:
+		_parry_pending = false
+		var answer := _guard
+		_guard = null
+		_immune_left = 0.0
+		health.immune = false
+		player_immunity_faded.emit()
+		guard_parried.emit(context.player_cell)
+		if answer != null:
+			_apply_area(answer, context.player_cell, context)
+	for index: int in _cuts.keys():
+		_cuts[index]["left"] = float(_cuts[index]["left"]) - delta
+		if float(_cuts[index]["left"]) <= 0.0:
+			_cuts.erase(index)
+			enemy_cuts.emit(index, 0)
+	if _sheathe.is_empty():
+		return
+	_sheathe["left"] = float(_sheathe["left"]) - delta
+	if float(_sheathe["left"]) > 0.0:
+		return
+	var ability: Ability = _sheathe["ability"]
+	var targets: Array = _sheathe["targets"]
+	_sheathe = {}
+	for index: int in targets:
+		var count := cuts_on(index)
+		if count <= 0 or not context.enemy_alive(index):
+			continue
+		_cuts.erase(index)
+		enemy_cuts.emit(index, 0)
+		cut_burst.emit(context.enemy_cells[index], count)
+		var blow := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+			"damage": ability.cut_damage * count})
+		_apply_damage(index, blow, context, false, false)
+	sheathe_ended.emit(ability.is_ultimate)
+
+
+# --- Le Geôlier ------------------------------------------------------------------------
+
+func _add_shackle_hit(index: int, context: CombatContext) -> void:
+	if not context.enemy_alive(index) or context.bosses.has(index):
+		return
+	var count := int(_shackle_hits.get(index, 0)) + 1
+	if count < SHACKLE_HITS:
+		_shackle_hits[index] = count
+		return
+	_shackle_hits.erase(index)
+	enemy_staggered.emit(index, SHACKLE_SECONDS)
+	enemy_shackled.emit(index, SHACKLE_SECONDS)
+
+
+## Le souffle fige ce qu'il touche, par les couloirs, comme ses dégâts. Un boss n'est pas figé.
+## Un sort qui passe les haies (`pierces_walls`) fige à vol d'oiseau, comme ses dégâts.
+func _freeze_around(ability: Ability, context: CombatContext, centre: Vector2i = Vector2i(-1, -1)) -> void:
+	if centre == Vector2i(-1, -1):
+		centre = context.player_cell
+	var frozen := []
+	var caught := _creatures_in_sky(centre, ability.radius, context) if ability.pierces_walls \
+		else _creatures_within(centre, ability.radius, context)
+	for i in caught:
+		if context.bosses.has(i):
+			continue
+		frozen.append(i)
+		enemy_staggered.emit(i, ability.stun_seconds)
+	if not frozen.is_empty():
+		enemies_frozen.emit(frozen, ability.stun_seconds)
+		enemies_dazed.emit(frozen, ability.stun_seconds, ability)
+
+
+## Le plus éloigné qu'on puisse ramener, par les couloirs. Il atterrit à une case du lanceur, sur
+## son propre chemin : jamais sur la case du mage, et jamais de l'autre côté d'une haie.
+func _cast_hook(ability: Ability, context: CombatContext) -> bool:
+	var target := -1
+	var best := 1
+	for i in context.enemy_cells.size():
+		if not _possessable(i, context):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance > best and distance <= ability.range:
+			best = distance
+			target = i
+	if target < 0:
+		use_refused.emit("cible")
+		return false
+	var field := _field_from(context.player_cell)
+	var from: Vector2i = context.enemy_cells[target]
+	var to := from
+	while Pathfinder.value_at(grid, field, to) > 1:
+		to = Pathfinder.step_toward(grid, field, to) + to
+	context.enemy_cells[target] = to
+	enemy_hooked.emit(target, from, to)
+	enemy_staggered.emit(target, ability.stun_seconds)
+	_apply_damage(target, ability, context, false, true)
+	return true
+
+
+func _cast_soul_chains(ability: Ability, context: CombatContext) -> bool:
+	var near := _creatures_within(context.player_cell, float(ability.range), context)
+	var field := _field_from(context.player_cell)
+	near.sort_custom(func(a: int, b: int) -> bool:
+		return Pathfinder.value_at(grid, field, context.enemy_cells[a]) \
+			< Pathfinder.value_at(grid, field, context.enemy_cells[b]))
+	near.resize(mini(near.size(), ability.bond_count))
+	if near.is_empty():
+		use_refused.emit("cible")
+		return false
+	_soul_chains = {"members": near, "left": ability.duration, "tick": 0.0, "ability": ability}
+	for i: int in near:
+		enemy_soaked.emit(i, ability.duration, ability.slow_factor)
+	soul_chains_cast.emit(near, ability.duration)
+	return true
+
+
+func _cast_gaol(ability: Ability, context: CombatContext) -> bool:
+	var members := []
+	var held := []
+	var centre := Vector2(context.player_cell)
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		if centre.distance_to(Vector2(context.enemy_cells[i])) > ability.radius:
+			continue
+		members.append(i)
+		if not context.bosses.has(i):
+			held.append(i)
+			enemy_staggered.emit(i, ability.duration)
+	_gaol = {"members": members, "left": ability.duration, "tick": 0.0, "ability": ability}
+	gaol_cast.emit(context.player_cell, held, ability.radius, ability.duration)
+	return true
+
+
+## Les chaînes et la Geôle rongent au rythme des zones : une usure, pas une rafale.
+func _burn_members(state: Dictionary, delta: float, context: CombatContext) -> void:
+	state["left"] = float(state["left"]) - delta
+	state["tick"] = float(state["tick"]) - delta
+	if float(state["tick"]) > 0.0:
+		return
+	state["tick"] = ZONE_TICK
+	var ability: Ability = state["ability"]
+	var slice := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+		"damage": int(round(ability.damage * ZONE_TICK))})
+	for i: int in state["members"]:
+		if context.enemy_alive(i):
+			_apply_damage(i, slice, context, false, false)
+
+
+func _update_gaoler(delta: float, context: CombatContext) -> void:
+	if not _soul_chains.is_empty():
+		_burn_members(_soul_chains, delta, context)
+		if float(_soul_chains["left"]) <= 0.0:
+			_soul_chains = {}
+	if not _gaol.is_empty():
+		_burn_members(_gaol, delta, context)
+		if float(_gaol["left"]) <= 0.0:
+			var cells := []
+			for i: int in _gaol["members"]:
+				if context.enemy_alive(i):
+					cells.append(context.enemy_cells[i])
+			_gaol = {}
+			gaol_ended.emit(cells)
+
+
+## Ce que le jeu dessine : les ennemis enchaînés au Geôlier, et ceux que la Geôle cloue.
+func soul_chain_members() -> Array:
+	return [] if _soul_chains.is_empty() else _soul_chains["members"]
+
+
+func gaol_members() -> Array:
+	return [] if _gaol.is_empty() else _gaol["members"]
+
+
 func _can_pay(ability: Ability) -> bool:
 	return ability.self_cost <= 0 or health.current > ability.self_cost
 
 
 # --- L'acier ----------------------------------------------------------------------
+
+# --- L'Archange du Ciel ------------------------------------------------------------
+
+## La distance à vol d'oiseau, arrondie à la case : celle de son trait, Vue d'en haut.
+func _sky_distance(from: Vector2i, to: Vector2i) -> int:
+	return roundi(Vector2(to - from).length())
+
+
+## L'ENVOL. Il s'élève, intouchable : c'est le JEU qui le laisse passer au-dessus des haies
+## (`GridMover.phases`) et qui le repose sur la case de sol la plus proche avant `_land`.
+func _cast_flight(ability: Ability) -> bool:
+	if _flight != null:
+		return false
+	_flight = ability
+	_flight_left = ability.duration
+	health.immune = true
+	flight_started.emit(ability.duration, ability)
+	return true
+
+
+func flying() -> bool:
+	return _flight != null
+
+
+## Ce que l'Envol fait de son allure. Le jeu le lit ; les bots n'utilisent aucune fuite.
+func flight_speed() -> float:
+	return _flight.flight_speed if _flight != null else 1.0
+
+
+## Il retombe. `flight_ended` part d'abord : le jeu le repose sur le sol et met la case à jour,
+## puis l'onde frappe autour de cette case.
+func _land(context: CombatContext) -> void:
+	var ability := _flight
+	_flight = null
+	_flight_left = 0.0
+	health.immune = _immune_left > 0.0
+	flight_ended.emit()
+	flight_landed.emit(context.player_cell, ability)
+	if ability.damage > 0 and ability.radius > 0.0:
+		_apply_area(ability, context.player_cell, context)
+
 
 ## Le Rempart le cloue sur place : le jeu et la simulation lisent tous deux cette réponse.
 func player_rooted() -> bool:
@@ -2934,6 +3661,9 @@ func _update_volleys(delta: float, context: CombatContext) -> void:
 		volley["time"] = float(volley["time"]) + delta
 		var time: float = volley["time"]
 		var ability: Ability = volley["ability"]
+		if time >= BLADE_OUT and not bool(volley["returning"]) and not ability.blades_return:
+			_volleys.remove_at(v)
+			continue
 		if time >= BLADE_OUT and not bool(volley["returning"]):
 			volley["returning"] = true
 			volley["hit"] = {}
@@ -3436,10 +4166,15 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 		_apply_trait(index, dealt, ability, context)
 	if dealt > 0 and not _bond_relaying:
 		_relay_bond(index, dealt, ability, context)
+	if ability.cuts > 0 and dealt > 0 and context.enemy_alive(index) and not structure:
+		_add_cuts(index, ability.cuts)
 	if not context.enemy_health[index].is_alive():
 		_marked.erase(index)
 		_whispers.erase(index)
 		_troubled.erase(index)
+		_caged.erase(index)
+		_cuts.erase(index)
+		_shackle_hits.erase(index)
 		if _possessed.erase(index):
 			enemy_possessed.emit(index, 0.0)
 		if _star_marks.erase(index):
@@ -3487,6 +4222,9 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 		Element.Kind.CHARM:
 			if ability == stats.attack:
 				_add_whisper(index, context)
+		Element.Kind.COLDFIRE:
+			if ability == stats.attack:
+				_add_shackle_hit(index, context)
 		Element.Kind.STEEL:
 			if _molten_left > 0.0 and ability == stats.attack and context.enemy_alive(index):
 				_push_away(index, context, MOLTEN_PUSH)

@@ -36,13 +36,18 @@ var _life := 0.0
 ## puis ses fourches.
 var _shapes: Array = []
 var _width := 3.0
+var _lifetime := LIFETIME
 
 
-func setup(from: Vector2, to: Vector2, tint: Color, width: float) -> void:
+## `lifetime` allonge un sort qui doit se voir (la Chaîne, l'Orage) ; le trait de
+## l'attaque garde le claquement bref.
+func setup(from: Vector2, to: Vector2, tint: Color, width: float,
+		lifetime: float = LIFETIME) -> void:
 	_from = from
 	_to = to
 	_tint = tint
 	_width = maxf(1.0, width)
+	_lifetime = maxf(0.05, lifetime)
 	position = Vector2.ZERO
 
 	var rng := RandomNumberGenerator.new()
@@ -85,7 +90,7 @@ func _broken(from: Vector2, to: Vector2, rng: RandomNumberGenerator) -> PackedVe
 
 func _process(delta: float) -> void:
 	_life += delta
-	if _life >= LIFETIME:
+	if _life >= _lifetime:
 		queue_free()
 		return
 	queue_redraw()
@@ -94,8 +99,8 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if _shapes.is_empty():
 		return
-	var shape: Array = _shapes[0 if _life < LIFETIME * 0.5 else 1]
-	var fade := 1.0 - _life / LIFETIME * 0.6
+	var shape: Array = _shapes[0 if _life < _lifetime * 0.5 else 1]
+	var fade := 1.0 - _life / _lifetime * 0.6
 	# Trois passes : le halo, le cerne bleu, le cœur blanc.
 	#
 	# ⚠️ Composé NORMALEMENT, et le cerne fait le travail : en additif, doré sur blanc, le

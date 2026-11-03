@@ -186,6 +186,13 @@ MAGES = {
     "acier": {"id": "acier", "name": "Archange d'Acier", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
             "demagenta": True, "whole_shapes": True},
+    # Sa lance levée fausse les hauteurs comme le marteau de l'Acier : même échelle imposée.
+    # Blanc, or et émeraude : rien n'a plus de rouge et de bleu que de vert, `demagenta` n'y
+    # touche pas, alors que `despilled` repeindrait ses ailes. Son attaque est arrivée en cases
+    # hautes (1774 x 887), comme celle du Geôlier ; la marche, carrée, n'en est pas changée.
+    "ciel": {"id": "ciel", "name": "Archange du Ciel", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True, "tall_cells": True},
     # Le gabarit d'animation : `every_step` garde ses huit images de course. Son épée déborde sur
     # les cases voisines, d'où `whole_shapes`.
     "test": {"id": "test", "name": "Héros d'essai", "source": MAGES_SOURCE,
@@ -213,6 +220,18 @@ MAGES = {
     "discorde": {"id": "discorde", "name": "Démone de la Discorde", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
             "walk_body_only": True},
+    # Or noirci et lave : aucun bleu en plus du vert, `demagenta` n'y change rien.
+    "braise": {"id": "braise", "name": "Roi de Braise", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True},
+    # Sa laque est un rouge sans bleu : `demagenta` ne la touche pas, et ses cheveux restent blancs.
+    "ecarlate": {"id": "ecarlate", "name": "Chevalier Écarlate", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True},
+    # Il flotte : le bas de sa flamme sert de pieds. Noir et cyan, `demagenta` n'y change rien.
+    "geolier": {"id": "geolier", "name": "Geôlier", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True, "tall_cells": True, "body_scale": 1.4},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,
@@ -1091,20 +1110,31 @@ def _drawn_height(row: Image.Image, columns: int) -> float:
     return float(np.median(heights))
 
 
-def _side_cell(cell: Image.Image, scale: float) -> Image.Image:
-    """Une case de profil sans ses miettes, agrandie autour de son centre."""
-    data = np.array(cell)
-    drawn = _drawn(data)
-    labels, count = ndimage.label(drawn)
-    if count > 1:
-        sizes = ndimage.sum(drawn, labels, range(1, count + 1))
-        for piece in np.nonzero(sizes < float(np.max(sizes)) * SIDE_CRUMB_SHARE)[0]:
-            data[labels == piece + 1] = (255, 0, 255)
-    out = Image.fromarray(data, "RGB")
-    grown = out.resize((round(out.width * scale), round(out.height * scale)), Image.LANCZOS)
-    left = (grown.width - out.width) // 2
-    top = (grown.height - out.height) // 2
-    return grown.crop((left, top, left + out.width, top + out.height))
+def _side_figures(side: Image.Image, columns: int) -> list:
+    """Les personnages d'une bande, recadrés sur leur dessin et sans leurs miettes.
+
+    Les colonnes vides les séparent ; s'ils se touchent, on retombe sur la grille.
+    """
+    labels, count = ndimage.label(_drawn(np.asarray(side)).any(axis=0))
+    runs = [(found[0].start, found[0].stop) for found in ndimage.find_objects(labels)]
+    runs = sorted(sorted(runs, key=lambda run: run[0] - run[1])[:columns])
+    if count < columns:
+        width = side.width / columns
+        runs = [(int(i * width), int((i + 1) * width)) for i in range(columns)]
+    figures = []
+    for start, stop in runs:
+        data = np.array(side.crop((start, 0, stop, side.height)))
+        drawn = _drawn(data)
+        pieces, found = ndimage.label(drawn)
+        if found > 1:
+            sizes = ndimage.sum(drawn, pieces, range(1, found + 1))
+            for piece in np.nonzero(sizes < float(np.max(sizes)) * SIDE_CRUMB_SHARE)[0]:
+                drawn[pieces == piece + 1] = False
+                data[pieces == piece + 1] = (255, 0, 255)
+        lines = np.nonzero(drawn.any(axis=1))[0]
+        figures.append(Image.fromarray(data, "RGB").crop(
+            (0, int(lines[0]), data.shape[1], int(lines[-1]) + 1)))
+    return figures
 
 
 ## Sous cette part de l'écart entre deux images voisines, les images 5 à 8 répètent 1 à 4.
@@ -1158,23 +1188,56 @@ def standing_cell(path: str, columns: int, column: int, reference: Image.Image) 
 def with_new_profile(walk_path: Path, side_path: Path) -> Path:
     """Une copie de la planche de marche, dont la dernière rangée vient de `side_path`.
 
-    ⚠️ Le profil refait est dessiné de 6 à 13 % plus petit que la rangée qu'il remplace,
-    et l'ange rétrécirait à chaque virage : il reprend donc la hauteur de cette rangée.
+    ⚠️ Le générateur ne tient ni la taille ni le format demandés : 6 à 13 % trop petit sur
+    les premiers profils, 2172 x 724 au lieu de 2048 x 256 ensuite. Étiré dans la rangée, il
+    serait déformé, et l'ange changerait de taille à chaque virage. Chaque personnage est
+    donc reposé dans sa case, sans déformation, à la hauteur de la rangée qu'il remplace.
     """
     with Image.open(walk_path) as walk, Image.open(side_path) as side:
         sheet = walk.convert("RGB")
         row_height = sheet.height // len(ROWS)
-        row = side.convert("RGB").resize((sheet.width, row_height), Image.LANCZOS)
-        old_row = sheet.crop((0, sheet.height - row_height, sheet.width, sheet.height))
+        top = sheet.height - row_height
         columns = sheet.width // row_height
-        scale = max(1.0, _drawn_height(old_row, columns) / _drawn_height(row, columns))
-        for column in range(columns):
-            box = (column * row_height, 0, (column + 1) * row_height, row_height)
-            sheet.paste(_side_cell(row.crop(box), scale),
-                        (box[0], sheet.height - row_height))
+        target = _drawn_height(sheet.crop((0, top, sheet.width, sheet.height)), columns)
+        figures = _side_figures(side.convert("RGB"), columns)
+        scale = target / float(np.median([figure.height for figure in figures]))
+        for column, figure in enumerate(figures):
+            size = (round(figure.width * scale), round(figure.height * scale))
+            cell = Image.new("RGB", (row_height, row_height), (255, 0, 255))
+            # Les pieds sur une même ligne : une hauteur qui varie d'un pixel ne les fait pas sautiller.
+            cell.paste(figure.resize(size, Image.LANCZOS),
+                       ((row_height - size[0]) // 2, (row_height + round(target)) // 2 - size[1]))
+            sheet.paste(cell, (column * row_height, top))
     merged = Path(tempfile.mkdtemp()) / walk_path.name
     sheet.save(merged)
     return merged
+
+
+def squared_cells(path: Path, rows: int) -> Path:
+    """Une copie de la planche aux cases carrées, chaque case réduite autour de son centre.
+
+    Le Geôlier est grand : le générateur a rendu ses planches en cases hautes (1774 x 887, soit
+    222 x 296), et les étirer en largeur l'aurait déformé. Chaque case garde ses proportions,
+    à la hauteur de la case carrée, et la marge gagnée sur les côtés reste magenta.
+    """
+    with Image.open(path) as image:
+        sheet = image.convert("RGB")
+    width = sheet.width / COLUMNS
+    height = sheet.height / rows
+    side = 256
+    out = Image.new("RGB", (side * COLUMNS, side * rows), (255, 0, 255))
+    scale = side / height
+    for row in range(rows):
+        for column in range(COLUMNS):
+            box = (round(column * width), round(row * height),
+                   round((column + 1) * width), round((row + 1) * height))
+            cell = sheet.crop(box)
+            size = (round(cell.width * scale), side)
+            out.paste(cell.resize(size, Image.LANCZOS),
+                      (column * side + (side - size[0]) // 2, row * side))
+    squared = Path(tempfile.mkdtemp()) / path.name
+    out.save(squared)
+    return squared
 
 
 def build(source_name: str, entry: dict) -> str:
@@ -1192,6 +1255,9 @@ def build(source_name: str, entry: dict) -> str:
     if missing:
         return f"{entry['id']} : {' et '.join(missing)} introuvable(s)"
 
+    if entry.get("tall_cells"):
+        walk_path = squared_cells(walk_path, len(ROWS))
+        strike_path = squared_cells(strike_path, len(ROWS))
     # ON MESURE AVANT DE COUPER. Une planche mal formée doit être refusée ici,
     # avec la raison, plutôt que produire des bandes fausses qu'on découvrira
     # en jeu — c'est la leçon des sept créatures qui marchaient à reculons :
@@ -1352,8 +1418,11 @@ def build(source_name: str, entry: dict) -> str:
     travel = foot_travel(walk["right"]) if walks else 0.0
     # Le gabarit d'animation, s'il en a un : voir `MotionProfile`.
     motion = {"motion": entry["motion"]} if "motion" in entry else {}
+    # Un corps dont le bas n'est que flamme paraît petit à hauteur égale : le jeu l'agrandit d'autant.
+    grown = {"body_scale": entry["body_scale"]} if "body_scale" in entry else {}
     (folder / "frames.json").write_text(json.dumps({
         **motion,
+        **grown,
         "cell": [cell_w, FRAME_HEIGHT],
         "feet_y": round(feet_y, 1),
         "foot_travel": round(travel, 4),

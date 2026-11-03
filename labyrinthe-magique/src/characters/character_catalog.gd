@@ -46,8 +46,12 @@ const ETOILES := "etoiles"
 const ACIER := "acier"
 const DEMON := "demon"
 const DISCORDE := "discorde"
-## Le gabarit d'animation : il a son onglet, mais il est absent de `all()`, donc de
-## l'équilibrage, des fiches et des tests qui parcourent les vrais personnages.
+const BRAISE := "braise"
+const ECARLATE := "ecarlate"
+const GEOLIER := "geolier"
+const CIEL := "ciel"
+## Le gabarit d'animation : il est absent de `all()`, donc de l'équilibrage, des fiches et
+## des tests qui parcourent les vrais personnages. `--demo --character test` y mène.
 const TEST := "test"
 
 const CATEGORY_MAGE := "mage"
@@ -60,20 +64,18 @@ const CATEGORIES := {
 	CATEGORY_MAGE: {"tab": "Mage", "accent": Color("#9fc4ff")},
 	CATEGORY_ANGE: {"tab": "Ange", "accent": Color("#ffd479")},
 	CATEGORY_DEMON: {"tab": "Démon", "accent": Color("#ff6b82")},
-	CATEGORY_TEST: {"tab": "Essai", "accent": Color("#9fe8b4")},
 }
 
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste(), lumiere(), mort(), etoiles(), acier(), demon(), discorde()]
+		peste(), lumiere(), mort(), etoiles(), acier(), ciel(), demon(), discorde(), braise(), ecarlate(), geolier()]
 
 
-## Ce que montre l'écran de sélection : les vrais personnages et le Héros d'essai.
+## Ce que montre l'écran de sélection. Le Héros d'essai en est caché pour l'instant : pour
+## le remontrer, l'ajouter ici et rendre son onglet à `CATEGORIES`.
 static func roster() -> Array[CharacterStats]:
-	var out := all()
-	out.append(test_hero())
-	return out
+	return all()
 
 
 static func in_category(category: String) -> Array[CharacterStats]:
@@ -1126,6 +1128,69 @@ static func acier() -> CharacterStats:
 	return c
 
 
+# --- Archange du Ciel : il voit le labyrinthe d'en haut. -------------------------------
+
+## Tous les autres se battent dans les couloirs. Lui frappe par-dessus les haies (`from_sky`) et
+## s'envole au-dessus des murs ; en échange, il est fragile et frappe court. Les chiffres sont
+## ceux de sa fiche (`docs/prompts/mages/mage_ciel.md`), réglés sur la passe rapide seulement.
+static func ciel() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = CIEL
+	c.display_name = "Archange du Ciel"
+	c.category = CATEGORY_ANGE
+	c.element = Element.Kind.SKY
+	c.description = "Il voit le labyrinthe d'en haut : ses coups tombent du ciel par-dessus les haies, et il s'envole au-dessus des murs. Fragile, il frappe court."
+	c.power_level = 4
+	c.base_health = 3
+	c.move_speed = 5.2
+	c.ultimate_required_kills = 4
+	c.attack = Ability.make({
+		"id": "ciel_lance", "display_name": "Lance céleste",
+		"description": "Une lance de lumière tombe du ciel sur l'ennemi le plus proche, même derrière une haie.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SKY,
+		"projectile_visual": "lance_celeste", "from_sky": true, "sky_fall": 0.35,
+		# 18 et non 17 : à 17, la Mort et la Foudre le dominaient sur le papier (`_test_no_dominance`),
+		# qui ne voit pas que sa portée passe les haies.
+		"damage": 18, "range": 6, "cooldown": 0.55,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "ciel_plumes", "display_name": "Plumes-lames",
+			"description": "Ses ailes lâchent un éventail de cinq plumes tranchantes, qui filent par-dessus les haies.",
+			"kind": Ability.Kind.BLADES, "element": Element.Kind.SKY,
+			"damage": 22, "range": 5, "blade_count": 5, "cooldown": 5.0, "blades_return": false,
+		}),
+		Ability.make({
+			"id": "ciel_colonne", "display_name": "Colonne du ciel",
+			"description": "Un pilier de lumière s'abat sur l'ennemi visé, même derrière une haie, et cloue ceux qui l'entourent. Les boss ne sont pas cloués.",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SKY,
+			"projectile_visual": "colonne_ciel", "from_sky": true, "sky_fall": 0.55,
+			"damage": 40, "radius": 1.5, "stun_seconds": 2.0, "range": 7, "cooldown": 9.0,
+		}),
+		Ability.make({
+			"id": "ciel_cloche", "display_name": "Cloche céleste",
+			"description": "Sa cloche sonne : une onde part de lui, passe les haies et étourdit tout ce qui l'entoure. Les boss ne sont pas étourdis.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.SKY,
+			"damage": 10, "radius": 4.0, "stun_seconds": 1.5, "cooldown": 12.0, "pierces_walls": true,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "ciel_envol", "display_name": "Envol",
+		"description": "Il s'élève trois secondes et vole par-dessus les haies sans pouvoir être touché, puis retombe avec une onde. Il ne ramasse rien en vol.",
+		"kind": Ability.Kind.FLIGHT, "element": Element.Kind.SKY,
+		"duration": 3.0, "flight_speed": 1.4, "damage": 20, "radius": 1.5, "cooldown": 12.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "ciel_jugement", "display_name": "Jugement des Six Ailes",
+		"description": "Six ailes de lumière s'ouvrent dans son dos, et douze épées tombent une à une sur les ennemis de la carte, par-dessus les murs.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.SKY,
+		"damage": 0, "radius": 0.0, "cooldown": 1.0, "is_ultimate": true, "pierces_walls": true,
+		"rain_count": 12, "rain_hunts": true, "rain_damage": 45, "rain_radius": 0.6,
+		"rain_duration": 3.0, "rain_fall": 0.45, "rain_delay": 0.5,
+	})
+	return c
+
+
 # --- Démon du Pacte : moins il lui reste de vie, plus il frappe fort. ------------------
 
 static func demon() -> CharacterStats:
@@ -1238,6 +1303,169 @@ static func discorde() -> CharacterStats:
 		"description": "Tous les ennemis à l'écran se battent entre eux, et leurs morts comptent pour elle. Seuls les boss résistent.",
 		"kind": Ability.Kind.POSSESS, "element": Element.Kind.CHARM,
 		"cooldown": 1.0, "is_ultimate": true, "possess_seconds": 6.0, "possess_strike": 22,
+	})
+	return c
+
+
+static func braise() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = BRAISE
+	c.display_name = "Roi de Braise"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.EMBER
+	c.description = "Son armure vole et se bat seule : il la lance dans les couloirs, puis la rappelle à travers le labyrinthe."
+	c.power_level = 3
+	c.base_health = 4
+	# Son allure de base, armure complète : chaque pièce lancée y ajoute `PIECE_SPEED_BONUS`.
+	c.move_speed = 4.4
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "braise_poing", "display_name": "Poing de braise",
+		"description": "Un poing d'or noirci file, frappe et rentre dans un jet d'escarbilles.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.EMBER,
+		"projectile_visual": "poing_braise",
+		# Le coup le plus lourd des démons : c'est ce qu'il a en échange de son allure et de sa portée.
+		"damage": 34, "range": 6, "cooldown": 0.75, "projectile_speed": 1.2,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "braise_chasseurs", "display_name": "Gantelets chasseurs",
+			"description": "Ses deux gantelets quittent leur orbite et s'abattent seuls sur les ennemis.",
+			"kind": Ability.Kind.HUNTERS, "element": Element.Kind.EMBER,
+			"damage": 18, "range": 8, "duration": 6.0, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "braise_plastron", "display_name": "Fournaise",
+			"description": "Posé au sol, il s'ouvre comme un four sur le premier ennemi qui passe, et le retient.",
+			"kind": Ability.Kind.CHEST, "element": Element.Kind.EMBER,
+			"damage": 20, "hold_seconds": 3.0, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "braise_rappel", "display_name": "Rappel",
+			"description": "Toutes ses pièces reviennent d'un coup, à travers les haies, et blessent ce qu'elles croisent.",
+			"kind": Ability.Kind.RECALL, "element": Element.Kind.EMBER,
+			"damage": 30, "cooldown": 8.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "braise_coquille", "display_name": "Coquille de cendre",
+		"description": "Il saute et laisse une armure de cendre, qui attire les ennemis puis explose.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.EMBER,
+		"range": 5, "cooldown": 10.0, "damage": 40, "decoy_seconds": 3.0, "decoy_radius": 2.5,
+	})
+	c.ultimate = Ability.make({
+		"id": "braise_cages", "display_name": "Les Mille Cages",
+		"description": "Une cage d'or en fusion s'abat sur chaque ennemi, le bloque, puis se resserre. Les boss subissent seulement le coup.",
+		"kind": Ability.Kind.CAGES, "element": Element.Kind.EMBER,
+		"damage": 60, "duration": 4.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+static func ecarlate() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = ECARLATE
+	c.display_name = "Chevalier Écarlate"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.BLADE
+	c.description = "Ses coups laissent des entailles qui ne font rien, jusqu'à ce qu'il rengaine. Alors, tout s'ouvre en même temps."
+	c.power_level = 3
+	c.base_health = 4
+	c.move_speed = 5.2
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "ecarlate_entaille", "display_name": "Entaille",
+		"description": "Un croissant de lumière blanche part de sa lame, et laisse une entaille.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.BLADE,
+		"projectile_visual": "coupe_ecarlate",
+		"damage": 15, "range": 5, "cooldown": 0.5, "projectile_speed": 1.5, "cuts": 1,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "ecarlate_pas", "display_name": "Pas de Lame",
+			"description": "Il file droit dans le couloir et coupe tout ce qu'il traverse.",
+			"kind": Ability.Kind.DASH, "element": Element.Kind.BLADE,
+			"damage": 20, "range": 5, "cooldown": 8.0, "cuts": 1,
+		}),
+		Ability.make({
+			"id": "ecarlate_garde", "display_name": "Garde",
+			"description": "Le premier coup reçu est annulé, et sa riposte entaille tout ce qui l'entoure.",
+			"kind": Ability.Kind.GUARD, "element": Element.Kind.BLADE,
+			"damage": 30, "radius": 2.0, "duration": 1.5, "cooldown": 10.0, "cuts": 2,
+		}),
+		Ability.make({
+			"id": "ecarlate_rengaine", "display_name": "Rengaine",
+			"description": "Sa lame rentre au fourreau : un silence, puis toutes les entailles à portée éclatent.",
+			"kind": Ability.Kind.SHEATHE, "element": Element.Kind.BLADE,
+			"damage": 18, "cut_damage": 18, "range": 8, "cooldown": 9.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "ecarlate_volte", "display_name": "Volte-face",
+		"description": "Il saute en arrière dans une pluie de pétales.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.BLADE,
+		"range": 5, "cooldown": 9.0, "backward": true,
+	})
+	c.ultimate = Ability.make({
+		"id": "ecarlate_derniere", "display_name": "Dernière Rengaine",
+		"description": "Le monde perd ses couleurs. Chaque ennemi reçoit cinq entailles, il rengaine, et tout s'ouvre.",
+		"kind": Ability.Kind.SHEATHE, "element": Element.Kind.BLADE,
+		"cuts": 5, "cut_damage": 18, "duration": 1.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+static func geolier() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = GEOLIER
+	c.display_name = "Geôlier"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.COLDFIRE
+	c.description = "Une armure vide qu'habite une flamme froide. Il flotte, enchaîne ce qu'il touche, et passe à travers les haies."
+	c.power_level = 3
+	# Une armure massive : il encaisse plus que les autres démons, et frappe moins vite.
+	c.base_health = 5
+	c.move_speed = 4.8
+	c.ultimate_required_kills = 6
+	c.attack = Ability.make({
+		"id": "geolier_poing", "display_name": "Poing spectral",
+		"description": "Un gantelet de flamme froide file et frappe. Au troisième coup, l'ennemi est entravé.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.COLDFIRE,
+		"projectile_visual": "poing_spectral",
+		"damage": 16, "range": 6, "cooldown": 0.6, "projectile_speed": 1.2,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "geolier_crochet", "display_name": "Crochet",
+			"description": "Une chaîne attrape l'ennemi le plus éloigné à portée et le traîne devant lui, sonné.",
+			"kind": Ability.Kind.HOOK, "element": Element.Kind.COLDFIRE,
+			"damage": 20, "range": 8, "stun_seconds": 1.0, "cooldown": 9.0,
+		}),
+		Ability.make({
+			"id": "geolier_chaines", "display_name": "Chaînes d'âmes",
+			"description": "Des chaînes le relient à trois ennemis : ralentis, ils brûlent de froid tant qu'elles tiennent.",
+			"kind": Ability.Kind.SOUL_CHAINS, "element": Element.Kind.COLDFIRE,
+			"damage": 12, "range": 6, "duration": 6.0, "cooldown": 13.0,
+			"bond_count": 3, "slow_factor": 0.5,
+		}),
+		Ability.make({
+			"id": "geolier_souffle", "display_name": "Souffle glacé",
+			"description": "Une nova de flamme froide déferle autour de lui et fige ce qu'elle touche.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.COLDFIRE,
+			"damage": 30, "radius": 2.5, "stun_seconds": 2.0, "cooldown": 11.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "geolier_traversee", "display_name": "Traversée spectrale",
+		"description": "Il devient flamme et passe à travers une haie, droit devant.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.COLDFIRE,
+		"range": 3, "cooldown": 12.0, "pierces_walls": true,
+	})
+	c.ultimate = Ability.make({
+		"id": "geolier_geole", "display_name": "La Geôle",
+		"description": "Un cercle de flamme froide s'abat autour de lui : des chaînes clouent au sol chaque ennemi à l'intérieur. Les boss brûlent sans être cloués.",
+		"kind": Ability.Kind.GAOL, "element": Element.Kind.COLDFIRE,
+		"damage": 15, "radius": 6.0, "duration": 5.0, "cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 

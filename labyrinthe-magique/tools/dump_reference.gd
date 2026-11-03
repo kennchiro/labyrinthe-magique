@@ -33,10 +33,14 @@ const TRAIT_TEXT := {
 	Element.Kind.STEEL: "**Plaques** — %d plaques encaissent chacune un coup à la place des PV ; %d kills en reforgent une",
 	Element.Kind.BLOOD: "**Rage** — jusqu'à +%d %% de dégâts selon les PV perdus, au maximum à 1 PV",
 	Element.Kind.CHARM: "**Trouble** — au %de murmure, la cible ralentit de %d %% pendant %.1f s, et sa possession dure %.1f s de plus",
+	Element.Kind.COLDFIRE: "**Entraves** — au %de poing sur le même ennemi, il est cloué au sol %.1f s",
+	Element.Kind.BLADE: "**Entailles** — jusqu'à %d par ennemi, %.0f s depuis la dernière ; elles éclatent quand il rengaine",
+	Element.Kind.EMBER: "**Armure vivante** — %d pièces encaissent chacune un coup et blessent pour %d dégâts ; chacune lancée ajoute %.1f de vitesse, et rentre seule après %.0f s",
 	Element.Kind.DEATH: "**Sentence** — un ennemi sous %d %% de ses PV après un coup est achevé",
 	Element.Kind.TIME: "**Retard** — la cible ralentit de %d %% pendant %.1f s",
 	Element.Kind.POISON: "**Venin** — jusqu'à %d doses, %d dégâts par seconde chacune pendant %.0f s",
 	Element.Kind.LIGHT: "**Éblouissement** — la cible perd sa trace %.1f s, au plus toutes les %.0f s",
+	Element.Kind.SKY: "**Vue d'en haut** — ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies",
 }
 
 
@@ -123,6 +127,13 @@ func _trait_line(element: Element.Kind) -> String:
 			return TRAIT_TEXT[element] % [CombatSystem.WHISPER_MARKS,
 				int((1.0 - CombatSystem.TROUBLE_FACTOR) * 100.0), CombatSystem.TROUBLE_SECONDS,
 				CombatSystem.TROUBLE_BONUS]
+		Element.Kind.COLDFIRE:
+			return TRAIT_TEXT[element] % [CombatSystem.SHACKLE_HITS, CombatSystem.SHACKLE_SECONDS]
+		Element.Kind.BLADE:
+			return TRAIT_TEXT[element] % [CombatSystem.CUTS_MAX, CombatSystem.CUT_SECONDS]
+		Element.Kind.EMBER:
+			return TRAIT_TEXT[element] % [CombatSystem.PIECES_MAX, CombatSystem.EJECT_DAMAGE,
+				CombatSystem.PIECE_SPEED_BONUS, CombatSystem.PIECE_AUTO_RETURN]
 		Element.Kind.DEATH:
 			return TRAIT_TEXT[element] % int(CombatSystem.SENTENCE_BELOW * 100.0)
 		Element.Kind.POISON:
@@ -131,6 +142,8 @@ func _trait_line(element: Element.Kind) -> String:
 		Element.Kind.TIME:
 			return TRAIT_TEXT[element] % [int((1.0 - CombatSystem.RETARD_FACTOR) * 100.0),
 				CombatSystem.RETARD_DURATION]
+		Element.Kind.SKY:
+			return TRAIT_TEXT[element]
 	return "—"
 
 
@@ -175,6 +188,18 @@ func _kind_label(kind: Ability.Kind) -> String:
 		Ability.Kind.BLINK: return "translation"
 		Ability.Kind.SUMMON: return "invocation"
 		Ability.Kind.STORM: return "phénomène"
+		Ability.Kind.HUNTERS: return "chasseurs"
+		Ability.Kind.CHEST: return "piège"
+		Ability.Kind.RECALL: return "rappel"
+		Ability.Kind.CAGES: return "cages"
+		Ability.Kind.DASH: return "ruée"
+		Ability.Kind.HOOK: return "crochet"
+		Ability.Kind.SOUL_CHAINS: return "chaînes"
+		Ability.Kind.GAOL: return "geôle"
+		Ability.Kind.BLADES: return "volée"
+		Ability.Kind.FLIGHT: return "envol"
+		Ability.Kind.GUARD: return "parade"
+		Ability.Kind.SHEATHE: return "éclat"
 		Ability.Kind.CHAIN: return "chaîne"
 		Ability.Kind.WAVE: return "vague"
 		Ability.Kind.LINE: return "ligne"

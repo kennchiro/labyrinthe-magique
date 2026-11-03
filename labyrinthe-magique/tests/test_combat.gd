@@ -55,6 +55,10 @@ func _init() -> void:
 	_test_acier()
 	_test_demon()
 	_test_discorde()
+	_test_braise()
+	_test_ecarlate()
+	_test_geolier()
+	_test_ciel()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -227,8 +231,8 @@ func _test_catalog() -> void:
 	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
 	# Porte-Lumière, et l'Ange de la Mort. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 16:
-		_fail("le catalogue contient %d personnages au lieu de 16" % characters.size())
+	if characters.size() != 20:
+		_fail("le catalogue contient %d personnages au lieu de 20" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -242,7 +246,8 @@ func _test_catalog() -> void:
 			_fail("%s n'a pas d'ultime" % character.id)
 		# La fuite n'est pas un luxe : sans elle, un couloir bouché est une
 		# impasse et non une erreur du joueur.
-		if character.escape == null or not (character.escape.kind in [Ability.Kind.BLINK, Ability.Kind.SWAP]):
+		if character.escape == null or not (character.escape.kind in [Ability.Kind.BLINK, Ability.Kind.SWAP,
+				Ability.Kind.FLIGHT]):
 			_fail("%s n'a pas de sort de fuite" % character.id)
 		if character.action_bar().size() != 6:
 			_fail("%s : barre d'action de %d emplacements au lieu de 6" % [
@@ -1581,6 +1586,11 @@ func _test_volcanic_ultimate() -> void:
 			if ability == null or ability.is_ultimate:
 				continue
 			if ability.kind == Ability.Kind.BLINK:
+				continue
+			# L'EXCEPTION ÉCRITE : l'Archange du Ciel. Frapper par-dessus les haies EST son trait,
+			# Vue d'en haut, choisi pour lui le 2026-11-03 ; il le paie de 3 PV et d'une portée courte,
+			# et chacun de ses coups se voit tomber du ciel ou passer les haies.
+			if ability.element == Element.Kind.SKY:
 				continue
 			if ability.pierces_walls:
 				_fail("%s (%s) traverse les murs sans être un ultime"
@@ -3316,6 +3326,319 @@ func _test_discorde() -> void:
 		_fail("discorde : une possession de %s s sur une cible troublée" % seconds[0])
 
 
+func _test_braise() -> void:
+	var braise := CharacterCatalog.braise()
+	var chasseurs: Ability = braise.abilities[0]
+	var plastron: Ability = braise.abilities[1]
+	var rappel: Ability = braise.abilities[2]
+	var parts := _context(braise)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	if health.plates != CombatSystem.PIECES_MAX or combat.armor_speed() != 0.0:
+		_fail("braise : il ne commence pas en armure complète")
+	# RIEN NE PART DANS LE VIDE : le rappel sans pièce lancée, ni les chasseurs sans proie.
+	if combat.use(rappel, context) or combat.use(chasseurs, context):
+		_fail("braise : un sort part sans objet")
+	# UN COUP ÉJECTE UNE PIÈCE AU LIEU DE PRENDRE UN PV, et elle blesse autour de lui.
+	var close := _cell_at(grid, context.player_field, 1)
+	_add_enemy(context, close, 500)
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	combat.update(0.016, context)
+	if health.current != braise.base_health or health.plates != 2:
+		_fail("braise : un coup laisse %d PV et %d pièces" % [health.current, health.plates])
+	if context.enemy_health[0].current != 500 - CombatSystem.EJECT_DAMAGE:
+		_fail("braise : l'éjection laisse l'ennemi à %d PV" % context.enemy_health[0].current)
+	if not is_equal_approx(combat.armor_speed(), CombatSystem.PIECE_SPEED_BONUS):
+		_fail("braise : une pièce lancée donne %s de vitesse" % combat.armor_speed())
+	# ELLE RENTRE SEULE, sans jamais blesser sur le chemin du retour automatique.
+	var before := context.enemy_health[0].current
+	for frame in 700:
+		combat.update(0.016, context)
+	if health.plates != CombatSystem.PIECES_MAX or context.enemy_health[0].current != before:
+		_fail("braise : le retour seul laisse %d pièces, %d PV" % [health.plates, context.enemy_health[0].current])
+	# LES GANTELETS CHASSENT PAR-DESSUS LES HAIES, et le rappel les ramène en frappant.
+	parts = _context(braise)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	var far := _cell_at(grid, context.player_field, 6)
+	_add_enemy(context, far, 5000)
+	if not combat.use(chasseurs, context) or health.plates != 1:
+		_fail("braise : les chasseurs ne partent pas (%d pièces)" % health.plates)
+	for frame in 120:
+		combat.update(0.016, context)
+	if context.enemy_health[0].current >= 5000:
+		_fail("braise : les chasseurs n'ont pas frappé")
+	var hurt := context.enemy_health[0].current
+	if combat.use(chasseurs, context):
+		_fail("braise : les chasseurs repartent sans gantelet")
+	if not combat.use(rappel, context):
+		_fail("braise : le rappel refuse ses gantelets")
+	for frame in 120:
+		combat.update(0.016, context)
+	if health.plates != CombatSystem.PIECES_MAX or context.enemy_health[0].current > hurt - rappel.damage:
+		_fail("braise : le rappel laisse %d pièces et %d PV" % [health.plates, context.enemy_health[0].current])
+	# LE PLASTRON RETIENT LE PREMIER QUI PASSE, et ne fait que mordre un boss.
+	parts = _context(braise)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var bites := {"stagger": 0.0, "boss": 0}
+	combat.enemy_staggered.connect(func(_index: int, seconds: float) -> void: bites["stagger"] = seconds)
+	if not combat.use(plastron, context) or combat.use(plastron, context):
+		_fail("braise : le plastron part mal")
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	for frame in 30:
+		combat.update(0.016, context)
+	if not is_equal_approx(float(bites["stagger"]), plastron.hold_seconds) or context.enemy_health[0].current >= 5000:
+		_fail("braise : le plastron ne retient pas (%s s, %d PV)" % [bites["stagger"], context.enemy_health[0].current])
+	parts = _context(braise)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	bites["stagger"] = 0.0
+	combat.enemy_staggered.connect(func(_index: int, seconds: float) -> void: bites["stagger"] = seconds)
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	context.bosses[0] = true
+	combat.use(plastron, context)
+	combat.update(0.016, context)
+	if float(bites["stagger"]) > 0.0 or context.enemy_health[0].current != 5000 - CombatSystem.CHEST_BOSS_BITE:
+		_fail("braise : le boss se laisse retenir (%d PV)" % context.enemy_health[0].current)
+	# LE LEURRE ATTIRE PUIS EXPLOSE, et rend les ennemis au mage.
+	parts = _context(braise)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var lured := {"field": 0}
+	combat.decoy_field.connect(func(field: PackedInt32Array) -> void: lured["field"] = field.size())
+	var home: Vector2i = context.player_cell
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 500)
+	for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		context.player_facing = facing
+		if grid.is_floor_v(home + facing):
+			break
+	if not combat.use(braise.escape, context):
+		_fail("braise : la coquille ne part pas")
+	if int(lured["field"]) == 0:
+		_fail("braise : le leurre n'attire personne")
+	for frame in 200:
+		combat.update(0.016, context)
+	if int(lured["field"]) != 0 or context.enemy_health[0].current != 500 - braise.escape.damage:
+		_fail("braise : le leurre laisse le champ %d et l'ennemi à %d PV" % [lured["field"], context.enemy_health[0].current])
+	# LES CAGES BLOQUENT, PUIS ÉCRASENT. Le boss prend le coup sans être bloqué.
+	parts = _context(braise)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var blocked := []
+	combat.enemy_staggered.connect(func(index: int, _seconds: float) -> void: blocked.append(index))
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 4), 5000)
+	context.bosses[1] = true
+	combat.use(braise.ultimate, context)
+	if blocked != [0]:
+		_fail("braise : les cages bloquent %s" % str(blocked))
+	if context.enemy_health[0].current != 5000:
+		_fail("braise : les cages frappent trop tôt")
+	for frame in 260:
+		combat.update(0.016, context)
+	for i in 2:
+		if context.enemy_health[i].current != 5000 - braise.ultimate.damage:
+			_fail("braise : les cages laissent l'ennemi %d à %d PV" % [i, context.enemy_health[i].current])
+
+
+func _test_ecarlate() -> void:
+	var ecarlate := CharacterCatalog.ecarlate()
+	var pas: Ability = ecarlate.abilities[0]
+	var garde: Ability = ecarlate.abilities[1]
+	var rengaine: Ability = ecarlate.abilities[2]
+	var parts := _context(ecarlate)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	# RENGAINER SUR RIEN NE COÛTE RIEN.
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	if combat.use(rengaine, context):
+		_fail("ecarlate : la rengaine part sans entaille")
+	# LES ENTAILLES NE FONT RIEN SEULES, plafonnent, et éclatent après le silence.
+	for i in 7:
+		combat._apply_damage(0, ecarlate.attack, context)
+	if combat.cuts_on(0) != CombatSystem.CUTS_MAX:
+		_fail("ecarlate : %d entailles au lieu du plafond" % combat.cuts_on(0))
+	var before := context.enemy_health[0].current
+	if not combat.use(rengaine, context):
+		_fail("ecarlate : la rengaine refuse des entailles")
+	if context.enemy_health[0].current != before:
+		_fail("ecarlate : la rengaine frappe avant le silence")
+	for frame in 30:
+		combat.update(0.016, context)
+	if context.enemy_health[0].current != before - rengaine.cut_damage * CombatSystem.CUTS_MAX or combat.cuts_on(0) != 0:
+		_fail("ecarlate : l'éclat laisse %d PV et %d entailles" % [context.enemy_health[0].current, combat.cuts_on(0)])
+	# ELLES S'EFFACENT AVEC LE TEMPS.
+	combat._apply_damage(0, ecarlate.attack, context)
+	for frame in 520:
+		combat.update(0.016, context)
+	if combat.cuts_on(0) != 0:
+		_fail("ecarlate : une entaille tient après %s s" % CombatSystem.CUT_SECONDS)
+	# LA GARDE ANNULE UN SEUL COUP, riposte, et ne protège plus du suivant.
+	var close := _cell_at(grid, context.player_field, 1)
+	context.enemy_cells[0] = close
+	before = context.enemy_health[0].current
+	combat.use(garde, context)
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	combat.update(0.016, context)
+	if health.current != ecarlate.base_health or context.enemy_health[0].current != before - garde.damage:
+		_fail("ecarlate : la garde laisse %d PV, l'ennemi à %d" % [health.current, context.enemy_health[0].current])
+	if combat.cuts_on(0) != garde.cuts or health.immune:
+		_fail("ecarlate : la riposte pose %d entailles, immunité %s" % [combat.cuts_on(0), health.immune])
+	health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+	if health.current != ecarlate.base_health - 1:
+		_fail("ecarlate : la garde pare un second coup")
+	# LE PAS DE LAME COUPE CE QU'IL TRAVERSE, et la volte-face part dans son dos.
+	parts = _context(ecarlate)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var moved := {"to": Vector2i(-1, -1)}
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: moved["to"] = to)
+	var home: Vector2i = context.player_cell
+	for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(home + facing):
+			context.player_facing = facing
+			break
+	_add_enemy(context, home + context.player_facing, 5000)
+	if not combat.use(pas, context) or context.enemy_health[0].current != 5000 - pas.damage or combat.cuts_on(0) != 1:
+		_fail("ecarlate : le pas laisse l'ennemi à %d PV, %d entaille" % [context.enemy_health[0].current, combat.cuts_on(0)])
+	var ahead := context.player_facing
+	context.player_facing = -ahead
+	if not combat.use(ecarlate.escape, context) or Vector2(moved["to"] - home).dot(Vector2(ahead)) <= 0.0:
+		_fail("ecarlate : la volte-face part de face, vers %s" % str(moved["to"]))
+	# LA DERNIÈRE RENGAINE PREND TOUT L'ÉCRAN, BOSS COMPRIS, après sa seconde de silence.
+	parts = _context(ecarlate)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 20), 5000)
+	context.bosses[1] = true
+	if not combat.use(ecarlate.ultimate, context) or context.enemy_health[0].current != 5000:
+		_fail("ecarlate : la dernière rengaine part mal")
+	for frame in 80:
+		combat.update(0.016, context)
+	var full := 5000 - ecarlate.ultimate.cut_damage * ecarlate.ultimate.cuts
+	if context.enemy_health[0].current != full or context.enemy_health[1].current != full:
+		_fail("ecarlate : la dernière rengaine laisse %d et %d PV" % [context.enemy_health[0].current, context.enemy_health[1].current])
+
+
+func _test_geolier() -> void:
+	var geolier := CharacterCatalog.geolier()
+	var crochet: Ability = geolier.abilities[0]
+	var chaines: Ability = geolier.abilities[1]
+	var souffle: Ability = geolier.abilities[2]
+	var parts := _context(geolier)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	var stunned := {}
+	combat.enemy_staggered.connect(func(index: int, seconds: float) -> void: stunned[index] = seconds)
+	# RIEN NE PART DANS LE VIDE.
+	if combat.use(crochet, context) or combat.use(chaines, context):
+		_fail("geolier : un sort part sans ennemi")
+	# LE CROCHET RAMÈNE LE PLUS ÉLOIGNÉ à une case de lui, par les couloirs, et le sonne.
+	var far := _cell_at(grid, context.player_field, 7)
+	var near := _cell_at(grid, context.player_field, 3)
+	_add_enemy(context, near, 5000)
+	_add_enemy(context, far, 5000)
+	if not combat.use(crochet, context):
+		_fail("geolier : le crochet ne part pas")
+	if Pathfinder.value_at(grid, context.player_field, context.enemy_cells[1]) != 1 or context.enemy_cells[0] != near:
+		_fail("geolier : le crochet pose l'ennemi à %d cases" % Pathfinder.value_at(grid, context.player_field, context.enemy_cells[1]))
+	if not stunned.has(1) or context.enemy_health[1].current != 5000 - crochet.damage:
+		_fail("geolier : le crochet ne sonne ni ne blesse")
+	# AU TROISIÈME POING, L'ENTRAVE.
+	stunned.clear()
+	for i in CombatSystem.SHACKLE_HITS:
+		combat._apply_damage(0, geolier.attack, context)
+	if not is_equal_approx(float(stunned.get(0, 0.0)), CombatSystem.SHACKLE_SECONDS):
+		_fail("geolier : pas d'entrave au troisième poing")
+	# LES CHAÎNES RONGENT TANT QU'ELLES TIENNENT, puis lâchent.
+	var before := context.enemy_health[0].current
+	if not combat.use(chaines, context) or combat.soul_chain_members().size() != 2:
+		_fail("geolier : les chaînes prennent %d ennemis" % combat.soul_chain_members().size())
+	for frame in 420:
+		combat.update(0.016, context)
+	var lost := before - context.enemy_health[0].current
+	if absi(lost - int(chaines.damage * chaines.duration)) > chaines.damage or not combat.soul_chain_members().is_empty():
+		_fail("geolier : les chaînes retirent %d au lieu de %d" % [lost, int(chaines.damage * chaines.duration)])
+	# LE SOUFFLE FIGE CE QU'IL TOUCHE, sauf un boss.
+	parts = _context(geolier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	stunned.clear()
+	combat.enemy_staggered.connect(func(index: int, seconds: float) -> void: stunned[index] = seconds)
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	context.bosses[1] = true
+	combat.use(souffle, context)
+	if not stunned.has(0) or stunned.has(1) or context.enemy_health[1].current >= 5000:
+		_fail("geolier : le souffle fige %s" % str(stunned.keys()))
+	# LA TRAVERSÉE PASSE UNE HAIE.
+	var crossed := false
+	var landed := {"to": Vector2i(-1, -1)}
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: landed["to"] = to)
+	for home: Vector2i in grid.all_floor_cells():
+		for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+			if grid.is_floor_v(home + facing) or not grid.is_floor_v(home + facing * 2):
+				continue
+			context.player_cell = home
+			context.player_facing = facing
+			crossed = combat.use(geolier.escape, context) and landed["to"] != home \
+				and not grid.is_floor_v(home + facing)
+			break
+		if crossed:
+			break
+	if not crossed:
+		_fail("geolier : la traversée ne passe pas la haie")
+	# LA GEÔLE CLOUE DANS SON RAYON, ROGNE, ET LÂCHE. Le boss brûle sans être cloué.
+	parts = _context(geolier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	stunned.clear()
+	combat.enemy_staggered.connect(func(index: int, seconds: float) -> void: stunned[index] = seconds)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	context.bosses[1] = true
+	combat.use(geolier.ultimate, context)
+	if not stunned.has(0) or stunned.has(1):
+		_fail("geolier : la geôle cloue %s" % str(stunned.keys()))
+	for frame in 330:
+		combat.update(0.016, context)
+	var burned := int(geolier.ultimate.damage * geolier.ultimate.duration)
+	for i in 2:
+		if absi(5000 - context.enemy_health[i].current - burned) > geolier.ultimate.damage:
+			_fail("geolier : la geôle retire %d à l'ennemi %d" % [5000 - context.enemy_health[i].current, i])
+	if not combat.gaol_members().is_empty():
+		_fail("geolier : la geôle ne lâche pas")
+
+
 func _test_demon() -> void:
 	var demon := CharacterCatalog.demon()
 	var pacte: Ability = demon.abilities[0]
@@ -3605,3 +3928,112 @@ func _test_etoiles() -> void:
 	if context.enemy_health[0].current != 500 - etoiles.ultimate.damage or int(blinded["count"]) != 0:
 		_fail("nuit : %d PV, %d aveuglements" % [context.enemy_health[0].current, int(blinded["count"])])
 	print("ange des étoiles : astre, constellation, pluie, voile, filante et nuit : OK")
+
+
+## L'ARCHANGE DU CIEL : ses coups passent par-dessus les haies, et l'Envol le rend intouchable.
+func _test_ciel() -> void:
+	var ciel := CharacterCatalog.ciel()
+	var parts := _context(ciel)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	# Une case proche à vol d'oiseau, loin ou hors d'atteinte par les couloirs : derrière une haie.
+	var behind := Vector2i(-1, -1)
+	for cell in grid.all_floor_cells():
+		var by_path := Pathfinder.value_at(grid, context.player_field, cell)
+		if Vector2(cell - context.player_cell).length() <= ciel.abilities[2].radius \
+				and (by_path < 0 or by_path > ciel.attack.range):
+			behind = cell
+			break
+	if behind.x < 0:
+		_fail("ciel : aucune case derrière une haie dans le labyrinthe d'essai")
+		return
+	# LA LANCE VISE PAR-DESSUS LA HAIE, et ne frappe qu'en touchant le sol.
+	_add_enemy(context, behind, 5000)
+	if combat.find_target(ciel.attack, context) != 0:
+		_fail("ciel : la lance ne vise pas par-dessus la haie")
+	combat.use(ciel.attack, context)
+	if context.enemy_health[0].current != 5000:
+		_fail("ciel : la lance frappe avant de tomber")
+	for frame in 30:
+		combat.update(0.016, context)
+	if context.enemy_health[0].current >= 5000:
+		_fail("ciel : la lance ne tombe pas")
+	# LA CLOCHE ÉTOURDIT PAR-DESSUS LA HAIE, sauf un boss.
+	var stunned := {}
+	combat.enemy_staggered.connect(func(index: int, seconds: float) -> void: stunned[index] = seconds)
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	context.bosses[1] = true
+	var before := context.enemy_health[0].current
+	combat.use(ciel.abilities[2], context)
+	if not stunned.has(0) or stunned.has(1) or context.enemy_health[0].current >= before:
+		_fail("ciel : la cloche étourdit %s" % str(stunned.keys()))
+	# LES PLUMES NE REVIENNENT PAS.
+	combat.use(ciel.abilities[0], context)
+	for frame in 30:
+		combat.update(0.016, context)
+	if not combat._volleys.is_empty():
+		_fail("ciel : les plumes reviennent")
+	# LA COLONNE TOMBE SUR LA CIBLE et cloue ce qui l'entoure, sauf un boss.
+	parts = _context(ciel)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var dazed := {}
+	combat.enemies_dazed.connect(func(indices: Array, seconds: float, _ability: Ability) -> void:
+		for index: int in indices:
+			dazed[index] = seconds)
+	var target := _cell_at(grid, context.player_field, 4)
+	var side := Vector2i(-1, -1)
+	for step: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		if grid.is_floor_v(target + step) and target + step != context.player_cell:
+			side = target + step
+			break
+	_add_enemy(context, target, 5000)
+	_add_enemy(context, side, 5000)
+	context.bosses[1] = true
+	if not combat.use(ciel.abilities[1], context):
+		_fail("ciel : la colonne ne part pas")
+	for frame in 45:
+		combat.update(0.016, context)
+	if not dazed.has(0) or dazed.has(1) or context.enemy_health[1].current >= 5000:
+		_fail("ciel : la colonne cloue %s" % str(dazed.keys()))
+	# L'ENVOL : intouchable et plus rapide 3 s, puis il retombe et l'onde frappe autour de lui.
+	parts = _context(ciel)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 5000)
+	if not combat.use(ciel.escape, context) or not combat.flying() or not health.immune \
+			or combat.flight_speed() <= 1.0:
+		_fail("ciel : l'Envol ne l'élève pas")
+	for frame in 150:
+		combat.update(0.016, context)
+	if not combat.flying():
+		_fail("ciel : il retombe avant la fin de l'Envol")
+	for frame in 60:
+		combat.update(0.016, context)
+	if combat.flying() or health.immune:
+		_fail("ciel : il ne retombe pas")
+	if context.enemy_health[0].current != 5000 - ciel.escape.damage:
+		_fail("ciel : l'atterrissage retire %d" % (5000 - context.enemy_health[0].current))
+	# LE JUGEMENT : douze épées sur les ennemis de la carte, derrière les haies comprises.
+	parts = _context(ciel)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	_add_enemy(context, behind, 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 9), 5000)
+	combat.use(ciel.ultimate, context)
+	for frame in 300:
+		combat.update(0.016, context)
+	var each := ciel.ultimate.rain_damage * ciel.ultimate.rain_count / 2
+	for i in 2:
+		if 5000 - context.enemy_health[i].current != each:
+			_fail("ciel : le Jugement retire %d à l'ennemi %d au lieu de %d" % [
+				5000 - context.enemy_health[i].current, i, each])

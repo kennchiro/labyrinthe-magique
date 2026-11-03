@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "ciel_lance",
+    "ciel_plumes",
+    "ciel_colonne",
+    "ciel_cloche",
+    "ciel_envol",
+    "ciel_jugement"
+  ],
+  "size": 256
+}

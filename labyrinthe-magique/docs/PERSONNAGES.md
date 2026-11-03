@@ -3,7 +3,7 @@
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
 > La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-16 mages jouables. La barre d'action a toujours la même forme —
+20 mages jouables. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -25,8 +25,12 @@ comparables d'un personnage à l'autre.
 | **Ange de la Mort** | Mort | 3 | 5.2 | 4 kills | **Sentence** — un ennemi sous 15 % de ses PV après un coup est achevé |
 | **Ange des Étoiles** | Étoiles | 4 | 5.1 | 5 kills | **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 dégâts |
 | **Archange d'Acier** | Acier | 6 | 4.3 | 7 kills | **Plaques** — 3 plaques encaissent chacune un coup à la place des PV ; 2 kills en reforgent une |
+| **Archange du Ciel** | Ciel | 3 | 5.2 | 4 kills | **Vue d'en haut** — ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies |
 | **Démon du Pacte** | Sang | 4 | 5.1 | 5 kills | **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum à 1 PV |
 | **Démone de la Discorde** | Envoûtement | 3 | 5.5 | 4 kills | **Trouble** — au 3e murmure, la cible ralentit de 30 % pendant 4.0 s, et sa possession dure 2.0 s de plus |
+| **Roi de Braise** | Braise | 4 | 4.4 | 5 kills | **Armure vivante** — 3 pièces encaissent chacune un coup et blessent pour 16 dégâts ; chacune lancée ajoute 0.4 de vitesse, et rentre seule après 8 s |
+| **Chevalier Écarlate** | Lame | 4 | 5.2 | 5 kills | **Entailles** — jusqu'à 5 par ennemi, 8 s depuis la dernière ; elles éclatent quand il rengaine |
+| **Geôlier** | Flamme froide | 5 | 4.8 | 6 kills | **Entraves** — au 3e poing sur le même ennemi, il est cloué au sol 1.5 s |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
@@ -383,7 +387,7 @@ Trait : **Plaques** — 3 plaques encaissent chacune un coup à la place des PV 
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Coup de marteau** | projectile | 22 dégâts · portée 6 · recharge 0.7 s | 0.7 s |
-| SKILL 1 | **Ailes-lames** | ? | 5 lames · 30 dégâts à l'aller et au retour · portée 5 · recharge 7 s | 7.0 s |
+| SKILL 1 | **Ailes-lames** | volée | 5 lames · 30 dégâts à l'aller et au retour · portée 5 · recharge 7 s | 7.0 s |
 | SKILL 2 | **Onde d'enclume** | ? | 34 dégâts · étourdit 1.5 s · 7 cases de couloirs · recharge 10 s | 10.0 s |
 | SKILL 3 | **Rempart** | bouclier | INTOUCHABLE 4 s · immobile · renvoie 40 · recharge 18 s | 18.0 s |
 | FUITE | **Charge** | translation | charge de 4 cases · 30 dégâts · renverse · recharge 8 s · projette de 2 cases | 8.0 s |
@@ -395,6 +399,32 @@ Trait : **Plaques** — 3 plaques encaissent chacune un coup à la place des PV 
 - **Rempart** — Il se referme dans ses ailes : immobile et intouchable, il renvoie les coups reçus.
 - **Charge** — Il fonce en ligne droite et renverse ce qu'il croise.
 - **Acier en fusion** — Son armure chauffe au rouge : plaques pleines, il grandit, et ses coups plus forts projettent les ennemis.
+
+---
+
+## Archange du Ciel — Ciel
+
+> Il voit le labyrinthe d'en haut : ses coups tombent du ciel par-dessus les haies, et il s'envole au-dessus des murs. Fragile, il frappe court.
+
+`id: ciel` · puissance affichée 4/5 · vie 3 · vitesse 5.2 · extra à 4 kills
+
+Trait : **Vue d'en haut** — ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Lance céleste** | projectile | 18 dégâts · portée 6 · recharge 0.6 s · à vol d'oiseau, par-dessus les haies | 0.6 s |
+| SKILL 1 | **Plumes-lames** | volée | 5 plumes · 22 dégâts · portée 5 · recharge 5 s | 5.0 s |
+| SKILL 2 | **Colonne du ciel** | projectile | 40 dégâts · rayon 1.5 · cloue 2 s · portée 7 · recharge 9 s · à vol d'oiseau, par-dessus les haies | 9.0 s |
+| SKILL 3 | **Cloche céleste** | explosion | 10 dégâts · rayon 4 · figés 1.5 s · recharge 12 s · TRAVERSE LES MURS | 12.0 s |
+| FUITE | **Envol** | envol | vole 3 s · INTOUCHABLE · allure x1.4 · 20 dégâts à l'atterrissage · recharge 12 s | 12.0 s |
+| EXTRA | **Jugement des Six Ailes** | explosion | sur les ennemis de toute la carte · TRAVERSE LES MURS · 12 épées à 45 dégâts | 1.0 s |
+
+- **Lance céleste** — Une lance de lumière tombe du ciel sur l'ennemi le plus proche, même derrière une haie.
+- **Plumes-lames** — Ses ailes lâchent un éventail de cinq plumes tranchantes, qui filent par-dessus les haies.
+- **Colonne du ciel** — Un pilier de lumière s'abat sur l'ennemi visé, même derrière une haie, et cloue ceux qui l'entourent. Les boss ne sont pas cloués.
+- **Cloche céleste** — Sa cloche sonne : une onde part de lui, passe les haies et étourdit tout ce qui l'entoure. Les boss ne sont pas étourdis.
+- **Envol** — Il s'élève trois secondes et vole par-dessus les haies sans pouvoir être touché, puis retombe avec une onde. Il ne ramasse rien en vol.
+- **Jugement des Six Ailes** — Six ailes de lumière s'ouvrent dans son dos, et douze épées tombent une à une sur les ennemis de la carte, par-dessus les murs.
 
 ---
 
@@ -447,3 +477,81 @@ Trait : **Trouble** — au 3e murmure, la cible ralentit de 30 % pendant 4.0 s, 
 - **Lien de Souffrance** — Une chaîne relie trois ennemis proches : la moitié des coups portés à l'un passe aux deux autres.
 - **Échange** — Elle prend la place de l'ennemi le plus proche, et lui laisse la sienne.
 - **Grande Discorde** — Tous les ennemis à l'écran se battent entre eux, et leurs morts comptent pour elle. Seuls les boss résistent.
+
+---
+
+## Roi de Braise — Braise
+
+> Son armure vole et se bat seule : il la lance dans les couloirs, puis la rappelle à travers le labyrinthe.
+
+`id: braise` · puissance affichée 3/5 · vie 4 · vitesse 4.4 · extra à 5 kills
+
+Trait : **Armure vivante** — 3 pièces encaissent chacune un coup et blessent pour 16 dégâts ; chacune lancée ajoute 0.4 de vitesse, et rentre seule après 8 s
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Poing de braise** | projectile | 34 dégâts · portée 6 · recharge 0.8 s | 0.8 s |
+| SKILL 1 | **Gantelets chasseurs** | chasseurs | 18 par coup · 6 s · portée 8 · recharge 12 s | 12.0 s |
+| SKILL 2 | **Fournaise** | piège | retient 3 s · 20 dégâts/s · recharge 12 s | 12.0 s |
+| SKILL 3 | **Rappel** | rappel | 30 par pièce · traverse les haies · recharge 8 s | 8.0 s |
+| FUITE | **Coquille de cendre** | translation | 5 cases · leurre 3 s · 40 dégâts · rayon 2.5 · recharge 10 s | 10.0 s |
+| EXTRA | **Les Mille Cages** | cages | tous les ennemis · bloqués 4 s · puis 60 dégâts | 1.0 s |
+
+- **Poing de braise** — Un poing d'or noirci file, frappe et rentre dans un jet d'escarbilles.
+- **Gantelets chasseurs** — Ses deux gantelets quittent leur orbite et s'abattent seuls sur les ennemis.
+- **Fournaise** — Posé au sol, il s'ouvre comme un four sur le premier ennemi qui passe, et le retient.
+- **Rappel** — Toutes ses pièces reviennent d'un coup, à travers les haies, et blessent ce qu'elles croisent.
+- **Coquille de cendre** — Il saute et laisse une armure de cendre, qui attire les ennemis puis explose.
+- **Les Mille Cages** — Une cage d'or en fusion s'abat sur chaque ennemi, le bloque, puis se resserre. Les boss subissent seulement le coup.
+
+---
+
+## Chevalier Écarlate — Lame
+
+> Ses coups laissent des entailles qui ne font rien, jusqu'à ce qu'il rengaine. Alors, tout s'ouvre en même temps.
+
+`id: ecarlate` · puissance affichée 3/5 · vie 4 · vitesse 5.2 · extra à 5 kills
+
+Trait : **Entailles** — jusqu'à 5 par ennemi, 8 s depuis la dernière ; elles éclatent quand il rengaine
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Entaille** | projectile | 15 dégâts · portée 5 · recharge 0.5 s | 0.5 s |
+| SKILL 1 | **Pas de Lame** | ruée | 5 cases · 20 dégâts · 1 entaille · recharge 8 s | 8.0 s |
+| SKILL 2 | **Garde** | parade | pare 1.5 s · riposte 30 · rayon 2 · 2 entailles · recharge 10 s | 10.0 s |
+| SKILL 3 | **Rengaine** | éclat | 18 par entaille · portée 8 · recharge 9 s | 9.0 s |
+| FUITE | **Volte-face** | translation | saut de 5 cases · recharge 9 s | 9.0 s |
+| EXTRA | **Dernière Rengaine** | éclat | tout l'écran · 5 entailles · 18 par entaille · 1 s | 1.0 s |
+
+- **Entaille** — Un croissant de lumière blanche part de sa lame, et laisse une entaille.
+- **Pas de Lame** — Il file droit dans le couloir et coupe tout ce qu'il traverse.
+- **Garde** — Le premier coup reçu est annulé, et sa riposte entaille tout ce qui l'entoure.
+- **Rengaine** — Sa lame rentre au fourreau : un silence, puis toutes les entailles à portée éclatent.
+- **Volte-face** — Il saute en arrière dans une pluie de pétales.
+- **Dernière Rengaine** — Le monde perd ses couleurs. Chaque ennemi reçoit cinq entailles, il rengaine, et tout s'ouvre.
+
+---
+
+## Geôlier — Flamme froide
+
+> Une armure vide qu'habite une flamme froide. Il flotte, enchaîne ce qu'il touche, et passe à travers les haies.
+
+`id: geolier` · puissance affichée 3/5 · vie 5 · vitesse 4.8 · extra à 6 kills
+
+Trait : **Entraves** — au 3e poing sur le même ennemi, il est cloué au sol 1.5 s
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Poing spectral** | projectile | 16 dégâts · portée 6 · recharge 0.6 s | 0.6 s |
+| SKILL 1 | **Crochet** | crochet | ramène le plus éloigné · portée 8 · 20 dégâts · sonné 1 s · recharge 9 s | 9.0 s |
+| SKILL 2 | **Chaînes d'âmes** | chaînes | 3 ennemis · portée 6 · 12 dégâts/s · ralentis à 50 % · 6 s · recharge 13 s | 13.0 s |
+| SKILL 3 | **Souffle glacé** | explosion | 30 dégâts · rayon 2.5 · figés 2 s · recharge 11 s | 11.0 s |
+| FUITE | **Traversée spectrale** | translation | saut de 3 cases · recharge 12 s · TRAVERSE LES MURS | 12.0 s |
+| EXTRA | **La Geôle** | geôle | rayon 6 · cloués 5 s · 15 dégâts/s | 1.0 s |
+
+- **Poing spectral** — Un gantelet de flamme froide file et frappe. Au troisième coup, l'ennemi est entravé.
+- **Crochet** — Une chaîne attrape l'ennemi le plus éloigné à portée et le traîne devant lui, sonné.
+- **Chaînes d'âmes** — Des chaînes le relient à trois ennemis : ralentis, ils brûlent de froid tant qu'elles tiennent.
+- **Souffle glacé** — Une nova de flamme froide déferle autour de lui et fige ce qu'elle touche.
+- **Traversée spectrale** — Il devient flamme et passe à travers une haie, droit devant.
+- **La Geôle** — Un cercle de flamme froide s'abat autour de lui : des chaînes clouent au sol chaque ennemi à l'intérieur. Les boss brûlent sans être cloués.

@@ -231,11 +231,29 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
   l'ombre magenta peinte sur les planches, en s'arrêtant aux contours sombres. Au-delà de
   20 % de l'objet, il n'y touche pas : ce violet EST l'objet (stages 2 et 5).
 
-## Les quinze personnages
+## Les vingt personnages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte`.
+`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte` · `Démone de la Discorde` · `Roi de Braise` · `Chevalier Écarlate` · `Geôlier` · `Archange du Ciel`.
+
+⚠️ **Pour tout nouveau personnage, n'oublie pas l'effet magique DRAMATIQUE de chaque sort**
+(demande du joueur, 2026-11-03). Les six créneaux (attaque, trois sorts, fuite, extra) ont chacun
+un effet qui se voit EN JEU, à l'échelle réelle, et qui dit ce que fait le sort. Le geste du
+personnage ou le chiffre de dégâts ne comptent pas comme un effet.
+- **Trois temps** : le départ (éclat ou charge sur le lanceur), le coup (une forme propre au
+  sort, lumineuse et plus grande que la case), puis une trace qui s'éteint (braises, fumée,
+  runes, sillage). Un éclat de 0,2 s ne se voit pas en jouant.
+- **La taille suit le rang** : l'attaque tient environ une case, un sort deux ou trois, et
+  l'extra prend une grande part de l'écran. Les gros coups et l'extra secouent la caméra (`_shake`).
+- **La fuite se voit aux deux bouts**, là où il part et là où il arrive (`ESCAPE_RADIUS`,
+  `ESCAPE_TIME`).
+- Un dessin par sort (`PaintedFx`, `test_animation`) : une recoloration ne compte pas.
+- **Contrôle** : une capture par créneau, avec un ennemi collé, à plusieurs instants :
+  `--demo --character X --kills 9 --hunter --skill N --skill-delay 0.2 --frames F --screenshot P`,
+  F de 13 à 50. Un créneau vide sur toutes les captures est un défaut. ⚠️ Certains sorts
+  demandent un contexte (Contagion et Transfusion, Rengaine, Lien de Souffrance) : la capture les
+  montre refusés, il faut alors les voir en jouant.
 
 Le **Chronomancien** (élément Temps) est né animé et peint au shader : il n'a ni planche
 `SHEETS` ni `impact.png`, `orb.png` ou `warp.png` (`_load_character_fx` met le quad peint à
@@ -283,6 +301,31 @@ ennemis les uns contre les autres. Un possédé est aveuglé (`blind_left`) et s
 (`possession_field`, `EnemyAI.possess_field`). `Kind.BOND` partage les dégâts, `Kind.SWAP` est sa fuite, et les boss
 (`CombatContext.bosses`) ne se possèdent ni ne s'échangent. ⚠️ Sa couleur est celle du fond des planches : aucun rose
 ni violet sur son sprite ou ses icônes, le magenta n'existe que dans ses shaders et `DiscordThreads`.
+
+Le **Roi de Braise** (élément Braise, onglet Démon) se bat avec son armure : deux gantelets et un plastron volent à vol
+d'oiseau (`CombatSystem.pieces()`). Ceux en orbite sont les plaques de `Health`, et chaque pièce lancée ajoute à son allure
+(`armor_speed()`, lue par le jeu et la simulation). `Kind.HUNTERS`, `CHEST`, `RECALL`, `CAGES` ; le leurre passe par
+`EnemyAI.lure_field`. Les pièces viennent de `tools/build_braise_pieces.py`, et `KingArmor`, `KingCage`, `KingDecoy` les
+montrent. ⚠️ Un nœud qui dessine en positions du monde dans `Entities` doit annuler le redressement de `WorldStage`, sinon
+tout glisse vers le sud (`KingArmor._stand`).
+
+Le **Chevalier Écarlate** (élément Lame, onglet Démon) pose des entailles (`_cuts`, `Ability.cuts`) qui ne font rien jusqu'à
+`Kind.SHEATHE`, après un silence (`SHEATHE_SILENCE`). `Kind.DASH` et `Kind.GUARD` en posent aussi. L'ultime lit l'écran
+(`ecarlate_nuit`) une seconde, sur un `CanvasLayer` à la racine de la fenêtre, jamais enfant du `Level`.
+
+Le **Geôlier** (élément Flamme froide, onglet Démon) flotte, et n'est PAS chibi à la demande du joueur. Il enchaîne :
+`Kind.HOOK` ramène, `Kind.SOUL_CHAINS` et `Kind.GAOL` rongent, et `GaolerChains` dessine les chaînes. Sa fuite traverse une
+haie (`pierces_walls`). ⚠️ Ses planches sont en cases hautes : `tall_cells` dans `build_enemies.py` les remet au carré.
+
+L'**Archange du Ciel** (élément Ciel, onglet Ange) frappe par-dessus les haies : son trait, Vue d'en haut,
+c'est `Ability.from_sky`. La cible se choisit à vol d'oiseau, le coup tombe après `sky_fall`, et le `Level` dessine
+la chute (`_sky_falls`) au lieu d'un projectile. La Colonne est un tel projectile, avec rayon et `stun_seconds`.
+Les Plumes-lames sont une volée `BLADES` qui ne revient pas (`blades_return`). La Cloche est un `BLAST` avec
+`pierces_walls`, une exception écrite dans `test_combat`. Le Jugement est la pluie qui vise du Feu, avec des épées.
+Son Envol (`Kind.FLIGHT`) le rend intouchable 3 s. Le `Level` passe `GridMover.phases` et compte le mage sur la case
+de sol la plus proche (`_grounded`), puis le repose avant que l'onde d'atterrissage ne frappe (`flight_ended`, puis
+`_land`). En vol, il ne ramasse rien et ne prend aucun portail. `enemies_dazed` distingue ses deux contrôles.
+`tools/preview_ciel.gd` montre ses effets. ⚠️ Son attaque est arrivée en cases hautes : `tall_cells`, comme le Geôlier.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
@@ -356,9 +399,10 @@ ferme la porte que pendant le combat. `--demo --demo-stage 4 --boss` passe par c
 
 ## Le gabarit d'animation
 
-Le **Héros d'essai** (`test`, onglet Essai de la sélection, puis DÉMO) sert à régler le mouvement.
-`--demo --character test` y va directement. Il est dans `CharacterCatalog.roster()`, que lit l'écran de
-sélection, mais hors de `all()`, donc hors de `test_balance` et des fiches. JOUER est grisé pour lui.
+Le **Héros d'essai** (`test`) sert à régler le mouvement. Il est caché de l'écran de sélection depuis
+le 2026-11-03, à la demande du joueur : on n'y va plus que par `--demo --character test`. Pour le remontrer,
+l'ajouter à `CharacterCatalog.roster()` et rendre son onglet à `CATEGORIES`. Il est hors de `all()`, donc hors
+de `test_balance` et des fiches. Il ne part jamais en vraie partie.
 
 - La clé `motion` de `frames.json` active `MotionProfile` dans `Player`. Sans elle, le code d'avant
   joue tel quel. `build_enemies.py` l'écrit depuis la clé `motion` de son entrée, `every_step` y garde
@@ -474,6 +518,23 @@ hauts (280×460), et une mise à l'échelle sur la largeur en aurait fait six ca
 de haut. Le sceau des gemmes suit le **sommet réel** du sprite, mesuré au moment
 du `setup()` — à hauteur fixe, il tombait au milieu de l'île.
 
+**L'îlot debout.** Couché sur la
+texture du sol, il glissait avec elle et paraissait plat à côté des haies. `WorldStage.raise_monument`
+le dresse face à la caméra, avec une ombre fixe au sol, et `House` le fait balancer. La logique
+et la vue `--2d` gardent le `House` 2D, qui ne fait plus que le halo et l'onde d'ouverture.
+
+- La texture du sol reste dessinée APRÈS l'îlot : mage, ennemis et gemmes restent devant,
+  comme avant (z 10 et 6 contre 5). Le décor aussi, d'où `House.hides` qui le retire de ce
+  que l'îlot couvre, sans changer les tirages du reste du semis.
+- ⚠️ Ce qui s'élève glisse vers le nord, d'autant plus qu'on s'éloigne du centre de l'écran :
+  sans `PANEL_SOUTH`, le portail flottait deux cases au-dessus de sa clairière.
+- ⚠️ L'ombre passe par `SoftTextures.blot()` : avec `glow()`, seul le centre se voit, et il
+  est caché par l'îlot. Elle semblait absente quelle que soit sa force.
+- **Le portail** reprend la spirale PEINTE de l'îlot et la tourne (`monument_portal`), dans
+  une ellipse relevée à la main : `House.PORTALS`. Éteint et immobile tant que la porte est
+  scellée, il s'allume et tourne à l'ouverture. `--open-door` l'ouvre pour une capture.
+  Un nouvel îlot demande de relever son ellipse, puis de la revoir porte ouverte.
+
 ## Les ennemis
 
 **Seize créatures**, toutes au format des mages, dans `assets/enemies/<id>/`.
@@ -494,23 +555,6 @@ réalité vers la **DROITE sur sept d'entre elles**. Sept créatures ont donc
 marché à reculons pendant des semaines. C'est ce que déclare `profile` dans
 `build_bestiary.py` (défaut `"right"`, exceptions écrites : l'ombre et le démon
 de cristal). Rien ne l'attrape tout seul — les fichiers existent, les bandes
-**L'îlot debout.** Couché sur la
-texture du sol, il glissait avec elle et paraissait plat à côté des haies. `WorldStage.raise_monument`
-le dresse face à la caméra, avec une ombre fixe au sol, et `House` le fait balancer. La logique
-et la vue `--2d` gardent le `House` 2D, qui ne fait plus que le halo et l'onde d'ouverture.
-
-- La texture du sol reste dessinée APRÈS l'îlot : mage, ennemis et gemmes restent devant,
-  comme avant (z 10 et 6 contre 5). Le décor aussi, d'où `House.hides` qui le retire de ce
-  que l'îlot couvre, sans changer les tirages du reste du semis.
-- ⚠️ Ce qui s'élève glisse vers le nord, d'autant plus qu'on s'éloigne du centre de l'écran :
-  sans `PANEL_SOUTH`, le portail flottait deux cases au-dessus de sa clairière.
-- ⚠️ L'ombre passe par `SoftTextures.blot()` : avec `glow()`, seul le centre se voit, et il
-  est caché par l'îlot. Elle semblait absente quelle que soit sa force.
-- **Le portail** reprend la spirale PEINTE de l'îlot et la tourne (`monument_portal`), dans
-  une ellipse relevée à la main : `House.PORTALS`. Éteint et immobile tant que la porte est
-  scellée, il s'allume et tourne à l'ouverture. `--open-door` l'ouvre pour une capture.
-  Un nouvel îlot demande de relever son ellipse, puis de la revoir porte ouverte.
-
 font la bonne taille, `check_characters.py` ne juge que le CADRAGE et les tests
 headless ne chargent aucune texture. D'où **`tools/check_profiles.py`**, qui
 pose côte à côte la pose de foulée de chaque `left.png` : elles doivent TOUTES

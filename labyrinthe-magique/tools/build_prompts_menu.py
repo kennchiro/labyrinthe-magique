@@ -223,6 +223,20 @@ MAGES = [
         "aura": "orange de métal chauffé au centre et gris acier sombre",
         "phrase": "Il va droit au combat, et c'est le combat qui recule.",
     },
+    {
+        "id": "ciel", "nom": "Archange du Ciel", "element": "Ciel",
+        "couleur": "#34e07a",
+        "corps": "un JEUNE ARCHANGE GUERRIER au visage calme et décidé, bien VISIBLE, aux yeux "
+                 "émeraude. Cheveux blancs courts en mèches soulevées, DIADÈME D'OR orné de deux "
+                 "petites ailes dorées sur les tempes. ARMURE LÉGÈRE blanche à bords dorés, petites "
+                 "épaulières dorées, et un TABARD COURT émeraude à liseré d'or qui s'arrête au-dessus "
+                 "des genoux. Ses deux GRANDES AILES de plumes BLANCHES, aux pointes émeraude, sont "
+                 "largement ouvertes derrière lui. Il tient de la main droite une LANCE D'OR à pointe "
+                 "blanche, levée vers le ciel, et une petite CLOCHE D'OR pend à sa ceinture. Le blanc "
+                 "reste blanc, ombré de gris-vert, sans reflet rose ni violet",
+        "aura": "émeraude lumineux au centre et vert profond presque noir",
+        "phrase": "Il voit le labyrinthe d'en haut, et ses coups tombent du ciel.",
+    },
 ]
 
 ENTETE = """> ⚠️ **Fichier GÉNÉRÉ** par `tools/build_prompts_menu.py`. Ne pas l'éditer à

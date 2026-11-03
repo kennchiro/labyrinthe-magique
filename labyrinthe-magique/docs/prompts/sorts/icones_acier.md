@@ -4,7 +4,7 @@
 
 | créneau | sort | ce qu'il fait |
 |---|---|---|
-| ATTAQUE | Coup de marteau | une frappe large, à courte portée |
+| ATTAQUE | Coup de marteau | il frappe le sol, et une onde de choc court jusqu'à sa cible |
 | SKILL 1 | Ailes-lames | une volée de lames part en éventail, puis revient vers lui |
 | SKILL 2 | Onde d'enclume | il frappe le sol : l'onde court dans les couloirs et étourdit |
 | SKILL 3 | Rempart | il se referme dans ses ailes et renvoie les dégâts reçus |

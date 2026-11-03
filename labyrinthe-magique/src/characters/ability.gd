@@ -41,6 +41,17 @@ enum Kind {
 	POSSESS,      ## la cible se retourne contre ses voisins ; l'ultime possède tout l'écran
 	BOND,         ## enchaîne des ennemis : une part des dégâts de l'un passe aux autres
 	SWAP,         ## le lanceur et l'ennemi le plus proche échangent leurs places
+	HUNTERS,      ## ses gantelets quittent leur orbite et chassent seuls
+	CHEST,        ## son plastron, posé au sol, mord le premier ennemi qui passe
+	RECALL,       ## toutes ses pièces reviennent d'un coup et blessent ce qu'elles traversent
+	CAGES,        ## une cage se referme sur chaque ennemi, puis se resserre
+	DASH,         ## il file droit dans le couloir et frappe tout ce qu'il traverse
+	GUARD,        ## annule le premier coup reçu et riposte autour de lui
+	SHEATHE,      ## fait éclater les entailles ; l'ultime en couvre d'abord tout l'écran
+	HOOK,         ## une chaîne ramène l'ennemi le plus éloigné à portée devant le lanceur
+	SOUL_CHAINS,  ## enchaîne des ennemis au lanceur : ralentis, ils brûlent de froid
+	GAOL,         ## un cercle cloue au sol tous les ennemis qu'il contient, et les brûle
+	FLIGHT,       ## le lanceur s'élève, survole les haies sans être touché, puis retombe avec une onde
 }
 
 @export var id: String = ""
@@ -538,12 +549,35 @@ enum Kind {
 ## Combien d'ennemis le lien enchaîne, et la part des dégâts qui passe aux autres.
 @export var bond_count: int = 0
 @export var bond_share: float = 0.0
+
+## LE ROI DE BRAISE. Combien de temps le plastron retient sa proie, et le leurre attire les ennemis.
+@export var hold_seconds: float = 0.0
+@export var decoy_seconds: float = 0.0
+@export var decoy_radius: float = 0.0
+
+## LE CHEVALIER ÉCARLATE. Les entailles que laisse chaque coup du sort.
+@export var cuts: int = 0
+## Ce que chaque entaille retire quand il rengaine.
+@export var cut_damage: int = 0
+## La translation part dans son dos.
+@export var backward: bool = false
 ## Le Dernier Pacte : le lanceur tombe à 1 PV et reste intouchable ce temps-là.
 @export var last_pact_seconds: float = 0.0
 ## La part des PV sacrifiés qu'il retrouve à la fin.
 @export var last_pact_return: float = 0.0
 ## Le dessin de ce qu'une gerbe laisse planté. Vide = les pics de pierre.
 @export var plant_style: String = ""
+
+## L'ARCHANGE DU CIEL. Le coup TOMBE DU CIEL au lieu de remonter les couloirs : la cible se
+## choisit à vol d'oiseau, par-dessus les haies, et le coup frappe après `sky_fall` secondes,
+## où qu'elle soit allée. C'est son trait, et il doit se voir : un sceau s'ouvre sous la cible
+## avant que le coup ne tombe.
+@export var from_sky: bool = false
+@export var sky_fall: float = 0.35
+## La volée de lames revient-elle au lanceur ? Les plumes, elles, filent et ne reviennent pas.
+@export var blades_return: bool = true
+## L'Envol : son allure en vol, en multiple de la sienne.
+@export var flight_speed: float = 1.0
 
 
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
@@ -600,12 +634,15 @@ func summary() -> String:
 		parts.append("puis brûle %.0f s" % snare_burn)
 	if pierces_walls:
 		parts.append("TRAVERSE LES MURS")
+	if from_sky:
+		parts.append("à vol d'oiseau, par-dessus les haies")
 	if geyser_count > 0:
 		parts.append("%d geysers à %d dégâts" % [geyser_count, geyser_damage])
 	if rain_count > 0:
 		# « Météores » pour le Feu, « gouttes » pour l'Eau : c'est le même
 		# mécanisme, mais le joueur ne lit pas une fiche de code.
-		var nom := "gouttes" if element == Element.Kind.WATER else "météores"
+		var nom := "gouttes" if element == Element.Kind.WATER \
+			else "épées" if element == Element.Kind.SKY else "météores"
 		parts.append("%d %s à %d dégâts" % [rain_count, nom, rain_damage])
 	if blow_cells > 0:
 		parts.append("projette de %d cases" % blow_cells)
@@ -633,14 +670,25 @@ func summary() -> String:
 ## voisine y a ajouté les invocations pendant ce travail.
 func _base_summary() -> String:
 	match kind:
+		Kind.PROJECTILE when radius > 0.0 and stun_seconds > 0.0:
+			return "%d dégâts · rayon %s · cloue %s s · portée %d" % [damage, _number(radius),
+				_number(stun_seconds), range]
 		Kind.PROJECTILE:
 			return "%d dégâts · portée %d" % [damage, range]
+		Kind.FLIGHT:
+			return "vole %s s · INTOUCHABLE · allure x%s · %d dégâts à l'atterrissage" % [
+				_number(duration), _number(flight_speed), damage]
 		Kind.BLAST when molten_seconds > 0.0:
 			return "%d dégâts · rayon %s · armure en fusion %s s" % [damage, _number(radius),
 				_number(molten_seconds)]
 		Kind.BLAST when last_pact_seconds > 0.0:
 			return "%d dégâts · rayon %s · 1 PV · INTOUCHABLE %s s" % [
 				damage, _number(radius), _number(last_pact_seconds)]
+		# ⚠️ Avant le cas général : placé après lui, il n'était jamais atteint.
+		Kind.BLAST when stun_seconds > 0.0:
+			return "%d dégâts · rayon %s · figés %s s" % [damage, _number(radius), _number(stun_seconds)]
+		Kind.BLAST when damage <= 0 and rain_count > 0:
+			return "sur les ennemis de toute la carte"
 		Kind.BLAST:
 			return "%d dégâts · rayon %s" % [damage, _number(radius)]
 		Kind.PACT:
@@ -655,6 +703,34 @@ func _base_summary() -> String:
 				bond_count, range, int(bond_share * 100.0), _number(duration)]
 		Kind.SWAP:
 			return "échange avec un ennemi · portée %d" % range
+		Kind.HUNTERS:
+			return "%d par coup · %s s · portée %d" % [damage, _number(duration), range]
+		Kind.CHEST:
+			return "retient %s s · %d dégâts/s" % [_number(hold_seconds), damage]
+		Kind.RECALL:
+			return "%d par pièce · traverse les haies" % damage
+		Kind.CAGES:
+			return "tous les ennemis · bloqués %s s · puis %d dégâts" % [_number(duration), damage]
+		Kind.HOOK:
+			return "ramène le plus éloigné · portée %d · %d dégâts · sonné %s s" % [
+				range, damage, _number(stun_seconds)]
+		Kind.SOUL_CHAINS:
+			return "%d ennemis · portée %d · %d dégâts/s · ralentis à %d %% · %s s" % [
+				bond_count, range, damage, int(slow_factor * 100.0), _number(duration)]
+		Kind.GAOL:
+			return "rayon %s · cloués %s s · %d dégâts/s" % [_number(radius), _number(duration), damage]
+		Kind.DASH:
+			return "%d cases · %d dégâts · %d entaille" % [range, damage, cuts]
+		Kind.GUARD:
+			return "pare %s s · riposte %d · rayon %s · %d entailles" % [
+				_number(duration), damage, _number(radius), cuts]
+		Kind.SHEATHE when is_ultimate:
+			return "tout l'écran · %d entailles · %d par entaille · %s s" % [cuts, cut_damage, _number(duration)]
+		Kind.SHEATHE:
+			return "%d par entaille · portée %d" % [cut_damage, range]
+		Kind.BLINK when decoy_seconds > 0.0:
+			return "%d cases · leurre %s s · %d dégâts · rayon %s" % [
+				range, _number(decoy_seconds), damage, _number(decoy_radius)]
 		Kind.ZONE when discord_bonus > 0.0:
 			return "%d dégâts/s · +%d %% par ennemi en plus · rayon %s · %s s" % [
 				damage, int(discord_bonus * 100.0), _number(radius), _number(duration)]
@@ -700,6 +776,8 @@ func _base_summary() -> String:
 				% int(CombatSystem.SENTENCE_BELOW * 100.0)
 		Kind.CONSTELLATION:
 			return "%d dégâts/s · %d étoiles · %s s" % [damage, CombatSystem.STAR_MAX, _number(duration)]
+		Kind.BLADES when not blades_return:
+			return "%d plumes · %d dégâts · portée %d" % [blade_count, damage, range]
 		Kind.BLADES:
 			return "%d lames · %d dégâts à l'aller et au retour · portée %d" % [blade_count, damage, range]
 		Kind.ANVIL:

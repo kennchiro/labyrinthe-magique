@@ -67,6 +67,11 @@ La commande complète, dans l'ordre, et le détail de chaque effet visuel :
 La commande complète, dans l'ordre, et le détail de chaque effet visuel :
 [mages/mage_acier](prompts/mages/mage_acier.md).
 
+## L'Archange du Ciel — le vingtième personnage
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_ciel](prompts/mages/mage_ciel.md). Ses coups
+passent par-dessus les haies, et sa fuite l'emmène au-dessus des murs.
+
 ## Le Démon du Pacte — le quinzième personnage
 
 La fiche et la commande complète, dans l'ordre : [mages/mage_demon](prompts/mages/mage_demon.md).
@@ -74,6 +79,23 @@ La fiche et la commande complète, dans l'ordre : [mages/mage_demon](prompts/mag
 ## La Démone de la Discorde — le seizième personnage
 
 La fiche et la commande complète, dans l'ordre : [mages/mage_discorde](prompts/mages/mage_discorde.md).
+
+## Le Geôlier — le dix-neuvième personnage
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_geolier](prompts/mages/mage_geolier.md). L'apparence
+voulue est `prompts/ref/geolier_concept.png`.
+
+## Le Roi de Braise et le Chevalier Écarlate — dix-septième et dix-huitième personnages
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_braise](prompts/mages/mage_braise.md),
+[mages/mage_ecarlate](prompts/mages/mage_ecarlate.md).
+
+## Les anges — refaire le sprite comme les mages
+
+Ils étaient élancés, à côté de mages chibi, et ils glissaient de profil. Les images 1, 2 et 3 sont à
+refaire : [Lumière](prompts/mages/mage_lumiere.md), [Mort](prompts/mages/mage_mort.md),
+[Étoiles](prompts/mages/mage_etoiles.md), [Acier](prompts/mages/mage_acier.md). En secours, si un
+profil glisse encore : [mages_animes/profil_anges](prompts/mages_animes/profil_anges.md).
 
 ## Refonte des huit mages — uniformiser les tailles
 
@@ -130,6 +152,11 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | les icônes de sorts de l'Archange d'Acier | [sorts/icones_acier](prompts/sorts/icones_acier.md) |
 | les icônes de sorts du Démon du Pacte | [sorts/icones_demon](prompts/sorts/icones_demon.md) |
 | les icônes de sorts de la Démone de la Discorde | [sorts/icones_discorde](prompts/sorts/icones_discorde.md) |
+| les icônes de sorts du Roi de Braise | [sorts/icones_braise](prompts/sorts/icones_braise.md) |
+| les pièces et la cage du Roi de Braise | [sorts/pieces_braise](prompts/sorts/pieces_braise.md) |
+| les icônes de sorts du Chevalier Écarlate | [sorts/icones_ecarlate](prompts/sorts/icones_ecarlate.md) |
+| les icônes de sorts du Geôlier | [sorts/icones_geolier](prompts/sorts/icones_geolier.md) |
+| les pièces du Geôlier (poing, crochet, maillons) | [sorts/pieces_geolier](prompts/sorts/pieces_geolier.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol

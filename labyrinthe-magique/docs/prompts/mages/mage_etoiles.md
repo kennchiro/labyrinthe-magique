@@ -7,7 +7,7 @@ Cinq images, **dans cet ordre** : la première sert de modèle aux autres.
 
 | # | image | prompt | à déposer dans `assets/peso&cover/` | images à joindre |
 |---|---|---|---|---|
-| 1 | le modèle du personnage | ci-dessous | `refonte/etoiles.png` | `refonte/mort.png` |
+| 1 | le modèle du personnage | ci-dessous | `refonte/etoiles.png` | `refonte/chrono.png` |
 | 2 | la marche | [mages_animes/etoiles](../mages_animes/etoiles.md), prompt 1 | `mages/etoiles_marche.png` | `refonte/etoiles.png` et `guide_marche.png` |
 | 3 | l'attaque | [mages_animes/etoiles](../mages_animes/etoiles.md), prompt 2 | `mages/etoiles_attaque.png` | `refonte/etoiles.png` |
 | 4 | les six icônes de sorts | [sorts/icones_etoiles](../sorts/icones_etoiles.md) | `sorts/mage_etoiles_skills.png` | aucune |
@@ -23,7 +23,7 @@ comme ceux des autres mages. La dernière partie de cette page les décrit en d�
 
 ## Image 1 — le modèle du personnage
 
-Joindre `assets/peso&cover/refonte/mort.png`, seulement pour le style et la mise en page.
+Joindre `assets/peso&cover/refonte/chrono.png`, pour le style, la mise en page et surtout LES PROPORTIONS.
 
 ```
 Fiche de modèle d'un personnage pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style
@@ -50,7 +50,7 @@ demi repliées dans son dos. Une COURONNE EN CROISSANT DE LUNE argentée flotte 
 Longs cheveux argentés attachés en une tresse qui tombe dans son dos. Longue robe bleu nuit à
 manches longues, sobre et couvrante, à liserés d'argent, fendue sur le côté, sur des bottines
 argentées. Elle tient de la main droite un fin SCEPTRE d'argent, surmonté d'une étoile blanche à
-quatre branches. Corps COMPACT, tête un peu large, silhouette lisible en très petit. L'aura reste
+quatre branches. Corps CHIBI, très grosse tête, silhouette lisible en très petit. L'aura reste
 COLLÉE au corps : pas de halo large, pas de particules, pas d'étoiles autour d'elle.
 
 ⚠️ RÈGLE BLOQUANTE — LES AILES RESTENT À DEMI REPLIÉES. Jamais déployées. Elles ne dépassent
@@ -69,6 +69,13 @@ NEUTRE ou BLEUTÉ. Aucun violet, aucun rose, aucun reflet du fond magenta sur le
 ⚠️ RÈGLE BLOQUANTE — MÊME PERSONNAGE dans les trois cases : même taille, mêmes couleurs, mêmes
 ailes, même couronne, même tresse, même sceptre, toujours dans la main droite.
 
+⚠️ RÈGLE BLOQUANTE — LA MORPHOLOGIE EST CELLE DE L'IMAGE JOINTE : UN CORPS CHIBI. Sa hauteur totale
+vaut 2,5 TÊTES : la tête (coiffure ou casque compris) occupe près de 40 % de la hauteur, et les
+jambes à peine un quart. Grosses mains, gros pieds, torse court. Jamais de corps élancé, de longues
+jambes ou de petite tête : posé à côté du personnage de l'image jointe, il a la même morphologie.
+Sa robe et sa tresse raccourcissent avec le corps : elle reste une femme adulte, habillée sobrement.
+
+
 ⚠️ RÈGLE BLOQUANTE — AUCUNE OMBRE PORTÉE, AUCUN CADRE.
 ```
 
@@ -76,6 +83,7 @@ ailes, même couronne, même tresse, même sceptre, toujours dans la main droite
 
 | Défaut | Pourquoi c'est gênant |
 |---|---|
+| Le corps est élancé, ou la tête petite | Il ne ressemblerait pas aux mages : c'est la raison de cette refonte, à regénérer sans attendre |
 | Le bleu vire au violet | Le détourage y ferait des trous, et elle se confondrait avec le Sorcier des Ténèbres |
 | Les ailes sont déployées ou très larges | Elle deviendrait bien plus large que les autres, et ses ailes passeraient sur les murs |
 | La robe cache les pieds | On ne verrait plus ses pas : le jeu a besoin de pieds lisibles |

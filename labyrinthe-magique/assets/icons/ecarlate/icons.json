@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "ecarlate_entaille",
+    "ecarlate_pas",
+    "ecarlate_garde",
+    "ecarlate_rengaine",
+    "ecarlate_volte",
+    "ecarlate_derniere"
+  ],
+  "size": 256
+}

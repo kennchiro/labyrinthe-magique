@@ -28,6 +28,8 @@ var blind_left := 0.0
 ## Possédé : il reste aveugle au mage et ne peut pas le frapper, mais il marche sur sa proie.
 var possess_left := 0.0
 var possess_field := PackedInt32Array()
+## Le leurre du Roi de Braise : tant qu'il tient, ce champ remplace celui du mage.
+var lure_field := PackedInt32Array()
 var _search_field := PackedInt32Array()
 var _search_timer := 0.0
 var _patrol_direction := Vector2i.ZERO
@@ -69,6 +71,12 @@ func decide(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 		if possess_left > 0.0:
 			return _possessed_step(grid, from, current_direction, delta)
 		return _patrol(grid, from, current_direction)
+	if not lure_field.is_empty():
+		player_field = lure_field
+		# Il s'arrête devant le leurre : monté dessus, on ne verrait plus ce qui l'a attiré.
+		if Pathfinder.value_at(grid, lure_field, from) == 1:
+			state = State.CHASE
+			return Vector2i.ZERO
 	var distance_to_player := Pathfinder.value_at(grid, player_field, from)
 	var detected := distance_to_player >= 0 and distance_to_player <= detection_radius
 

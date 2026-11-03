@@ -93,6 +93,11 @@ var _last_step := -1
 var _struck := false
 var _slashed := false
 var _dust: FootDust = null
+## L'Envol de l'Archange du Ciel : de combien de pixels le dessin s'élève, et de combien il grandit.
+## Seul le DESSIN monte : l'origine du nœud, son ombre et ses collisions restent au sol.
+var lift := 0.0
+var lift_scale := 1.0
+var _hover := 0.0
 
 
 ## Appelée par le Level AVANT setup() : la planche à charger dépend du mage.
@@ -186,6 +191,8 @@ func _load_character() -> void:
 	_display_height = DEFAULT_TARGET_HEIGHT
 	if data.has("body_height"):
 		_display_height = BODY_SCREEN_HEIGHT * _cell.y / float(data["body_height"])
+	# Le Geôlier n'a qu'une flamme sous la taille : à hauteur égale, son armure paraissait petite.
+	_display_height *= float(data.get("body_scale", 1.0))
 	target_height = _display_height
 	_walk_poses.clear()
 	_attack_poses.clear()
@@ -316,6 +323,11 @@ func _animate_body(delta: float) -> void:
 	if _attack_left > 0.0:
 		var punch: float = pow(_attack_left / ATTACK_DURATION, 3.0)
 		sprite.scale = _sprite_scale * (Vector2.ONE + CAST_PUNCH * punch)
+	if lift > 0.0:
+		# En vol, il plane : un lent balancement, sans le rebond des appuis.
+		_hover += delta
+		sprite.position.y = -lift + sin(_hover * 4.2) * lift * 0.08
+		sprite.scale = sprite.scale * lift_scale
 
 
 func _attack_duration() -> float:

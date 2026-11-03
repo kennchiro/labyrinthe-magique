@@ -7,7 +7,7 @@ Cinq images, **dans cet ordre** : la première sert de modèle aux autres.
 
 | # | image | prompt | à déposer dans `assets/peso&cover/` | images à joindre |
 |---|---|---|---|---|
-| 1 | le modèle du personnage | ci-dessous | `refonte/mort.png` | `refonte/lumiere.png` |
+| 1 | le modèle du personnage | ci-dessous | `refonte/mort.png` | `refonte/chrono.png` |
 | 2 | la marche | [mages_animes/mort](../mages_animes/mort.md), prompt 1 | `mages/mort_marche.png` | `refonte/mort.png` et `guide_marche.png` |
 | 3 | l'attaque | [mages_animes/mort](../mages_animes/mort.md), prompt 2 | `mages/mort_attaque.png` | `refonte/mort.png` |
 | 4 | les six icônes de sorts | [sorts/icones_mort](../sorts/icones_mort.md) | `sorts/mage_mort_skills.png` | aucune |
@@ -23,7 +23,7 @@ comme ceux des autres mages. La dernière partie de cette page les décrit en d�
 
 ## Image 1 — le modèle du personnage
 
-Joindre `assets/peso&cover/refonte/lumiere.png`, seulement pour le style et la mise en page.
+Joindre `assets/peso&cover/refonte/chrono.png`, pour le style, la mise en page et surtout LES PROPORTIONS.
 
 ```
 Fiche de modèle d'un personnage pour un jeu 2D vu de DESSUS EN LÉGÈRE PLONGÉE, style
@@ -50,8 +50,7 @@ PETITES CORNES noires courbes sortent de son front, et une AURÉOLE BRISÉE roug
 comme un anneau fendu, flotte au-dessus de sa tête. Visage pâle couleur d'os, bien visible, aux
 yeux rouge braise, et cheveux noirs mi-longs. Armure sombre gris anthracite à liserés couleur
 d'os, sur une longue robe noire déchirée au bas, bottes noires griffues. Il tient de la main
-droite une grande FAUX au manche d'os, dont la lame noire est bordée de rouge braise. Corps
-COMPACT, tête un peu large, silhouette lisible en très petit. L'aura reste COLLÉE au corps : pas
+droite une grande FAUX au manche d'os, dont la lame noire est bordée de rouge braise. Corps CHIBI, très grosse tête, silhouette lisible en très petit. L'aura reste COLLÉE au corps : pas
 de halo large, pas de fumée, pas de particules autour.
 
 ⚠️ RÈGLE BLOQUANTE — UN ANGE D'ABORD, UN DÉMON ENSUITE. Les plumes des ailes et l'auréole brisée
@@ -74,6 +73,12 @@ de braise. Aucun violet, aucun rose, aucun reflet du fond magenta sur les plumes
 ⚠️ RÈGLE BLOQUANTE — MÊME PERSONNAGE dans les trois cases : même taille, mêmes couleurs, mêmes
 ailes, mêmes cornes, même auréole brisée, même faux, toujours dans la main droite.
 
+⚠️ RÈGLE BLOQUANTE — LA MORPHOLOGIE EST CELLE DE L'IMAGE JOINTE : UN CORPS CHIBI. Sa hauteur totale
+vaut 2,5 TÊTES : la tête (coiffure ou casque compris) occupe près de 40 % de la hauteur, et les
+jambes à peine un quart. Grosses mains, gros pieds, torse court. Jamais de corps élancé, de longues
+jambes ou de petite tête : posé à côté du personnage de l'image jointe, il a la même morphologie.
+
+
 ⚠️ RÈGLE BLOQUANTE — AUCUNE OMBRE PORTÉE, AUCUN CADRE.
 ```
 
@@ -81,6 +86,7 @@ ailes, mêmes cornes, même auréole brisée, même faux, toujours dans la main 
 
 | Défaut | Pourquoi c'est gênant |
 |---|---|
+| Le corps est élancé, ou la tête petite | Il ne ressemblerait pas aux mages : c'est la raison de cette refonte, à regénérer sans attendre |
 | Il ressemble à un démon plutôt qu'à un ange | Tu l'as voulu « un peu » démon, et il va dans l'onglet Ange |
 | Les ailes sont déployées ou très larges | Il deviendrait bien plus large que les autres, et ses ailes passeraient sur les murs |
 | La lame de la faux est coupée ou très haute | Elle fausserait le calage du corps, comme la lance du Porte-Lumière l'a fait |
