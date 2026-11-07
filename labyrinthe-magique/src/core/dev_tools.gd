@@ -28,6 +28,7 @@ extends Node
 ##                      capture pas à la frame zéro, le labyrinthe est vide)
 ##   --skill-then N F   lance aussi le slot N, F secondes après le début (Rappel du Roi de Braise)
 ##   --cast             attaque dès qu'une cible est à portée
+##   --awaken           lance l'ÉVEIL du mage au bout d'une demi-seconde (en démo, sans kills)
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
 ##   --settings         ouvre aussi les réglages (avec --pause et --touch)
@@ -163,6 +164,7 @@ func apply_command_line() -> void:
 	# Colle un ennemi au joueur : la seule façon de voir sa pose de coup sans
 	# jouer jusqu'à se faire rattraper, donc de pouvoir la capturer en image.
 	_crowd_pending = "--crowd" in args
+	_awaken_left = 0.5 if "--awaken" in args else -1.0
 	if "--goblin" in args:
 		_cling_enemy("goblin")
 	if "--hunter" in args:
@@ -347,6 +349,7 @@ var _crowd_pending := false
 var _auto_walk := false
 var _warp_tries := 0
 var _skill_slot := -1
+var _awaken_left := -1.0
 var _skill_tries := 0
 ## Attente avant de lancer `--skill`, en secondes.
 var _skill_delay := 0.0
@@ -377,6 +380,10 @@ func _gather_crowd() -> void:
 
 
 func _process(delta: float) -> void:
+	if _awaken_left >= 0.0:
+		_awaken_left -= delta
+		if _awaken_left < 0.0 and game.level.player != null:
+			game.use_slot(GameManager.SLOT_TRANSFORM)
 	if _skill_delay > 0.0:
 		_skill_delay -= delta
 	elif _skill_tries > 0 and _skill_slot >= 0:

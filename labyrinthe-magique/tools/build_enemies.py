@@ -199,6 +199,18 @@ MAGES = {
     "cherubin": {"id": "cherubin", "name": "Chérubin", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
             "demagenta": True, "whole_shapes": True},
+    # L'ÉVEIL du Mage du Feu, le Phénix : ses propres bandes, lues par `Player` quand le mage est
+    # éveillé (`CharacterStats.awakened`). Feu et or n'ont jamais plus de bleu que de vert : `demagenta`
+    # n'y touche pas. Ses ailes et les plumes de l'attaque débordent : formes entières.
+    "feu_eveil": {"id": "fire_eveil", "name": "Mage du Feu éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True,
+            # Le bout des plumes de la 4e image de profil déborde dans la 5e, à 41 px derrière lui :
+            # pris pour un sort lancé dans le dos (`check_characters`). Relevé sur la planche.
+            "strike_erase": [(1052, 596, 1078, 652)]},
+    "eau_eveil": {"id": "water_eveil", "name": "Mage de l'Eau éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
     # Le gabarit d'animation : `every_step` garde ses huit images de course. Son épée déborde sur
     # les cases voisines, d'où `whole_shapes`.
     "test": {"id": "test", "name": "Héros d'essai", "source": MAGES_SOURCE,

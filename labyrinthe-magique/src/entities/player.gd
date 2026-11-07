@@ -56,6 +56,8 @@ var debug_direction: Vector2 = Vector2.ZERO
 
 var character_id := CharacterCatalog.default_id()
 var hero_form := 0
+## La forme éveillée d'un mage : ses bandes viennent de `<id>_eveil`.
+var awakened := false
 
 ## Ordre de marche « toucher le chemin » : champ de distances BFS depuis la case
 ## visée, que l'on descend pas à pas — exactement le mécanisme des ennemis, mais
@@ -128,6 +130,7 @@ func set_growth(value: float) -> void:
 func set_character(stats: CharacterStats) -> void:
 	character_id = stats.id if stats != null else CharacterCatalog.default_id()
 	hero_form = stats.hero_form if stats != null else 0
+	awakened = stats != null and stats.awakened
 	_load_character()
 
 
@@ -215,6 +218,9 @@ func _load_character() -> void:
 	var visual_id := character_id
 	if character_id == "ael" and hero_form > 0:
 		visual_id = "ael_" + ["apprenti", "eveille", "ascendant", "prisme", "dragon"][clampi(hero_form, 0, 4)]
+	# L'ÉVEIL d'un mage a ses propres bandes, à côté des siennes (`fire_eveil`).
+	if awakened:
+		visual_id = character_id + "_eveil"
 	var folder := CHARACTERS_PATH + visual_id + "/"
 	if not FileAccess.file_exists(folder + "frames.json"):
 		folder = CHARACTERS_PATH + character_id + "/"

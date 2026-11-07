@@ -214,6 +214,18 @@ SHEETS = {
         "cherubin_glaive", "cherubin_tournoyant", "cherubin_roues",
         "cherubin_voile", "cherubin_eclair", "cherubin_jardin",
     ], {"undust": 12}),
+    # L'ÉVEIL du Mage du Feu. Relevé case par case : trois plumes · soleil cerclé de plumes · six
+    # flammes autour d'une plume // trois braises en couronne · oiseau qui plonge · phénix sur une
+    # étoile. L'ordre demandé. `UiIcons` les cherche dans `fire_eveil` quand le mage est éveillé.
+    "mage_feu_eveil_skills.png": ("fire_eveil", [
+        "fire_eveil_plumes", "fire_eveil_soleil", "fire_eveil_colonnes",
+        "fire_eveil_couronne", "fire_eveil_plongee", "fire_eveil_supernova",
+    ], {"undust": 12}),
+    # L'ÉVEIL du Mage de l'Eau, l'Esprit des Marées. Ordre correspondant aux six créneaux du mage.
+    "mage_eau_eveil_skills.png": ("water_eveil", [
+        "water_eveil_trident", "water_eveil_tsunami", "water_eveil_carapace",
+        "water_eveil_prison", "water_eveil_torrent", "water_eveil_deluge",
+    ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",

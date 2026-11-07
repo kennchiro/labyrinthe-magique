@@ -19,6 +19,9 @@ extends Resource
 @export var base_health: int = 3
 @export var hero_level: int = 1
 @export var hero_form: int = 0
+## La forme ÉVEILLÉE d'un mage (2026-11-07) : même identifiant, donc mêmes effets de base, mais
+## ses propres bandes (`<id>_eveil`) et ses propres icônes. `CharacterCatalog.awakening_of`.
+@export var awakened: bool = false
 @export var base_plates: int = 0
 ## Vitesse du mage, en cases par seconde. Celle des ennemis ne s'en déduit PAS :
 ## elle est calée sur une vitesse de référence, sinon choisir le mage le plus

@@ -72,6 +72,8 @@ enum Kind {
 	HERO_TRANSFORM,
 	COMET,
 	TRANSMISSION,
+	PILLARS,      ## des piliers de feu jaillissent en cercle autour du lanceur
+	LEVIATHAN,    ## un serpent d'eau géant traverse le labyrinthe et frappe ce qu'il croise
 }
 
 @export var id: String = ""
@@ -608,6 +610,35 @@ enum Kind {
 ## Les Ailes voilées : de combien de cases elles repoussent ce qui le touche. Zéro = rien.
 @export var repel_cells: int = 0
 
+## L'ÉVEIL DU PHÉNIX (Mage du Feu éveillé).
+## Le projectile part sur autant de cibles à la fois (les plus proches, une chacune).
+@export var volley: int = 1
+## Une seconde explosion au même endroit, après ce délai, pour ces dégâts. Zéro = aucune.
+@export var echo_delay: float = 0.0
+@export var echo_damage: int = 0
+## Le magma laissé à l'impact : durée et dégâts par seconde. Zéro = aucun.
+@export var magma_duration: float = 0.0
+@export var magma_damage: int = 0
+## Les Colonnes de feu : combien de piliers, et à quelle distance du lanceur.
+@export var pillar_count: int = 0
+@export var pillar_ring: float = 0.0
+## Une explosion à chaque bout de la fuite : ses dégâts et son rayon. Zéro = aucune.
+@export var end_blast_damage: int = 0
+@export var end_blast_radius: float = 0.0
+
+## L'ÉVEIL DU SEIGNEUR DES MARÉES (Mage de l'Eau éveillé).
+## Le tir rebondit ensuite sur autant d'ennemis voisins, à cette distance de couloir, en perdant
+## une part de ses dégâts à chaque fois.
+@export var bounces: int = 0
+@export var bounce_range: int = 3
+@export var bounce_falloff: float = 0.7
+## Le bouclier rend autant de PV s'il tient jusqu'à son échéance sans céder.
+@export var heal_if_held: int = 0
+## La fuite suit le couloir et tourne avec lui, au lieu de filer droit.
+@export var follows_corridor: bool = false
+## Elle laisse derrière elle une eau qui ralentit, ce temps-là. Zéro = rien.
+@export var wake_seconds: float = 0.0
+
 ## LE DRAGON DES ABYSSES. Secondes de feu laissées sur les cases touchées. Zéro = aucune.
 @export var ground_fire: float = 0.0
 ## La Morsure : PV rendus quand la proie brûlait.
@@ -685,6 +716,22 @@ func summary() -> String:
 		parts.append("à vol d'oiseau, par-dessus les haies")
 	if pierce_line:
 		parts.append("brûle tout sur son trajet")
+	if volley > 1:
+		parts.append("%d cibles à la fois" % volley)
+	if echo_damage > 0:
+		parts.append("explose une 2e fois (%d)" % echo_damage)
+	if magma_duration > 0.0:
+		parts.append("magma %s s à %d/s" % [_number(magma_duration), magma_damage])
+	if end_blast_damage > 0:
+		parts.append("explose aux deux bouts (%d)" % end_blast_damage)
+	if bounces > 0:
+		parts.append("rebondit sur %d voisins" % bounces)
+	if heal_if_held > 0:
+		parts.append("+%d PV s'il tient" % heal_if_held)
+	if follows_corridor:
+		parts.append("suit le couloir")
+	if wake_seconds > 0.0:
+		parts.append("laisse un courant qui ralentit")
 	if geyser_count > 0:
 		parts.append("%d geysers à %d dégâts" % [geyser_count, geyser_damage])
 	if rain_count > 0:
@@ -730,6 +777,11 @@ func _base_summary() -> String:
 				_number(stun_seconds), range]
 		Kind.PROJECTILE:
 			return "%d dégâts · portée %d" % [damage, range]
+		Kind.LEVIATHAN:
+			return "%d dégâts · traverse le labyrinthe · bande de %s cases · +%d PV" % [damage,
+				_number(radius * 2.0), heal_self]
+		Kind.PILLARS:
+			return "%d piliers · %d dégâts · cercle de %s cases" % [pillar_count, damage, _number(pillar_ring)]
 		Kind.WHIRL:
 			return "%d par passage · %s par seconde · rayon %s · %s s" % [damage,
 				_number(1.0 / maxf(0.05, whirl_interval)), _number(radius), _number(duration)]

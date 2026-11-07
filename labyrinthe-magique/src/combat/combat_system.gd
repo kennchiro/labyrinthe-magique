@@ -214,6 +214,14 @@ signal flight_ended
 signal flight_landed(cell: Vector2i, ability: Ability)
 ## Le Chérubin. Un œil s'ouvre ou se ferme sur un ennemi ; il s'embrase au contact.
 signal enemy_eyed(index: int, open: bool)
+## L'Éveil du Phénix : la seconde explosion du Soleil captif, les piliers, les braises de sa traînée.
+signal echo_blasted(cell: Vector2i, ability: Ability)
+signal pillars_erupted(cells: Array, ability: Ability)
+signal ember_laid(cell: Vector2i, life: float)
+## L'Éveil du Seigneur des Marées : le rebond du Trident, la Bulle tenue, le Léviathan.
+signal water_bounced(from: Vector2i, to: Vector2i)
+signal shield_held(healed: int)
+signal leviathan_cast(cell: Vector2i, ability: Ability, direction: int)
 signal eye_burst(cell: Vector2i)
 signal whirl_started(duration: float, radius: float)
 signal whirl_cut(cell: Vector2i)
@@ -620,6 +628,15 @@ var _wings: Ability = null             # la coque en place, quand elle aveugle e
 var _wings_cell := Vector2i.ZERO
 var _flight: Ability = null            # l'Envol en cours, nul au sol
 var _eyes := {}                        # index -> vrai : l'œil du Chérubin est ouvert sur lui
+var _echo_blasts: Array[Dictionary] = []   # {cell, time_left, ability} : la seconde explosion
+var _embers := {}                      # case -> secondes : la traînée du Phénix
+var _ember_left := 0.0                 # tant qu'elle dure, il en laisse une derrière lui
+var _ember_damage := 0
+var _ember_life := 0.0
+var _ember_tick := 0.0
+var _ember_from := Vector2i(-9999, -9999)
+var _held_heal := 0                    # PV rendus si la bulle en cours tient jusqu'au bout
+var _leviathan := {}                   # {origin, direction, time, hit, ability}
 var _eye_locks := {}                   # index -> secondes avant qu'un nouvel œil s'ouvre
 var _whirl := {}                       # {left, tick, ability}
 var _veil: Ability = null              # les Ailes voilées, tant qu'elles tiennent
@@ -727,6 +744,9 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_blade(delta, context)
 	_update_gaoler(delta, context)
 	_update_cherubin(delta, context)
+	_update_phoenix(delta, context)
+	if not _leviathan.is_empty():
+		_swim_leviathan(delta, context)
 	_update_dragon(delta, context)
 	_update_croupier(delta, context)
 	_update_avide(delta, context)
@@ -791,6 +811,13 @@ func update(delta: float, context: CombatContext) -> void:
 		if _wings != null and health.shield <= 0 and _shield_left > 0.0:
 			_burst_wings(context)
 		if _shield_left <= 0.0 or health.shield <= 0:
+			# La Bulle des abysses : tenue jusqu'à l'échéance, elle rend ses PV.
+			if _shield_left <= 0.0 and health.shield > 0 and _held_heal > 0:
+				var healed := health.heal(_held_heal)
+				if healed > 0:
+					player_healed.emit(healed)
+				shield_held.emit(healed)
+			_held_heal = 0
 			_wings = null
 			_shield_left = 0.0
 			health.shield = 0
@@ -836,12 +863,46 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 		# ne doit pas être compté parmi les cloués.
 		if ability.stun_seconds > 0.0:
 			_freeze_around(ability, context, cell)
+		# Le Soleil captif : une seconde explosion au même endroit, et du magma qui reste.
+		if ability.echo_damage > 0:
+			_echo_blasts.append({"cell": cell, "time_left": ability.echo_delay, "ability": ability})
+		if ability.magma_duration > 0.0:
+			_pour_magma(ability, cell)
 		# Un projectile à rayon (boule de feu) explose : il touche aussi les
 		# voisins. À rayon nul, il ne concerne que sa cible.
 		if ability.radius > 0.0:
 			_apply_area(ability, cell, context)
 		else:
 			_apply_damage(index, ability, context)
+		if ability.bounces > 0:
+			_bounce_from(index, cell, ability, context)
+
+
+## LE TRIDENT rebondit d'ennemi en ennemi, par les couloirs, en perdant de sa force à chaque saut.
+func _bounce_from(first: int, start: Vector2i, ability: Ability, context: CombatContext) -> void:
+	var visited := {first: true}
+	var from := start
+	var damage := float(ability.damage)
+	for _jump in ability.bounces:
+		var field := _field_from(from)
+		var next := -1
+		var best := ability.bounce_range + 1
+		for i in context.enemy_cells.size():
+			if visited.has(i) or not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance >= 0 and distance < best:
+				best = distance
+				next = i
+		if next < 0:
+			return
+		visited[next] = true
+		damage *= ability.bounce_falloff
+		var to: Vector2i = context.enemy_cells[next]
+		water_bounced.emit(from, to)
+		_apply_damage(next, Ability.make({"id": ability.id + "_rebond", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": maxi(1, roundi(damage))}), context, false, true)
+		from = to
 
 
 func _update_zones(delta: float, context: CombatContext) -> void:
@@ -1070,6 +1131,7 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			else:
 				health.add_shield(ability.damage)
 				_shield_left = ability.duration
+				_held_heal = ability.heal_if_held
 				_wings = ability if ability.blind_seconds > 0.0 else null
 				player_shielded.emit(ability.damage, ability.duration)
 			fired = true
@@ -1166,6 +1228,10 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_flight(ability)
 		Ability.Kind.WHIRL:
 			fired = _cast_whirl(ability)
+		Ability.Kind.PILLARS:
+			fired = _cast_pillars(ability, context)
+		Ability.Kind.LEVIATHAN:
+			fired = _cast_leviathan(ability, context)
 		Ability.Kind.WHEELS:
 			fired = _cast_wheels(ability, context)
 		Ability.Kind.GARDEN:
@@ -1290,6 +1356,17 @@ func _already_targeted(index: int) -> bool:
 
 
 func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
+	# LA VOLÉE DU PHÉNIX : un tir par cible, sur les plus proches, chacune la sienne.
+	if ability.volley > 1:
+		var targets := _volley_targets(ability, context)
+		if targets.is_empty():
+			if ability == stats.attack:
+				return _cast_free_shot(ability, context)
+			use_refused.emit("cible")
+			return false
+		for prey in targets:
+			_launch_at(ability, prey, context)
+		return true
 	var target := find_target(ability, context)
 	if target < 0:
 		if ability == stats.attack:
@@ -1322,6 +1399,33 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	_in_flight.append(shot)
 	projectile_launched.emit(ability, target, path, duration)
 	return true
+
+
+## Les `volley` cibles les plus proches à portée, par les couloirs ; les repaires après les créatures.
+func _volley_targets(ability: Ability, context: CombatContext) -> Array[int]:
+	var scored: Array = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance < 0 or distance > ability.range:
+			continue
+		scored.append([distance + (STRUCTURE_PENALTY if context.is_structure(i) else 0), i])
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var out: Array[int] = []
+	for entry: Array in scored.slice(0, ability.volley):
+		out.append(int(entry[1]))
+	return out
+
+
+func _launch_at(ability: Ability, target: int, context: CombatContext) -> void:
+	var path := trajectory(context.player_cell, context.enemy_cells[target])
+	if path.size() < 2:
+		path.append(context.enemy_cells[target])
+	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
+	var duration := float(path.size() - 1) / speed
+	_in_flight.append({"ability": ability, "target": target, "time_left": duration})
+	projectile_launched.emit(ability, target, path, duration)
 
 
 ## Personne à viser : l'attaque de base part quand même, droit devant le mage, jusqu'à
@@ -2033,6 +2137,14 @@ func _break_on_wave(wave: Dictionary, cell: Vector2i, context: CombatContext) ->
 			continue
 		already[i] = true
 		_apply_damage(i, ability, context)
+		# Le Raz-de-marée EMPORTE ce qu'il frappe, et le plaque contre la paroi qui l'arrête.
+		if ability.blow_cells > 0 and context.enemy_alive(i) and not context.is_structure(i) \
+				and not context.bosses.has(i):
+			var travelled := _push_away(i, context, ability.blow_cells)
+			if travelled < ability.blow_cells and ability.slam_damage > 0 and context.enemy_alive(i):
+				enemy_slammed.emit(i, context.enemy_cells[i])
+				_apply_damage(i, Ability.make({"id": ability.id + "_paroi", "kind": Ability.Kind.BLAST,
+					"element": ability.element, "damage": ability.slam_damage}), context, false, false)
 
 
 ## PICS DE TERRE : la gerbe COURT DANS LE COULOIR, elle n'entoure pas le mage.
@@ -2382,7 +2494,14 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 			return false
 		blink_performed.emit(context.player_cell, destination)
 		return true
-	if ability.pierces_walls:
+	if ability.follows_corridor:
+		# LE TORRENT suit le couloir et tourne avec lui, et laisse un courant qui ralentit.
+		var route := _rolling_path(context.player_cell, facing, ability.range)
+		if not route.is_empty():
+			destination = route[-1]
+			if ability.wake_seconds > 0.0:
+				_lay_wake(ability, [context.player_cell] + route)
+	elif ability.pierces_walls:
 		for step in range(ability.range, 0, -1):
 			var far: Vector2i = context.player_cell + facing * step
 			if grid.is_floor_v(far) and not grid.is_occupied(far):
@@ -2400,6 +2519,13 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	if ability.cloud_duration > 0.0:
 		_cloud_zone(context.player_cell, ability)
 	blink_performed.emit(context.player_cell, destination)
+	# La Plongée du phénix explose là où il part, puis là où il arrive.
+	if ability.end_blast_damage > 0:
+		var blast := Ability.make({"id": ability.id + "_eclat", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.end_blast_damage,
+			"radius": ability.end_blast_radius})
+		_apply_area(blast, context.player_cell, context)
+		_apply_area(blast, destination, context)
 	if ability.blind_radius > 0:
 		_blind_around(destination, ability, context)
 	if ability.trail_damage > 0:
@@ -3730,6 +3856,165 @@ func _can_pay(ability: Ability) -> bool:
 
 
 # --- L'acier ----------------------------------------------------------------------
+
+# --- Le Phénix (l'Éveil du Mage du Feu) ---------------------------------------------
+
+func _pour_magma(ability: Ability, cell: Vector2i) -> void:
+	var magma := Ability.make({
+		"id": ability.id + "_magma", "display_name": ability.display_name,
+		"kind": Ability.Kind.ZONE, "element": ability.element,
+		"damage": ability.magma_damage, "radius": ability.radius * 0.7,
+		"duration": ability.magma_duration, "zone_style": "magma_peint", "flames": 0.5,
+	})
+	var id := _next_zone_id
+	_next_zone_id += 1
+	_zones.append({"id": id, "ability": magma, "cell": cell, "time_left": magma.duration, "tick": 0.0})
+	zone_created.emit(id, magma, cell)
+
+
+## LES COLONNES DE FEU : des piliers en cercle autour de lui. Un pilier qui tomberait dans une haie
+## jaillit sur la case de sol voisine, ou pas du tout. Chaque ennemi n'est frappé qu'une fois.
+func _cast_pillars(ability: Ability, context: CombatContext) -> bool:
+	var cells: Array[Vector2i] = []
+	var facing := Vector2(context.player_facing) if context.player_facing != Vector2i.ZERO else Vector2.DOWN
+	for k in ability.pillar_count:
+		var direction := facing.rotated(TAU * float(k) / float(maxi(1, ability.pillar_count)))
+		var spot := context.player_cell + Vector2i((direction * ability.pillar_ring).round())
+		if not grid.is_floor_v(spot):
+			var moved := false
+			for side: Vector2i in MazeGrid.NEIGHBORS:
+				if grid.is_floor_v(spot + side) and not cells.has(spot + side) and spot + side != context.player_cell:
+					spot += side
+					moved = true
+					break
+			if not moved:
+				continue
+		if not cells.has(spot):
+			cells.append(spot)
+	if cells.is_empty():
+		use_refused.emit("mur")
+		return false
+	var struck := {}
+	for spot in cells:
+		for i in _creatures_within(spot, ability.radius, context):
+			struck[i] = true
+	pillars_erupted.emit(cells, ability)
+	for i: int in struck.keys():
+		if context.enemy_alive(i):
+			_apply_damage(i, ability, context)
+	return true
+
+
+## L'onde de la Renaissance, ou tout autre éclat posé par le jeu autour du mage.
+func erupt(ability: Ability, context: CombatContext) -> void:
+	_apply_area(ability, context.player_cell, context, null, false, false)
+
+
+## La traînée de braises du Phénix : il en laisse une sur chaque case qu'il quitte, tant qu'elle
+## dure. Une braise brûle ce qui s'y tient, une fois par seconde.
+func start_embers(seconds: float, damage: int, life: float) -> void:
+	_ember_left = seconds
+	_ember_damage = damage
+	_ember_life = life
+	_ember_from = Vector2i(-9999, -9999)
+
+
+func stop_embers() -> void:
+	_ember_left = 0.0
+
+
+func _update_phoenix(delta: float, context: CombatContext) -> void:
+	for i in range(_echo_blasts.size() - 1, -1, -1):
+		var echo: Dictionary = _echo_blasts[i]
+		echo["time_left"] = float(echo["time_left"]) - delta
+		if float(echo["time_left"]) > 0.0:
+			continue
+		_echo_blasts.remove_at(i)
+		var source: Ability = echo["ability"]
+		echo_blasted.emit(echo["cell"], source)
+		_apply_area(Ability.make({"id": source.id + "_echo", "kind": Ability.Kind.BLAST,
+			"element": source.element, "damage": source.echo_damage, "radius": source.radius}),
+			echo["cell"], context, null, false, false)
+	if _ember_left > 0.0:
+		_ember_left = maxf(0.0, _ember_left - delta)
+		if _ember_from != context.player_cell:
+			if _ember_from.x > -9999 and grid.is_floor_v(_ember_from):
+				_embers[_ember_from] = _ember_life
+				ember_laid.emit(_ember_from, _ember_life)
+			_ember_from = context.player_cell
+	if _embers.is_empty():
+		return
+	_ember_tick -= delta
+	var bite := _ember_tick <= 0.0
+	if bite:
+		_ember_tick += 1.0
+	for cell: Vector2i in _embers.keys():
+		var left: float = _embers[cell] - delta
+		if left <= 0.0:
+			_embers.erase(cell)
+			continue
+		_embers[cell] = left
+		if not bite:
+			continue
+		for i in context.enemy_cells.size():
+			if context.enemy_alive(i) and not context.is_structure(i) and context.enemy_cells[i] == cell:
+				_apply_damage(i, Ability.make({"id": stats.id + "_braise", "kind": Ability.Kind.BLAST,
+					"element": stats.element, "damage": _ember_damage}), context, false, false)
+
+
+# --- Le Seigneur des Marées (l'Éveil du Mage de l'Eau) --------------------------------
+
+## Le courant du Torrent : une petite zone par case, qui englue sans blesser.
+func _lay_wake(ability: Ability, cells: Array) -> void:
+	for cell: Vector2i in cells:
+		var wake := Ability.make({
+			"id": ability.id + "_courant", "display_name": ability.display_name,
+			"kind": Ability.Kind.ZONE, "element": ability.element, "damage": 0, "radius": 0.6,
+			"duration": ability.wake_seconds, "slow_duration": 1.5, "slow_factor": 0.5,
+			"zone_style": "courant_peint",
+		})
+		var id := _next_zone_id
+		_next_zone_id += 1
+		_zones.append({"id": id, "ability": wake, "cell": cell, "time_left": wake.duration, "tick": 0.0})
+		zone_created.emit(id, wake, cell)
+
+
+## LE LÉVIATHAN : un serpent d'eau traverse le labyrinthe d'un bord à l'autre de l'écran, par-dessus
+## les haies, dans une bande de rangées autour du mage. Il frappe chaque ennemi une fois, quand sa
+## tête le dépasse. Il part du côté opposé à celui où regarde le mage, et file vers son regard.
+func _cast_leviathan(ability: Ability, context: CombatContext) -> bool:
+	var direction := -1 if context.player_facing.x < 0 else 1
+	_leviathan = {"origin": context.player_cell, "direction": direction, "time": 0.0, "hit": {},
+		"ability": ability}
+	if ability.heal_self > 0:
+		var healed := health.heal(ability.heal_self)
+		if healed > 0:
+			player_healed.emit(healed)
+	leviathan_cast.emit(context.player_cell, ability, direction)
+	return true
+
+
+func _swim_leviathan(delta: float, context: CombatContext) -> void:
+	var ability: Ability = _leviathan["ability"]
+	_leviathan["time"] = float(_leviathan["time"]) + delta
+	var origin: Vector2i = _leviathan["origin"]
+	var direction := int(_leviathan["direction"])
+	var reach := float(ability.range)
+	var head := -reach + 2.0 * reach * clampf(float(_leviathan["time"]) / maxf(0.1, ability.duration), 0.0, 1.0)
+	var hit: Dictionary = _leviathan["hit"]
+	for i in context.enemy_cells.size():
+		if hit.has(i) or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var offset: Vector2i = context.enemy_cells[i] - origin
+		if absf(float(offset.y)) > ability.radius or absf(float(offset.x)) > reach:
+			continue
+		if float(offset.x * direction) > head:
+			continue
+		hit[i] = true
+		_apply_damage(i, ability, context)
+	if float(_leviathan["time"]) >= ability.duration:
+		_leviathan = {}
+
 
 # --- Le Chérubin ------------------------------------------------------------------
 

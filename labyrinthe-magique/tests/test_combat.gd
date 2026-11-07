@@ -60,6 +60,9 @@ func _init() -> void:
 	_test_geolier()
 	_test_ciel()
 	_test_cherubin()
+	_test_awakening()
+	_test_phoenix_kit()
+	_test_tide_lord()
 	_test_dragon()
 	_test_croupier()
 	_test_avide()
@@ -4484,3 +4487,235 @@ func _test_cherubin() -> void:
 		_fail("cherubin : le boss ne brûle pas dans le jardin")
 	if not combat.garden().is_empty():
 		_fail("cherubin : le jardin ne se referme pas")
+
+
+## L'ÉVEIL : six kills pour le lancer, une minute éveillé, dix secondes d'épuisement. La
+## Renaissance relève le Phénix une fois à 2 PV, intouchable, et met fin à l'Éveil.
+func _test_awakening() -> void:
+	var base := CharacterCatalog.fire()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or not form.awakened or form.id != base.id or form.action_bar().size() != 6:
+		_fail("éveil : pas de Phénix pour le Mage du Feu")
+		return
+	# Un Éveil n'existe que s'il a ses bandes : un mage éveillé sans planche serait invisible.
+	for mage in CharacterCatalog.all():
+		var awakened := CharacterCatalog.awakening_of(mage.id)
+		if awakened == null:
+			continue
+		if not awakened.awakened or awakened.id != mage.id or awakened.action_bar().size() != 6:
+			_fail("éveil : la forme de %s est mal formée" % mage.id)
+		if not FileAccess.file_exists("res://assets/characters/%s_eveil/frames.json" % mage.id):
+			_fail("éveil : %s s'éveille sans planche découpée" % mage.id)
+	var parts := _context(base)
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	var forms: Array = []
+	awakening.form_changed.connect(func(next: CharacterStats) -> void: forms.append(next))
+	if awakening.begin():
+		_fail("éveil : il part sans kills")
+	for i in Awakening.KILLS:
+		awakening.kill()
+	if not awakening.begin() or awakening.can_act():
+		_fail("éveil : il ne part pas après %d kills" % Awakening.KILLS)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not awakening.awake() or forms.is_empty() or not (forms[-1] as CharacterStats).awakened:
+		_fail("éveil : il ne s'éveille pas")
+	# La Renaissance : le coup mortel le laisse à 2 PV, intouchable, et l'Éveil s'achève.
+	var reborn := {"count": 0}
+	awakening.reborn.connect(func() -> void: reborn["count"] += 1)
+	health.take(Damage.new(health.current + 5))
+	if int(reborn["count"]) != 1 or health.current != Awakening.REBIRTH_HEALTH or not health.immune:
+		_fail("éveil : pas de Renaissance (%d PV)" % health.current)
+	if awakening.state != Awakening.State.EXHAUSTED or (forms[-1] as CharacterStats).awakened:
+		_fail("éveil : la Renaissance ne met pas fin à l'Éveil")
+	if health.minimum_current != 0:
+		_fail("éveil : il reste increvable après l'Éveil")
+	awakening.update(Awakening.EXHAUST_TIME + 0.01)
+	if awakening.state != Awakening.State.NORMAL or awakening.can_begin():
+		_fail("éveil : l'épuisement ne rend pas la main, ou la charge reste pleine")
+	# Sans coup mortel, la minute passe, puis l'épuisement.
+	for i in Awakening.KILLS:
+		awakening.kill()
+	awakening.begin()
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	awakening.update(Awakening.DURATION - 1.0)
+	if not awakening.awake():
+		_fail("éveil : il s'achève avant la minute")
+	awakening.update(1.1)
+	if awakening.state != Awakening.State.EXHAUSTED:
+		_fail("éveil : il dure plus d'une minute")
+	awakening.dispose()
+
+
+## Le kit du Phénix : la volée sur trois cibles, le Soleil qui explose deux fois et laisse du magma,
+## les piliers qui frappent une fois chacun, et la Plongée qui explose aux deux bouts.
+func _test_phoenix_kit() -> void:
+	var phoenix := CharacterCatalog.fire_awakened()
+	var parts := _context(phoenix)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	var launched := {"count": 0}
+	combat.projectile_launched.connect(func(_a: Ability, _t: int, _p: Array, _d: float) -> void:
+		launched["count"] += 1)
+	for steps in [2, 3, 4]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 5000)
+	combat.use(phoenix.attack, context)
+	if int(launched["count"]) != 3:
+		_fail("phénix : la volée part sur %d cibles" % int(launched["count"]))
+	for frame in 90:
+		combat.update(0.016, context)
+	for i in 3:
+		if context.enemy_health[i].current >= 5000:
+			_fail("phénix : la plume %d ne touche pas" % i)
+	# Le Soleil captif.
+	var echoes := {"count": 0, "magma": 0}
+	combat.echo_blasted.connect(func(_c: Vector2i, _a: Ability) -> void: echoes["count"] += 1)
+	combat.zone_created.connect(func(_id: int, zone: Ability, _c: Vector2i) -> void:
+		if zone.zone_style == "magma_peint":
+			echoes["magma"] += 1)
+	var before := context.enemy_health[0].current
+	combat.use(phoenix.abilities[0], context)
+	for frame in 200:
+		combat.update(0.016, context)
+	if int(echoes["count"]) != 1 or int(echoes["magma"]) != 1:
+		_fail("phénix : le soleil explose %d fois, magma %d" % [int(echoes["count"]), int(echoes["magma"])])
+	if before - context.enemy_health[0].current < phoenix.abilities[0].damage + phoenix.abilities[0].echo_damage:
+		_fail("phénix : le soleil ne retire que %d" % (before - context.enemy_health[0].current))
+	# Les Colonnes de feu.
+	parts = _context(phoenix)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var pillars := {"cells": []}
+	combat.pillars_erupted.connect(func(cells: Array, _a: Ability) -> void: pillars["cells"] = cells)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 5000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	if not combat.use(phoenix.abilities[1], context) or (pillars["cells"] as Array).is_empty():
+		_fail("phénix : les colonnes ne jaillissent pas")
+	for i in 2:
+		var lost := 5000 - context.enemy_health[i].current
+		if lost != 0 and lost != phoenix.abilities[1].damage:
+			_fail("phénix : une colonne frappe %d au lieu d'une fois" % lost)
+	# La Plongée : elle explose là où il part.
+	parts = _context(phoenix)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var plunged := false
+	for home: Vector2i in grid.all_floor_cells():
+		for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+			if not grid.is_floor_v(home + facing) or not grid.is_floor_v(home - facing):
+				continue
+			context.player_cell = home
+			context.player_facing = facing
+			context.player_field = Pathfinder.distance_field(grid, [home] as Array[Vector2i])
+			context.enemy_cells.clear()
+			context.enemy_health.clear()
+			_add_enemy(context, home - facing, 5000)
+			plunged = combat.use(phoenix.escape, context)
+			break
+		if plunged:
+			break
+	if not plunged or context.enemy_health[0].current != 5000 - phoenix.escape.end_blast_damage:
+		_fail("phénix : la plongée n'explose pas au départ")
+
+
+## LE SEIGNEUR DES MARÉES : sa coque se reforme après avoir cédé, et chacun de ses sorts fait ce qu'il dit.
+func _test_tide_lord() -> void:
+	var base := CharacterCatalog.water()
+	var form := CharacterCatalog.awakening_of(base.id)
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	# Marée haute.
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not awakening.shell_up() or health.shield != 1:
+		_fail("marées : pas de coque à l'éveil (bouclier %d)" % health.shield)
+	var before := health.current
+	health.take(Damage.new(1))
+	awakening.update(0.016)
+	if health.current != before or awakening.shell_up():
+		_fail("marées : la coque n'encaisse pas le coup")
+	awakening.update(Awakening.SHELL_REGROW - 0.5)
+	if awakening.shell_up():
+		_fail("marées : la coque revient trop tôt")
+	awakening.update(0.6)
+	if not awakening.shell_up() or health.shield != 1:
+		_fail("marées : la coque ne se reforme pas")
+	awakening.finish()
+	if health.shield != 0:
+		_fail("marées : la coque reste après l'éveil")
+	awakening.dispose()
+	# Le Trident rebondit sur deux voisins.
+	var tide := CharacterCatalog.water_awakened()
+	parts = _context(tide)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	var bounces := {"count": 0}
+	combat.water_bounced.connect(func(_f: Vector2i, _t: Vector2i) -> void: bounces["count"] += 1)
+	for steps in [2, 3, 4]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 5000)
+	combat.use(tide.attack, context)
+	for frame in 90:
+		combat.update(0.016, context)
+	if int(bounces["count"]) != 2:
+		_fail("marées : le trident rebondit %d fois" % int(bounces["count"]))
+	# La Bulle des abysses rend 1 PV si elle tient.
+	health.current = health.maximum - 1
+	combat.use(tide.abilities[1], context)
+	for frame in int(tide.abilities[1].duration / 0.016) + 10:
+		combat.update(0.016, context)
+	if health.current != health.maximum:
+		_fail("marées : la bulle tenue ne rend pas de PV (%d/%d)" % [health.current, health.maximum])
+	# Le Léviathan frappe dans sa bande, à travers les haies, et le soigne.
+	parts = _context(tide)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	var behind := Vector2i(-1, -1)
+	for cell in grid.all_floor_cells():
+		var by_path := Pathfinder.value_at(grid, context.player_field, cell)
+		var offset: Vector2i = cell - context.player_cell
+		if absi(offset.y) <= 2 and absi(offset.x) <= 6 and (by_path < 0 or by_path > 12):
+			behind = cell
+			break
+	if behind.x < 0:
+		_fail("marées : aucune case derrière une haie dans la bande")
+		return
+	_add_enemy(context, behind, 5000)
+	health.current = health.maximum - 2
+	combat.use(tide.ultimate, context)
+	for frame in int(tide.ultimate.duration / 0.016) + 10:
+		combat.update(0.016, context)
+	if context.enemy_health[0].current != 5000 - tide.ultimate.damage:
+		_fail("marées : le léviathan retire %d" % (5000 - context.enemy_health[0].current))
+	if health.current != health.maximum:
+		_fail("marées : le léviathan ne soigne pas")
+	# Le Torrent suit le couloir et laisse un courant.
+	var wakes := {"count": 0}
+	combat.zone_created.connect(func(_id: int, zone: Ability, _c: Vector2i) -> void:
+		if zone.zone_style == "courant_peint":
+			wakes["count"] += 1)
+	var landed := {"to": context.player_cell}
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: landed["to"] = to)
+	for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + facing):
+			context.player_facing = facing
+			break
+	if not combat.use(tide.escape, context) or landed["to"] == context.player_cell or int(wakes["count"]) < 2:
+		_fail("marées : le torrent ne file pas (%d courants)" % int(wakes["count"]))

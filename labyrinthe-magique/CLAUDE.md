@@ -375,6 +375,25 @@ vagues dans deux sens (`_rolling_path`). Les Ailes voilées sont un `SHIELD` int
 fois par `GARDEN_LOCK`. Les boss y entrent, et brûlent. Le rejet passe par `enemy_pushed`, que la simulation applique
 déjà. `SacredJet` et `EzekielWheel` dessinent la flamme et les roues, et `tools/preview_cherubin.gd` montre ses effets.
 
+**L'Éveil des mages** (2026-11-07) : une minute sous une forme transformée, puis `EXHAUST_TIME` d'épuisement, et
+`KILLS` kills avant le suivant (`Awakening`, RefCounted). Le joueur avait demandé « 1 min, recharge 10 s » : sans la
+charge, le mage serait éveillé six secondes sur sept. Le bouton est celui de la transformation d'Aël (`TransformButton`,
+`SLOT_TRANSFORM`, touche T), que le GameManager prête aux mages : rappuyer quitte l'Éveil. En démo, il est libre.
+- La forme vient de `CharacterCatalog.awakening_of(id)`. Elle garde l'IDENTIFIANT du mage, donc ses effets de base, et
+  porte `CharacterStats.awakened` : `Player` lit alors `<id>_eveil` et `UiIcons` le dossier d'icônes `<id>_eveil`.
+- Le **Mage du Feu** a le sien, le **Phénix** (`fire_awakened`, fiche `docs/prompts/mages/eveil_feu.md`). Sa
+  Renaissance vit dans `Awakening` : `minimum_current` le garde à 1 PV, puis `_on_damaged` le relève à 2 PV,
+  intouchable, `CombatSystem.erupt` frappe, et l'Éveil s'achève. Ses braises : `start_embers`.
+- Ses sorts : `Ability.volley` (un tir par cible), `echo_delay` et `magma_duration` (le Soleil captif),
+  `Kind.PILLARS`, `end_blast_damage` (la Plongée). La Couronne est un `WHIRL`. `tools/preview_phenix.gd` montre
+  ses effets, `--awaken` l'éveille dans une capture.
+- Le **Mage de l'Eau** a le **Seigneur des Marées** (`water_awakened`, `docs/prompts/mages/eveil_eau.md`), choisi
+  par le joueur à la place de l'Esprit des Marées, dont il garde les images. Son trait, Marée haute, est une
+  coque d'eau d'un coup qui se reforme `SHELL_REGROW` s après avoir cédé, lue à chaque image dans `Awakening`.
+  Ses sorts : `Ability.bounces` (le Trident), la vague à `blow_cells` et `slam_damage`, `heal_if_held` (la Bulle),
+  `follows_corridor` et `wake_seconds` (le Torrent), et `Kind.LEVIATHAN`. `tools/preview_maree.gd`.
+- ⚠️ Les bots de `test_balance` ne s'éveillent jamais : rien n'y mesure l'Éveil.
+
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
   vrai canal alpha, dessin bien plus fin, quatre fois plus de poses). Elle est

@@ -63,6 +63,12 @@ static func for_ability(character_id: String, ability_id: String) -> Texture2D:
 			if ability_id in group:
 				ability_id = group[0]
 				break
+	# L'ÉVEIL d'un mage : ses icônes sont découpées à côté des siennes, dans `<id>_eveil`.
+	var awakened_path := ICONS_PATH + character_id + "_eveil/" + ability_id + ".png"
+	if ResourceLoader.exists(awakened_path):
+		var awakened: Texture2D = load(awakened_path)
+		_cache[requested_key] = awakened
+		return awakened
 	var key := character_id + "/" + ability_id
 	if _cache.has(key):
 		return _cache[key]

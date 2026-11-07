@@ -130,8 +130,149 @@ static func by_id(id: String) -> CharacterStats:
 
 
 ## Le héros principal : c'est avec lui que s'ouvrent le titre et la sélection.
+## L'ÉVEIL (2026-11-07) : la forme transformée d'un mage, ou null s'il n'en a pas encore.
+## Elle garde l'identifiant du mage : ses effets de base, ses sons et ses tables restent les siens.
+static func awakening_of(id: String) -> CharacterStats:
+	match id:
+		FIRE:
+			return fire_awakened()
+		WATER:
+			return water_awakened()
+	return null
+
+
 static func default_id() -> String:
 	return AEL
+
+
+# --- Le Phénix : l'Éveil du Mage du Feu. -----------------------------------------
+
+## Une minute de Phénix (`Awakening`). Plus rapide, et chaque sort change. Son trait, Renaissance,
+## vit dans `AwakeningRuntime`. Fiche : `docs/prompts/mages/eveil_feu.md`. Chiffres non mesurés.
+static func fire_awakened() -> CharacterStats:
+	var base := fire()
+	var c := CharacterStats.new()
+	c.id = FIRE
+	c.awakened = true
+	c.display_name = "Phénix"
+	c.element = Element.Kind.FIRE
+	c.category = base.category
+	c.description = "Le Mage du Feu éveillé. Il renaît une fois de ses cendres."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed * 1.15
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "fire_eveil_plumes", "display_name": "Plumes du phénix",
+		"description": "Trois plumes de feu en éventail, chacune sur sa cible.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.FIRE,
+		"damage": 16, "range": 8, "cooldown": 0.5, "volley": 3,
+		"projectile_scale": 0.9, "projectile_speed": 1.2, "projectile_visual": "plume_phenix",
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "fire_eveil_soleil", "display_name": "Soleil captif",
+			"description": "Une boule plus grosse qui explose deux fois, et laisse du magma.",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.FIRE,
+			"damage": 48, "radius": 3.0, "range": 7, "cooldown": 5.0,
+			"echo_delay": 0.6, "echo_damage": 30, "magma_duration": 4.0, "magma_damage": 8,
+			"projectile_scale": 2.4, "projectile_speed": 0.55, "projectile_visual": "soleil_captif",
+			"shockwave": true,
+		}),
+		Ability.make({
+			"id": "fire_eveil_colonnes", "display_name": "Colonnes de feu",
+			"description": "Six piliers de feu jaillissent en cercle autour de lui.",
+			"kind": Ability.Kind.PILLARS, "element": Element.Kind.FIRE,
+			"damage": 30, "radius": 1.1, "pillar_count": 6, "pillar_ring": 2.5, "cooldown": 3.0,
+		}),
+		Ability.make({
+			"id": "fire_eveil_couronne", "display_name": "Couronne de brasiers",
+			"description": "Trois brasiers tournent autour de lui et brûlent ce qu'ils touchent.",
+			"kind": Ability.Kind.WHIRL, "element": Element.Kind.FIRE,
+			"damage": 6, "radius": 1.6, "duration": 10.0, "whirl_interval": 0.5, "cooldown": 7.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "fire_eveil_plongee", "display_name": "Plongée du phénix",
+		"description": "Il plonge droit devant, et une explosion part de chaque bout.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.FIRE,
+		"range": 8, "cooldown": 7.0, "end_blast_damage": 35, "end_blast_radius": 1.8,
+	})
+	var nova := base.ultimate
+	c.ultimate = Ability.make({
+		"id": "fire_eveil_supernova", "display_name": "Supernova",
+		"description": "Le phénix monte au ciel et retombe : l'onde traverse les murs, puis deux fois plus de météores.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.FIRE,
+		"damage": 160, "radius": 8.0, "cooldown": 1.0, "is_ultimate": true,
+		"shockwave": true, "pierces_walls": true, "flames": 1.6,
+		"rain_count": nova.rain_count * 2, "rain_damage": nova.rain_damage, "rain_radius": nova.rain_radius,
+		"rain_duration": nova.rain_duration * 1.3, "rain_fall": nova.rain_fall,
+	})
+	return c
+
+
+# --- L'Esprit des Marées : l'Éveil du Mage de l'Eau. -----------------------------
+
+## Une minute de Seigneur des Marées (`Awakening`). Son trait, Marée haute, est une coque d'eau qui se
+## reforme 6 s après avoir cédé. Fiche : `docs/prompts/mages/eveil_eau.md`. Chiffres non mesurés.
+## Le joueur a préféré ce kit à celui de l'Esprit des Marées (Source vive) le 2026-11-07 : les images
+## de l'Esprit sont gardées, elles vont à ce concept.
+static func water_awakened() -> CharacterStats:
+	var base := water()
+	var c := CharacterStats.new()
+	c.id = WATER
+	c.awakened = true
+	c.display_name = "Seigneur des Marées"
+	c.element = Element.Kind.WATER
+	c.category = base.category
+	c.description = "Le Mage de l'Eau éveillé. Sa coque d'eau se reforme toute seule après chaque coup."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed * 1.15
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "water_eveil_trident", "display_name": "Trident",
+		"description": "Le jet touche sa cible, puis rebondit sur deux ennemis voisins.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.WATER,
+		"damage": 16, "range": 9, "cooldown": 0.5, "bounces": 2, "bounce_range": 3,
+		"projectile_scale": 1.0, "projectile_speed": 1.3, "projectile_visual": "trident_maree",
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "water_eveil_tsunami", "display_name": "Raz-de-marée",
+			"description": "Une vague géante remonte le couloir, emporte les ennemis et les plaque contre le mur.",
+			"kind": Ability.Kind.WAVE, "element": Element.Kind.WATER,
+			"damage": 40, "radius": 2.0, "range": 9, "cooldown": 4.0, "wave_speed": 10.0,
+			"blow_cells": 3, "slam_damage": 25,
+		}),
+		Ability.make({
+			"id": "water_eveil_carapace", "display_name": "Bulle des abysses",
+			"description": "Une bulle qui encaisse trois coups, et lui rend 1 PV si elle tient jusqu'au bout.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.WATER,
+			"damage": 3, "duration": 12.0, "cooldown": 10.0, "heal_if_held": 1,
+		}),
+		Ability.make({
+			"id": "water_eveil_prison", "display_name": "Glacier",
+			"description": "Le cercle se hérisse de pics de glace : ce qui entre est gelé net, puis rampe.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.WATER,
+			"damage": 8, "radius": 3.0, "duration": 8.0, "cooldown": 8.0,
+			"snare": 2.0, "slow_duration": 2.0, "slow_factor": 0.4, "zone_style": "glacier_peint",
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "water_eveil_torrent", "display_name": "Torrent",
+		"description": "Il se change en torrent, file en suivant le couloir, et laisse un courant qui ralentit.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.WATER,
+		"range": 9, "cooldown": 7.0, "follows_corridor": true, "wake_seconds": 4.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "water_eveil_deluge", "display_name": "Léviathan",
+		"description": "Un serpent d'eau géant traverse le labyrinthe et emporte tout sur son passage, puis une pluie le soigne.",
+		"kind": Ability.Kind.LEVIATHAN, "element": Element.Kind.WATER,
+		"damage": 110, "radius": 3.0, "range": 12, "duration": 2.0, "heal_self": 2,
+		"cooldown": 1.0, "is_ultimate": true, "pierces_walls": true,
+	})
+	return c
 
 
 # --- Sorcier des Ténèbres : l'étalon. Précis, mobile, portée maximale. -----------

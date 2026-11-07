@@ -119,6 +119,13 @@ La fiche et la commande complète, dans l'ordre : [mages/mage_croupier](prompts/
 La fiche et la commande complète, dans l'ordre : [mages/mage_avide](prompts/mages/mage_avide.md). Un démon sans rien
 d'humain, pas chibi, à la gueule fendant le ventre : plus il dévore, plus il grandit. Il est jouable.
 
+## L'Éveil des mages — le Phénix et l'Esprit des Marées
+
+Chaque mage aura un ÉVEIL : une minute sous une forme transformée, avec ses six sorts changés, puis 10 s
+d'épuisement, et une charge de 6 kills avant le suivant. Le Mage du Feu devient le Phénix ; le Mage de l'Eau,
+l'Esprit des Marées. Fiches, règles et prompts : [mages/eveil_feu](prompts/mages/eveil_feu.md) et
+[mages/eveil_eau](prompts/mages/eveil_eau.md). Leurs visuels et leurs sorts éveillés sont intégrés.
+
 ## Les anges — refaire le sprite comme les mages
 
 Ils étaient élancés, à côté de mages chibi, et ils glissaient de profil. Les images 1, 2 et 3 sont à

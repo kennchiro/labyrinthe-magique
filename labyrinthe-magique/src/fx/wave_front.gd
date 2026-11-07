@@ -19,6 +19,7 @@ extends Node2D
 ## direction) sans jamais avoir à connaître l'orientation réelle.
 
 const SHADER := preload("res://assets/shaders/wave.gdshader")
+const EVEIL_WATER_SHADER := preload("res://assets/shaders/water_eveil_tsunami.gdshader")
 ## Profondeur de la lame, en cases. Elle traîne derrière son bord d'attaque.
 const DEPTH_TILES := 2.2
 ## Temps que met l'écume à retomber une fois le front arrivé.
@@ -40,7 +41,7 @@ var _behind: Array[Vector2] = []
 
 
 func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
-		tint: Color, width_tiles: float) -> void:
+		tint: Color, width_tiles: float, awakened_tsunami: bool = false) -> void:
 	blade = get_node_or_null("Blade")
 	if blade == null:
 		queue_free()
@@ -59,7 +60,7 @@ func setup(points: PackedVector2Array, duration: float, p_tile_size: int,
 	blade.position = Vector2(-span * 0.5, -depth)
 
 	_material = ShaderMaterial.new()
-	_material.shader = SHADER
+	_material.shader = EVEIL_WATER_SHADER if awakened_tsunami else SHADER
 	_material.set_shader_parameter("deep_color",
 		Color(tint.r * 0.25, tint.g * 0.45, tint.b * 0.8, 1.0))
 	_material.set_shader_parameter("light_color", tint)

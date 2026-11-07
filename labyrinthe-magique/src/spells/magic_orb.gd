@@ -62,6 +62,14 @@ const PAINTED := {
 		"length": 1.6, "height": 0.45, "lead": 0.3, "sparks": 0.4},
 	"boule_peinte": {"shader": preload("res://assets/shaders/fire_ball.gdshader"),
 		"length": 1.5, "height": 0.94, "lead": 0.22, "sparks": 0.0},
+	# L'Éveil du Mage du Feu : la plume du phénix et le soleil captif.
+	"plume_phenix": {"shader": preload("res://assets/shaders/phenix_plume.gdshader"),
+		"length": 1.4, "height": 0.6, "lead": 0.3, "sparks": 0.3},
+	"soleil_captif": {"shader": preload("res://assets/shaders/phenix_soleil.gdshader"),
+		"length": 1.6, "height": 1.0, "lead": 0.2, "sparks": 0.0},
+	# L'Éveil du Mage de l'Eau : le trident d'eau.
+	"trident_maree": {"shader": preload("res://assets/shaders/maree_trident.gdshader"),
+		"length": 1.5, "height": 0.62, "lead": 0.3, "sparks": 0.0},
 	"orbe_ombre": {"shader": preload("res://assets/shaders/shadow_orb.gdshader"),
 		"length": 1.7, "height": 1.3, "lead": 0.16, "sparks": 0.0},
 	"aiguille_occulte": {"shader": preload("res://assets/shaders/arcane_needle.gdshader"),

@@ -521,6 +521,12 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.garden_planted.connect(_on_garden_planted)
 	combat.garden_repelled.connect(_on_garden_repelled)
 	combat.garden_ended.connect(_on_garden_ended)
+	combat.echo_blasted.connect(_on_echo_blasted)
+	combat.pillars_erupted.connect(_on_pillars_erupted)
+	combat.ember_laid.connect(_on_ember_laid)
+	combat.water_bounced.connect(_on_water_bounced)
+	combat.shield_held.connect(_on_shield_held)
+	combat.leviathan_cast.connect(_on_leviathan_cast)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -1326,6 +1332,17 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 	if ability.from_sky:
 		_sky_strikes(ability, cell)
 		return
+	if ability.projectile_visual in ["plume_phenix", "soleil_captif"]:
+		_phoenix_hit(ability, index, cell)
+		return
+	if ability.projectile_visual == "trident_maree":
+		if _orbs.has(index):
+			var orb: MagicOrb = _orbs[index]
+			if is_instance_valid(orb):
+				orb.burst()
+			_orbs.erase(index)
+		_front_burst(cell, 1.0, 0.45, "maree_choc")
+		return
 	if ability.projectile_visual == "onde_marteau":
 		_spawn_painted_burst(cell, 1.5, 0.45, "acier_dash").z_index = 11
 	if _crescents.has(index):
@@ -1426,6 +1443,17 @@ func _on_player_shielded(amount: int, duration: float) -> void:
 	if player == null:
 		return
 	_shield_max = maxi(1, amount)
+	# La Bulle des abysses du Seigneur des Marées a son dessin à elle.
+	if character.awakened and character.id == CharacterCatalog.WATER:
+		if _tide_bubble != null and is_instance_valid(_tide_bubble):
+			_tide_bubble.queue_free()
+		_tide_bubble = PaintedBurst.new()
+		player.add_child(_tide_bubble)
+		_tide_bubble.setup(TILE_SIZE, 1.25, duration, 0.0, "maree_bulle")
+		_tide_bubble.position = Vector2(0.0, -TILE_SIZE * 0.6)
+		_tide_bubble.z_index = 3
+		player_shielded.emit(amount)
+		return
 	# Les Écailles de magma ont leurs propres flammes (`_on_scales_raised`) : pas de bulle d'eau.
 	if character.id == "dragon":
 		player_shielded.emit(amount)
@@ -1668,6 +1696,239 @@ func _hit_stop(seconds: float) -> void:
 
 
 ## La charge de la Transformation, au bouton dédié : la lumière converge vers lui avant l'éclatement.
+# --- L'Éveil du Seigneur des Marées -------------------------------------------
+
+const LEVIATHAN_HEIGHT := 2.4
+var _tide_bubble: PaintedBurst = null
+
+
+func _on_water_bounced(from: Vector2i, to: Vector2i) -> void:
+	_streak_between(from, to, "maree_rebond", 0.35, 1.0)
+	_front_burst(to, 0.9, 0.4, "maree_choc")
+
+
+func _on_shield_held(_healed: int) -> void:
+	if _tide_bubble != null and is_instance_valid(_tide_bubble):
+		_tide_bubble.queue_free()
+	_tide_bubble = null
+	if player != null:
+		_front_burst(player.mover.nearest_cell(), 1.2, 0.7, "maree_soin")
+
+
+## Un trait peint couché entre deux cases, orienté de l'une vers l'autre.
+func _streak_between(from: Vector2i, to: Vector2i, key: String, seconds: float, height: float) -> void:
+	var a := maze_renderer.cell_to_world(from)
+	var b := maze_renderer.cell_to_world(to)
+	var streak := PaintedBurst.new()
+	entities.add_child(streak)
+	streak.setup(TILE_SIZE, 1.0, seconds, float(from.x * 7 + to.y) * 0.01, key)
+	streak.scale = Vector2.ONE
+	streak.position = (a + b) * 0.5
+	streak.rotation = (b - a).angle()
+	(streak.get_child(0) as Sprite2D).scale = Vector2(a.distance_to(b) + TILE_SIZE * 0.8, TILE_SIZE * height)
+	streak.z_index = 12
+
+
+## Le Torrent : il se change en courant, file le long du couloir, et éclabousse aux deux bouts.
+func _tide_torrent(from: Vector2i, to: Vector2i) -> void:
+	var path := combat.trajectory(from, to)
+	for i in range(path.size() - 1):
+		_streak_between(path[i], path[i + 1], "maree_courant", 0.5 + float(i) * 0.03, 1.3)
+	_front_burst(from, 1.4, 0.5, "maree_eclat")
+	_front_burst(to, 1.4, 0.5, "maree_eclat")
+	player.mover.teleport_to(to)
+	player.snap_to_mover()
+	player.play_warp()
+	_shake(0.2, 0.5)
+	_refresh_ai()
+
+
+## Le Léviathan : le serpent traverse l'écran dans sa bande, puis la pluie tombe et soigne.
+func _on_leviathan_cast(cell: Vector2i, ability: Ability, direction: int) -> void:
+	var serpent := _spawn_painted_burst(cell, 1.0, ability.duration + 0.4, "maree_leviathan")
+	var body := serpent.get_child(0) as Sprite2D
+	var width := (float(ability.range) * 2.0 + 3.0) * TILE_SIZE
+	body.scale = Vector2(width * float(direction), (ability.radius * 2.0 + LEVIATHAN_HEIGHT) * TILE_SIZE)
+	serpent.z_index = 12
+	_spawn_painted_burst(cell, 3.0, ability.duration + 1.6, "maree_pluie").span_tiles(TILE_SIZE, 16.0)
+	_shake(0.6, 0.9)
+	_spawn_slow_motion(0.12, 0.3)
+
+
+# --- L'Éveil du Phénix ---------------------------------------------------------
+
+const PHOENIX_PILLAR_SIZE := Vector2(1.1, 2.4)
+const PHOENIX_DIVE_HEIGHT := 1.6
+var _phoenix_aura: PaintedBurst = null
+var _water_aura: PaintedBurst = null
+
+
+## Le geste d'Éveil : la spirale de plumes monte autour de lui.
+func show_awakening_charge() -> void:
+	if player == null:
+		return
+	var spiral := PaintedBurst.new()
+	player.add_child(spiral)
+	var water := character.id == CharacterCatalog.WATER
+	spiral.setup(TILE_SIZE, 1.5, Awakening.CHARGE_TIME, 0.0,
+		"maree_spirale" if water else "phenix_spirale")
+	spiral.position = Vector2(0.0, -TILE_SIZE * 0.6)
+	spiral.z_index = 3
+	_shake(0.2, 0.25)
+
+
+## L'éclosion : les ailes s'ouvrent en grand, la colonne monte, et l'aura reste pour la minute.
+func show_awakening() -> void:
+	if player == null:
+		return
+	if character.id == CharacterCatalog.WATER:
+		_show_water_awakening()
+		return
+	var cell := player.mover.nearest_cell()
+	var bloom := PaintedBurst.new()
+	player.add_child(bloom)
+	bloom.setup(TILE_SIZE, 1.15, 0.9, 0.0, "phenix_eveil")
+	bloom.position = Vector2(0.0, -TILE_SIZE * 0.7)
+	bloom.z_index = -1
+	_front_burst(cell, 1.1, 0.6, "phenix_eclat")
+	_shake(0.4, 0.8)
+	_spawn_slow_motion(0.1, 0.35)
+	if _phoenix_aura != null and is_instance_valid(_phoenix_aura):
+		_phoenix_aura.queue_free()
+	_phoenix_aura = PaintedBurst.new()
+	player.add_child(_phoenix_aura)
+	_phoenix_aura.setup(TILE_SIZE, 1.1, Awakening.DURATION, 0.0, "phenix_aura")
+	_phoenix_aura.position = Vector2(0.0, -TILE_SIZE * 0.8)
+	_phoenix_aura.z_index = -1
+
+
+## L'éclosion du Seigneur des Marées : une vague se dresse dans son dos et retombe en écume.
+## Sa coque (Marée haute) vient ensuite d'`Awakening`, par `show_shell_formed`.
+func _show_water_awakening() -> void:
+	var cell := player.mover.nearest_cell()
+	var surge := PaintedBurst.new()
+	player.add_child(surge)
+	surge.setup(TILE_SIZE, 1.3, 1.0, 0.0, "maree_eveil")
+	surge.position = Vector2(0.0, -TILE_SIZE * 0.7)
+	surge.z_index = -1
+	_front_burst(cell, 1.2, 0.6, "maree_eclat")
+	_shake(0.35, 0.7)
+	_spawn_slow_motion(0.1, 0.3)
+
+
+## Marée haute : la coque d'eau l'entoure tant qu'elle tient.
+func show_shell_formed() -> void:
+	if player == null:
+		return
+	if _water_aura != null and is_instance_valid(_water_aura):
+		_water_aura.queue_free()
+	_water_aura = PaintedBurst.new()
+	player.add_child(_water_aura)
+	_water_aura.setup(TILE_SIZE, 0.92, Awakening.DURATION, 0.0, "maree_coque")
+	_water_aura.position = Vector2(0.0, -TILE_SIZE * 0.62)
+	_water_aura.z_index = 2
+
+
+## La coque cède : elle éclate en écume, et se reformera.
+func show_shell_broken() -> void:
+	if _water_aura != null and is_instance_valid(_water_aura):
+		_water_aura.queue_free()
+	_water_aura = null
+	if player != null:
+		_front_burst(player.mover.nearest_cell(), 1.0, 0.45, "maree_eclat")
+
+
+## La fin : ses ailes se défont en cendres.
+func end_awakening() -> void:
+	if _phoenix_aura != null and is_instance_valid(_phoenix_aura):
+		_phoenix_aura.queue_free()
+	_phoenix_aura = null
+	if _water_aura != null and is_instance_valid(_water_aura):
+		_water_aura.queue_free()
+	_water_aura = null
+	if player == null:
+		return
+	if character.id == CharacterCatalog.WATER:
+		var ebb := PaintedBurst.new()
+		player.add_child(ebb)
+		ebb.setup(TILE_SIZE, 1.3, 0.9, 0.0, "maree_fin")
+		ebb.position = Vector2(0.0, -TILE_SIZE * 0.55)
+		ebb.z_index = 3
+		return
+	var ashes := PaintedBurst.new()
+	player.add_child(ashes)
+	ashes.setup(TILE_SIZE, 1.4, 1.1, 0.0, "phenix_cendres")
+	ashes.position = Vector2(0.0, -TILE_SIZE * 0.6)
+	ashes.z_index = 3
+
+
+## Renaissance : le temps se fige, les cendres, puis le phénix qui jaillit et l'onde.
+func show_rebirth() -> void:
+	if player == null:
+		return
+	_spawn_slow_motion(0.35, 0.2)
+	var rebirth := _front_burst(player.mover.nearest_cell(), 3.0, 1.3, "phenix_renaissance")
+	rebirth.span_tiles(TILE_SIZE, Awakening.REBIRTH_RADIUS + 0.5)
+	_shake(0.5, 1.0)
+
+
+func _phoenix_hit(ability: Ability, index: int, cell: Vector2i) -> void:
+	if _orbs.has(index):
+		var orb: MagicOrb = _orbs[index]
+		if is_instance_valid(orb):
+			orb.burst()
+		_orbs.erase(index)
+	if ability.radius > 0.0:
+		_front_burst(cell, maxf(1.5, ability.radius * 0.7), 0.8, "phenix_soleil_choc")
+		_shake(0.3, 0.7)
+		if ability.shockwave:
+			_spawn_shockwave(cell, ability)
+	else:
+		_front_burst(cell, 0.9, 0.45, "phenix_plume_choc")
+
+
+func _on_echo_blasted(cell: Vector2i, ability: Ability) -> void:
+	_front_burst(cell, maxf(1.4, ability.radius * 0.8), 0.5, "phenix_second")
+	_shake(0.2, 0.5)
+
+
+func _on_pillars_erupted(cells: Array, _ability: Ability) -> void:
+	for spot: Vector2i in cells:
+		var pillar := _spawn_painted_burst(spot, 1.0, 1.1, "phenix_pilier")
+		var shaft := pillar.get_child(0) as Sprite2D
+		shaft.scale = PHOENIX_PILLAR_SIZE * TILE_SIZE
+		shaft.position = Vector2(0.0, -(0.95 - 0.5) * PHOENIX_PILLAR_SIZE.y * TILE_SIZE)
+		pillar.z_index = 11
+	_shake(0.3, 0.7)
+
+
+func _on_ember_laid(cell: Vector2i, life: float) -> void:
+	var ember := _spawn_painted_burst(cell, 0.9, life, "phenix_braise")
+	ember.z_index = 5
+
+
+## La Plongée : l'oiseau file de l'un à l'autre, et les deux bouts éclatent.
+func _phoenix_dive(from: Vector2i, to: Vector2i) -> void:
+	var a := maze_renderer.cell_to_world(from)
+	var b := maze_renderer.cell_to_world(to)
+	var streak := PaintedBurst.new()
+	entities.add_child(streak)
+	streak.setup(TILE_SIZE, 1.0, 0.7, 0.0, "phenix_plongee")
+	streak.scale = Vector2.ONE
+	streak.position = (a + b) * 0.5
+	streak.rotation = (b - a).angle()
+	var shaft := streak.get_child(0) as Sprite2D
+	shaft.scale = Vector2(a.distance_to(b) + TILE_SIZE * 1.5, TILE_SIZE * PHOENIX_DIVE_HEIGHT)
+	streak.z_index = 12
+	_front_burst(from, 1.8, 0.6, "phenix_eclat")
+	_front_burst(to, 1.8, 0.6, "phenix_eclat")
+	player.mover.teleport_to(to)
+	player.snap_to_mover()
+	player.play_warp()
+	_shake(0.25, 0.6)
+	_refresh_ai()
+
+
 func show_transformation_charge() -> void:
 	var gather := GatherLight.new()
 	entities.add_child(gather)
@@ -3731,6 +3992,15 @@ func _on_eye_burst(cell: Vector2i) -> void:
 func _on_whirl_started(duration: float, radius: float) -> void:
 	if player == null:
 		return
+	if character.id == "fire":
+		var crown := PaintedBurst.new()
+		player.add_child(crown)
+		crown.setup(TILE_SIZE, radius, duration, 0.0, "phenix_couronne")
+		crown.set_shader_seconds(duration)
+		crown.position = Vector2(0.0, -TILE_SIZE * 0.35)
+		crown.z_index = 2
+		_front_burst(player.mover.nearest_cell(), 1.2, 0.4, "phenix_eclat")
+		return
 	var whirl := PaintedBurst.new()
 	player.add_child(whirl)
 	whirl.setup(TILE_SIZE, radius, duration, 0.0, "cherubin_tournoyant")
@@ -3741,6 +4011,9 @@ func _on_whirl_started(duration: float, radius: float) -> void:
 
 
 func _on_whirl_cut(cell: Vector2i) -> void:
+	if character.id == "fire":
+		_front_burst(cell, 0.9, 0.45, "phenix_braise_touche")
+		return
 	_front_burst(cell, 0.9, 0.3, "cherubin_coupe")
 
 
@@ -4248,6 +4521,12 @@ func _on_shield_faded() -> void:
 	if _bubble != null and is_instance_valid(_bubble):
 		_bubble.queue_free()
 	_bubble = null
+	# La Bulle des abysses éclate en écume quand elle cède avant son échéance.
+	if _tide_bubble != null and is_instance_valid(_tide_bubble):
+		_tide_bubble.queue_free()
+		if player != null:
+			_front_burst(player.mover.nearest_cell(), 1.1, 0.45, "maree_eclat")
+	_tide_bubble = null
 	player_shielded.emit(0)
 
 
@@ -4278,7 +4557,7 @@ func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 	var front: WaveFront = WAVE_SCENE.instantiate()
 	entities.add_child(front)
 	front.setup(points, duration, TILE_SIZE, Element.color(ability.element),
-		ability.radius)
+		ability.radius, character.awakened and ability.id == "water_eveil_tsunami")
 
 
 func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
@@ -4298,6 +4577,10 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 		return
 	if character.id in ["test", "ael"]:
 		return
+	# La Supernova du Phénix : son ciel et son ombre, PAR-DESSUS l'Embrasement, qui suit.
+	if character.awakened and character.id == "fire" and ability.is_ultimate:
+		_spawn_painted_burst(cell, 3.0, 2.6, "phenix_supernova").span_tiles(TILE_SIZE, 20.0)
+		_spawn_slow_motion(0.12, 0.3)
 	if character.id == "mort":
 		_spawn_sweep(ability, cell)
 		return
@@ -4693,6 +4976,12 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 	# Un seul effet, sept lectures.
 	if character.id == CharacterCatalog.AEL:
 		_ael_leap(from, to)
+		return
+	if character.awakened and character.id == "fire":
+		_phoenix_dive(from, to)
+		return
+	if character.awakened and character.id == CharacterCatalog.WATER:
+		_tide_torrent(from, to)
 		return
 	var tint := Element.color(character.element)
 	_spawn_warp(player.mover.nearest_cell(), tint, false)

@@ -64,6 +64,9 @@ var demo := false
 var demo_hero_form := -1
 var hero_progress: HeroProgress = null
 var hero: HeroRuntime = null
+## L'ÉVEIL d'un mage (2026-11-07), s'il en a un : le même bouton et la même touche que la
+## transformation d'Aël. Nul pour Aël et pour les mages qui n'ont pas encore le leur.
+var awakening: Awakening = null
 
 
 func _ready() -> void:
@@ -147,6 +150,9 @@ func _ready() -> void:
 func start_level(index: int) -> void:
 	if hero != null:
 		hero.dispose()
+	if awakening != null:
+		awakening.dispose()
+	awakening = null
 	level_index = clampi(index, 0, levels.size() - 1)
 	var config := levels[level_index]
 	character = HeroCatalog.at_level(hero_progress.level()) if character_id == "ael" else CharacterCatalog.by_id(character_id)
@@ -185,6 +191,15 @@ func start_level(index: int) -> void:
 	# la config, et une config recyclée d'un niveau à l'autre mentirait.
 	quest = QuestBook.new(config)
 	ui.set_quest_available(not config.is_demo)
+
+	if hero == null and CharacterCatalog.awakening_of(character_id) != null:
+		awakening = Awakening.new(character, CharacterCatalog.awakening_of(character_id), level.combat,
+			level.combat_context)
+		awakening.form_changed.connect(_on_awakening_form)
+		awakening.changed.connect(_on_awakening_state)
+		awakening.reborn.connect(_on_awakening_reborn)
+		awakening.shell_formed.connect(level.show_shell_formed)
+		awakening.shell_broken.connect(level.show_shell_broken)
 
 	ui.set_character(character)
 	ui.set_hero_progress(hero_progress if hero != null else null)
@@ -344,6 +359,9 @@ func _process(delta: float) -> void:
 			"seconds": hero.transformation.left, "dragon": hero.next_is_dragon()})
 		if demo:
 			ui.set_demo_hero_state(3 if hero.transformation.state == Transformation.State.CHARGING else character.hero_form, hero_progress.level())
+	if awakening != null:
+		awakening.update(delta)
+		ui.set_transform_state(true, _awakening_info())
 	# Le joueur est recréé à chaque chargement : on relie ici plutôt que par
 	# signal, pour ne pas avoir à gérer les reconnexions.
 	level.player.touch_direction = ui.touch_direction()
@@ -367,7 +385,7 @@ func _action_state() -> Dictionary:
 		var ability: Ability = bar[slot]
 		var is_ultimate := slot == SLOT_ULTIMATE
 		var ready := level.can_use(slot) and (not is_ultimate or kills.available())
-		ready = ready and (hero == null or hero.can_act())
+		ready = ready and (hero == null or hero.can_act()) and (awakening == null or awakening.can_act())
 		if ability.kind == Ability.Kind.HERO_TRANSFORM:
 			ready = ready and level.combat.hero_transform_allowed
 		var ratio := level.combat.cooldown_ratio(ability)
@@ -444,7 +462,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Page précédente / suivante : le tour des décors au clavier. Elles ne
 	# servent à rien hors démo, `demo_stage` s'en assure.
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_T and hero != null:
+		if event.keycode == KEY_T and (hero != null or awakening != null):
 			use_slot(SLOT_TRANSFORM)
 			return
 		if event.keycode == KEY_PAGEDOWN or event.keycode == KEY_BRACKETRIGHT:
@@ -474,10 +492,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Point d'entrée unique des gestes du joueur, clavier comme tactile.
 func use_slot(slot: int) -> void:
-	if state != State.PLAYING or (hero != null and not hero.can_act()):
+	if state != State.PLAYING or (hero != null and not hero.can_act()) \
+			or (awakening != null and not awakening.can_act()):
 		return
 	if slot == SLOT_PORTAL:
 		level.try_teleport_player()
+		return
+	if slot == SLOT_TRANSFORM and awakening != null:
+		# Rappuyer pendant l'Éveil le quitte : le joueur garde la main sur sa minute.
+		if awakening.awake():
+			awakening.finish()
+		elif awakening.begin(demo):
+			level.show_awakening_charge()
+			var awakening_tint := Color("#55ddeb") if character_id == CharacterCatalog.WATER else Color("#ffb347")
+			ui.flash("ÉVEIL : %s !" % awakening.awakened.display_name.to_upper(), awakening_tint)
 		return
 	if slot == SLOT_TRANSFORM:
 		var dragon := hero != null and hero.next_is_dragon()
@@ -541,6 +569,8 @@ func _on_ability_refused(reason: String) -> void:
 func _on_enemy_killed() -> void:
 	if hero != null:
 		hero.kill()
+	if awakening != null:
+		awakening.kill()
 	kills.register_kill()
 	ui.set_kills(kills.progress, kills.needed, kills.available())
 	if not kills.available():
@@ -661,6 +691,49 @@ func _on_hero_progressed(_amount: int, levels_gained: int) -> void:
 func _exit_tree() -> void:
 	if hero != null:
 		hero.dispose()
+	if awakening != null:
+		awakening.dispose()
+
+
+# --- L'Éveil des mages -------------------------------------------------------------
+
+## Ce que montre le bouton : il reprend celui d'Aël, avec ses mots et sa minute.
+func _awakening_info() -> Dictionary:
+	var shown := Transformation.State.NORMAL
+	match awakening.state:
+		Awakening.State.CHARGING:
+			shown = Transformation.State.CHARGING
+		Awakening.State.AWAKE:
+			shown = Transformation.State.PRISM
+		Awakening.State.EXHAUSTED:
+			shown = Transformation.State.EXHAUSTED
+	return {"ratio": 1.0 if demo else awakening.charge_ratio(), "ready": awakening.can_begin(demo),
+		"state": shown, "seconds": awakening.left, "max_seconds": Awakening.DURATION,
+		"label_on": awakening.awakened.display_name.to_upper(), "label_ready": "ÉVEIL",
+		"symbol": "water" if awakening.base.id == CharacterCatalog.WATER else "flame"}
+
+
+func _on_awakening_form(next: CharacterStats) -> void:
+	character = next
+	level.set_character(next)
+	ui.set_character(next)
+	ui.set_health(level.player_health.current, level.player_health.maximum)
+	ui.set_kills(kills.progress, kills.needed, kills.available())
+
+
+func _on_awakening_state(next: Awakening.State) -> void:
+	match next:
+		Awakening.State.AWAKE:
+			level.show_awakening()
+		Awakening.State.EXHAUSTED:
+			level.end_awakening()
+			ui.flash("Épuisé", Color("#9a7b6a"))
+
+
+func _on_awakening_reborn() -> void:
+	level.show_rebirth()
+	ui.flash("RENAISSANCE !", Color("#ffd27a"))
+	ui.set_health(level.player_health.current, level.player_health.maximum)
 
 
 static func development_run() -> bool:
