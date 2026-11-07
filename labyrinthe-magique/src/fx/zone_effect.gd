@@ -24,6 +24,9 @@ const PAINTED_STYLES := {
 	"magma_peint": preload("res://assets/shaders/phenix_magma.gdshader"),
 	"glacier_peint": preload("res://assets/shaders/maree_glacier.gdshader"),
 	"courant_peint": preload("res://assets/shaders/maree_flaque.gdshader"),
+	"faille_peinte": preload("res://assets/shaders/colosse_faille.gdshader"),
+	"cage_peinte": preload("res://assets/shaders/tempete_cage.gdshader"),
+	"ouragan_peint": preload("res://assets/shaders/souverain_ouragan.gdshader"),
 }
 ## La glace lit des plaques et des fissures, pas un bruit lissé (`tools/build_noise.py`).
 const ICE_NOISE := preload("res://assets/shaders/ice_noise.png")

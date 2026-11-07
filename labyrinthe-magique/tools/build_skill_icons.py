@@ -226,6 +226,27 @@ SHEETS = {
         "water_eveil_trident", "water_eveil_tsunami", "water_eveil_carapace",
         "water_eveil_prison", "water_eveil_torrent", "water_eveil_deluge",
     ], {"undust": 12}),
+    # L'ÉVEIL du Mage de la Terre, le Colosse. Relevé case par case : rocher fendu qui roule · croix
+    # de failles hérissée de pics · bouclier de roche entouré de pics // cristal planté dans une roche
+    # ouverte · jet de roche et de lave · trois colonnes de lave. L'ordre demandé.
+    "mage_terre_eveil_skills.png": ("earth_eveil", [
+        "earth_eveil_meteorite", "earth_eveil_faille", "earth_eveil_bastion",
+        "earth_eveil_geode", "earth_eveil_eruption", "earth_eveil_cataclysme",
+    ], {"undust": 12}),
+    # L'ÉVEIL du Mage de la Foudre, l'Avatar de la Tempête. Relevé case par case : lance d'éclair à trois
+    # anneaux · arc qui relie six étoiles · dôme de barreaux d'éclairs // trois nuages autour d'un soleil ·
+    # éclair qui rebondit sur trois étoiles · nuage noir et trois éclairs. L'ordre demandé.
+    "mage_foudre_eveil_skills.png": ("thunder_eveil", [
+        "thunder_eveil_lance", "thunder_eveil_chaine", "thunder_eveil_cage",
+        "thunder_eveil_cyclone", "thunder_eveil_saut", "thunder_eveil_colere",
+    ], {"undust": 12}),
+    # L'ÉVEIL du Mage de l'Air, le Souverain des Vents. Relevé case par case : croissant à spirale · tornade
+    # et trois flèches qui s'y enroulent · anneau et six flèches // sphère de rubans cerclée d'or · ailes et
+    # flèche par-dessus un mur · spirale à six petites tornades. L'ordre demandé.
+    "mage_air_eveil_skills.png": ("air_eveil", [
+        "air_eveil_croissant", "air_eveil_vortex", "air_eveil_titan",
+        "air_eveil_cocon", "air_eveil_zephyr", "air_eveil_ouragan",
+    ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",

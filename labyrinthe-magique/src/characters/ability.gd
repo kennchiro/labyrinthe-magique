@@ -639,6 +639,56 @@ enum Kind {
 ## Elle laisse derrière elle une eau qui ralentit, ce temps-là. Zéro = rien.
 @export var wake_seconds: float = 0.0
 
+## L'ÉVEIL DU COLOSSE (Mage de la Terre éveillé).
+## La gerbe part dans les QUATRE directions à la fois, en croix, au lieu de devant lui seulement.
+@export var line_cross: bool = false
+## Le cristal planté tire sur autant d'ennemis à la fois. Zéro ou un = le plus proche seulement.
+@export var turret_volley: int = 0
+## Le séisme fait jaillir autant de colonnes de lave, une à une, chacune de ces dégâts et ce rayon.
+@export var lava_columns: int = 0
+@export var lava_damage: int = 0
+@export var lava_radius: float = 1.0
+## L'explosion de bout de fuite projette ce qu'elle touche d'autant de cases. Zéro = rien.
+@export var end_blast_push: int = 0
+## L'explosion de bout de fuite n'a lieu qu'à l'arrivée (l'Éruption), pas au départ.
+@export var end_blast_arrival_only: bool = false
+## Un bouclier qui renvoie les coups (`reflect_damage`) cloue le lanceur sur place, comme le Rempart de
+## l'Acier ; le Bastion du Colosse le laisse marcher (demande du joueur, 2026-11-07).
+@export var reflect_mobile: bool = false
+
+## L'ÉVEIL DE L'AVATAR DE LA TEMPÊTE (Mage de la Foudre éveillé).
+## Chaque maillon de la chaîne est paralysé ce temps-là. Zéro = rien.
+@export var chain_stun: float = 0.0
+## La zone suit le lanceur au lieu de rester où elle est posée (la Cage électrique).
+@export var zone_follows: bool = false
+## L'orage frappe autant de cibles à chaque décharge (un nuage chacune). Zéro ou un = la plus proche.
+@export var storm_clouds: int = 0
+## La fuite saute d'ennemi en ennemi, `hop_count` fois, à `hop_range` cases au plus l'un de l'autre, en
+## frappant chacun de `hop_damage`, et le lanceur réapparaît sur le dernier. Zéro = une fuite ordinaire.
+@export var hop_count: int = 0
+@export var hop_damage: int = 0
+@export var hop_range: int = 5
+## La Colère du ciel : un éclair géant sur chaque ennemi à `wrath_reach` cases (à vol d'oiseau), un par
+## un, `wrath_gap` secondes l'un après l'autre. Zéro = rien.
+@export var wrath_damage: int = 0
+@export var wrath_reach: float = 10.0
+@export var wrath_gap: float = 0.15
+
+## L'ÉVEIL DU SOUVERAIN DES VENTS (Mage de l'Air éveillé).
+## Le tir qui traverse (`pierce_line`) repousse de ce nombre de cases tout ce qu'il touche. Zéro = rien.
+@export var pierce_push: int = 0
+## La zone aspire, à chaque tic, les ennemis à cette distance d'elle (au-delà de son rayon) d'une case
+## vers elle. Zéro = rien.
+@export var zone_pull: float = 0.0
+## Ce qui heurte un mur sous le souffle (`slam_damage`) est étourdi ce temps-là. Zéro = rien.
+@export var slam_stun: float = 0.0
+## L'œil de l'ouragan : une zone qui suit le lanceur, ses secondes, ses dégâts par seconde, son rayon et
+## la distance d'où elle aspire. Zéro = rien.
+@export var eye_seconds: float = 0.0
+@export var eye_damage: int = 0
+@export var eye_radius: float = 3.0
+@export var eye_pull: float = 6.0
+
 ## LE DRAGON DES ABYSSES. Secondes de feu laissées sur les cases touchées. Zéro = aucune.
 @export var ground_fire: float = 0.0
 ## La Morsure : PV rendus quand la proie brûlait.
@@ -723,7 +773,7 @@ func summary() -> String:
 	if magma_duration > 0.0:
 		parts.append("magma %s s à %d/s" % [_number(magma_duration), magma_damage])
 	if end_blast_damage > 0:
-		parts.append("explose aux deux bouts (%d)" % end_blast_damage)
+		parts.append(("explose à l'arrivée (%d)" if end_blast_arrival_only else "explose aux deux bouts (%d)") % end_blast_damage)
 	if bounces > 0:
 		parts.append("rebondit sur %d voisins" % bounces)
 	if heal_if_held > 0:
@@ -732,6 +782,32 @@ func summary() -> String:
 		parts.append("suit le couloir")
 	if wake_seconds > 0.0:
 		parts.append("laisse un courant qui ralentit")
+	if line_cross:
+		parts.append("en croix")
+	if turret_volley > 1:
+		parts.append("%d cibles à la fois" % turret_volley)
+	if lava_columns > 0:
+		parts.append("%d colonnes de lave à %d dégâts" % [lava_columns, lava_damage])
+	if end_blast_push > 0:
+		parts.append("projette de %d cases" % end_blast_push)
+	if chain_stun > 0.0:
+		parts.append("paralyse %s s" % _number(chain_stun))
+	if zone_follows:
+		parts.append("le suit")
+	if storm_clouds > 1:
+		parts.append("%d nuages" % storm_clouds)
+	if hop_count > 0:
+		parts.append("rebondit sur %d ennemis (%d)" % [hop_count, hop_damage])
+	if wrath_damage > 0:
+		parts.append("un éclair géant par ennemi (%d)" % wrath_damage)
+	if pierce_push > 0:
+		parts.append("repousse de %d case(s)" % pierce_push)
+	if zone_pull > 0.0:
+		parts.append("aspire à %s cases" % _number(zone_pull))
+	if slam_stun > 0.0:
+		parts.append("étourdit %s s au choc" % _number(slam_stun))
+	if eye_seconds > 0.0:
+		parts.append("œil de l'ouragan %s s à %d/s" % [_number(eye_seconds), eye_damage])
 	if geyser_count > 0:
 		parts.append("%d geysers à %d dégâts" % [geyser_count, geyser_damage])
 	if rain_count > 0:

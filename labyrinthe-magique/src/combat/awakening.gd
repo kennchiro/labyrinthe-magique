@@ -16,6 +16,13 @@ extends RefCounted
 ## - la TRAÎNÉE DE BRAISES qu'il laisse derrière lui (`CombatSystem.start_embers`) ;
 ## - MARÉE HAUTE (le Seigneur des Marées) : une coque d'eau qui encaisse un coup entier et se reforme
 ##   `SHELL_REGROW` secondes après avoir cédé. Elle vit dans le bouclier de `Health`, avec la Bulle.
+## - PIÉTINEMENT (le Colosse) : il marche à travers les ennemis, les repousse de `TRAMPLE_CELLS` cases
+##   et leur fait `TRAMPLE_DAMAGE` (`CombatSystem.start_trample`). Il grandit de `GROWTH`, que le
+##   `Level` applique au sprite.
+## - SURTENSION (l'Avatar de la Tempête) : chaque coup le charge, et la `SURGE_CHARGES`-ième fait tomber
+##   la foudre du ciel sur la cible de l'attaque suivante (`CombatSystem.start_surge`).
+## - REMPART DE VENT (le Souverain des Vents) : le pas du Colosse sans dégâts. Un voisin est repoussé de
+##   `GALE_CELLS` cases et ralenti `GALE_SLOW` s, une fois toutes les `GALE_LOCK` s.
 
 enum State { NORMAL, CHARGING, AWAKE, EXHAUSTED }
 
@@ -30,6 +37,15 @@ const REBIRTH_RADIUS := 2.5
 const EMBER_DAMAGE := 6
 const EMBER_LIFE := 1.5
 const SHELL_REGROW := 6.0
+const TRAMPLE_DAMAGE := 15
+const TRAMPLE_CELLS := 2
+const GROWTH := 1.33
+const SURGE_CHARGES := 5
+const SURGE_DAMAGE := 40
+const SURGE_RADIUS := 1.5
+const GALE_CELLS := 2
+const GALE_LOCK := 2.0
+const GALE_SLOW := 1.0
 
 signal changed(state: State)
 ## La forme à appliquer : l'éveillée au réveil, la forme de base à l'épuisement.
@@ -148,12 +164,22 @@ func _change(next: State, seconds: float) -> void:
 			_shell_up = false
 			_shell_wait = 0.0
 			_tend_shell(0.0)
+		elif base.id == CharacterCatalog.EARTH:
+			combat.start_trample(DURATION, TRAMPLE_DAMAGE, TRAMPLE_CELLS)
+		elif base.id == CharacterCatalog.THUNDER:
+			combat.start_surge(DURATION, SURGE_CHARGES, SURGE_DAMAGE, SURGE_RADIUS)
+		elif base.id == CharacterCatalog.AIR:
+			combat.start_trample(DURATION, 0, GALE_CELLS, GALE_LOCK, GALE_SLOW)
 		form_changed.emit(awakened)
 	elif before == State.AWAKE or (before == State.CHARGING and next == State.EXHAUSTED):
 		if before == State.AWAKE:
 			if base.id == CharacterCatalog.FIRE:
 				health.minimum_current = _minimum_before
 				combat.stop_embers()
+			if base.id == CharacterCatalog.EARTH or base.id == CharacterCatalog.AIR:
+				combat.stop_trample()
+			if base.id == CharacterCatalog.THUNDER:
+				combat.stop_surge()
 			if base.id == CharacterCatalog.WATER and _shell_up:
 				# La coque s'en va avec l'Éveil ; une Bulle encore en place garde le reste.
 				health.shield = maxi(0, health.shield - 1)

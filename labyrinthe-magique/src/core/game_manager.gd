@@ -504,7 +504,10 @@ func use_slot(slot: int) -> void:
 			awakening.finish()
 		elif awakening.begin(demo):
 			level.show_awakening_charge()
-			var awakening_tint := Color("#55ddeb") if character_id == CharacterCatalog.WATER else Color("#ffb347")
+			var awakening_tint: Color = {CharacterCatalog.WATER: Color("#55ddeb"),
+				CharacterCatalog.EARTH: Color("#9dff5c"), CharacterCatalog.THUNDER: Color("#7fd0ff"),
+				CharacterCatalog.AIR: Color("#bfe9ff")}.get(
+				character_id, Color("#ffb347"))
 			ui.flash("ÉVEIL : %s !" % awakening.awakened.display_name.to_upper(), awakening_tint)
 		return
 	if slot == SLOT_TRANSFORM:
@@ -710,7 +713,8 @@ func _awakening_info() -> Dictionary:
 	return {"ratio": 1.0 if demo else awakening.charge_ratio(), "ready": awakening.can_begin(demo),
 		"state": shown, "seconds": awakening.left, "max_seconds": Awakening.DURATION,
 		"label_on": awakening.awakened.display_name.to_upper(), "label_ready": "ÉVEIL",
-		"symbol": "water" if awakening.base.id == CharacterCatalog.WATER else "flame"}
+		"symbol": {CharacterCatalog.WATER: "water", CharacterCatalog.EARTH: "earth",
+			CharacterCatalog.THUNDER: "thunder", CharacterCatalog.AIR: "air"}.get(awakening.base.id, "flame")}
 
 
 func _on_awakening_form(next: CharacterStats) -> void:

@@ -361,7 +361,9 @@ def check_written_strips() -> list:
 ## L'Archange d'Acier frappe devant lui, mais ses ailes débordent déjà derrière au repos : vu à l'œil.
 ## Le Chérubin arme son épée par-dessus l'épaule et ses quatre ailes débordent derrière (26 px au
 ## repos) ; il frappe bien devant à l'image 4 (+30 px). Mesuré le 2026-11-03, vu à l'œil.
-ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier", "cherubin"}
+## `earth_eveil` : le bâton levé à la 3e image déborde de 42 px derrière lui, autant que les éclats de
+## l'impact devant lui à la 4e (mesuré le 2026-11-07).
+ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier", "cherubin", "earth_eveil"}
 
 
 ## Écarts tolérés sur un mage animé, entre la marche et la dernière image d'attaque.

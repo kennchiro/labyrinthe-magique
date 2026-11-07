@@ -63,6 +63,9 @@ func _init() -> void:
 	_test_awakening()
 	_test_phoenix_kit()
 	_test_tide_lord()
+	_test_colossus()
+	_test_tempest()
+	_test_sovereign()
 	_test_dragon()
 	_test_croupier()
 	_test_avide()
@@ -4624,6 +4627,305 @@ func _test_phoenix_kit() -> void:
 			break
 	if not plunged or context.enemy_health[0].current != 5000 - phoenix.escape.end_blast_damage:
 		_fail("phénix : la plongée n'explose pas au départ")
+
+
+## LE COLOSSE : il piétine ce qu'il touche, et chacun de ses sorts fait ce qu'il dit.
+func _test_colossus() -> void:
+	var base := CharacterCatalog.earth()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Colosse":
+		_fail("colosse : pas d'éveil pour le Mage de la Terre")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Piétinement : un voisin est repoussé et blessé, une fois par seconde ; un boss encaisse sans bouger.
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.trampling():
+		_fail("colosse : pas de piétinement à l'éveil")
+	var beside: Array[Vector2i] = []
+	for facing: Vector2i in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(context.player_cell + facing):
+			beside.append(context.player_cell + facing)
+	if beside.is_empty():
+		_fail("colosse : aucune case voisine du départ")
+		return
+	_add_enemy(context, beside[0], 5000)
+	combat.update(0.016, context)
+	if context.enemy_health[0].current != 5000 - Awakening.TRAMPLE_DAMAGE:
+		_fail("colosse : le piétinement retire %d" % (5000 - context.enemy_health[0].current))
+	if context.enemy_cells[0] == beside[0]:
+		_fail("colosse : le piétinement ne repousse pas")
+	context.enemy_cells[0] = beside[0]
+	combat.update(0.016, context)
+	if context.enemy_health[0].current != 5000 - Awakening.TRAMPLE_DAMAGE:
+		_fail("colosse : il piétine deux fois dans la même seconde")
+	context.bosses[0] = true
+	combat.update(CombatSystem.TRAMPLE_LOCK + 0.01, context)
+	if context.enemy_cells[0] != beside[0] or context.enemy_health[0].current != 5000 - 2 * Awakening.TRAMPLE_DAMAGE:
+		_fail("colosse : un boss piétiné doit encaisser sans bouger")
+	awakening.finish()
+	if combat.trampling():
+		_fail("colosse : le piétinement survit à l'éveil")
+	awakening.dispose()
+	# La Faille part dans chaque couloir qui touche sa case, et frappe sur deux branches.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var branches := {"count": 0}
+	combat.line_erupted.connect(func(_a: Ability, _p: Array, _d: float) -> void: branches["count"] += 1)
+	for cell in beside.slice(0, 2):
+		_add_enemy(context, cell, 5000)
+	combat.use(form.abilities[0], context)
+	for frame in 30:
+		combat.update(0.016, context)
+	if int(branches["count"]) != beside.size():
+		_fail("colosse : la faille a %d branches pour %d couloirs" % [int(branches["count"]), beside.size()])
+	for i in context.enemy_cells.size():
+		if context.enemy_health[i].current > 5000 - form.abilities[0].damage:
+			_fail("colosse : la faille épargne la branche %d" % i)
+	# Le Bastion renvoie les coups, mais ne le cloue pas sur place comme le Rempart de l'Acier.
+	if not combat.use(form.abilities[1], context) or not combat.health.immune:
+		_fail("colosse : le bastion ne le rend pas intouchable")
+	if combat.player_rooted():
+		_fail("colosse : le bastion le cloue sur place")
+	# La Tour de cristal tire sur trois ennemis à la fois.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	for steps in [2, 3, 4]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 5000)
+	combat.use(form.abilities[2], context)
+	combat.update(0.016, context)
+	for i in 3:
+		if context.enemy_health[i].current >= 5000:
+			_fail("colosse : la tour de cristal épargne l'ennemi %d" % i)
+	# Le Cataclysme fait jaillir toutes ses colonnes de lave pendant le séisme.
+	var columns := {"count": 0}
+	combat.lava_column.connect(func(_c: Vector2i, _a: Ability) -> void: columns["count"] += 1)
+	combat.use(form.ultimate, context)
+	for frame in int((form.ultimate.quake_duration + 1.0) / 0.016):
+		combat.update(0.016, context)
+	if int(columns["count"]) != form.ultimate.lava_columns:
+		_fail("colosse : %d colonnes de lave sur %d" % [int(columns["count"]), form.ultimate.lava_columns])
+	# L'Éruption n'explose qu'à l'arrivée.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var bursts := {"count": 0}
+	combat.eruption_burst.connect(func(_c: Vector2i, _a: Ability) -> void: bursts["count"] += 1)
+	for facing: Vector2i in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(context.player_cell + facing):
+			context.player_facing = facing
+			break
+	if not combat.use(form.escape, context) or int(bursts["count"]) != 1:
+		_fail("colosse : l'éruption n'éclate pas une fois à l'arrivée (%d)" % int(bursts["count"]))
+
+
+## L'AVATAR DE LA TEMPÊTE : chaque coup le charge et la cinquième charge fait tomber la foudre ; chacun
+## de ses sorts fait ce qu'il dit.
+func _test_tempest() -> void:
+	var base := CharacterCatalog.thunder()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Avatar de la Tempête":
+		_fail("tempête : pas d'éveil pour le Mage de la Foudre")
+		return
+	if form.move_speed <= base.move_speed:
+		_fail("tempête : l'avatar n'est pas plus rapide")
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Surtension : cinq coups le chargent, l'attaque suivante appelle la foudre, et les charges retombent.
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	# Le jeu passe la forme éveillée au combat (`Level.set_character`) : ici, à la main.
+	combat.stats = form
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	var strikes := {"count": 0}
+	combat.surge_struck.connect(func(_c: Vector2i) -> void: strikes["count"] += 1)
+	for shot in Awakening.SURGE_CHARGES:
+		combat.use(form.attack, context)
+		for frame in 30:
+			combat.update(0.016, context)
+	if combat.surge_charges() != Awakening.SURGE_CHARGES:
+		_fail("tempête : %d charges après %d coups" % [combat.surge_charges(), Awakening.SURGE_CHARGES])
+	var before := context.enemy_health[0].current
+	combat.use(form.attack, context)
+	if int(strikes["count"]) != 1 or combat.surge_charges() != 0:
+		_fail("tempête : la cinquième charge n'appelle pas la foudre")
+	if before - context.enemy_health[0].current < Awakening.SURGE_DAMAGE:
+		_fail("tempête : la foudre de surtension ne frappe pas")
+	awakening.finish()
+	awakening.update(0.016)
+	awakening.dispose()
+	# La Tempête en chaîne touche six ennemis sans faiblir, et paralyse chacun.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	# Sur UN chemin, une case d'écart : des cases prises au hasard à la bonne distance pouvaient être
+	# sur des branches séparées de plus que la portée d'un saut.
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 8))
+	for cell in path.slice(2, 8):
+		_add_enemy(context, cell, 5000)
+	var stunned := {"count": 0}
+	combat.enemy_staggered.connect(func(_i: int, _s: float) -> void: stunned["count"] += 1)
+	combat.use(form.abilities[0], context)
+	for frame in 40:
+		combat.update(0.016, context)
+	var struck := 0
+	for i in context.enemy_cells.size():
+		if context.enemy_health[i].current < 5000:
+			struck += 1
+	if struck < 6 or int(stunned["count"]) < 6:
+		_fail("tempête : la chaîne touche %d ennemis et en paralyse %d" % [struck, int(stunned["count"])])
+	# La Cage électrique le suit.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var moved := {"count": 0}
+	combat.zone_moved.connect(func(_id: int, _c: Vector2i) -> void: moved["count"] += 1)
+	combat.use(form.abilities[1], context)
+	for facing: Vector2i in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(context.player_cell + facing):
+			context.player_cell += facing
+			break
+	combat.update(0.016, context)
+	if int(moved["count"]) != 1:
+		_fail("tempête : la cage ne le suit pas")
+	# L'Œil du cyclone frappe trois cibles à chaque décharge.
+	for steps in [1, 2, 3]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 5000)
+	var bolts := {"count": 0}
+	combat.storm_struck.connect(func(_i: int, _a: Ability) -> void: bolts["count"] += 1)
+	combat.use(form.abilities[2], context)
+	combat.update(0.016, context)
+	if int(bolts["count"]) != 3:
+		_fail("tempête : l'œil du cyclone frappe %d cibles" % int(bolts["count"]))
+	# Le Saut d'éclair frappe trois ennemis et le pose sur le dernier.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	for steps in [2, 3, 4]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 5000)
+	var landing := {"to": context.player_cell}
+	combat.blink_performed.connect(func(_f: Vector2i, to: Vector2i) -> void: landing["to"] = to)
+	if not combat.use(form.escape, context):
+		_fail("tempête : le saut d'éclair refuse de partir")
+	var hit := 0
+	for i in context.enemy_cells.size():
+		if context.enemy_health[i].current == 5000 - form.escape.hop_damage:
+			hit += 1
+	if hit != 3 or not context.enemy_cells.has(landing["to"]):
+		_fail("tempête : le saut touche %d ennemis et ne finit pas sur le dernier" % hit)
+	# La Colère du ciel : un éclair géant par ennemi.
+	var wrath := {"count": 0}
+	combat.wrath_bolt.connect(func(_c: Vector2i, _i: int) -> void: wrath["count"] += 1)
+	combat.use(form.ultimate, context)
+	for frame in 120:
+		combat.update(0.016, context)
+	if int(wrath["count"]) != 3:
+		_fail("tempête : %d éclairs de colère pour 3 ennemis" % int(wrath["count"]))
+
+
+## LE SOUVERAIN DES VENTS : plus rien ne l'approche, et chacun de ses sorts fait ce qu'il dit.
+func _test_sovereign() -> void:
+	var base := CharacterCatalog.air()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Souverain des Vents":
+		_fail("souverain : pas d'éveil pour le Mage de l'Air")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Rempart de vent : un voisin est repoussé et ralenti, sans dégâts.
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	var beside := Vector2i(-1, -1)
+	for facing: Vector2i in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(context.player_cell + facing):
+			beside = context.player_cell + facing
+			break
+	_add_enemy(context, beside, 5000)
+	var soaked := {"count": 0}
+	combat.enemy_soaked.connect(func(_i: int, _d: float, _f: float) -> void: soaked["count"] += 1)
+	combat.update(0.016, context)
+	if context.enemy_cells[0] == beside or context.enemy_health[0].current != 5000 or int(soaked["count"]) != 1:
+		_fail("souverain : le rempart de vent doit repousser et ralentir sans blesser")
+	awakening.finish()
+	awakening.dispose()
+	# Le Croissant d'ouragan repousse ce qu'il touche.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var target := _cell_at(grid, context.player_field, 3)
+	_add_enemy(context, target, 5000)
+	combat.use(form.attack, context)
+	for frame in 60:
+		combat.update(0.016, context)
+	if context.enemy_health[0].current >= 5000 or Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0]) <= 3:
+		_fail("souverain : le croissant ne repousse pas sa cible")
+	# Le Grand vortex aspire vers lui ce qui l'entoure.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var pulls := {"count": 0}
+	combat.enemy_pushed.connect(func(_i: int, _c: Vector2i) -> void: pulls["count"] += 1)
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 9))
+	# À trois cases du mage, là où naît la tornade : hors de son rayon, mais à portée d'aspiration.
+	_add_enemy(context, path[3] if path[0] == context.player_cell else path[2], 5000)
+	combat.use(form.abilities[0], context)
+	for frame in 200:
+		combat.update(0.016, context)
+	if int(pulls["count"]) == 0:
+		_fail("souverain : le vortex n'aspire rien")
+	# Le Cocon le rend intouchable et rejette.
+	if not combat.use(form.abilities[2], context) or not combat.health.immune:
+		_fail("souverain : le cocon ne le rend pas intouchable")
+	# Le Vol du zéphyr rabat tout en retombant.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var near := _cell_at(grid, context.player_field, 1)
+	_add_enemy(context, near, 5000)
+	combat.use(form.escape, context)
+	for frame in int(form.escape.duration / 0.016) + 5:
+		combat.update(0.016, context)
+	if combat.flying() or context.enemy_cells[0] == near:
+		_fail("souverain : le vol ne retombe pas en rabattant")
+	# L'Ouragan ouvre l'œil, une zone qui le suit.
+	var eyes := {"count": 0}
+	combat.zone_created.connect(func(_id: int, zone: Ability, _c: Vector2i) -> void:
+		if zone.zone_style == "ouragan_peint" and zone.zone_follows:
+			eyes["count"] += 1)
+	combat.use(form.ultimate, context)
+	if int(eyes["count"]) != 1:
+		_fail("souverain : l'ouragan n'ouvre pas son œil")
 
 
 ## LE SEIGNEUR DES MARÉES : sa coque se reforme après avoir cédé, et chacun de ses sorts fait ce qu'il dit.

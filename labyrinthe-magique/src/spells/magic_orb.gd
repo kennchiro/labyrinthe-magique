@@ -70,6 +70,15 @@ const PAINTED := {
 	# L'Éveil du Mage de l'Eau : le trident d'eau.
 	"trident_maree": {"shader": preload("res://assets/shaders/maree_trident.gdshader"),
 		"length": 1.5, "height": 0.62, "lead": 0.3, "sparks": 0.0},
+	# L'Éveil du Mage de la Terre : la Météorite, un rocher qui roule.
+	"meteorite": {"shader": preload("res://assets/shaders/colosse_meteorite.gdshader"),
+		"length": 1.6, "height": 1.0, "lead": 0.25, "sparks": 0.0},
+	# L'Éveil du Mage de la Foudre : la Lance de foudre.
+	"lance_foudre": {"shader": preload("res://assets/shaders/tempete_lance.gdshader"),
+		"length": 2.0, "height": 0.55, "lead": 0.3, "sparks": 0.0},
+	# L'Éveil du Mage de l'Air : le Croissant d'ouragan.
+	"croissant_ouragan": {"shader": preload("res://assets/shaders/souverain_croissant.gdshader"),
+		"length": 1.5, "height": 1.0, "lead": 0.25, "sparks": 0.0},
 	"orbe_ombre": {"shader": preload("res://assets/shaders/shadow_orb.gdshader"),
 		"length": 1.7, "height": 1.3, "lead": 0.16, "sparks": 0.0},
 	"aiguille_occulte": {"shader": preload("res://assets/shaders/arcane_needle.gdshader"),

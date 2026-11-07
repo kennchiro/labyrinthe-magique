@@ -138,6 +138,12 @@ static func awakening_of(id: String) -> CharacterStats:
 			return fire_awakened()
 		WATER:
 			return water_awakened()
+		EARTH:
+			return earth_awakened()
+		THUNDER:
+			return thunder_awakened()
+		AIR:
+			return air_awakened()
 	return null
 
 
@@ -271,6 +277,214 @@ static func water_awakened() -> CharacterStats:
 		"kind": Ability.Kind.LEVIATHAN, "element": Element.Kind.WATER,
 		"damage": 110, "radius": 3.0, "range": 12, "duration": 2.0, "heal_self": 2,
 		"cooldown": 1.0, "is_ultimate": true, "pierces_walls": true,
+	})
+	return c
+
+
+# --- Le Colosse : l'Éveil du Mage de la Terre. ---------------------------------------
+
+## Une minute de Colosse (`Awakening`). Il grandit d'un tiers (`GROWTH`) et garde son allure. Son
+## trait, Piétinement, vit dans `Awakening` : il marche à travers les ennemis et les repousse.
+## Fiche : `docs/prompts/mages/eveil_terre.md`. Chiffres non mesurés.
+static func earth_awakened() -> CharacterStats:
+	var base := earth()
+	var c := CharacterStats.new()
+	c.id = EARTH
+	c.awakened = true
+	c.display_name = "Colosse"
+	c.element = Element.Kind.EARTH
+	c.category = base.category
+	c.description = "Le Mage de la Terre éveillé. Il marche à travers les ennemis et les écrase."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "earth_eveil_meteorite", "display_name": "Météorite",
+		"description": "Un rocher géant roule dans le couloir et écrase tout ce qu'il croise.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.EARTH,
+		"damage": 26, "range": 7, "cooldown": 0.7, "pierce_line": true,
+		"projectile_scale": 1.25, "projectile_speed": 0.9, "projectile_visual": "meteorite",
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "earth_eveil_faille", "display_name": "Faille",
+			"description": "Le sol se fend en croix, hérissé de pics qui restent plantés.",
+			"kind": Ability.Kind.LINE, "element": Element.Kind.EARTH,
+			"damage": 40, "range": 5, "cooldown": 6.0, "line_cross": true,
+			"line_speed": 14.0, "radius": 0.6, "duration": 3.0, "line_bite": 8,
+			"slow_duration": 1.2, "slow_factor": 0.55, "plant_style": "faille_peinte",
+		}),
+		Ability.make({
+			"id": "earth_eveil_bastion", "display_name": "Bastion",
+			"description": "Intouchable, et des pics de roche jaillissent sur qui le frappe.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.EARTH,
+			"immune": true, "duration": 3.0, "cooldown": 14.0, "reflect_damage": 30, "reflect_mobile": true,
+		}),
+		Ability.make({
+			# Une tour magique en cristal (demande du joueur) : l'identifiant garde l'ancien nom, l'icône aussi.
+			"id": "earth_eveil_geode", "display_name": "Tour de cristal",
+			"description": "Une tour magique de cristal sort du sol, et tire sur trois ennemis à la fois.",
+			"kind": Ability.Kind.TURRET, "element": Element.Kind.EARTH,
+			"damage": 14, "range": 7, "cooldown": 10.0, "duration": 12.0,
+			"turret_interval": 1.0, "turret_volley": 3,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "earth_eveil_eruption", "display_name": "Éruption",
+		"description": "Il plonge sous terre et ressort plus loin, en projetant tout autour.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.EARTH,
+		"range": 6, "cooldown": 8.0, "end_blast_damage": 35, "end_blast_radius": 2.0,
+		"end_blast_push": 2, "end_blast_arrival_only": true,
+	})
+	var quake := base.ultimate
+	c.ultimate = Ability.make({
+		"id": "earth_eveil_cataclysme", "display_name": "Cataclysme",
+		"description": "Le sol craque sur toute la carte, et des colonnes de lave jaillissent des failles.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.EARTH,
+		"damage": quake.damage, "radius": quake.radius, "cooldown": 1.0, "is_ultimate": true,
+		"shockwave": true, "pierces_walls": true,
+		"quake_duration": quake.quake_duration, "quake_interval": quake.quake_interval,
+		"quake_slides": quake.quake_slides, "quake_damage": quake.quake_damage,
+		"quake_radius": quake.quake_radius, "quake_tremor": quake.quake_tremor,
+		"lava_columns": 16, "lava_damage": 50, "lava_radius": 1.0,
+	})
+	return c
+
+
+# --- L'Avatar de la Tempête : l'Éveil du Mage de la Foudre. -------------------------
+
+## Une minute d'Avatar (`Awakening`). 20 % plus rapide ; son trait, Surtension, vit dans `Awakening` :
+## chaque coup le charge, la cinquième charge fait tomber la foudre du ciel. Fiche :
+## `docs/prompts/mages/eveil_foudre.md`. Chiffres non mesurés.
+static func thunder_awakened() -> CharacterStats:
+	var base := thunder()
+	var c := CharacterStats.new()
+	c.id = THUNDER
+	c.awakened = true
+	c.display_name = "Avatar de la Tempête"
+	c.element = Element.Kind.THUNDER
+	c.category = base.category
+	c.description = "Le Mage de la Foudre éveillé. Chaque coup le charge, et la foudre tombe à la cinquième."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed * 1.2
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "thunder_eveil_lance", "display_name": "Lance de foudre",
+		"description": "Un trait de foudre qui traverse le couloir et touche tout ce qu'il croise.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.THUNDER,
+		"damage": 14, "range": 8, "cooldown": 0.35, "pierce_line": true,
+		"projectile_speed": 3.0, "projectile_scale": 1.1, "projectile_visual": "lance_foudre",
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "thunder_eveil_chaine", "display_name": "Tempête en chaîne",
+			"description": "L'arc saute sur six ennemis sans faiblir, et paralyse chacun un instant.",
+			"kind": Ability.Kind.CHAIN, "element": Element.Kind.THUNDER,
+			"damage": 30, "range": 7, "cooldown": 2.0,
+			"chain_jumps": 5, "chain_range": 5, "chain_falloff": 1.0, "chain_delay": 0.06,
+			"chain_stun": 0.6,
+		}),
+		Ability.make({
+			"id": "thunder_eveil_cage", "display_name": "Cage électrique",
+			"description": "Un dôme de foudre qui le suit, paralyse et brûle ce qui entre.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.THUNDER,
+			"damage": 12, "radius": 2.0, "duration": 8.0, "cooldown": 11.0,
+			"snare": 1.0, "zone_follows": true, "zone_style": "cage_peinte",
+		}),
+		Ability.make({
+			"id": "thunder_eveil_cyclone", "display_name": "Œil du cyclone",
+			"description": "Trois nuages tournent autour de lui et foudroient tout seuls.",
+			"kind": Ability.Kind.STORM, "element": Element.Kind.THUNDER,
+			"damage": 18, "duration": 20.0, "cooldown": 25.0,
+			"storm_interval": 1.0, "storm_range": 5, "storm_clouds": 3,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "thunder_eveil_saut", "display_name": "Saut d'éclair",
+		"description": "Il devient foudre, rebondit sur trois ennemis en les frappant, et réapparaît sur le dernier.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.THUNDER,
+		"range": 7, "cooldown": 6.0, "hop_count": 3, "hop_damage": 30, "hop_range": 5,
+	})
+	var judgement := base.ultimate
+	c.ultimate = Ability.make({
+		"id": "thunder_eveil_colere", "display_name": "Colère du ciel",
+		"description": "Le ciel devient noir, puis un éclair géant tombe sur chaque ennemi, un par un.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.THUNDER,
+		"damage": judgement.damage, "radius": judgement.radius, "cooldown": 1.0, "is_ultimate": true,
+		"shockwave": true, "pierces_walls": true,
+		"sky_clouds": judgement.sky_clouds, "sky_duration": judgement.sky_duration,
+		"sky_interval": judgement.sky_interval, "sky_reach": judgement.sky_reach,
+		"wrath_damage": 80, "wrath_reach": 10.0, "wrath_gap": 0.15,
+	})
+	return c
+
+
+# --- Le Souverain des Vents : l'Éveil du Mage de l'Air. -----------------------------
+
+## Une minute de Souverain (`Awakening`). Son trait, Rempart de vent, vit dans `Awakening` : ce qui
+## l'approche est repoussé et ralenti, sans dégâts. Fiche : `docs/prompts/mages/eveil_air.md`. Chiffres
+## non mesurés.
+static func air_awakened() -> CharacterStats:
+	var base := air()
+	var c := CharacterStats.new()
+	c.id = AIR
+	c.awakened = true
+	c.display_name = "Souverain des Vents"
+	c.element = Element.Kind.AIR
+	c.category = base.category
+	c.description = "Le Mage de l'Air éveillé. Plus rien ne l'approche : le vent repousse tout."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed * 1.1
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "air_eveil_croissant", "display_name": "Croissant d'ouragan",
+		"description": "Un grand croissant de vent qui traverse le couloir et repousse ce qu'il touche.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.AIR,
+		"damage": 15, "range": 12, "cooldown": 0.42, "pierce_line": true, "pierce_push": 1,
+		"projectile_speed": 1.6, "projectile_scale": 1.2, "projectile_visual": "croissant_ouragan",
+	})
+	var tornado: Ability = base.abilities[0]
+	c.abilities = [
+		Ability.make({
+			"id": "air_eveil_vortex", "display_name": "Grand vortex",
+			"description": "Une tornade géante remonte le couloir, aspire ce qui l'entoure et l'emporte.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.AIR,
+			"damage": 14, "radius": 1.6, "duration": 5.0, "cooldown": 10.0,
+			"range": tornado.range, "zone_travel": tornado.zone_travel, "zone_carries": true,
+			"zone_style": "tornade", "zone_pull": 3.0,
+		}),
+		Ability.make({
+			"id": "air_eveil_titan", "display_name": "Souffle du titan",
+			"description": "Une onde de vent projette tout de six cases ; ce qui heurte un mur est étourdi.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.AIR,
+			"damage": 30, "radius": 4.0, "cooldown": 7.0,
+			"blow_cells": 6, "slam_damage": 25, "slam_stun": 1.0,
+		}),
+		Ability.make({
+			"id": "air_eveil_cocon", "display_name": "Cocon de vent",
+			"description": "Une sphère de vent l'enveloppe : intouchable, et ce qui le touche est rejeté.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.AIR,
+			"immune": true, "duration": 4.0, "repel_cells": 3, "cooldown": 14.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "air_eveil_zephyr", "display_name": "Vol du zéphyr",
+		"description": "Il s'envole par-dessus les haies, puis retombe dans une bourrasque qui rabat tout.",
+		"kind": Ability.Kind.FLIGHT, "element": Element.Kind.AIR,
+		"duration": 3.0, "flight_speed": 1.5, "damage": 25, "radius": 2.0, "end_blast_push": 2,
+		"cooldown": 10.0,
+	})
+	var cyclone := base.ultimate
+	c.ultimate = Ability.make({
+		"id": "air_eveil_ouragan", "display_name": "Ouragan",
+		"description": "Six colonnes de vent partent chasser, et l'œil de l'ouragan reste sur lui : il aspire ce qui approche.",
+		"kind": Ability.Kind.SUMMON, "element": Element.Kind.AIR,
+		"summon_id": cyclone.summon_id, "summon_count": cyclone.summon_count * 2,
+		"duration": cyclone.duration, "cooldown": 1.0, "is_ultimate": true,
+		"eye_seconds": 10.0, "eye_damage": 12, "eye_radius": 3.0, "eye_pull": 6.0,
 	})
 	return c
 

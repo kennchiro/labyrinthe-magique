@@ -392,6 +392,29 @@ charge, le mage serait éveillé six secondes sur sept. Le bouton est celui de l
   coque d'eau d'un coup qui se reforme `SHELL_REGROW` s après avoir cédé, lue à chaque image dans `Awakening`.
   Ses sorts : `Ability.bounces` (le Trident), la vague à `blow_cells` et `slam_damage`, `heal_if_held` (la Bulle),
   `follows_corridor` et `wake_seconds` (le Torrent), et `Kind.LEVIATHAN`. `tools/preview_maree.gd`.
+- Le **Mage de la Terre** a le **Colosse** (`earth_awakened`, `docs/prompts/mages/eveil_terre.md`). L'image reste à
+  l'échelle du mage : c'est le `Level` qui le grandit de `Awakening.GROWTH` (`Player.set_growth`, comme l'Avide).
+  Son trait, Piétinement, est `CombatSystem.start_trample` : sa case et ses voisines sont repoussées et blessées, une
+  fois par seconde par ennemi ; boss et repaires encaissent sans bouger. Les ennemis ne bloquent pas le mage : il
+  les traverse déjà. Ses sorts : `pierce_line` (la Météorite), `line_cross` (la Faille, une branche par couloir,
+  zone `faille_peinte`), `reflect_damage` (le Bastion, comme l'Acier), `turret_volley` (la Tour de cristal, ex-Géode : id `earth_eveil_geode`),
+  `end_blast_push` et `end_blast_arrival_only` (l'Éruption), `lava_columns` (le Cataclysme, sur le Séisme de base).
+  Effets : `colosse_*`, palette commune dans `colosse.gdshaderinc`. `tools/preview_colosse.gd`.
+- Le **Mage de la Foudre** a l'**Avatar de la Tempête** (`thunder_awakened`, `docs/prompts/mages/eveil_foudre.md`),
+  20 % plus rapide. Son trait, Surtension, est `CombatSystem.start_surge` : chaque coup d'origine (`with_trait`)
+  donne une charge, et la cinquième fait tomber la foudre sur la cible de l'attaque suivante. Ses sorts :
+  `pierce_line` (la Lance), `chain_stun` (la Tempête en chaîne), `zone_follows` (la Cage électrique, zone
+  `cage_peinte`), `storm_clouds` (l'Œil du cyclone), `hop_count` (le Saut d'éclair, qui finit sur le dernier
+  ennemi), `wrath_damage` (la Colère du ciel, sur le Jugement de base). Effets : `tempete_*`, palette dans
+  `tempete.gdshaderinc` — jamais de violet. `tools/preview_tempete.gd`.
+- Le **Mage de l'Air** a le **Souverain des Vents** (`air_awakened`, `docs/prompts/mages/eveil_air.md`). Son trait,
+  Rempart de vent, est le pas du Colosse sans dégâts (`start_trample` avec `lock` et `slow`). Ses sorts :
+  `pierce_push` (le Croissant), `zone_pull` (le Grand vortex, une tornade de base qui aspire), `slam_stun` (le
+  Souffle du titan), un bouclier `immune` + `repel_cells` (le Cocon, comme le Chérubin), `Kind.FLIGHT` +
+  `end_blast_push` (le Vol du zéphyr, comme l'Envol du Ciel), `eye_seconds` (l'Ouragan : une zone `zone_follows`
+  fabriquée par `_open_eye`). Effets : `souverain_*`, palette dans `souverain.gdshaderinc`. `tools/preview_souverain.gd`.
+- ⚠️ Une zone `zone_follows` est déplacée par `Level._on_zone_moved` : avant le 2026-11-07, seules les tornades
+  bougeaient à l'écran, et la Cage de l'Avatar blessait autour du mage en restant dessinée où elle était posée.
 - ⚠️ Les bots de `test_balance` ne s'éveillent jamais : rien n'y mesure l'Éveil.
 
 L'**Invocateur** est à part sur toute la ligne :

@@ -126,6 +126,22 @@ d'épuisement, et une charge de 6 kills avant le suivant. Le Mage du Feu devient
 l'Esprit des Marées. Fiches, règles et prompts : [mages/eveil_feu](prompts/mages/eveil_feu.md) et
 [mages/eveil_eau](prompts/mages/eveil_eau.md). Leurs visuels et leurs sorts éveillés sont intégrés.
 
+## L'Éveil de la Terre — le Colosse
+
+Le Mage de la Terre se couvre de roche et de cristal, grandit d'un tiers et marche à travers les ennemis.
+Fiche, règles et quatre prompts : [mages/eveil_terre](prompts/mages/eveil_terre.md). Jouable depuis le 2026-11-07.
+
+## L'Éveil de la Foudre — l'Avatar de la Tempête
+
+Le Mage de la Foudre se change à moitié en foudre, court plus vite et se charge à chaque coup (Surtension).
+Fiche, règles et quatre prompts : [mages/eveil_foudre](prompts/mages/eveil_foudre.md). Jouable depuis le 2026-11-07.
+
+## L'Éveil de l'Air — le Souverain des Vents
+
+Le Mage de l'Air tient tout à distance : un rempart de vent repousse ce qui l'approche, il aspire, projette
+et s'envole. Fiche, règles et quatre prompts : [mages/eveil_air](prompts/mages/eveil_air.md). Jouable depuis le
+2026-11-07.
+
 ## Les anges — refaire le sprite comme les mages
 
 Ils étaient élancés, à côté de mages chibi, et ils glissaient de profil. Les images 1, 2 et 3 sont à

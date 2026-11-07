@@ -527,6 +527,15 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.water_bounced.connect(_on_water_bounced)
 	combat.shield_held.connect(_on_shield_held)
 	combat.leviathan_cast.connect(_on_leviathan_cast)
+	combat.trampled.connect(_on_trampled)
+	combat.lava_column.connect(_on_lava_column)
+	combat.eruption_burst.connect(_on_eruption_burst)
+	combat.colossus_step.connect(_on_colossus_step)
+	combat.line_erupted.connect(_colossus_line)
+	combat.surge_changed.connect(_on_surge_changed)
+	combat.surge_struck.connect(_on_surge_struck)
+	combat.lightning_hopped.connect(_on_lightning_hopped)
+	combat.wrath_bolt.connect(_on_wrath_bolt)
 	combat.use_refused.connect(func(reason: String) -> void: ability_refused.emit(reason))
 
 	for i in grid.portals.size():
@@ -1250,6 +1259,8 @@ func _texture_or_null(path: String) -> Texture2D:
 
 
 func _on_projectile_launched(ability: Ability, index: int, path: Array, duration: float) -> void:
+	if ability.projectile_visual == "meteorite" and path.size() >= 2:
+		_crack_behind(path, duration, 0.55)
 	if ability.from_sky and not path.is_empty():
 		_cast_target = maze_renderer.cell_to_world(path[path.size() - 1])
 		_sky_falls(ability, path[path.size() - 1], duration)
@@ -1334,6 +1345,31 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 		return
 	if ability.projectile_visual in ["plume_phenix", "soleil_captif"]:
 		_phoenix_hit(ability, index, cell)
+		return
+	if ability.projectile_visual == "croissant_ouragan":
+		if _orbs.has(index):
+			var moon: MagicOrb = _orbs[index]
+			if is_instance_valid(moon):
+				moon.burst()
+			_orbs.erase(index)
+		_front_burst(cell, 0.9, 0.4, "souverain_souffle")
+		return
+	if ability.projectile_visual == "lance_foudre":
+		if _orbs.has(index):
+			var spear: MagicOrb = _orbs[index]
+			if is_instance_valid(spear):
+				spear.burst()
+			_orbs.erase(index)
+		_front_burst(cell, 0.9, 0.35, "tempete_choc")
+		return
+	if ability.projectile_visual == "meteorite":
+		if _orbs.has(index):
+			var boulder: MagicOrb = _orbs[index]
+			if is_instance_valid(boulder):
+				boulder.burst()
+			_orbs.erase(index)
+		_front_burst(cell, 1.1, 0.5, "colosse_ecrase")
+		_shake(0.12, 0.35)
 		return
 	if ability.projectile_visual == "trident_maree":
 		if _orbs.has(index):
@@ -1512,6 +1548,19 @@ func _on_turret_planted(id: int, ability: Ability, cell: Vector2i) -> void:
 		_turret_nodes[id] = orbit
 		_spawn_impact(cell, ability.element, 1.0, 0.45)
 		return
+	if character.awakened and character.id == EARTH:
+		# LA TOUR DE CRISTAL, dressée sur sa case : un quad haut, le pied sur la case.
+		var tower := _spawn_painted_burst(cell, 1.0, ability.duration, "colosse_geode")
+		var body := tower.get_child(0) as Sprite2D
+		body.scale = TOWER_SIZE * TILE_SIZE
+		body.position = Vector2(0.0, -(TOWER_FOOT - 0.5) * TOWER_SIZE.y * TILE_SIZE)
+		# SOUS les personnages : plantée sur sa case quand il regarde un mur, elle cachait le Colosse.
+		tower.z_index = 9
+		_turret_nodes[id] = tower
+		_spawn_painted_burst(cell, 1.5, 0.8, "colosse_fente")
+		_front_burst(cell, 1.3, 0.55, "colosse_ecrase")
+		_shake(0.25, 0.7)
+		return
 	if character.id == CharacterCatalog.AEL:
 		var sentinel := CrystalSentinel.new()
 		entities.add_child(sentinel)
@@ -1546,6 +1595,16 @@ func _on_turret_fired(id: int, ability: Ability, cell: Vector2i, index: int) -> 
 		(node as StoneOrbit).launch(enemies[index].position)
 	elif is_instance_valid(node) and node is CrystalSentinel:
 		(node as CrystalSentinel).fire(enemies[index].position)
+	elif is_instance_valid(node) and node is PaintedBurst and combat_context != null \
+			and index < combat_context.enemy_cells.size():
+		# L'éclat part du CRISTAL DU SOMMET, et le cristal s'illumine.
+		var prey: Vector2i = combat_context.enemy_cells[index]
+		var spire := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TOWER_SPIRE * TILE_SIZE)
+		_streak_world(spire, maze_renderer.cell_to_world(prey), "colosse_eclat", 0.4, 0.7, float(index) * 0.1)
+		_front_burst(prey, 0.7, 0.4, "colosse_ecrase")
+		var glow := (node.get_child(0) as Sprite2D).material as ShaderMaterial
+		glow.set_shader_parameter("shot", 1.0)
+		node.create_tween().tween_property(glow, "shader_parameter/shot", 0.0, 0.35)
 
 
 func _on_turret_faded(id: int) -> void:
@@ -1589,6 +1648,17 @@ func _on_player_made_immune(duration: float) -> void:
 		return
 	if character.id == CharacterCatalog.AEL:
 		_raise_guard(duration)
+		return
+	if character.awakened and character.id == AIR:
+		_spawn_on_player(duration, "souverain_cocon", 1.0)
+		_front_burst(player.mover.nearest_cell(), 1.2, 0.5, "souverain_souffle")
+		_shake(0.15, 0.4)
+		return
+	if character.awakened and character.id == EARTH:
+		_spawn_on_player(duration, "colosse_bastion", 1.05)
+		_spawn_on_player(0.5, "colosse_eveil", 1.0)
+		_spawn_painted_burst(player.mover.nearest_cell(), 1.2, 0.5, "colosse_fente")
+		_shake(0.25, 0.7)
 		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.refresh(duration)
@@ -1716,17 +1786,23 @@ func _on_shield_held(_healed: int) -> void:
 
 
 ## Un trait peint couché entre deux cases, orienté de l'une vers l'autre.
-func _streak_between(from: Vector2i, to: Vector2i, key: String, seconds: float, height: float) -> void:
-	var a := maze_renderer.cell_to_world(from)
-	var b := maze_renderer.cell_to_world(to)
+func _streak_between(from: Vector2i, to: Vector2i, key: String, seconds: float, height: float) -> PaintedBurst:
+	return _streak_world(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), key, seconds,
+		height, float(from.x * 7 + to.y) * 0.01)
+
+
+## La même chose entre deux points du monde : l'éclat de la Tour de cristal part de son sommet.
+func _streak_world(a: Vector2, b: Vector2, key: String, seconds: float, height: float,
+		seed_value: float) -> PaintedBurst:
 	var streak := PaintedBurst.new()
 	entities.add_child(streak)
-	streak.setup(TILE_SIZE, 1.0, seconds, float(from.x * 7 + to.y) * 0.01, key)
+	streak.setup(TILE_SIZE, 1.0, seconds, seed_value, key)
 	streak.scale = Vector2.ONE
 	streak.position = (a + b) * 0.5
 	streak.rotation = (b - a).angle()
 	(streak.get_child(0) as Sprite2D).scale = Vector2(a.distance_to(b) + TILE_SIZE * 0.8, TILE_SIZE * height)
 	streak.z_index = 12
+	return streak
 
 
 ## Le Torrent : il se change en courant, file le long du couloir, et éclabousse aux deux bouts.
@@ -1755,6 +1831,258 @@ func _on_leviathan_cast(cell: Vector2i, ability: Ability, direction: int) -> voi
 	_spawn_slow_motion(0.12, 0.3)
 
 
+# --- L'Éveil du Souverain des Vents --------------------------------------------------
+
+## L'éclosion : la colonne de vent s'ouvre, l'onde couche tout, et deux rubans restent la minute.
+## Les rubans réemploient `_tempest_aura`, que `_free_tempest` libère à la fin.
+func _show_air_awakening() -> void:
+	var bloom := PaintedBurst.new()
+	player.add_child(bloom)
+	bloom.setup(TILE_SIZE, 1.6, 1.0, 0.0, "souverain_eveil")
+	bloom.position = Vector2(0.0, -TILE_SIZE * 0.35)
+	bloom.z_index = 3
+	_shake(0.35, 0.8)
+	_spawn_slow_motion(0.1, 0.3)
+	_free_tempest()
+	_tempest_aura = PaintedBurst.new()
+	player.add_child(_tempest_aura)
+	_tempest_aura.setup(TILE_SIZE, 1.0, Awakening.DURATION, 0.0, "souverain_aura")
+	_tempest_aura.position = Vector2(0.0, -TILE_SIZE * 0.5)
+	_tempest_aura.z_index = 2
+
+
+# --- L'Éveil de l'Avatar de la Tempête ----------------------------------------------
+
+const THUNDER := "thunder"
+var _cyclone: PaintedBurst = null
+var _tempest_aura: PaintedBurst = null
+var _surge_crown: PaintedBurst = null
+var _hop_cells: Array = []
+
+
+## L'éclosion : la foudre tombe sur lui, l'onde électrique part au sol, et les arcs restent la minute.
+func _show_thunder_awakening() -> void:
+	var cell := player.mover.nearest_cell()
+	var bloom := PaintedBurst.new()
+	player.add_child(bloom)
+	bloom.setup(TILE_SIZE, 1.6, 1.0, 0.0, "tempete_eveil")
+	bloom.position = Vector2(0.0, -TILE_SIZE * 0.4)
+	bloom.z_index = 3
+	_sky_bolt_visual(cell, Vector2(1.3, 3.2), 0.7)
+	_shake(0.45, 1.0)
+	_spawn_slow_motion(0.1, 0.3)
+	_free_tempest()
+	_tempest_aura = PaintedBurst.new()
+	player.add_child(_tempest_aura)
+	_tempest_aura.setup(TILE_SIZE, 0.9, Awakening.DURATION, 0.0, "tempete_aura")
+	_tempest_aura.position = Vector2(0.0, -TILE_SIZE * 0.55)
+	_tempest_aura.z_index = 2
+	_surge_crown = PaintedBurst.new()
+	player.add_child(_surge_crown)
+	_surge_crown.setup(TILE_SIZE, 0.6, Awakening.DURATION, 0.0, "tempete_charges")
+	_surge_crown.position = Vector2(0.0, -TILE_SIZE * 1.55)
+	_surge_crown.z_index = 3
+	_on_surge_changed(combat.surge_charges())
+
+
+func _free_tempest() -> void:
+	for node: PaintedBurst in [_tempest_aura, _surge_crown]:
+		if node != null and is_instance_valid(node):
+			node.queue_free()
+	_tempest_aura = null
+	_surge_crown = null
+
+
+func _free_cyclone() -> void:
+	if _cyclone != null and is_instance_valid(_cyclone):
+		_cyclone.queue_free()
+	_cyclone = null
+
+
+## Les étoiles de Surtension au-dessus de sa tête : une par charge.
+func _on_surge_changed(charges: int) -> void:
+	if _surge_crown == null or not is_instance_valid(_surge_crown):
+		return
+	((_surge_crown.get_child(0) as Sprite2D).material as ShaderMaterial).set_shader_parameter(
+		"charges", float(charges))
+
+
+## La cinquième charge : la foudre du ciel tombe sur la cible, avec son anneau d'or.
+func _on_surge_struck(cell: Vector2i) -> void:
+	_sky_bolt_visual(cell, Vector2(1.3, 3.0), 0.7)
+	_front_burst(cell, 1.5, 0.5, "tempete_choc")
+	_shake(0.2, 0.6)
+
+
+## Un éclair géant de la Colère du ciel.
+func _on_wrath_bolt(cell: Vector2i, _index: int) -> void:
+	_sky_bolt_visual(cell, Vector2(1.5, 3.6), 0.8)
+	_front_burst(cell, 1.6, 0.5, "tempete_choc")
+	_shake(0.18, 0.7)
+
+
+func _on_lightning_hopped(cells: Array) -> void:
+	_hop_cells = cells
+
+
+## Le Saut d'éclair : un arc d'ennemi en ennemi, un choc sur chacun, et il réapparaît sur le dernier.
+func _tempest_hop(from: Vector2i, to: Vector2i) -> void:
+	var cells: Array = _hop_cells if not _hop_cells.is_empty() and _hop_cells[-1] == to else [from, to]
+	_hop_cells = []
+	for i in range(cells.size() - 1):
+		_streak_between(cells[i], cells[i + 1], "tempete_arc", 0.45 + 0.05 * float(i), 0.9)
+		_front_burst(cells[i + 1], 1.0, 0.4, "tempete_choc")
+	_front_burst(from, 1.1, 0.4, "tempete_choc")
+	player.mover.teleport_to(to)
+	player.snap_to_mover()
+	player.play_warp()
+	_shake(0.25, 0.7)
+	_refresh_ai()
+
+
+## Un éclair qui tombe du ciel, dressé sur sa case : `size` en cases, le pied sur la case.
+func _sky_bolt_visual(cell: Vector2i, size: Vector2, seconds: float) -> void:
+	var bolt := _spawn_painted_burst(cell, 1.0, seconds, "tempete_foudre")
+	var shaft := bolt.get_child(0) as Sprite2D
+	shaft.scale = size * TILE_SIZE
+	shaft.position = Vector2(0.0, -(0.95 - 0.5) * size.y * TILE_SIZE)
+	bolt.z_index = 11
+
+
+# --- L'Éveil du Colosse ---------------------------------------------------------
+
+const COLOSSUS_COLUMN_SIZE := Vector2(1.1, 2.6)
+## La Tour de cristal : la taille de son quad en cases, où tombe son pied (en part du quad, depuis le
+## haut), et la hauteur de son cristal au-dessus de la case. Voir `colosse_geode.gdshader`.
+## Le dessin est fait pour 1,3 x 2,4 : on l'agrandit d'un bloc, sans le déformer.
+const TOWER_SIZE := Vector2(1.3, 2.4) * 1.15
+const TOWER_FOOT := 0.95
+const TOWER_SPIRE := 1.66 * 1.15
+var _fente_frame := -1
+
+
+## L'éclosion du Colosse : les roches se plaquent sur lui, il grandit d'un coup, l'onde part au sol.
+func _show_earth_awakening() -> void:
+	var cell := player.mover.nearest_cell()
+	var bloom := PaintedBurst.new()
+	player.add_child(bloom)
+	bloom.setup(TILE_SIZE, 1.5, 1.0, 0.0, "colosse_eveil")
+	bloom.position = Vector2(0.0, -TILE_SIZE * 0.3)
+	bloom.z_index = 3
+	# La fente est AU SOL, sous lui : par-dessus, elle cachait le Colosse au moment où il apparaît.
+	_spawn_painted_burst(cell, 1.6, 0.7, "colosse_fente")
+	_grow_player(Awakening.GROWTH, 0.35)
+	_shake(0.5, 1.1)
+	_spawn_slow_motion(0.1, 0.3)
+	# Quatre colonnes de lave jaillissent aux coins de sa case au moment du choc.
+	for corner: Vector2i in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]:
+		get_tree().create_timer(0.22, false).timeout.connect(_lava_column_visual.bind(cell + corner))
+
+
+## Le Colosse grandit ou retrouve sa taille, avec un petit rebond.
+func _grow_player(target: float, seconds: float) -> void:
+	if player == null:
+		return
+	player.create_tween().tween_method(player.set_growth, player.growth, target, seconds) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Piétinement : l'ennemi part dans une gerbe de cailloux.
+func _on_trampled(_index: int, cell: Vector2i) -> void:
+	if character.id == AIR:
+		# Le Rempart de vent du Souverain : une bourrasque, sans écrasement.
+		_front_burst(cell, 0.9, 0.45, "souverain_souffle")
+		return
+	_spawn_painted_burst(cell, 0.6, 0.7, "colosse_pas").z_index = 5
+	_front_burst(cell, 0.85, 0.4, "colosse_ecrase")
+	_shake(0.1, 0.35)
+
+
+## Chaque pas du Colosse fend le sol, et la fente refroidit.
+func _on_colossus_step(cell: Vector2i) -> void:
+	var step := _spawn_painted_burst(cell, 0.55, 0.9, "souverain_pas" if character.id == AIR else "colosse_pas")
+	step.z_index = 5
+
+
+## La Faille : les crevasses de lave courent dans chaque branche, et le sol éclate sous lui une fois.
+func _colossus_line(ability: Ability, path: Array, duration: float) -> void:
+	if not (character.awakened and character.id == EARTH) or not ability.line_cross or path.is_empty():
+		return
+	var origin := player.mover.nearest_cell() if player != null else Vector2i(path[0])
+	if _fente_frame != Engine.get_process_frames():
+		_fente_frame = Engine.get_process_frames()
+		_spawn_painted_burst(origin, 1.6, 0.7, "colosse_fente")
+		_shake(0.3, 0.8)
+	var previous := origin
+	for i in path.size():
+		var next: Vector2i = path[i]
+		# Au sol, sous le mage et les ennemis.
+		_streak_between(previous, next, "colosse_sillon", 1.0 + 0.08 * float(i), 1.1).z_index = 8
+		previous = next
+	get_tree().create_timer(duration, false).timeout.connect(_spike_burst.bind(Vector2i(path[-1])))
+
+
+## Une traînée de fissures derrière ce qui file sur `path` en `seconds` : chaque tronçon s'ouvre quand
+## la tête y passe. `bind` et non un lambda : les lambdas GDScript capturent par valeur.
+func _crack_behind(path: Array, seconds: float, height: float) -> void:
+	for i in range(path.size() - 1):
+		var delay := seconds * float(i) / float(maxi(1, path.size() - 1))
+		var a: Vector2i = path[i]
+		var b: Vector2i = path[i + 1]
+		if delay <= 0.0:
+			_crack_segment(a, b, height)
+		else:
+			get_tree().create_timer(delay, false).timeout.connect(_crack_segment.bind(a, b, height))
+
+
+func _crack_segment(a: Vector2i, b: Vector2i, height: float) -> void:
+	if player == null:
+		return
+	_streak_between(a, b, "colosse_sillon", 0.9, height).z_index = 8
+
+
+## Une gerbe de pics au bout d'une branche de la Faille.
+func _spike_burst(cell: Vector2i) -> void:
+	if player == null:
+		return
+	_front_burst(cell, 1.0, 0.55, "colosse_pic")
+	_spawn_painted_burst(cell, 1.0, 0.6, "colosse_ecrase")
+
+
+## L'Éruption, au départ : le sol s'ouvre et l'avale. L'arrivée vient de `_on_eruption_burst`.
+func _colossus_dive(from: Vector2i, to: Vector2i) -> void:
+	_front_burst(from, 1.3, 0.6, "colosse_plongee")
+	_crack_behind(combat.trajectory(from, to), 0.25, 0.8)
+	player.mover.teleport_to(to)
+	player.snap_to_mover()
+	player.play_warp()
+	_refresh_ai()
+
+
+func _on_eruption_burst(cell: Vector2i, ability: Ability) -> void:
+	_front_burst(cell, ability.end_blast_radius + 0.3, 0.8, "colosse_eruption")
+	_spawn_painted_burst(cell, 1.6, 0.8, "colosse_fente")
+	_shake(0.4, 1.0)
+	_spawn_slow_motion(0.08, 0.35)
+
+
+## Une colonne de lave du Cataclysme, dressée sur sa case.
+func _on_lava_column(cell: Vector2i, _ability: Ability) -> void:
+	_lava_column_visual(cell)
+
+
+func _lava_column_visual(cell: Vector2i) -> void:
+	if player == null:
+		return
+	var column := _spawn_painted_burst(cell, 1.0, 1.3, "colosse_colonne")
+	var shaft := column.get_child(0) as Sprite2D
+	shaft.scale = COLOSSUS_COLUMN_SIZE * TILE_SIZE
+	shaft.position = Vector2(0.0, -(0.95 - 0.5) * COLOSSUS_COLUMN_SIZE.y * TILE_SIZE)
+	column.z_index = 11
+	_front_burst(cell, 1.0, 0.5, "colosse_ecrase")
+	_shake(0.15, 0.5)
+
+
 # --- L'Éveil du Phénix ---------------------------------------------------------
 
 const PHOENIX_PILLAR_SIZE := Vector2(1.1, 2.4)
@@ -1770,9 +2098,16 @@ func show_awakening_charge() -> void:
 	var spiral := PaintedBurst.new()
 	player.add_child(spiral)
 	var water := character.id == CharacterCatalog.WATER
-	spiral.setup(TILE_SIZE, 1.5, Awakening.CHARGE_TIME, 0.0,
-		"maree_spirale" if water else "phenix_spirale")
-	spiral.position = Vector2(0.0, -TILE_SIZE * 0.6)
+	var earth := character.id == EARTH
+	var key := "maree_spirale" if water else "phenix_spirale"
+	if earth:
+		key = "colosse_charge"
+	elif character.id == THUNDER:
+		key = "tempete_charge"
+	elif character.id == AIR:
+		key = "souverain_charge"
+	spiral.setup(TILE_SIZE, 1.5, Awakening.CHARGE_TIME, 0.0, key)
+	spiral.position = Vector2(0.0, -TILE_SIZE * (0.3 if earth else 0.6))
 	spiral.z_index = 3
 	_shake(0.2, 0.25)
 
@@ -1783,6 +2118,15 @@ func show_awakening() -> void:
 		return
 	if character.id == CharacterCatalog.WATER:
 		_show_water_awakening()
+		return
+	if character.id == EARTH:
+		_show_earth_awakening()
+		return
+	if character.id == THUNDER:
+		_show_thunder_awakening()
+		return
+	if character.id == AIR:
+		_show_air_awakening()
 		return
 	var cell := player.mover.nearest_cell()
 	var bloom := PaintedBurst.new()
@@ -1846,7 +2190,32 @@ func end_awakening() -> void:
 	if _water_aura != null and is_instance_valid(_water_aura):
 		_water_aura.queue_free()
 	_water_aura = null
+	_free_tempest()
 	if player == null:
+		return
+	if character.id == AIR:
+		var leave := PaintedBurst.new()
+		player.add_child(leave)
+		leave.setup(TILE_SIZE, 1.4, 1.0, 0.0, "souverain_fin")
+		leave.position = Vector2(0.0, -TILE_SIZE * 0.6)
+		leave.z_index = 3
+		return
+	if character.id == THUNDER:
+		var leave := PaintedBurst.new()
+		player.add_child(leave)
+		leave.setup(TILE_SIZE, 1.4, 0.9, 0.0, "tempete_fin")
+		leave.position = Vector2(0.0, -TILE_SIZE * 0.6)
+		leave.z_index = 3
+		_shake(0.12, 0.35)
+		return
+	if character.id == EARTH:
+		var rubble := PaintedBurst.new()
+		player.add_child(rubble)
+		rubble.setup(TILE_SIZE, 1.3, 1.0, 0.0, "colosse_eboulis")
+		rubble.position = Vector2(0.0, -TILE_SIZE * 0.5)
+		rubble.z_index = 3
+		_grow_player(1.0, 0.5)
+		_shake(0.15, 0.4)
 		return
 	if character.id == CharacterCatalog.WATER:
 		var ebb := PaintedBurst.new()
@@ -3894,6 +4263,9 @@ func _on_blade_cut(cell: Vector2i) -> void:
 	if character.id == "ciel":
 		_front_burst(cell, 0.85, 0.32, "ciel_entaille")
 		return
+	if character.id == EARTH:
+		_front_burst(cell, 0.9, 0.45, "colosse_pic")
+		return
 	_spawn_painted_burst(cell, 0.8, 0.28, "acier_impact").z_index = 11
 
 
@@ -4018,6 +4390,10 @@ func _on_whirl_cut(cell: Vector2i) -> void:
 
 
 func _on_veil_repelled(cell: Vector2i) -> void:
+	if character.id == AIR:
+		_front_burst(cell, 1.0, 0.45, "souverain_souffle")
+		_shake(0.08, 0.25)
+		return
 	_front_burst(cell, 1.0, 0.4, "cherubin_rejet")
 	_shake(0.08, 0.25)
 
@@ -4234,7 +4610,7 @@ func _sword_landed(cell: Vector2i) -> void:
 
 
 ## L'Envol. Seul le dessin s'élève : l'ombre reste au sol et dit où il retombera.
-func _on_flight_started(_duration: float, _ability: Ability) -> void:
+func _on_flight_started(duration: float, _ability: Ability) -> void:
 	if player == null:
 		return
 	player.cancel_path()
@@ -4242,7 +4618,9 @@ func _on_flight_started(_duration: float, _ability: Ability) -> void:
 	# Ses ailes s'ouvrent DANS SON DOS, à hauteur d'épaules, et l'anneau du shader tombe au sol.
 	var wings := PaintedBurst.new()
 	player.add_child(wings)
-	wings.setup(TILE_SIZE, 1.7, 0.55, 0.0, "ciel_envol")
+	# Le Vol du zéphyr du Souverain : des ailes de vent, qui restent tout le vol.
+	var zephyr := character.id == AIR
+	wings.setup(TILE_SIZE, 1.7, duration if zephyr else 0.55, 0.0, "souverain_ailes" if zephyr else "ciel_envol")
 	wings.position = Vector2(0.0, -TILE_SIZE * 0.9)
 	wings.z_index = -1
 	var rise := create_tween().set_parallel()
@@ -4300,8 +4678,9 @@ func _on_flight_ended() -> void:
 func _on_flight_landed(cell: Vector2i, ability: Ability) -> void:
 	var ring := create_tween()
 	ring.tween_interval(FLIGHT_DROP * 0.8)
+	var landing_key := "souverain_atterrissage" if character.id == AIR else "ciel_atterrissage"
 	ring.tween_callback(func() -> void:
-		_front_burst(cell, ability.radius + 0.3, 0.6, "ciel_atterrissage")
+		_front_burst(cell, ability.radius + 0.3, 0.6, landing_key)
 		_shake(0.22, 0.5))
 
 
@@ -4581,6 +4960,26 @@ func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
 	if character.awakened and character.id == "fire" and ability.is_ultimate:
 		_spawn_painted_burst(cell, 3.0, 2.6, "phenix_supernova").span_tiles(TILE_SIZE, 20.0)
 		_spawn_slow_motion(0.12, 0.3)
+	# Le Souffle du titan du Souverain : l'onde de vent jusqu'au bout de son rayon.
+	if character.awakened and character.id == AIR and ability.blow_cells > 0:
+		_front_burst(cell, ability.radius + 0.3, 0.75, "souverain_titan")
+		_shake(0.3, 0.8)
+		return
+	# La Colère du ciel de l'Avatar : le ciel noircit sous les éclairs, PAR-DESSUS le Jugement, qui suit.
+	if character.awakened and character.id == THUNDER and ability.is_ultimate:
+		var sky := _spawn_painted_burst(cell, 3.0, 4.0, "tempete_ciel")
+		sky.span_tiles(TILE_SIZE, 20.0)
+		sky.z_index = 8
+		_front_burst(cell, 1.6, 0.9, "tempete_eveil")
+		_spawn_slow_motion(0.12, 0.3)
+	# Le Cataclysme du Colosse : le sol craque sur tout l'écran, SOUS le Séisme, qui suit.
+	if character.awakened and character.id == EARTH and ability.is_ultimate:
+		var web := _spawn_painted_burst(cell, 3.0, ability.quake_duration + 1.0, "colosse_reseau")
+		web.span_tiles(TILE_SIZE, 20.0)
+		web.z_index = 8
+		_front_burst(cell, 2.0, 0.8, "colosse_eveil")
+		_front_burst(cell, 3.0, 1.0, "colosse_eruption")
+		_spawn_slow_motion(0.15, 0.25)
 	if character.id == "mort":
 		_spawn_sweep(ability, cell)
 		return
@@ -4768,6 +5167,15 @@ func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
 			Element.color(ability.element))
 		if character.id == AIR:
 			_spawn_painted_burst(cell, 1.3, 0.5, "air_streaks")
+		# LE GRAND VORTEX du Souverain : plus haute, et sa spirale au sol montre jusqu'où elle aspire.
+		if ability.zone_pull > 0.0:
+			tornado.scale = Vector2.ONE * 1.5
+			var swirl := PaintedBurst.new()
+			tornado.add_child(swirl)
+			# Enfant de la tornade agrandie : son rayon est déjà multiplié par 1,5. Au rayon d'aspiration
+			# entier, la spirale couvrait sept cases et noyait le couloir (vu en jeu le 2026-11-07).
+			swirl.setup(TILE_SIZE, ability.zone_pull * 0.4, ability.duration, 0.0, "souverain_vortex")
+			swirl.z_index = -1
 		_zone_nodes[zone_id] = tornado
 		return
 	# LA FAILLE joue la planche ANIMÉE : cristal et pierre en alternance selon
@@ -4834,6 +5242,10 @@ func _on_zone_moved(zone_id: int, cell: Vector2i) -> void:
 	var node: Node2D = _zone_nodes[zone_id]
 	if is_instance_valid(node) and node is Tornado:
 		(node as Tornado).walk_to(maze_renderer.cell_to_world(cell))
+	elif is_instance_valid(node):
+		# Une zone qui SUIT le mage (la Cage électrique, l'œil de l'ouragan) : son dessin glisse avec lui.
+		# Sans ça, elle blessait autour de lui mais restait dessinée là où elle avait été posée.
+		node.create_tween().tween_property(node, "position", maze_renderer.cell_to_world(cell), 0.18)
 
 
 func _on_zone_expired(zone_id: int) -> void:
@@ -4982,6 +5394,12 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		return
 	if character.awakened and character.id == CharacterCatalog.WATER:
 		_tide_torrent(from, to)
+		return
+	if character.awakened and character.id == EARTH:
+		_colossus_dive(from, to)
+		return
+	if character.awakened and character.id == THUNDER:
+		_tempest_hop(from, to)
 		return
 	var tint := Element.color(character.element)
 	_spawn_warp(player.mover.nearest_cell(), tint, false)
@@ -5209,6 +5627,8 @@ func _on_enemy_hauled(index: int, cell: Vector2i) -> void:
 func _on_enemy_slammed(index: int, cell: Vector2i) -> void:
 	if index >= enemies.size():
 		return
+	if character.awakened and character.id == AIR:
+		_front_burst(cell, 0.9, 1.0, "souverain_choc")
 	var mark := SlamMark.new()
 	entities.add_child(mark)
 	mark.position = maze_renderer.cell_to_world(cell)
@@ -5371,6 +5791,14 @@ func _on_storm_gathered(ability: Ability, duration: float) -> void:
 		player.add_child(_ael_orbit)
 		_ael_orbit.setup(TILE_SIZE, _ael_colour(), duration)
 		return
+	if character.awakened and character.id == THUNDER:
+		_free_cyclone()
+		_cyclone = PaintedBurst.new()
+		player.add_child(_cyclone)
+		_cyclone.setup(TILE_SIZE, 1.4, duration, 0.0, "tempete_cyclone")
+		_cyclone.position = Vector2(0.0, -TILE_SIZE * 0.9)
+		_cyclone.z_index = 3
+		return
 	if _cloud != null and is_instance_valid(_cloud):
 		_cloud.refresh(duration)
 		return
@@ -5380,6 +5808,7 @@ func _on_storm_gathered(ability: Ability, duration: float) -> void:
 
 
 func _on_storm_dispersed() -> void:
+	_free_cyclone()
 	if _ael_orbit != null and is_instance_valid(_ael_orbit):
 		_ael_orbit.stop()
 	_ael_orbit = null
@@ -5400,6 +5829,11 @@ func _on_storm_struck(index: int, ability: Ability) -> void:
 		var blade := BladeThrow.new()
 		entities.add_child(blade)
 		blade.setup(from, enemies[index].position, TILE_SIZE, _ael_colour())
+		return
+	if character.awakened and character.id == THUNDER and combat_context != null \
+			and index < combat_context.enemy_cells.size():
+		_sky_bolt_visual(combat_context.enemy_cells[index], Vector2(1.0, 2.6), 0.55)
+		_shake(0.08, 0.25)
 		return
 	if _cloud != null and is_instance_valid(_cloud):
 		_cloud.discharge()
@@ -5428,6 +5862,11 @@ func _on_chain_arced(from_index: int, to_index: int) -> void:
 		entities.add_child(link)
 		link.setup(start, target.position, TILE_SIZE, _ael_colour())
 		_shake(0.1, 0.3)
+		return
+	if character.awakened and character.id == THUNDER:
+		_streak_world(start, target.position, "tempete_arc", 0.4, 0.75, float(to_index) * 0.13)
+		_front_burst(maze_renderer.world_to_cell(target.position), 0.8, 0.35, "tempete_choc")
+		_shake(0.06, 0.25)
 		return
 	var arc: LightningArc = ARC_SCENE.instantiate()
 	entities.add_child(arc)

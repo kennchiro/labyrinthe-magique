@@ -81,6 +81,18 @@ func _draw() -> void:
 		_draw_water(centre, s, gem, ready or in_prism, beat)
 		_draw_label(centre, radius, ready, in_prism, tired)
 		return
+	if info.get("symbol", "") == "air":
+		_draw_air(centre, s, gem, ready or in_prism, beat)
+		_draw_label(centre, radius, ready, in_prism, tired)
+		return
+	if info.get("symbol", "") == "thunder":
+		_draw_thunder(centre, s, gem, ready or in_prism, beat)
+		_draw_label(centre, radius, ready, in_prism, tired)
+		return
+	if info.get("symbol", "") == "earth":
+		_draw_earth(centre, s, gem, ready or in_prism, beat)
+		_draw_label(centre, radius, ready, in_prism, tired)
+		return
 	draw_colored_polygon(PackedVector2Array([centre + Vector2(0, -s * 1.3), centre + Vector2(s, 0),
 		centre + Vector2(0, s * 1.3), centre + Vector2(-s, 0)]), gem)
 	draw_colored_polygon(PackedVector2Array([centre + Vector2(0, -s * 0.6), centre + Vector2(s * 0.45, 0),
@@ -117,6 +129,50 @@ func _draw_water(centre: Vector2, s: float, tint: Color, lit: bool, beat: float)
 	var wave_y := centre.y + s * (0.36 + 0.08 * sin(_time * 5.0) * float(lit))
 	draw_arc(Vector2(centre.x, wave_y), s * (0.72 + 0.08 * beat * float(lit)), PI * 0.12, PI * 0.88,
 		24, Color("#e9ffff") if lit else Color(tint, 0.45), 2.4, true)
+
+
+## Un rocher fendu de lave, un cristal vert planté dessus : l'Éveil de la Terre.
+func _draw_earth(centre: Vector2, s: float, tint: Color, lit: bool, beat: float) -> void:
+	var rock := PackedVector2Array([
+		centre + Vector2(-s * 1.05, s * 0.2), centre + Vector2(-s * 0.7, -s * 0.45),
+		centre + Vector2(s * 0.55, -s * 0.5), centre + Vector2(s * 1.05, s * 0.1),
+		centre + Vector2(s * 0.75, s * 0.85), centre + Vector2(-s * 0.6, s * 0.9),
+	])
+	draw_colored_polygon(rock, Color("#8a6f48") if lit else tint)
+	draw_polyline(PackedVector2Array([centre + Vector2(-s * 0.75, s * 0.35), centre + Vector2(-s * 0.2, s * 0.15),
+		centre + Vector2(0.0, s * 0.55), centre + Vector2(s * 0.6, s * 0.3)]),
+		Color("#ff8a1e") if lit else Color(tint, 0.45), 2.2 + 0.6 * beat * float(lit), true)
+	var gem := PackedVector2Array([
+		centre + Vector2(0.0, -s * 1.5), centre + Vector2(s * 0.32, -s * 0.55),
+		centre + Vector2(0.0, -s * 0.25), centre + Vector2(-s * 0.32, -s * 0.55),
+	])
+	draw_colored_polygon(gem, Color("#6fe03a") if lit else Color(tint, 0.8))
+
+
+## Une spirale de vent : l'Éveil de l'Air.
+func _draw_air(centre: Vector2, s: float, tint: Color, lit: bool, beat: float) -> void:
+	var swirl := PackedVector2Array()
+	for i in 40:
+		var t := float(i) / 39.0
+		var angle := t * TAU * 1.6 + _time * 2.0 * float(lit)
+		swirl.append(centre + Vector2.from_angle(angle) * s * (0.2 + 1.15 * t))
+	draw_polyline(swirl, Color("#7fd3ff") if lit else tint, 3.0 + 0.8 * beat * float(lit), true)
+	draw_arc(centre, s * 0.25, 0.0, TAU, 16, Color("#e0b040") if lit else Color(tint, 0.6), 2.0, true)
+
+
+## Un éclair en zigzag, cœur blanc, bord bleu : l'Éveil de la Foudre.
+func _draw_thunder(centre: Vector2, s: float, tint: Color, lit: bool, beat: float) -> void:
+	var bolt := PackedVector2Array([
+		centre + Vector2(s * 0.25, -s * 1.5), centre + Vector2(-s * 0.75, s * 0.15),
+		centre + Vector2(-s * 0.05, s * 0.15), centre + Vector2(-s * 0.35, s * 1.5),
+		centre + Vector2(s * 0.8, -s * 0.3), centre + Vector2(s * 0.08, -s * 0.3),
+		centre + Vector2(s * 0.55, -s * 1.5),
+	])
+	draw_colored_polygon(bolt, Color("#3fa9ff") if lit else tint)
+	var core := PackedVector2Array()
+	for point in bolt:
+		core.append(centre + (point - centre) * (0.55 + 0.1 * beat * float(lit)))
+	draw_colored_polygon(core, Color(0.96, 0.98, 1.0, 0.95 if lit else 0.35))
 
 
 ## Le libellé, sous le bouton.

@@ -222,6 +222,17 @@ signal ember_laid(cell: Vector2i, life: float)
 signal water_bounced(from: Vector2i, to: Vector2i)
 signal shield_held(healed: int)
 signal leviathan_cast(cell: Vector2i, ability: Ability, direction: int)
+## L'Éveil du Colosse : un ennemi piétiné, une colonne de lave du Cataclysme, l'Éruption.
+signal trampled(index: int, cell: Vector2i)
+signal lava_column(cell: Vector2i, ability: Ability)
+signal eruption_burst(cell: Vector2i, ability: Ability)
+signal colossus_step(cell: Vector2i)
+## L'Éveil de l'Avatar de la Tempête : ses charges de Surtension, la foudre qui tombe à la cinquième, le
+## Saut d'éclair (les cases touchées, du départ à l'arrivée), un éclair de la Colère du ciel.
+signal surge_changed(charges: int)
+signal surge_struck(cell: Vector2i)
+signal lightning_hopped(cells: Array)
+signal wrath_bolt(cell: Vector2i, index: int)
 signal eye_burst(cell: Vector2i)
 signal whirl_started(duration: float, radius: float)
 signal whirl_cut(cell: Vector2i)
@@ -637,6 +648,20 @@ var _ember_tick := 0.0
 var _ember_from := Vector2i(-9999, -9999)
 var _held_heal := 0                    # PV rendus si la bulle en cours tient jusqu'au bout
 var _leviathan := {}                   # {origin, direction, time, hit, ability}
+var _trample_left := 0.0               # Piétinement du Colosse, tant qu'il dure
+var _trample_damage := 0
+var _trample_cells := 0
+var _trample_locks := {}               # index -> secondes avant qu'il puisse le repiétiner
+var _trample_from := Vector2i(-9999, -9999)
+var _trample_lock := 1.0
+var _trample_slow := 0.0
+var _lava := []                        # colonnes du Cataclysme à venir : {ability, time_left}
+var _surge_left := 0.0                 # Surtension de l'Avatar, tant qu'elle dure
+var _surge_charges := 0
+var _surge_max := 0
+var _surge_damage := 0
+var _surge_radius := 0.0
+var _wrath := []                       # éclairs de la Colère du ciel à venir : {index, time_left, ability}
 var _eye_locks := {}                   # index -> secondes avant qu'un nouvel œil s'ouvre
 var _whirl := {}                       # {left, tick, ability}
 var _veil: Ability = null              # les Ailes voilées, tant qu'elles tiennent
@@ -745,6 +770,8 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_gaoler(delta, context)
 	_update_cherubin(delta, context)
 	_update_phoenix(delta, context)
+	_update_colossus(delta, context)
+	_update_tempest(delta, context)
 	if not _leviathan.is_empty():
 		_swim_leviathan(delta, context)
 	_update_dragon(delta, context)
@@ -859,6 +886,9 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 			for other in context.enemy_cells.size():
 				if other != index and context.enemy_alive(other) and line.has(context.enemy_cells[other]):
 					_apply_damage(other, ability, context)
+					# Le Croissant d'ouragan rejette ce qu'il traverse.
+					_shove(other, ability.pierce_push, context)
+			_shove(index, ability.pierce_push, context)
 		# La Colonne du ciel cloue ce qu'elle entoure, AVANT ses dégâts : un ennemi qu'elle tue
 		# ne doit pas être compté parmi les cloués.
 		if ability.stun_seconds > 0.0:
@@ -912,6 +942,14 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 		zone["tick"] = float(zone["tick"]) - delta
 		if zone.has("path"):
 			_walk_zone(zone, delta, context)
+		# La Cage électrique de l'Avatar le suit, et l'œil de l'ouragan du Souverain.
+		if (zone["ability"] as Ability).zone_follows and zone["cell"] != context.player_cell:
+			zone["cell"] = context.player_cell
+			zone_moved.emit(int(zone["id"]), context.player_cell)
+		# Le Grand vortex aspire ce qui l'entoure, au rythme des tics.
+		var pulling: Ability = zone["ability"]
+		if pulling.zone_pull > 0.0 and float(zone["tick"]) <= 0.0:
+			_pull_toward(zone["cell"], pulling.radius, pulling.zone_pull, context)
 		# L'englu SOUTENU se réarme à CHAQUE frame, pas au tick de la zone : sa
 		# traînée est plus courte que l'intervalle des ticks, sans quoi l'ennemi
 		# retrouverait son allure deux fois par seconde entre deux passages. Les
@@ -1275,6 +1313,10 @@ func use(ability: Ability, context: CombatContext) -> bool:
 	#
 	# `empower_bonus` est une propriété de la COMPÉTENCE. N'importe laquelle
 	# peut donc en porter une, et c'est ici, au tronc commun, qu'on la lit.
+	if fired and ability.eye_seconds > 0.0:
+		_open_eye(ability, context)
+	if fired and ability == stats.attack and _surge_left > 0.0 and _surge_charges >= _surge_max:
+		_release_surge(ability, context)
 	if fired and ability.empower_bonus > 0 and ability.empower_duration > 0.0:
 		# Relancer l'exaltation la REMET à neuf plutôt que de l'additionner :
 		# deux lancers coup sur coup ne doivent pas donner +16.
@@ -1552,6 +1594,8 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 		_start_quake(ability)
 	if ability.sky_clouds > 0:
 		_gather_sky(ability)
+	if ability.wrath_damage > 0:
+		_summon_wrath(ability, context)
 	if ability.heal_self > 0 and (not ability.heal_needs_hit or _blast_hits > 0):
 		var gained := health.heal(ability.heal_self)
 		if gained > 0:
@@ -1631,6 +1675,10 @@ func _start_quake(ability: Ability) -> void:
 		quake["time_left"] = ability.quake_duration
 		quake_started.emit(ability.quake_duration, ability)
 		return
+	# LE CATACLYSME du Colosse : les colonnes de lave jaillissent une à une pendant le séisme.
+	for k in ability.lava_columns:
+		_lava.append({"ability": ability, "time_left": LAVA_DELAY
+			+ ability.quake_duration * 0.85 * float(k) / float(ability.lava_columns)})
 	_quakes.append({
 		"ability": ability, "time_left": ability.quake_duration, "tick": 0.0,
 	})
@@ -1947,22 +1995,24 @@ func _update_storm(delta: float, context: CombatContext) -> void:
 	# La cible est la plus proche DU MAGE : le nuage est au-dessus de lui et
 	# frappe ce qui l'entoure. Un orage qui bombarderait la carte entière ne
 	# récompenserait plus le fait de rester mobile — il jouerait tout seul.
-	var best := -1
-	var best_distance := ability.storm_range + 1
+	# L'Œil du cyclone de l'Avatar a trois nuages : chacun frappe sa cible, les plus proches d'abord.
+	var scored: Array = []
 	for i in context.enemy_cells.size():
 		if not context.enemy_alive(i) or context.is_structure(i):
 			continue
 		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
-		if distance >= 0 and distance < best_distance:
-			best_distance = distance
-			best = i
-	if best < 0:
+		if distance >= 0 and distance <= ability.storm_range:
+			scored.append([distance, i])
+	if scored.is_empty():
 		return
-	storm_struck.emit(best, ability)
-	# La décharge est un coup À PART ENTIÈRE : elle déclenche donc le trait de
-	# l'élément, et chaque éclair peut rebondir sur un voisin. C'est ce qui rend
-	# l'orage redoutable au milieu d'un groupe, et anodin sur un isolé.
-	_apply_damage(best, ability, context)
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	for entry: Array in scored.slice(0, maxi(1, ability.storm_clouds)):
+		var best := int(entry[1])
+		storm_struck.emit(best, ability)
+		# La décharge est un coup À PART ENTIÈRE : elle déclenche donc le trait de
+		# l'élément, et chaque éclair peut rebondir sur un voisin. C'est ce qui rend
+		# l'orage redoutable au milieu d'un groupe, et anodin sur un isolé.
+		_apply_damage(best, ability, context)
 
 
 ## LA CHAÎNE D'ÉCLAIRS : elle saute d'une créature à l'autre, de proche en
@@ -2055,6 +2105,10 @@ func _update_chains(delta: float, context: CombatContext) -> void:
 		# L'exaltation, elle, s'applique au premier maillon comme à tout coup
 		# d'origine.
 		_apply_damage(target, relay, context, false, index == 0)
+		# La Tempête en chaîne paralyse chaque maillon un instant ; un boss n'en a cure.
+		if ability.chain_stun > 0.0 and context.enemy_alive(target) and not context.bosses.has(target) \
+				and not context.is_structure(target):
+			enemy_staggered.emit(target, ability.chain_stun)
 
 
 ## LA VAGUE : un front qui part droit devant et balaie tout son chemin.
@@ -2160,6 +2214,8 @@ func _break_on_wave(wave: Dictionary, cell: Vector2i, context: CombatContext) ->
 ## second est du terrain — et c'est le second qui le distingue du Feu (dont le
 ## brasier cloue sur place) et de l'Eau (dont le cercle englue sans blesser).
 func _cast_line(ability: Ability, context: CombatContext) -> bool:
+	if ability.line_cross:
+		return _cast_cross(ability, context)
 	var path := _corridor_ahead(context.player_cell, context.player_facing,
 		ability.range)
 	if path.is_empty():
@@ -2355,6 +2411,11 @@ func _update_turrets(delta: float, context: CombatContext) -> void:
 					# Coup D'ORIGINE : il déclenche donc le trait de la Terre,
 					# comme s'il venait du mage.
 					_apply_damage(prey, ability, context)
+					# LA TOUR DE CRISTAL du Colosse tire sur plusieurs à la fois : les suivants après le premier.
+					if ability.turret_volley > 1:
+						for other in _turret_volley(cell, prey, ability, context):
+							turret_fired.emit(int(turret["id"]), ability, cell, other)
+							_apply_damage(other, ability, context)
 		if float(turret["time_left"]) <= 0.0:
 			_turrets.remove_at(i)
 			turret_faded.emit(int(turret["id"]))
@@ -2485,6 +2546,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 	if player_rooted():
 		use_refused.emit("immobile")
 		return false
+	if ability.hop_count > 0 and _hop(ability, context):
+		return true
 	var destination := context.player_cell
 	var facing := -context.player_facing if ability.backward else context.player_facing
 	if ability.rewind_seconds > 0.0:
@@ -2524,8 +2587,12 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		var blast := Ability.make({"id": ability.id + "_eclat", "kind": Ability.Kind.BLAST,
 			"element": ability.element, "damage": ability.end_blast_damage,
 			"radius": ability.end_blast_radius})
-		_apply_area(blast, context.player_cell, context)
-		_apply_area(blast, destination, context)
+		if not ability.end_blast_arrival_only:
+			_apply_area(blast, context.player_cell, context)
+		if ability.end_blast_push > 0:
+			_erupt_at(blast, destination, ability, context)
+		else:
+			_apply_area(blast, destination, context)
 	if ability.blind_radius > 0:
 		_blind_around(destination, ability, context)
 	if ability.trail_damage > 0:
@@ -3962,6 +4029,301 @@ func _update_phoenix(delta: float, context: CombatContext) -> void:
 					"element": stats.element, "damage": _ember_damage}), context, false, false)
 
 
+# --- Le Colosse (l'Éveil du Mage de la Terre) --------------------------------------
+
+## Un même ennemi n'est piétiné qu'une fois par seconde au plus.
+const TRAMPLE_LOCK := 1.0
+## Le Rempart de vent ralentit ce qu'il repousse à cette part de son allure.
+const GALE_SLOW_FACTOR := 0.5
+## La première colonne de lave attend que le sol ait commencé de craquer.
+const LAVA_DELAY := 0.5
+## Les colonnes visent les ennemis à cette distance du mage, à vol d'oiseau ; au-delà, le hasard.
+const LAVA_REACH := 9.0
+
+
+## PIÉTINEMENT : il marche à travers les ennemis. Ce qu'il touche (sa case ou une voisine) est
+## repoussé de `cells` cases et prend `damage`. Les boss et les repaires encaissent sans bouger.
+## Le REMPART DE VENT du Souverain réemploie ce pas : sans dégâts, avec un verrou plus long et un
+## ralentissement (`lock`, `slow`).
+func start_trample(seconds: float, damage: int, cells: int, lock: float = TRAMPLE_LOCK,
+		slow: float = 0.0) -> void:
+	_trample_left = seconds
+	_trample_damage = damage
+	_trample_cells = cells
+	_trample_lock = lock
+	_trample_slow = slow
+	_trample_locks.clear()
+	_trample_from = Vector2i(-9999, -9999)
+
+
+func stop_trample() -> void:
+	_trample_left = 0.0
+
+
+func trampling() -> bool:
+	return _trample_left > 0.0
+
+
+func _update_colossus(delta: float, context: CombatContext) -> void:
+	for index in _trample_locks.keys():
+		var left: float = _trample_locks[index] - delta
+		if left <= 0.0:
+			_trample_locks.erase(index)
+		else:
+			_trample_locks[index] = left
+	if _trample_left > 0.0:
+		_trample_left = maxf(0.0, _trample_left - delta)
+		# Chaque case qu'il quitte garde la trace de son pas : le jeu y fend le sol.
+		if context.player_cell != _trample_from:
+			if _trample_from.x > -9999:
+				colossus_step.emit(_trample_from)
+			_trample_from = context.player_cell
+		var field := PackedInt32Array()
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or _trample_locks.has(i):
+				continue
+			var offset: Vector2i = context.enemy_cells[i] - context.player_cell
+			if absi(offset.x) + absi(offset.y) > 1:
+				continue
+			_trample_locks[i] = _trample_lock
+			trampled.emit(i, context.enemy_cells[i])
+			if not context.is_structure(i) and not context.bosses.has(i):
+				if field.is_empty():
+					field = _field_from(context.player_cell)
+				_push_away(i, context, _trample_cells, field)
+				if _trample_slow > 0.0:
+					enemy_soaked.emit(i, _trample_slow, GALE_SLOW_FACTOR)
+			if _trample_damage > 0:
+				_apply_damage(i, Ability.make({"id": stats.id + "_pietinement", "kind": Ability.Kind.BLAST,
+					"element": stats.element, "damage": _trample_damage}), context, false, false)
+	for k in range(_lava.size() - 1, -1, -1):
+		var column: Dictionary = _lava[k]
+		column["time_left"] = float(column["time_left"]) - delta
+		if float(column["time_left"]) > 0.0:
+			continue
+		_lava.remove_at(k)
+		var ability: Ability = column["ability"]
+		var cell := _lava_target(context)
+		lava_column.emit(cell, ability)
+		_apply_area(Ability.make({"id": ability.id + "_lave", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.lava_damage, "radius": ability.lava_radius}),
+			cell, context, ability, false, false)
+
+
+## La colonne jaillit sous un ennemi proche, tiré au sort ; sans personne à portée, sur une case
+## libre autour du mage.
+func _lava_target(context: CombatContext) -> Vector2i:
+	var near: Array[Vector2i] = []
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and Vector2(context.enemy_cells[i] - context.player_cell).length() <= LAVA_REACH:
+			near.append(context.enemy_cells[i])
+	if not near.is_empty():
+		return near[_rng.randi_range(0, near.size() - 1)]
+	for _try in 12:
+		var spot := context.player_cell + Vector2i(_rng.randi_range(-6, 6), _rng.randi_range(-6, 6))
+		if grid.is_floor_v(spot) and spot != context.player_cell:
+			return spot
+	return context.player_cell
+
+
+## LA FAILLE : le sol se fend dans les quatre directions à la fois, et chaque branche suit son couloir.
+func _cast_cross(ability: Ability, context: CombatContext) -> bool:
+	var plant := _plant_of(ability)
+	var hit := {}
+	var cast := false
+	for facing: Vector2i in MazeGrid.NEIGHBORS:
+		var path := _corridor_ahead(context.player_cell, facing, ability.range)
+		if path.is_empty():
+			continue
+		cast = true
+		var duration := float(path.size()) / maxf(1.0, ability.line_speed)
+		line_erupted.emit(ability, path, duration)
+		# Les quatre branches partagent leur liste de touchés : un ennemi au carrefour n'encaisse
+		# la Faille qu'une fois.
+		_lines.append({"ability": ability, "path": path, "index": 0,
+			"step": duration / float(path.size()), "timer": 0.0, "hit": hit, "plant": plant})
+	if not cast:
+		use_refused.emit("mur")
+	return cast
+
+
+## Les `turret_volley - 1` ennemis les plus proches du cristal après `first`, à sa portée.
+func _turret_volley(cell: Vector2i, first: int, ability: Ability, context: CombatContext) -> Array[int]:
+	var field := _field_from(cell)
+	var scored: Array = []
+	for i in context.enemy_cells.size():
+		if i == first or not context.enemy_alive(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or distance > ability.range:
+			continue
+		scored.append([distance + (STRUCTURE_PENALTY if context.is_structure(i) else 0), i])
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var out: Array[int] = []
+	for entry: Array in scored.slice(0, ability.turret_volley - 1):
+		out.append(int(entry[1]))
+	return out
+
+
+## L'ÉRUPTION : il ressort du sol dans un jet de roche et de lave qui projette tout autour.
+func _erupt_at(blast: Ability, cell: Vector2i, escape: Ability, context: CombatContext) -> void:
+	eruption_burst.emit(cell, escape)
+	var field := _field_from(cell)
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > blast.radius:
+			continue
+		if not context.is_structure(i) and not context.bosses.has(i):
+			_push_away(i, context, escape.end_blast_push, field)
+		_apply_damage(i, blast, context)
+
+
+# --- Le Souverain des Vents (l'Éveil du Mage de l'Air) -------------------------------
+
+## Repousse d'autant de cases, sauf un repaire ou un boss. Zéro ne fait rien.
+func _shove(index: int, cells: int, context: CombatContext) -> void:
+	if cells <= 0 or not context.enemy_alive(index) or context.is_structure(index) or context.bosses.has(index):
+		return
+	_push_away(index, context, cells)
+
+
+## Rapproche d'une case de `cell` les ennemis entre `inner` et `reach` cases de lui, par les couloirs.
+func _pull_toward(cell: Vector2i, inner: float, reach: float, context: CombatContext) -> void:
+	var field := _field_from(cell)
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i) or context.bosses.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) <= inner or float(distance) > reach:
+			continue
+		var next: Vector2i = context.enemy_cells[i] + Pathfinder.step_toward(grid, field, context.enemy_cells[i])
+		if next == context.enemy_cells[i]:
+			continue
+		context.enemy_cells[i] = next
+		enemy_pushed.emit(i, next)
+
+
+## L'ŒIL DE L'OURAGAN : une zone qui le suit, blesse et aspire. C'est une zone ordinaire, fabriquée ici.
+func _open_eye(ability: Ability, context: CombatContext) -> void:
+	_cast_zone(Ability.make({
+		"id": ability.id + "_oeil", "display_name": ability.display_name,
+		"kind": Ability.Kind.ZONE, "element": ability.element,
+		"damage": ability.eye_damage, "radius": ability.eye_radius, "duration": ability.eye_seconds,
+		"zone_follows": true, "zone_pull": ability.eye_pull, "zone_style": "ouragan_peint",
+	}), context)
+
+
+# --- L'Avatar de la Tempête (l'Éveil du Mage de la Foudre) ---------------------------
+
+## SURTENSION : tant qu'elle dure, chaque coup d'origine donne une charge, jusqu'à `charges`. La
+## cinquième fait tomber la foudre du ciel sur la cible de l'attaque suivante.
+func start_surge(seconds: float, charges: int, damage: int, radius: float) -> void:
+	_surge_left = seconds
+	_surge_max = charges
+	_surge_damage = damage
+	_surge_radius = radius
+	_surge_charges = 0
+	surge_changed.emit(0)
+
+
+func stop_surge() -> void:
+	_surge_left = 0.0
+	_surge_charges = 0
+	surge_changed.emit(0)
+
+
+func surge_charges() -> int:
+	return _surge_charges
+
+
+func _release_surge(ability: Ability, context: CombatContext) -> void:
+	var target := find_target(ability, context)
+	if target < 0:
+		return
+	var cell: Vector2i = context.enemy_cells[target]
+	_surge_charges = 0
+	surge_changed.emit(0)
+	surge_struck.emit(cell)
+	_apply_area(Ability.make({"id": ability.id + "_surtension", "kind": Ability.Kind.BLAST,
+		"element": ability.element, "damage": _surge_damage, "radius": _surge_radius}),
+		cell, context, null, false, false)
+
+
+func _update_tempest(delta: float, context: CombatContext) -> void:
+	if _surge_left > 0.0:
+		_surge_left = maxf(0.0, _surge_left - delta)
+	for k in range(_wrath.size() - 1, -1, -1):
+		var bolt: Dictionary = _wrath[k]
+		bolt["time_left"] = float(bolt["time_left"]) - delta
+		if float(bolt["time_left"]) > 0.0:
+			continue
+		_wrath.remove_at(k)
+		var index := int(bolt["index"])
+		if not context.enemy_alive(index):
+			continue
+		var ability: Ability = bolt["ability"]
+		wrath_bolt.emit(context.enemy_cells[index], index)
+		_apply_damage(index, Ability.make({"id": ability.id + "_colere", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.wrath_damage}), context, false, false)
+
+
+## LA COLÈRE DU CIEL : un éclair géant par ennemi à portée, du plus proche au plus loin.
+func _summon_wrath(ability: Ability, context: CombatContext) -> void:
+	var scored: Array = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Vector2(context.enemy_cells[i] - context.player_cell).length()
+		if distance <= ability.wrath_reach:
+			scored.append([distance, i])
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for k in scored.size():
+		_wrath.append({"index": int(scored[k][1]), "ability": ability,
+			"time_left": WRATH_DELAY + ability.wrath_gap * float(k)})
+
+
+## Le premier éclair attend que le ciel se soit assombri.
+const WRATH_DELAY := 0.6
+
+
+## LE SAUT D'ÉCLAIR : il bondit d'ennemi en ennemi en les frappant, et réapparaît sur le dernier.
+## Sans personne à portée, c'est une fuite ordinaire (faux).
+func _hop(ability: Ability, context: CombatContext) -> bool:
+	var hops: Array[int] = []
+	var visited := {}
+	var first := -1
+	var best := ability.hop_range + 1
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance >= 0 and distance < best:
+			best = distance
+			first = i
+	if first < 0:
+		return false
+	hops.append(first)
+	visited[first] = true
+	while hops.size() < ability.hop_count:
+		var next := _nearest_unvisited(hops[-1], visited, ability.hop_range, context)
+		if next < 0:
+			break
+		visited[next] = true
+		hops.append(next)
+	var cells: Array = [context.player_cell]
+	for i in hops:
+		cells.append(context.enemy_cells[i])
+	lightning_hopped.emit(cells)
+	blink_performed.emit(context.player_cell, cells[-1])
+	var strike := Ability.make({"id": ability.id + "_saut", "kind": Ability.Kind.BLAST,
+		"element": ability.element, "damage": ability.hop_damage})
+	for i in hops:
+		_apply_damage(i, strike, context, false, false)
+	return true
+
+
 # --- Le Seigneur des Marées (l'Éveil du Mage de l'Eau) --------------------------------
 
 ## Le courant du Torrent : une petite zone par case, qui englue sans blesser.
@@ -4262,11 +4624,21 @@ func _land(context: CombatContext) -> void:
 	flight_landed.emit(context.player_cell, ability)
 	if ability.damage > 0 and ability.radius > 0.0:
 		_apply_area(ability, context.player_cell, context)
+	# Le Vol du zéphyr rabat tout en retombant.
+	if ability.end_blast_push > 0:
+		var field := _field_from(context.player_cell)
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or context.is_structure(i) or context.bosses.has(i):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance >= 0 and float(distance) <= ability.radius:
+				_push_away(i, context, ability.end_blast_push, field)
 
 
-## Le Rempart le cloue sur place : le jeu et la simulation lisent tous deux cette réponse.
+## Le Rempart le cloue sur place : le jeu et la simulation lisent tous deux cette réponse. Le Bastion du
+## Colosse renvoie les coups lui aussi, mais le laisse marcher (`reflect_mobile`).
 func player_rooted() -> bool:
-	return _rampart != null
+	return _rampart != null and not _rampart.reflect_mobile
 
 
 func plates_left() -> int:
@@ -5418,6 +5790,10 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 	if _molten_left > 0.0:
 		power = int(round(float(power) * MOLTEN_DAMAGE))
 	var structure := context.is_structure(index)
+	# SURTENSION : chaque coup d'origine de l'Avatar le charge.
+	if with_trait and _surge_left > 0.0 and _surge_charges < _surge_max:
+		_surge_charges += 1
+		surge_changed.emit(_surge_charges)
 	if empowered and not structure:
 		power = int(round(float(power) * (1.0 + rage_bonus())))
 	if stats.element == Element.Kind.LUCK and empowered and not structure:
@@ -5567,19 +5943,24 @@ func _blow_away(ability: Ability, context: CombatContext) -> void:
 		})
 		_apply_damage(index, slam, context, false, false)
 		enemy_slammed.emit(index, context.enemy_cells[index])
+		if ability.slam_stun > 0.0 and context.enemy_alive(index) and not context.bosses.has(index):
+			enemy_staggered.emit(index, ability.slam_stun)
 
 
-func _push_away(index: int, context: CombatContext, cells: int = PUSH_CELLS) -> int:
+## `field` : le champ de distance d'où l'on pousse. Vide, c'est celui de l'IA, autour du mage.
+func _push_away(index: int, context: CombatContext, cells: int = PUSH_CELLS,
+		field: PackedInt32Array = PackedInt32Array()) -> int:
+	var from := context.player_field if field.is_empty() else field
 	var cell: Vector2i = context.enemy_cells[index]
 	var travelled := 0
 	for _step in cells:
 		var best := cell
-		var here := Pathfinder.value_at(grid, context.player_field, cell)
+		var here := Pathfinder.value_at(grid, from, cell)
 		for direction in MazeGrid.NEIGHBORS:
 			var next: Vector2i = cell + direction
 			if not grid.is_floor_v(next) or grid.is_occupied(next):
 				continue
-			var value := Pathfinder.value_at(grid, context.player_field, next)
+			var value := Pathfinder.value_at(grid, from, next)
 			if value > here:
 				here = value
 				best = next

@@ -211,6 +211,21 @@ MAGES = {
     "eau_eveil": {"id": "water_eveil", "name": "Mage de l'Eau éveillé", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
             "demagenta": True, "whole_shapes": True},
+    # Le Colosse : roche, cristal vert et lave n'ont jamais plus de bleu que de vert, `demagenta`
+    # n'y touche pas. Son bâton levé et les éclats de l'impact débordent : formes entières.
+    "terre_eveil": {"id": "earth_eveil", "name": "Mage de la Terre éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
+    # L'Avatar de la Tempête : son bleu électrique a peu de rouge, `demagenta` n'y touche pas. Ses
+    # cheveux d'éclairs et le bâton tendu de l'attaque débordent : formes entières.
+    "foudre_eveil": {"id": "thunder_eveil", "name": "Mage de la Foudre éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
+    # Le Souverain des Vents : blanc, bleu ciel et or. Le fond se voit à travers les spirales ouvertes de son
+    # bâton : le détourage par distance au fond l'y retire, `demagenta` nettoie la frange du bleu clair.
+    "air_eveil": {"id": "air_eveil", "name": "Mage de l'Air éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
     # Le gabarit d'animation : `every_step` garde ses huit images de course. Son épée déborde sur
     # les cases voisines, d'où `whole_shapes`.
     "test": {"id": "test", "name": "Héros d'essai", "source": MAGES_SOURCE,
