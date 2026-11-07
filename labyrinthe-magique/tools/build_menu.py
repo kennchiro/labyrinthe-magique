@@ -37,8 +37,8 @@ OUT_UI = Path("assets/ui")
 OUT_PORTRAITS = OUT_UI / "portraits"
 
 ## Ordre du catalogue — c'est celui de la rangée à l'écran.
-MAGES = ["fire", "water", "earth", "shadow", "thunder", "air",
-         "invocateur", "supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon"]
+MAGES = ["ael_eveille", "ael_ascendant", "ael_prisme", "ael_dragon", "ael", "fire", "water", "earth", "shadow", "thunder", "air",
+         "invocateur", "supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "croupier", "avide"]
 
 ## Taille des portraits sur le disque. La vignette de la rangée fait ~116 points
 ## de large, doublée sur un écran Retina : 384 laisse de la marge sans peser.

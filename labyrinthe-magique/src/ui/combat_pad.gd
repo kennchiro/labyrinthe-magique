@@ -24,6 +24,8 @@ signal action_requested(slot: int)
 ## [{slot, label, color, ready, ratio, locked, hint}] — reconstruit à chaque frame
 ## par l'UIManager. La barre ne sait rien du jeu, elle affiche ce qu'on lui donne.
 var entries: Array[Dictionary] = []
+## Ce qu'un bouton cache en ce moment : {at, color}. Voir `show_beneath`.
+var _beneath: Array[Dictionary] = []
 ## La disposition du joueur. Sans elle, l'éventail déduit ci-dessous.
 var layout: TouchLayout = null
 ## Dessinée dans l'éditeur de disposition : elle se montre, mais ne lance rien.
@@ -90,6 +92,10 @@ const FAN_GAP := 10.0
 const ESCAPE_BONUS := 1.12
 ## Sinus du bouton le plus HAUT de l'éventail (258°), en valeur absolue.
 const FAN_TOP := 0.978
+## Opacité d'un bouton sous lequel passe une gemme, une potion ou un ennemi.
+const SEE_THROUGH := 0.35
+## Rayon du repère posé sur ce qui est caché, en unités d'interface.
+const BENEATH_MARK := 13.0
 
 
 ## Toute la géométrie de l'éventail, DÉDUITE de la place disponible.
@@ -154,6 +160,19 @@ func _fan_centre(slot_index: int) -> Vector2:
 	return corner + Vector2(cos(angle), sin(angle)) * float(fan["radius"])
 
 
+## Jusqu'où l'éventail PAR DÉFAUT s'étend depuis le bord droit, parmi les boutons qui
+## montent au-dessus de `band`. C'est la place que la pause et le carnet doivent lui laisser.
+func reach_from_right(band: float) -> float:
+	var fan := _fan()
+	var reach := 0.0
+	for slot: int in [0] + FAN_ORDER:
+		var radius: float = fan["main"] if slot == 0 else float(fan["skill"]) * (ESCAPE_BONUS if slot == 4 else 1.0)
+		var at := _fan_centre(slot)
+		if at.y - radius < band:
+			reach = maxf(reach, size.x - at.x + radius)
+	return reach
+
+
 func _radius(slot_index: int) -> float:
 	var fan := _fan()
 	var chosen := layout.scale_of(TouchLayout.button_id(slot_index)) if layout != null else 1.0
@@ -207,6 +226,40 @@ func _fire(index: int) -> void:
 func _draw() -> void:
 	for i in entries.size():
 		_draw_button(i, entries[i])
+	# Le repère de ce qui est caché, PAR-DESSUS les boutons : sans lui, une gemme sous
+	# l'éventail n'existait pas pour le joueur.
+	for thing in _beneath:
+		var at: Vector2 = thing["at"]
+		var tint: Color = thing["color"]
+		draw_circle(at, BENEATH_MARK * 0.42, Color(tint, 0.85))
+		draw_arc(at, BENEATH_MARK, 0.0, TAU, 24, Color(tint, 0.95), 3.0)
+
+
+## Ce qui passe sous les boutons : gemmes, potions, ennemis, en coordonnées d'interface.
+## Seul ce qu'un bouton couvre est gardé, et ce bouton devient transparent.
+func show_beneath(things: Array[Dictionary]) -> void:
+	var kept: Array[Dictionary] = []
+	for thing in things:
+		if _slot_over(thing["at"]) >= 0:
+			kept.append(thing)
+	if kept.is_empty() and _beneath.is_empty():
+		return
+	_beneath = kept
+	queue_redraw()
+
+
+func _slot_over(point: Vector2) -> int:
+	for i in entries.size():
+		if point.distance_to(_centre(i)) <= _radius(i):
+			return i
+	return -1
+
+
+func _hides_something(index: int) -> bool:
+	for thing in _beneath:
+		if _slot_over(thing["at"]) == index:
+			return true
+	return false
 
 
 func _draw_button(index: int, entry: Dictionary) -> void:
@@ -217,6 +270,8 @@ func _draw_button(index: int, entry: Dictionary) -> void:
 	var locked: bool = entry.get("locked", false)
 	var ratio: float = clampf(float(entry.get("ratio", 1.0)), 0.0, 1.0)
 	var fade := layout.alpha_of(TouchLayout.button_id(index)) if layout != null else 1.0
+	if _hides_something(index):
+		fade *= SEE_THROUGH
 
 	# Fond dense et teinté de l'élément : à 72 % d'un bleu presque noir, les
 	# boutons se lisaient comme des trous percés dans le labyrinthe.

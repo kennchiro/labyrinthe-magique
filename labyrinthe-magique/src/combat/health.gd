@@ -25,6 +25,8 @@ var shield: int = 0
 var immune := false
 ## Les plaques de l'Archange d'Acier : chacune encaisse un coup ENTIER, quel qu'il soit.
 var plates: int = 0
+## La forme Prisme se brise à 1 PV au lieu de mourir sur ce coup.
+var minimum_current := 0
 
 
 func _init(p_maximum: int) -> void:
@@ -66,7 +68,7 @@ func take(damage: Damage) -> int:
 		shield -= absorbed
 		left -= absorbed
 
-	var dealt: int = mini(current, left)
+	var dealt: int = mini(maxi(0, current - minimum_current), left)
 	current -= dealt
 	damaged.emit(damage.amount, current)
 	if current <= 0:

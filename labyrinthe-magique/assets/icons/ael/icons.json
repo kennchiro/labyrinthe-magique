@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "ael_slash",
+    "ael_wind_cut",
+    "ael_parry",
+    "ael_rush",
+    "ael_roll",
+    "ael_great_slash"
+  ],
+  "size": 256
+}

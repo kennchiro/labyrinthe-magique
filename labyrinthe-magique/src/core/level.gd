@@ -101,6 +101,7 @@ signal potion_collected
 ## Un ennemi vient d'encaisser, de mourir, ou de revenir avec la vague suivante.
 signal enemy_damaged(dealt: int)
 signal enemy_killed
+signal enemy_defeated(species: String, boss: bool, at: Vector2)
 signal enemy_respawned
 signal gem_stolen
 ## Le boss du chapitre surgit, puis il tombe. Le GameManager dit ce que ça veut dire.
@@ -241,6 +242,8 @@ var potions: Array[Potion] = []
 var teleport_system: TeleportSystem = null
 var combat: CombatSystem = null
 var combat_context: CombatContext = null
+var _prism_aura: PrismAura = null
+var _ael_dragon_aura: DragonAura = null
 ## Personnage joué et ses points de vie. Le Level les PORTE, le GameManager les
 ## interprète : c'est lui qui décide qu'à zéro la partie est perdue.
 var character: CharacterStats = null
@@ -268,6 +271,13 @@ var _objective_cell := Vector2i(-1, -1)
 var _ai_timer := 0.0
 var _potion_timer := 0.0
 var _orbs := {}          # index d'ennemi -> MagicOrb en vol
+var _crescents := {}     # index d'ennemi -> FlyingCrescent en vol (le Tranche-vent d'Aël)
+var _ael_guard: GuardFlash = null
+var _ael_orbit: ShardOrbit = null
+## La dernière forme vue : l'évolution monte, le retour du Prisme retombe.
+var _ael_form_seen := -1
+## Le saut d'Aël en cours : la Ruée l'annonce par sa traînée juste après le saut, sinon c'est une roulade.
+var _ael_blink := {}
 var _summon_orbs := {}   # id d'invocation -> MagicOrb en vol
 var _zone_nodes := {}    # id de zone -> ZoneEffect affiché
 ## index d'ennemi -> secondes avant que la vague suivante ne le ramène.
@@ -359,6 +369,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.wall_raised.connect(_on_wall_changed)
 	combat.wall_fell.connect(_on_wall_changed)
 	combat.blink_performed.connect(_on_blink)
+	combat.comet_performed.connect(_ael_comet)
 	combat.summon_spawned.connect(_on_summon_spawned)
 	combat.summon_moved.connect(_on_summon_moved)
 	combat.summon_struck.connect(_on_summon_struck)
@@ -419,6 +430,7 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.astre_burst.connect(_on_astre_burst)
 	combat.stars_changed.connect(_on_stars_changed)
 	combat.star_falling.connect(_on_star_falling)
+	combat.line_erupted.connect(_ael_line)
 	combat.star_trail.connect(_on_star_trail)
 	_on_stars_changed([])
 	combat.enemy_sentenced.connect(_on_enemy_sentenced)
@@ -479,6 +491,24 @@ func load_level(p_config: LevelConfig, p_character: CharacterStats, rng_seed: in
 	combat.dragon_shadow_cast.connect(_on_dragon_shadow_cast)
 	combat.shadow_column.connect(_on_shadow_column)
 	combat.shadow_ended.connect(_on_shadow_ended)
+	combat.lucky_hit.connect(_on_lucky_hit)
+	combat.dice_rolled.connect(_on_dice_rolled)
+	combat.trap_posed.connect(_on_trap_posed)
+	combat.trap_faded.connect(_on_trap_faded)
+	combat.trap_flipped.connect(_on_trap_flipped)
+	combat.coin_flipped.connect(_on_coin_flipped)
+	combat.doubled_spent.connect(_on_doubled_spent)
+	combat.roulette_spun.connect(_on_roulette_spun)
+	combat.roulette_landed.connect(_on_roulette_landed)
+	combat.bites_changed.connect(_on_bites_changed)
+	combat.gulf_opened.connect(_on_gulf_opened)
+	combat.gulf_closed.connect(_on_gulf_closed)
+	combat.devoured.connect(_on_devoured)
+	combat.regurgitated.connect(_on_regurgitated)
+	combat.leap_landed.connect(_on_leap_landed)
+	combat.feast_started.connect(_on_feast_started)
+	combat.feast_bite.connect(_on_feast_bite)
+	combat.feast_ended.connect(_on_feast_ended)
 	combat.enemies_dazed.connect(_on_enemies_dazed)
 	combat.flight_started.connect(_on_flight_started)
 	combat.flight_ended.connect(_on_flight_ended)
@@ -607,6 +637,7 @@ func _process(delta: float) -> void:
 	_update_king_armor()
 	_update_gaoler_chains()
 	_update_dragon_aura()
+	_update_avide_aura()
 	_update_boss(delta, stopped)
 	_update_pickups(delta)
 	_update_orbs()
@@ -792,6 +823,10 @@ func use_ability(slot: int) -> bool:
 		return false
 	_refresh_context()
 	_cast_target = null
+	if character.id == "ael" and ability == character.attack and ability.kind == Ability.Kind.BLAST:
+		var target := combat.find_target(ability, combat_context)
+		if target >= 0 and target < enemies.size():
+			_cast_target = enemies[target].position
 	if not combat.use(ability, combat_context):
 		return false
 	player.play_cast(_cast_target)
@@ -830,7 +865,9 @@ func _refresh_context() -> void:
 	var cells := _enemy_cells()
 	var healths: Array[Health] = []
 	combat_context.bosses.clear()
+	combat_context.enemy_facings.clear()
 	for enemy in enemies:
+		combat_context.enemy_facings.append(enemy.mover.direction)
 		if enemy.is_boss():
 			combat_context.bosses[healths.size()] = true
 		healths.append(enemy.health)
@@ -963,7 +1000,7 @@ var _meteor_rank := 0
 ## ⚠️ LA TERRE ET L'AIR N'Y SONT PAS, à la demande du joueur : leurs dessins restent, et
 ## les shaders ne font que s'y AJOUTER (`DRAWN_MAGES`).
 const PAINTED_MAGES: Array[String] = ["fire", "shadow", "invocateur", "water", "thunder",
-	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon"]
+	"supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "croupier", "avide"]
 const DRAWN_MAGES: Array[String] = ["earth", "air"]
 const EARTH := "earth"
 const AIR := "air"
@@ -1087,7 +1124,7 @@ func _load_character_fx() -> void:
 	_impact_texture = _texture_or_null(folder + "impact.png")
 	# Ces mages n'ont jamais eu de planche d'effets. Le quad tient la place
 	# du dessin que tout le reste du code attend : un mage peint ne l'affiche de toute façon pas.
-	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "test"]:
+	if _impact_texture == null and character.id in ["chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "croupier", "avide", "test", "ael"]:
 		_impact_texture = MagicOrb.painted_quad()
 		_orb_texture = _impact_texture
 	# Les EFFETS DESSINÉS ANIMÉS du personnage, quand sa planche en fournit :
@@ -1215,6 +1252,16 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 		_cast_target = maze_renderer.cell_to_world(path[path.size() - 1])
 		_throw_sacred_flame(path, duration)
 		return
+	if ability.projectile_visual == "langue_fouet" and not path.is_empty():
+		_cast_target = maze_renderer.cell_to_world(path[path.size() - 1])
+		_lash_tongue(path, duration)
+		return
+	if ability.projectile_visual == "tranche_vent" and not path.is_empty():
+		_throw_wind_cut(ability, index, path, duration)
+		return
+	if character.id == CharacterCatalog.AEL and ability == character.attack and not path.is_empty():
+		_throw_wind_cut(ability, index, path, duration)
+		return
 	var points := PackedVector2Array()
 	for cell in path:
 		points.append(maze_renderer.cell_to_world(cell))
@@ -1266,6 +1313,8 @@ func _on_projectile_launched(ability: Ability, index: int, path: Array, duration
 		_arm_fist(orb, GAOLER_PIECES + "poing.png")
 	elif ability.projectile_visual == "crachat_magma":
 		_arm_ball(orb, DRAGON_PIECES + "magma.png")
+	elif ability.projectile_visual == "carte_tranchante":
+		_arm_ball(orb, CROUPIER_PIECES + "dos.png")
 	# LE TRAIT DU SUPRÊME CHANGE DE MATIÈRE À CHAQUE TIR, comme le dit sa fiche.
 	if ability.projectile_visual == "trait_prisme":
 		_prism_rank = (_prism_rank + 1) % 4
@@ -1279,6 +1328,12 @@ func _on_projectile_hit(ability: Ability, index: int, cell: Vector2i) -> void:
 		return
 	if ability.projectile_visual == "onde_marteau":
 		_spawn_painted_burst(cell, 1.5, 0.45, "acier_dash").z_index = 11
+	if _crescents.has(index):
+		var crescent: FlyingCrescent = _crescents.get(index)
+		if crescent != null and is_instance_valid(crescent):
+			crescent.burst()
+		_crescents.erase(index)
+		return
 	if _orbs.has(index):
 		var orb: MagicOrb = _orbs[index]
 		if is_instance_valid(orb):
@@ -1429,6 +1484,14 @@ func _on_turret_planted(id: int, ability: Ability, cell: Vector2i) -> void:
 		_turret_nodes[id] = orbit
 		_spawn_impact(cell, ability.element, 1.0, 0.45)
 		return
+	if character.id == CharacterCatalog.AEL:
+		var sentinel := CrystalSentinel.new()
+		entities.add_child(sentinel)
+		sentinel.position = maze_renderer.cell_to_world(cell)
+		sentinel.setup(TILE_SIZE, _ael_colour())
+		_turret_nodes[id] = sentinel
+		_shake(0.1, 0.3)
+		return
 	var turret: CrystalTurret = TURRET_SCENE.instantiate()
 	entities.add_child(turret)
 	turret.position = maze_renderer.cell_to_world(cell)
@@ -1453,6 +1516,8 @@ func _on_turret_fired(id: int, ability: Ability, cell: Vector2i, index: int) -> 
 	var node: Node2D = _turret_nodes[id]
 	if is_instance_valid(node) and node is StoneOrbit:
 		(node as StoneOrbit).launch(enemies[index].position)
+	elif is_instance_valid(node) and node is CrystalSentinel:
+		(node as CrystalSentinel).fire(enemies[index].position)
 
 
 func _on_turret_faded(id: int) -> void:
@@ -1464,6 +1529,8 @@ func _on_turret_faded(id: int) -> void:
 	if is_instance_valid(node):
 		if node is StoneOrbit:
 			(node as StoneOrbit).stop()
+		elif node is CrystalSentinel:
+			(node as CrystalSentinel).fade()
 		elif node is CrystalTurret:
 			(node as CrystalTurret).fade()
 		else:
@@ -1492,6 +1559,9 @@ func _on_player_made_immune(duration: float) -> void:
 		_spawn_on_player(duration, "cherubin_voile", 0.9)
 		_shake(0.12, 0.3)
 		return
+	if character.id == CharacterCatalog.AEL:
+		_raise_guard(duration)
+		return
 	if _aegis != null and is_instance_valid(_aegis):
 		_aegis.refresh(duration)
 		return
@@ -1501,6 +1571,281 @@ func _on_player_made_immune(duration: float) -> void:
 		_spark_texture)
 	if character.id == EARTH:
 		_spawn_painted_burst(player.mover.nearest_cell(), 1.3, 0.5, "earth_crack")
+
+
+# --- Aël, le héros principal ------------------------------------------------------
+#
+# ⚠️ AUCUN EFFET PARTAGÉ (demande du joueur, 2026-11-04). Chacun de ses 24 sorts a le sien : ni l'effet
+# d'un autre personnage (la téléportation commune, l'éclat d'impact générique, la vague de l'Eau...),
+# ni celui d'un autre de ses propres sorts. Chaque forme a sa matière : l'acier de l'Apprenti, le cristal
+# cyan de l'Éveillé, le cristal bleu et or de l'Ascendant, la lumière d'or du Prisme.
+# `tools/preview_ael.gd` les montre tous image par image.
+
+const AEL_STEEL := Color("#dff4ff")
+const AEL_SHARD := Color("#8fe3ff")
+## La matière de chaque forme. Un seul endroit, comme `Element.COLORS`.
+const AEL_FORM_COLORS := [Color("#dff4ff"), Color("#7fe3ff"), Color("#a9dcff"), Color("#f2c94c"), Color("#ffd15a")]
+
+
+func _ael_colour() -> Color:
+	return AEL_FORM_COLORS[clampi(character.hero_form, 0, AEL_FORM_COLORS.size() - 1)]
+
+
+## Le Tranche-vent de l'Apprenti (un croissant d'air) et la Rafale du Prisme (un dard de lumière).
+func _throw_wind_cut(ability: Ability, index: int, path: Array, duration: float) -> void:
+	var points := PackedVector2Array()
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	_cast_target = points[points.size() - 1]
+	var crescent := FlyingCrescent.new()
+	entities.add_child(crescent)
+	var style := FlyingCrescent.Style.LANCE if ability == character.attack else FlyingCrescent.Style.CRESCENT
+	crescent.setup(points, duration, TILE_SIZE, _ael_colour(), style)
+	_crescents[index] = crescent
+
+
+## La Lame d'éclat de l'Éveillé : après le coup, trois éclats de cristal taillés filent en tournoyant au
+## ras du sol, là où l'Eau déroulait sa vague.
+func _crystal_wake(path: Array, duration: float) -> void:
+	var points := PackedVector2Array([maze_renderer.cell_to_world(player.mover.nearest_cell())])
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	for i in 3:
+		var shard := FlyingCrescent.new()
+		entities.add_child(shard)
+		shard.setup(points, duration * (1.0 + 0.12 * float(i)), TILE_SIZE, _ael_colour(),
+			FlyingCrescent.Style.SHARD)
+		shard.scale = Vector2.ONE * (1.0 - 0.18 * float(i))
+
+
+## Ses trois protections : la garde en croix de l'Apprenti, les plaques de cristal de l'Éveillé, la
+## sphère d'or du Prisme.
+func _raise_guard(duration: float) -> void:
+	if _ael_guard != null and is_instance_valid(_ael_guard):
+		_ael_guard.queue_free()
+	_ael_guard = GuardFlash.new()
+	player.add_child(_ael_guard)
+	_ael_guard.position = Vector2(0.0, -Player.BODY_SCREEN_HEIGHT * 0.5)
+	var style := [GuardFlash.Style.CROSS, GuardFlash.Style.PLATES, GuardFlash.Style.PLATES,
+		GuardFlash.Style.SPHERE, GuardFlash.Style.SCALES][clampi(character.hero_form, 0, 4)] as GuardFlash.Style
+	_ael_guard.setup(float(TILE_SIZE) * 0.75, _ael_colour(), duration, style)
+	_shake(0.08, 0.2)
+
+
+## Un coup renvoyé. L'Apprenti riposte d'un tour de lame ; les plaques de l'Éveillé s'illuminent seules.
+func _riposte(_cell: Vector2i) -> void:
+	if _ael_guard != null and is_instance_valid(_ael_guard):
+		_ael_guard.parry()
+	if character.hero_form == 0:
+		_ael_ring(float(TILE_SIZE) * 1.3, _ael_colour(), 0.16)
+
+
+## Les coups du Dragon d'or qui passent par une explosion : ses Griffes de soleil, son Souffle, l'impact de
+## sa Chute (que sa trace dessine déjà).
+func _dragon_strike(ability: Ability) -> void:
+	var facing := Vector2(combat_context.player_facing) if combat_context != null else Vector2.DOWN
+	if ability == character.attack:
+		var claws := ClawRake.new()
+		entities.add_child(claws)
+		claws.position = player.position + Vector2(0.0, -Player.BODY_SCREEN_HEIGHT * 0.4)
+		claws.setup(facing, ability.radius * float(TILE_SIZE) * 1.5)
+		return
+	if ability.kind == Ability.Kind.COMET:
+		_shake(0.35, 1.0)
+		return
+	var breath := DragonBreath.new()
+	entities.add_child(breath)
+	breath.position = player.position + Vector2(0.0, -Player.BODY_SCREEN_HEIGHT * 0.5)
+	breath.setup(facing, ability.radius * float(TILE_SIZE), deg_to_rad(maxf(ability.arc, 40.0) * 0.5))
+	_shake(0.3, 0.7)
+
+
+## L'ARRÊT SUR IMAGE des Extras d'Aël : le jeu se fige un instant quand le grand coup part.
+func _hit_stop(seconds: float) -> void:
+	Engine.time_scale = 0.05
+	await get_tree().create_timer(seconds, true, false, true).timeout
+	Engine.time_scale = 1.0
+
+
+## La charge de la Transformation, au bouton dédié : la lumière converge vers lui avant l'éclatement.
+func show_transformation_charge() -> void:
+	var gather := GatherLight.new()
+	entities.add_child(gather)
+	gather.position = player.position
+	gather.setup(TILE_SIZE, AEL_FORM_COLORS[3], Transformation.CHARGE_TIME)
+	_shake(0.8, 0.35)
+
+
+## L'Extra de chaque forme qui passe par une explosion : le grand cercle de l'Apprenti, la Nova de
+## cristal de l'Ascendant, et la charge de sa Transformation.
+func _awaken_shard(ability: Ability) -> void:
+	_hit_stop(0.06 + 0.02 * float(character.hero_form))
+	if character.hero_form >= 4:
+		var roar := DragonRoar.new()
+		entities.add_child(roar)
+		roar.position = player.position
+		roar.setup(ability.radius * float(TILE_SIZE), TILE_SIZE)
+		_shake(0.9, 2.0)
+		return
+	if character.hero_form >= 3:
+		_prism_nova(ability)
+		return
+	if ability.kind == Ability.Kind.HERO_TRANSFORM:
+		var gather := GatherLight.new()
+		entities.add_child(gather)
+		gather.position = player.position
+		gather.setup(TILE_SIZE, AEL_FORM_COLORS[3], Transformation.CHARGE_TIME)
+		_shake(0.8, 0.35)
+		return
+	if character.hero_form >= 1:
+		var nova := CrystalNova.new()
+		entities.add_child(nova)
+		nova.position = player.position
+		nova.setup(ability.radius * float(TILE_SIZE), TILE_SIZE, _ael_colour())
+		_shake(0.3, 0.9)
+		return
+	var glint := GemGlint.new()
+	player.add_child(glint)
+	glint.position = Vector2(0.0, -Player.BODY_SCREEN_HEIGHT * 0.55)
+	glint.setup(float(TILE_SIZE) * 0.6, AEL_SHARD)
+	_ael_ring(ability.radius * float(TILE_SIZE), AEL_SHARD, 0.3)
+	_ael_ring(ability.radius * float(TILE_SIZE) * 0.6, AEL_STEEL, 0.22)
+	_shake(0.25, 0.8)
+
+
+## Le Prisme ultime : une explosion de lasers, qui file droit sur chaque ennemi qu'elle touche.
+func _prism_nova(ability: Ability) -> void:
+	var reach := ability.radius * float(TILE_SIZE)
+	var targets: Array[Vector2] = []
+	for i in enemies.size():
+		if combat_context.enemy_alive(i) and _structure_at(i) == null \
+				and enemies[i].position.distance_to(player.position) <= reach:
+			targets.append(enemies[i].position)
+	var nova := PrismNova.new()
+	entities.add_child(nova)
+	nova.position = player.position
+	nova.setup(reach, TILE_SIZE, targets)
+	_shake(0.7, 1.8)
+
+
+func _ael_ring(radius: float, colour: Color, seconds: float) -> void:
+	var ring := SlashArc.new()
+	player.add_child(ring)
+	ring.position = Vector2(0.0, -Player.BODY_SCREEN_HEIGHT * 0.5)
+	ring.setup_ring(radius, colour, seconds)
+	ring.z_index = 2
+
+
+## Les charges du sort 3. L'Éveillé file sur un trait de lumière et des aiguilles de cristal jaillissent
+## derrière lui ; l'Ascendant passe comme une lumière réfractée, en deux traits brisés ; le Prisme lance devant
+## lui une volée de lames de lumière qui le précèdent.
+func _ael_charge(form: int, from: Vector2, to: Vector2) -> void:
+	player.play_dash(from, 0.16)
+	_shake(0.2, 0.6)
+	if form == 1:
+		var points := PackedVector2Array()
+		var steps := maxi(2, int(from.distance_to(to) / float(TILE_SIZE)) + 1)
+		for i in steps:
+			points.append(from.lerp(to, float(i) / float(steps - 1)))
+		var line := CrystalLine.new()
+		entities.add_child(line)
+		line.setup(points, 0.16, 0.8, TILE_SIZE, _ael_colour())
+		return
+	if form == 2:
+		for side: float in [-1.0, 1.0]:
+			var link := PrismLink.new()
+			entities.add_child(link)
+			var shift := (to - from).orthogonal().normalized() * float(TILE_SIZE) * 0.3 * side
+			link.setup(from + shift, to + shift, TILE_SIZE, _ael_colour())
+		return
+	for i in 4:
+		var blade := BladeThrow.new()
+		entities.add_child(blade)
+		var spread := (to - from).orthogonal().normalized() * float(TILE_SIZE) * 0.35 * (float(i) - 1.5)
+		blade.setup(from + spread, to + spread + (to - from).normalized() * float(TILE_SIZE), TILE_SIZE, _ael_colour())
+
+
+## Ses deux rayons : le Rayon de gemme de l'Éveillé, à facettes, et le Prisme ultime, une colonne d'or
+## parcourue d'anneaux.
+func _ael_beam(points: PackedVector2Array) -> void:
+	var ultimate := character.hero_form >= 3
+	var beam := PrismBeam.new()
+	entities.add_child(beam)
+	beam.setup(points, TILE_SIZE, _ael_colour(), 0.9 if ultimate else 0.7, ultimate)
+	_shake(0.45 if ultimate else 0.18, 1.3 if ultimate else 0.5)
+
+
+## La Frappe éclair : un trait au sol, et des aiguilles de cristal qui jaillissent derrière lui.
+func _ael_line(ability: Ability, path: Array, duration: float) -> void:
+	if character.id != CharacterCatalog.AEL or path.is_empty():
+		return
+	var points := PackedVector2Array()
+	for cell in path:
+		points.append(maze_renderer.cell_to_world(cell))
+	var line := CrystalLine.new()
+	entities.add_child(line)
+	line.setup(points, maxf(duration, 0.05 * float(points.size())), maxf(1.0, ability.duration), TILE_SIZE,
+		_ael_colour())
+	_shake(0.12, 0.35)
+
+
+func _spawn_star_burst(cell: Vector2i, size_tiles: float, colour: Color) -> void:
+	var burst := StarBurst.new()
+	entities.add_child(burst)
+	burst.position = maze_renderer.cell_to_world(cell)
+	burst.setup(float(TILE_SIZE) * size_tiles, colour)
+
+
+## Ses sauts : il arrive tout de suite, et son dessin rattrape le trajet. Chaque forme a sa trace — la
+## Ruée et la Roulade de l'Apprenti, le Pas de lumière de l'Éveillé, les Ailes de l'Ascendant, la Comète
+## et la Transmission du Prisme. La Ruée et la Comète s'annoncent juste après le saut.
+func _ael_leap(from: Vector2i, to: Vector2i) -> void:
+	_ael_blink = {"from": maze_renderer.cell_to_world(from), "to": maze_renderer.cell_to_world(to),
+		"rush": false, "comet": false}
+	player.mover.teleport_to(to)
+	player.snap_to_mover()
+	_refresh_ai()
+	_ael_land.call_deferred()
+
+
+func _ael_land() -> void:
+	if _ael_blink.is_empty() or player == null:
+		return
+	var from: Vector2 = _ael_blink["from"]
+	var to: Vector2 = _ael_blink["to"]
+	var form := character.hero_form
+	# Le sort 3 de l'Éveillé, de l'Ascendant et du Prisme : une charge qui frappe en chemin, chacune à sa façon.
+	if _ael_blink["rush"] and form >= 1 and form <= 3:
+		_ael_charge(form, from, to)
+		_ael_blink = {}
+		return
+	var style := BladeStreak.Style.GHOSTS
+	if form >= 4:
+		style = BladeStreak.Style.DIVE if _ael_blink["comet"] else BladeStreak.Style.SOAR
+	elif _ael_blink["comet"]:
+		style = BladeStreak.Style.COMET
+	elif form == 1:
+		style = BladeStreak.Style.MOTES
+	elif form == 2:
+		style = BladeStreak.Style.WINGS
+	elif form >= 3:
+		style = BladeStreak.Style.TRANSMIT
+	elif not _ael_blink["rush"]:
+		# La Roulade : c'est le corps qui roule, avec un nuage de poussière au départ et un tour de lame à l'arrivée.
+		player.play_dash(from, 0.3, 1.0)
+		_spawn_star_burst(maze_renderer.world_to_cell(from), 0.9, Color("#c9a77c"))
+		_ael_ring(float(TILE_SIZE) * 0.9, AEL_STEEL, 0.25)
+		_shake(0.1, 0.3)
+		_ael_blink = {}
+		return
+	var streak := BladeStreak.new()
+	entities.add_child(streak)
+	streak.setup(from, to, TILE_SIZE, _ael_colour(), player.sprite, player.scale, style)
+	# La Transmission ne glisse pas : il disparaît et reparaît. La Chute tombe du ciel sur sa case.
+	if style != BladeStreak.Style.TRANSMIT and style != BladeStreak.Style.DIVE:
+		player.play_dash(from, 0.18 if style == BladeStreak.Style.COMET else 0.12)
+	_shake(0.18, 0.5)
+	_ael_blink = {}
 
 
 # --- Le Porte-Lumière -------------------------------------------------------------
@@ -1524,6 +1869,9 @@ func _on_beam_fired(from: Vector2i, cells: Array) -> void:
 	var points := PackedVector2Array([maze_renderer.cell_to_world(from)])
 	for cell: Vector2i in cells:
 		points.append(maze_renderer.cell_to_world(cell))
+	if character.id == CharacterCatalog.AEL:
+		_ael_beam(points)
+		return
 	var hits: Array[int] = []
 	for enemy in enemies:
 		var rank := cells.find(enemy.mover.nearest_cell())
@@ -1619,10 +1967,20 @@ func _constellation_size() -> int:
 
 
 func _on_star_falling(cell: Vector2i, lead: float) -> void:
+	if character.id == CharacterCatalog.AEL:
+		var shard := ShardRain.new()
+		entities.add_child(shard)
+		shard.position = maze_renderer.cell_to_world(cell)
+		shard.setup(lead, TILE_SIZE, _ael_colour())
+		return
 	_spawn_comet(cell, lead / COMET_LAND, FALLING_SIZE)
 
 
 func _on_star_trail(from: Vector2i, to: Vector2i) -> void:
+	# Chez Aël, c'est la Ruée qui frappe en chemin : sa traînée est celle de `_ael_leap`.
+	if character.id == CharacterCatalog.AEL:
+		_ael_blink["rush"] = true
+		return
 	var trail := StarTrail.new()
 	entities.add_child(trail)
 	trail.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE,
@@ -2247,6 +2605,634 @@ func _on_shadow_ended() -> void:
 	_shake(0.4, 0.8)
 
 
+# --- Le Croupier des Enfers -----------------------------------------------------------
+
+const CROUPIER_PIECES := "res://assets/characters/croupier/pieces/"
+const GOLD := Color("#e8b54a")
+const GOLD_PALE := Color("#fff2c4")
+const CARD_TILES := 0.62
+const DIE_TILES := 0.6
+const COIN_TILES := 0.75
+const CHIP_TILES := 0.32
+const WHEEL_TILES := 8.0
+## La bille court près du bord de la roue, dans la couronne des cases.
+const BALL_RING := 0.4
+const ROULETTE_CELLS := 37
+const FLIP_TIME := 0.18
+
+var _traps_drawn := {}                 # case -> Sprite2D de la carte face cachée
+var _card_decoy: Sprite2D = null
+var _doubled_glow: CPUParticles2D = null
+var _roulette_wheel: Sprite2D = null
+var _roulette_ball: Sprite2D = null
+var _roulette_veil: PaintedBurst = null
+
+
+func _piece_sprite(texture_name: String, tiles: float, at: Vector2, z: int = 12) -> Sprite2D:
+	var sprite := Sprite2D.new()
+	sprite.texture = load(CROUPIER_PIECES + texture_name)
+	entities.add_child(sprite)
+	sprite.position = at
+	sprite.z_index = z
+	var unit := tiles * float(TILE_SIZE) / float(maxi(sprite.texture.get_width(), sprite.texture.get_height()))
+	sprite.scale = Vector2(unit, unit)
+	return sprite
+
+
+## Un grand mot d'or au-dessus de la scène : le total des dés, ROUGE, NOIR, JACKPOT.
+func _gold_words(text: String, at: Vector2, size_tiles: float, tint: Color = GOLD) -> void:
+	var words := Label.new()
+	words.text = text
+	words.add_theme_font_size_override("font_size", int(size_tiles * float(TILE_SIZE)))
+	words.add_theme_color_override("font_color", tint)
+	words.add_theme_color_override("font_outline_color", Color("#15100f"))
+	words.add_theme_constant_override("outline_size", int(float(TILE_SIZE) * 0.12))
+	words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	words.z_index = 30
+	entities.add_child(words)
+	words.reset_size()
+	words.position = at - Vector2(words.size.x * 0.5, words.size.y)
+	words.pivot_offset = words.size * 0.5
+	words.scale = Vector2.ONE * 0.4
+	var tween := words.create_tween()
+	tween.tween_property(words, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(0.7)
+	tween.tween_property(words, "position:y", words.position.y - float(TILE_SIZE) * 0.6, 0.4)
+	tween.parallel().tween_property(words, "modulate:a", 0.0, 0.4)
+	tween.tween_callback(words.queue_free)
+
+
+## Des cartes qui partent en éventail en tournant, puis s'effacent.
+func _card_spray(cell: Vector2i, count: int) -> void:
+	var centre := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.5)
+	for k in count:
+		var card := _piece_sprite("dos.png", CARD_TILES * 0.6, centre)
+		var angle := TAU * float(k) / float(count) + randf() * 0.4
+		var reach := float(TILE_SIZE) * randf_range(0.8, 1.6)
+		var tween := card.create_tween().set_parallel()
+		tween.tween_property(card, "position", centre + Vector2(cos(angle), sin(angle) - 0.4) * reach, 0.45) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween.tween_property(card, "rotation", randf_range(-2.0, 2.0) * PI, 0.45)
+		tween.tween_property(card, "modulate:a", 0.0, 0.25).set_delay(0.3)
+		tween.chain().tween_callback(card.queue_free)
+
+
+## Des pièces et des jetons qui jaillissent, puis retombent.
+func _coin_spray(cell: Vector2i, count: int) -> void:
+	var centre := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.5)
+	for k in count:
+		var coin := _piece_sprite("face.png" if k % 2 == 0 else "jeton.png", CHIP_TILES, centre)
+		var side := randf_range(-1.0, 1.0) * float(TILE_SIZE) * 0.9
+		var peak := centre + Vector2(side * 0.5, -float(TILE_SIZE) * randf_range(0.7, 1.3))
+		var land := centre + Vector2(side, float(TILE_SIZE) * 0.35)
+		var tween := coin.create_tween()
+		tween.tween_property(coin, "position", peak, 0.22).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(coin, "position", land, 0.26).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(coin, "modulate:a", 0.0, 0.25)
+		tween.tween_callback(coin.queue_free)
+
+
+func _on_lucky_hit(_index: int, cell: Vector2i) -> void:
+	_front_burst(cell, 1.25, 0.45, "croupier_eclat")
+	_coin_spray(cell, 6)
+	_shake(0.12, 0.35)
+
+
+func _on_dice_rolled(from: Vector2i, cells: Array, first: int, second: int) -> void:
+	if cells.is_empty():
+		return
+	var start := maze_renderer.cell_to_world(from) + Vector2(0.0, -TILE_SIZE * 0.4)
+	var end_cell: Vector2i = cells[cells.size() - 1]
+	var finish := maze_renderer.cell_to_world(end_cell) + Vector2(0.0, -TILE_SIZE * 0.4)
+	var roll_time := 0.12 + 0.06 * float(cells.size())
+	for side: float in [-1.0, 1.0]:
+		var die := _piece_sprite("de.png", DIE_TILES, start + Vector2(side * TILE_SIZE * 0.22, 0.0))
+		var tween := die.create_tween().set_parallel()
+		tween.tween_property(die, "position", finish + Vector2(side * TILE_SIZE * 0.25, 0.0), roll_time) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(die, "rotation", side * TAU * 2.5, roll_time).set_ease(Tween.EASE_OUT)
+		tween.chain().tween_interval(0.5)
+		tween.chain().tween_property(die, "modulate:a", 0.0, 0.25)
+		tween.chain().tween_callback(die.queue_free)
+	for k in cells.size():
+		var cell: Vector2i = cells[k]
+		get_tree().create_timer(0.06 * float(k)).timeout.connect(func() -> void:
+			_spawn_painted_burst(cell, 0.95, 0.4, "croupier_choc"))
+	var double := first == second
+	get_tree().create_timer(roll_time).timeout.connect(func() -> void:
+		_gold_words("%d" % (first + second) + (" DOUBLE !" if double else ""),
+			finish + Vector2(0.0, -TILE_SIZE * 0.9), 1.1 if double else 0.9)
+		_front_burst(end_cell, 1.8 if double else 1.2, 0.5, "croupier_explosion" if double else "croupier_eclat")
+		if double:
+			_spawn_wave(end_cell, 7.0, 0.45, "croupier_onde")
+			_spawn_slow_motion(0.08, 0.3)
+		_shake(0.3 if double else 0.15, 0.7 if double else 0.4))
+
+
+func _on_trap_posed(cell: Vector2i, _seconds: float) -> void:
+	_on_trap_faded(cell)
+	var at := maze_renderer.cell_to_world(cell)
+	var card := _piece_sprite("dos.png", CARD_TILES, at + Vector2(0.0, -TILE_SIZE * 0.9), 8)
+	var rest := card.scale * Vector2(1.0, 0.55)
+	card.rotation = PI
+	var tween := card.create_tween().set_parallel()
+	tween.tween_property(card, "position", at, 0.3).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(card, "rotation", 0.0, 0.3)
+	tween.tween_property(card, "scale", rest, 0.3)
+	tween.chain().tween_callback(func() -> void: _spawn_painted_burst(cell, 0.9, 0.35, "croupier_choc"))
+	# Elle luit faiblement, pour qu'on la retrouve au sol.
+	var glow := card.create_tween().set_loops()
+	glow.tween_property(card, "modulate", Color(1.35, 1.2, 0.9), 0.6).set_delay(0.3)
+	glow.tween_property(card, "modulate", Color.WHITE, 0.6)
+	_traps_drawn[cell] = card
+
+
+func _on_trap_faded(cell: Vector2i) -> void:
+	# Non typée : une carte déjà libérée garde une référence qu'un type refuserait.
+	var card: Variant = _traps_drawn.get(cell)
+	_traps_drawn.erase(cell)
+	if card != null and is_instance_valid(card):
+		(card as Sprite2D).queue_free()
+
+
+func _on_trap_flipped(cell: Vector2i, suit: int, targets: Array) -> void:
+	_on_trap_faded(cell)
+	var at := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.7)
+	var faces := ["as_feu.png", "dame_glace.png", "roi_foudre.png"]
+	var figure := _piece_sprite(faces[suit], CARD_TILES * 1.5, at, 13)
+	var full := figure.scale * Vector2(1.0, CameraRules.stand_scale())
+	# Elle se dresse et se retourne d'un coup : sa largeur passe par zéro.
+	figure.scale = Vector2(0.0, full.y)
+	var tween := figure.create_tween()
+	tween.tween_property(figure, "scale", full, FLIP_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(0.55)
+	tween.tween_property(figure, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(figure.queue_free)
+	_front_burst(cell, 1.2, 0.4, "croupier_eclat")
+	match suit:
+		CombatSystem.Suit.FIRE:
+			for target: Vector2i in targets:
+				_front_burst(target, 1.5, 0.55, "braise_explosion")
+				_spawn_painted_burst(target, 1.6, 1.0, "braise_fissure")
+		CombatSystem.Suit.ICE:
+			for target: Vector2i in targets:
+				_front_burst(target, 1.3, 0.45, "geolier_eclat")
+				_spawn_painted_burst(target, 1.6, 1.1, "geolier_givre")
+				_frost_shards(target, 12)
+		CombatSystem.Suit.THUNDER:
+			var from := at
+			for target: Vector2i in targets:
+				var to := maze_renderer.cell_to_world(target) + Vector2(0.0, -TILE_SIZE * 0.5)
+				var arc: LightningArc = ARC_SCENE.instantiate()
+				entities.add_child(arc)
+				arc.setup(from, to, Color("#ffd93a"), float(TILE_SIZE) * 0.16, 0.45)
+				_front_burst(target, 1.1, 0.4, "croupier_eclat")
+				from = to
+	_spawn_slow_motion(0.06, 0.3)
+	_shake(0.28, 0.65)
+
+
+## La pièce monte en tournant au-dessus de lui, ralentit, et retombe sur sa face.
+func _on_coin_flipped(face: bool) -> void:
+	if player == null:
+		return
+	var base := player.position + Vector2(0.0, -TILE_SIZE * 1.3)
+	var coin := _piece_sprite("face.png", COIN_TILES, base, 14)
+	var unit := coin.scale
+	var face_texture: Texture2D = load(CROUPIER_PIECES + "face.png")
+	var pile_texture: Texture2D = load(CROUPIER_PIECES + "pile.png")
+	var spin := func(t: float) -> void:
+		var turn := cos(t * TAU * 5.0)
+		coin.scale = Vector2(unit.x * absf(turn), unit.y)
+		coin.texture = face_texture if turn >= 0.0 else pile_texture
+		coin.position = base + Vector2(0.0, -sin(t * PI) * float(TILE_SIZE) * 1.1)
+	var tween := coin.create_tween()
+	tween.tween_method(spin, 0.0, 1.0, 0.75).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_callback(func() -> void:
+		coin.texture = face_texture if face else pile_texture
+		coin.scale = unit * 1.25
+		_gold_words("FACE !" if face else "PILE !", base + Vector2(0.0, -TILE_SIZE * 0.6), 0.5)
+		if player != null:
+			_front_burst(player.mover.nearest_cell(), 1.4, 0.5, "croupier_eclat")
+			_coin_spray(player.mover.nearest_cell(), 5)
+		_shake(0.18, 0.45)
+		if not face:
+			_raise_doubled_glow())
+	tween.tween_interval(0.5)
+	tween.tween_property(coin, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(coin.queue_free)
+	_spawn_slow_motion(0.1, 0.4)
+
+
+## Pile : une flamme d'or l'entoure tant qu'il lui reste des coups doublés.
+func _raise_doubled_glow() -> void:
+	_on_doubled_spent()
+	if player == null or combat.doubled_left() <= 0:
+		return
+	_doubled_glow = FxTextures.flame_emitter(26, 0.5, TILE_SIZE * 0.14, Color(GOLD_PALE, 0.95),
+		Color(GOLD, 0.0), -TILE_SIZE * 1.6, 60.0)
+	player.add_child(_doubled_glow)
+	_doubled_glow.position = Vector2(0.0, -TILE_SIZE * 0.45)
+	_doubled_glow.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	_doubled_glow.emission_sphere_radius = TILE_SIZE * 0.35
+	_doubled_glow.emitting = true
+
+
+func _on_doubled_spent() -> void:
+	if _doubled_glow != null and is_instance_valid(_doubled_glow):
+		_doubled_glow.queue_free()
+	_doubled_glow = null
+
+
+func _pose_card_decoy(cell: Vector2i, seconds: float) -> void:
+	var at := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.5)
+	_card_decoy = _piece_sprite("dos.png", CARD_TILES * 1.3, at, 9)
+	_card_decoy.scale *= Vector2(1.0, CameraRules.stand_scale())
+	var tween := _card_decoy.create_tween().set_loops(maxi(1, int(seconds / 0.5)))
+	tween.tween_property(_card_decoy, "modulate", Color(1.5, 1.3, 0.9), 0.25)
+	tween.tween_property(_card_decoy, "modulate", Color.WHITE, 0.25)
+
+
+func _free_roulette() -> void:
+	for node: Node in [_roulette_wheel, _roulette_ball, _roulette_veil]:
+		if node != null and is_instance_valid(node):
+			node.queue_free()
+	_roulette_wheel = null
+	_roulette_ball = null
+	_roulette_veil = null
+
+
+## La roue apparaît au-dessus de la carte, tourne, ralentit, et la bille s'arrête en haut sur la case
+## tirée : le zéro est en haut de l'image, le rouge 32 à sa droite, le noir 26 à sa gauche.
+func _on_roulette_spun(cell: Vector2i, result: int, seconds: float) -> void:
+	if player == null:
+		return
+	_free_roulette()
+	var centre := player.position
+	_roulette_veil = _spawn_painted_burst(cell, 3.0, seconds + 1.6, "croupier_voile")
+	_roulette_veil.span_tiles(TILE_SIZE, 40.0)
+	_roulette_veil.z_index = 3
+	_roulette_veil.position = centre
+	_roulette_wheel = _piece_sprite("roulette.png", WHEEL_TILES, centre, 20)
+	_roulette_wheel.modulate = Color(1.0, 1.0, 1.0, 0.93)
+	var full := _roulette_wheel.scale
+	_roulette_wheel.scale = full * 0.2
+	var step := TAU / float(ROULETTE_CELLS)
+	var offset := 0.0
+	if result == CombatSystem.Slot.RED:
+		offset = -step
+	elif result == CombatSystem.Slot.BLACK:
+		offset = step
+	var wheel_tween := _roulette_wheel.create_tween()
+	wheel_tween.tween_property(_roulette_wheel, "scale", full, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	wheel_tween.parallel().tween_property(_roulette_wheel, "rotation", TAU * 5.0 + offset, seconds) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUART)
+	_roulette_ball = _piece_sprite("bille.png", 0.42, centre, 21)
+	var ring := WHEEL_TILES * BALL_RING * float(TILE_SIZE)
+	var ball := _roulette_ball
+	var orbit := func(angle: float) -> void:
+		if is_instance_valid(ball):
+			ball.position = centre + Vector2(cos(angle), sin(angle)) * ring
+	ball.create_tween().tween_method(orbit, -PI / 2.0 + TAU * 7.0, -PI / 2.0, seconds) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	_front_burst(cell, 1.6, 0.5, "croupier_eclat")
+	_coin_spray(cell, 10)
+	_shake(0.5, 0.6)
+
+
+func _on_roulette_landed(result: int, cells: Array) -> void:
+	var centre := player.position if player != null else Vector2.ZERO
+	match result:
+		CombatSystem.Slot.ZERO:
+			_gold_words("JACKPOT !", centre + Vector2(0.0, -TILE_SIZE * 1.6), 1.0)
+			for cell: Vector2i in cells:
+				var to := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.5)
+				var arc: LightningArc = ARC_SCENE.instantiate()
+				entities.add_child(arc)
+				arc.setup(to + Vector2(0.0, -TILE_SIZE * 4.0), to, GOLD, float(TILE_SIZE) * 0.2, 0.5)
+				_front_burst(cell, 1.8, 0.6, "croupier_explosion")
+				_coin_spray(cell, 8)
+			_spawn_slow_motion(0.16, 0.25)
+			_shake(0.7, 1.0)
+		CombatSystem.Slot.RED:
+			_gold_words("ROUGE", centre + Vector2(0.0, -TILE_SIZE * 1.6), 0.9, Color("#ff4a3a"))
+			for cell: Vector2i in cells:
+				_front_burst(cell, 1.3, 0.9, "dragon_colonne")
+				_front_burst(cell, 1.4, 0.5, "braise_explosion")
+			_spawn_slow_motion(0.1, 0.3)
+			_shake(0.5, 0.8)
+		_:
+			_gold_words("NOIR", centre + Vector2(0.0, -TILE_SIZE * 1.6), 0.9, Color("#d8d0c8"))
+			for cell: Vector2i in cells:
+				_front_burst(cell, 1.6, 0.6, "croupier_noir")
+				_spawn_painted_burst(cell, 1.1, 2.0, "croupier_gangue")
+			_spawn_slow_motion(0.1, 0.3)
+			_shake(0.5, 0.8)
+	if player != null:
+		_spawn_wave(player.mover.nearest_cell(), 18.0, WAVE_TIME, "croupier_onde")
+	for node: Node in [_roulette_wheel, _roulette_ball]:
+		if node != null and is_instance_valid(node):
+			var fade := node.create_tween()
+			fade.tween_interval(0.6)
+			fade.tween_property(node, "modulate:a", 0.0, 0.45)
+			fade.tween_callback(node.queue_free)
+	_roulette_wheel = null
+	_roulette_ball = null
+
+
+# --- L'Avide, Démon de la Faim ---------------------------------------------------------
+
+const AVIDE_PIECES := "res://assets/characters/avide/pieces/"
+const BILE := Color("#c8e830")
+const BILE_PALE := Color("#f2ffb0")
+const BILE_DEEP := Color("#5a7a12")
+## La langue part du ventre, et s'épaissit avec lui.
+const TONGUE_WIDTH := 0.42
+const TONGUE_LIFT := 0.6
+const GULF_FILL := 0.55
+const JAW_TILES := 1.6
+const BILE_BALL_TILES := 0.55
+const FEAST_MOUTH_TILES := 4.5
+
+var _avide_aura: CPUParticles2D = null
+var _gulf_mouth: Sprite2D = null
+var _feast_mouth: Sprite2D = null
+var _feast_veil: PaintedBurst = null
+
+
+func _avide_sprite(texture_name: String, tiles: float, at: Vector2, z: int = 12) -> Sprite2D:
+	var sprite := Sprite2D.new()
+	sprite.texture = load(AVIDE_PIECES + texture_name)
+	entities.add_child(sprite)
+	sprite.position = at
+	sprite.z_index = z
+	var unit := tiles * float(TILE_SIZE) / float(maxi(sprite.texture.get_width(), sprite.texture.get_height()))
+	sprite.scale = Vector2(unit, unit)
+	return sprite
+
+
+## Une vapeur verte monte de lui ; plus il a mangé, plus elle est épaisse.
+func _update_avide_aura() -> void:
+	if character == null or character.id != "avide" or player == null:
+		return
+	if _avide_aura == null or not is_instance_valid(_avide_aura) or _avide_aura.get_parent() != player:
+		_avide_aura = FxTextures.flame_emitter(14, 0.9, TILE_SIZE * 0.12, Color(BILE_PALE, 0.8),
+			Color(BILE_DEEP, 0.0), -TILE_SIZE * 1.1, 40.0)
+		player.add_child(_avide_aura)
+		_avide_aura.position = Vector2(0.0, -TILE_SIZE * 0.55)
+		_avide_aura.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		_avide_aura.emission_sphere_radius = TILE_SIZE * 0.3
+		_avide_aura.direction = Vector2.UP
+		_avide_aura.emitting = true
+	_avide_aura.speed_scale = 1.0 + 0.3 * float(combat.bites())
+
+
+func _bile_splash(cell: Vector2i, amount: int) -> void:
+	var drops := FxTextures.flame_emitter(amount, 0.6, TILE_SIZE * 0.13, Color(BILE_PALE, 0.95),
+		Color(BILE_DEEP, 0.0), TILE_SIZE * 5.0, 180.0, false)
+	drops.initial_velocity_min = TILE_SIZE * 1.4
+	drops.initial_velocity_max = TILE_SIZE * 3.2
+	entities.add_child(drops)
+	drops.position = maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.45)
+	drops.z_index = 11
+	drops.one_shot = true
+	drops.explosiveness = 0.9
+	drops.emitting = true
+	get_tree().create_timer(drops.lifetime + 0.4).timeout.connect(drops.queue_free)
+
+
+func _bile_streak(from: Vector2i, to: Vector2i, seconds: float) -> void:
+	var streak := BladeDash.new()
+	entities.add_child(streak)
+	streak.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE, seconds)
+	streak.tint(BILE_PALE, BILE, BILE_DEEP)
+
+
+func _refresh_growth() -> void:
+	if player == null or character == null or character.id != "avide":
+		return
+	var target := 1.0 + CombatSystem.BITE_SIZE * float(combat.bites())
+	if combat.feasting():
+		target *= CombatSystem.FEAST_SIZE
+	player.create_tween().tween_method(player.set_growth, player.growth, target, 0.3) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _on_bites_changed(_count: int, gained: bool) -> void:
+	_refresh_growth()
+	if player == null:
+		return
+	var cell := player.mover.nearest_cell()
+	if gained:
+		_front_burst(cell, 1.1, 0.4, "avide_eclat")
+		_bile_splash(cell, 8)
+	else:
+		_dragon_smoke_puff(cell, 6)
+
+
+## La langue s'étire du ventre au bout de sa course, le long du couloir, puis se rétracte.
+func _lash_tongue(path: Array, duration: float) -> void:
+	if player == null or path.size() < 2:
+		return
+	var points := PackedVector2Array([player.position + Vector2(0.0, -TILE_SIZE * TONGUE_LIFT)])
+	for k in range(1, path.size()):
+		points.append(maze_renderer.cell_to_world(path[k]) + Vector2(0.0, -TILE_SIZE * 0.5))
+	var tongue := Line2D.new()
+	entities.add_child(tongue)
+	# Elle dessine en positions du monde : le redressement de `WorldStage` la ferait glisser.
+	tongue.scale = Vector2.ONE
+	tongue.position = Vector2.ZERO
+	tongue.z_index = 12
+	tongue.texture = load(AVIDE_PIECES + "langue.png")
+	tongue.texture_mode = Line2D.LINE_TEXTURE_STRETCH
+	tongue.width = TILE_SIZE * TONGUE_WIDTH * player.growth
+	tongue.joint_mode = Line2D.LINE_JOINT_ROUND
+	var reach := func(t: float) -> void:
+		if is_instance_valid(tongue):
+			tongue.points = _polyline_part(points, t)
+	var out := clampf(duration, 0.1, 0.3)
+	var tween := tongue.create_tween()
+	tween.tween_method(reach, 0.05, 1.0, out).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	var end_cell: Vector2i = path[path.size() - 1]
+	tween.tween_callback(func() -> void:
+		_front_burst(end_cell, 0.95, 0.35, "avide_choc")
+		_bile_splash(end_cell, 6))
+	tween.tween_interval(0.06)
+	tween.tween_method(reach, 1.0, 0.0, 0.14).set_ease(Tween.EASE_IN)
+	tween.tween_callback(tongue.queue_free)
+
+
+## Le début d'une ligne brisée, sur une part `t` de sa longueur.
+func _polyline_part(points: PackedVector2Array, t: float) -> PackedVector2Array:
+	var total := 0.0
+	for k in range(1, points.size()):
+		total += points[k - 1].distance_to(points[k])
+	var left := total * clampf(t, 0.0, 1.0)
+	var out := PackedVector2Array([points[0]])
+	for k in range(1, points.size()):
+		var piece := points[k - 1].distance_to(points[k])
+		if left >= piece:
+			out.append(points[k])
+			left -= piece
+			continue
+		out.append(points[k - 1].lerp(points[k], left / maxf(piece, 0.001)))
+		break
+	if out.size() < 2:
+		out.append(points[0] + Vector2(0.5, 0.0))
+	return out
+
+
+func _on_gulf_opened(cell: Vector2i, radius: float, seconds: float) -> void:
+	_on_gulf_gone()
+	var at := maze_renderer.cell_to_world(cell)
+	_gulf_mouth = _avide_sprite("gouffre.png", radius * 2.0 * GULF_FILL, at, 7)
+	var full := _gulf_mouth.scale
+	_gulf_mouth.scale = Vector2.ZERO
+	var tween := _gulf_mouth.create_tween().set_parallel()
+	tween.tween_property(_gulf_mouth, "scale", full, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_gulf_mouth, "rotation", 0.8, seconds)
+	_spawn_painted_burst(cell, radius, seconds + 0.3, "avide_fissure")
+	_spawn_wave(cell, radius * 2.5, 0.5, "avide_onde")
+	_bile_splash(cell, 14)
+	_shake(0.3, 0.6)
+
+
+func _on_gulf_gone() -> void:
+	if _gulf_mouth != null and is_instance_valid(_gulf_mouth):
+		_gulf_mouth.queue_free()
+	_gulf_mouth = null
+
+
+func _on_gulf_closed(cell: Vector2i, cells: Array) -> void:
+	if _gulf_mouth != null and is_instance_valid(_gulf_mouth):
+		var mouth := _gulf_mouth
+		var close := mouth.create_tween()
+		close.tween_property(mouth, "scale", mouth.scale * 1.15, 0.06)
+		close.tween_property(mouth, "scale", Vector2.ZERO, 0.12).set_ease(Tween.EASE_IN)
+		close.tween_callback(mouth.queue_free)
+	_gulf_mouth = null
+	_front_burst(cell, 1.8, 0.5, "avide_explosion")
+	for target: Vector2i in cells:
+		_front_burst(target, 1.0, 0.4, "avide_eclat")
+		_bile_splash(target, 10)
+	_spawn_slow_motion(0.08, 0.3)
+	_shake(0.4, 0.85)
+
+
+## La gueule du ventre s'ouvre sur la proie et se referme ; avalée, sa vie remonte jusqu'à lui.
+func _on_devoured(_index: int, cell: Vector2i, swallowed: bool) -> void:
+	var at := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.55)
+	var jaw := _avide_sprite("gueule.png", JAW_TILES, at, 12)
+	var stand := CameraRules.stand_scale()
+	var full := jaw.scale * Vector2(1.0, stand)
+	jaw.scale = full * 0.4
+	var tween := jaw.create_tween()
+	tween.tween_property(jaw, "scale", full, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(jaw, "scale", Vector2(full.x * 1.1, full.y * 0.1), 0.1).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void:
+		_front_burst(cell, 1.3, 0.45, "avide_explosion")
+		_bile_splash(cell, 14)
+		_spawn_slow_motion(0.08, 0.25)
+		_shake(0.28, 0.8))
+	tween.tween_property(jaw, "modulate:a", 0.0, 0.12)
+	tween.tween_callback(jaw.queue_free)
+	if swallowed and player != null:
+		var home := player.mover.nearest_cell()
+		get_tree().create_timer(0.26).timeout.connect(func() -> void:
+			_bile_streak(cell, home, 0.35)
+			_front_burst(home, 1.1, 0.45, "avide_eclat"))
+
+
+## Une boule par bouchée, lancée en cloche depuis son ventre, et chacune éclate à son tour.
+func _on_regurgitated(_from: Vector2i, cells: Array) -> void:
+	if player == null:
+		return
+	var start := player.position + Vector2(0.0, -TILE_SIZE * TONGUE_LIFT)
+	for k in cells.size():
+		var cell: Vector2i = cells[k]
+		var finish := maze_renderer.cell_to_world(cell) + Vector2(0.0, -TILE_SIZE * 0.3)
+		var ball := _avide_sprite("bile.png", BILE_BALL_TILES, start, 13)
+		var flight := 0.32 + 0.06 * float(k)
+		var arc := func(t: float) -> void:
+			if is_instance_valid(ball):
+				ball.position = start.lerp(finish, t) + Vector2(0.0, -sin(t * PI) * TILE_SIZE * 1.4)
+		var tween := ball.create_tween()
+		tween.tween_method(arc, 0.0, 1.0, flight)
+		tween.tween_callback(func() -> void:
+			_front_burst(cell, 1.5, 0.5, "avide_explosion")
+			_spawn_painted_burst(cell, 1.3, 1.2, "avide_fissure")
+			_bile_splash(cell, 12)
+			_shake(0.14, 0.4))
+		tween.tween_callback(ball.queue_free)
+	_dragon_smoke_puff(player.mover.nearest_cell(), 10)
+	_shake(0.2, 0.5)
+
+
+func _on_leap_landed(cell: Vector2i, radius: float) -> void:
+	_front_burst(cell, radius + 0.8, 0.5, "avide_nova")
+	_spawn_painted_burst(cell, radius + 0.6, 1.1, "avide_fissure")
+	_spawn_wave(cell, radius * 3.0, 0.45, "avide_onde")
+	_bile_splash(cell, 16)
+	_shake(0.35, 0.8)
+
+
+func _on_feast_started(seconds: float) -> void:
+	if player == null:
+		return
+	_on_feast_ended()
+	_refresh_growth()
+	var cell := player.mover.nearest_cell()
+	_feast_veil = _spawn_painted_burst(cell, 3.0, seconds + 0.6, "avide_voile")
+	_feast_veil.span_tiles(TILE_SIZE, 40.0)
+	_feast_veil.z_index = 3
+	_feast_veil.position = player.position
+	# DERRIÈRE lui (z 9, le mage est à 10) : le géant se dresse devant sa propre gueule, au lieu
+	# d'être caché par elle.
+	var at := player.position + Vector2(0.0, -TILE_SIZE * 1.9)
+	_feast_mouth = _avide_sprite("gueule.png", FEAST_MOUTH_TILES, at, 9)
+	_feast_mouth.modulate = Color(1.0, 1.0, 1.0, 0.88)
+	var full := _feast_mouth.scale * Vector2(1.0, CameraRules.stand_scale())
+	_feast_mouth.scale = Vector2(full.x, 0.0)
+	_feast_mouth.create_tween().tween_property(_feast_mouth, "scale", full, 0.35) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_feast_mouth.set_meta("full", full)
+	_front_burst(cell, 2.0, 0.6, "avide_explosion")
+	_spawn_wave(cell, 12.0, 0.5, "avide_onde")
+	_shake(0.7, 1.0)
+
+
+func _on_feast_bite(_index: int, cell: Vector2i, killed: bool) -> void:
+	_front_burst(cell, 1.2, 0.4, "avide_eclat")
+	_bile_splash(cell, 10)
+	if _feast_mouth != null and is_instance_valid(_feast_mouth) and player != null:
+		var mouth := _feast_mouth
+		var full: Vector2 = mouth.get_meta("full")
+		var chomp := mouth.create_tween()
+		chomp.tween_property(mouth, "scale", Vector2(full.x * 1.08, full.y * 0.45), 0.08)
+		chomp.tween_property(mouth, "scale", full, 0.16).set_trans(Tween.TRANS_BACK)
+		var streak := BladeDash.new()
+		entities.add_child(streak)
+		streak.setup(maze_renderer.cell_to_world(cell), mouth.position, TILE_SIZE, 0.3)
+		streak.tint(BILE_PALE, BILE, BILE_DEEP)
+	_shake(0.22 if killed else 0.14, 0.6)
+
+
+func _on_feast_ended() -> void:
+	if _feast_mouth != null and is_instance_valid(_feast_mouth):
+		var mouth := _feast_mouth
+		var close := mouth.create_tween()
+		close.tween_property(mouth, "scale", Vector2(mouth.scale.x, 0.0), 0.2).set_ease(Tween.EASE_IN)
+		close.tween_callback(mouth.queue_free)
+	_feast_mouth = null
+	if _feast_veil != null and is_instance_valid(_feast_veil):
+		_feast_veil.queue_free()
+	_feast_veil = null
+	if player != null and combat != null and not combat.feasting():
+		_refresh_growth()
+		_spawn_wave(player.mover.nearest_cell(), 14.0, WAVE_TIME, "avide_onde")
+		_dragon_smoke_puff(player.mover.nearest_cell(), 18)
+
+
 # --- Le Chevalier Écarlate ----------------------------------------------------------
 
 const GUARD_RADIUS := 1.25
@@ -2488,6 +3474,9 @@ func _on_recall_cast(cell: Vector2i) -> void:
 
 func _on_decoy_posed(cell: Vector2i, seconds: float) -> void:
 	_on_decoy_gone()
+	if character.id == "croupier":
+		_pose_card_decoy(cell, seconds)
+		return
 	_spawn_painted_burst(cell, 1.6, seconds, "braise_sceau")
 	_king_decoy = KingDecoy.new()
 	entities.add_child(_king_decoy)
@@ -2496,6 +3485,9 @@ func _on_decoy_posed(cell: Vector2i, seconds: float) -> void:
 
 
 func _on_decoy_gone() -> void:
+	if _card_decoy != null and is_instance_valid(_card_decoy):
+		_card_decoy.queue_free()
+	_card_decoy = null
 	if _king_decoy != null and is_instance_valid(_king_decoy):
 		_king_decoy.queue_free()
 	_king_decoy = null
@@ -2503,6 +3495,10 @@ func _on_decoy_gone() -> void:
 
 func _on_decoy_blew(cell: Vector2i, radius: float) -> void:
 	_on_decoy_gone()
+	if character.id == "croupier":
+		_front_burst(cell, 1.1, 0.45, "croupier_eclat")
+		_card_spray(cell, 10)
+		return
 	_front_burst(cell, radius, BLAST_TIME, "braise_explosion")
 	_spawn_painted_burst(cell, radius + 0.4, 1.4, "braise_fissure")
 	_spawn_wave(cell, radius * 3.0, 0.5)
@@ -2580,7 +3576,7 @@ var _size_before_molten := Vector2.ONE
 
 
 func _on_plates_changed(count: int) -> void:
-	if character == null or character.id != "acier" or player == null:
+	if character == null or player == null or (character.id != "acier" and not (character.id == "ael" and character.hero_form >= 2)):
 		return
 	# Le niveau se reconstruit au démarrage : l'ancien mage n'est pas encore libéré à cet instant,
 	# et ses plaques sembleraient toujours valides.
@@ -2589,6 +3585,11 @@ func _on_plates_changed(count: int) -> void:
 		_plate_pips = PlatePips.new()
 		player.add_child(_plate_pips)
 		_plate_pips.setup(TILE_SIZE, CombatSystem.PLATE_MAX)
+	if character.id == "ael":
+		_plate_pips.setup(TILE_SIZE, 2 if character.hero_form == 3 else 1)
+		_plate_pips.set_count(count)
+		_plates_shown = count
+		return
 	_plate_pips.set_count(count)
 	if _plates_shown >= 0 and count != _plates_shown:
 		var cell := player.mover.nearest_cell()
@@ -2611,6 +3612,12 @@ func _spawn_hammer_strike(path: Array, points: PackedVector2Array, duration: flo
 
 
 func _on_blades_thrown(from: Vector2i, directions: Array, reach: int) -> void:
+	if character.id == CharacterCatalog.AEL:
+		var gems := GemVolley.new()
+		gems.colour = _ael_colour()
+		entities.add_child(gems)
+		gems.setup(maze_renderer.cell_to_world(from), directions, float(reach * TILE_SIZE), TILE_SIZE, player)
+		return
 	if character.id == "ciel":
 		_throw_feathers(from, directions, reach)
 		return
@@ -2620,6 +3627,9 @@ func _on_blades_thrown(from: Vector2i, directions: Array, reach: int) -> void:
 
 
 func _on_blade_cut(cell: Vector2i) -> void:
+	if character.id == CharacterCatalog.AEL:
+		_riposte(cell)
+		return
 	if character.id == "ciel":
 		_front_burst(cell, 0.85, 0.32, "ciel_entaille")
 		return
@@ -3258,6 +4268,9 @@ func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 	if ability.kind == Ability.Kind.WHEELS:
 		_roll_wheel(path, duration)
 		return
+	if character.id == CharacterCatalog.AEL:
+		_crystal_wake(path, duration)
+		return
 	var points := PackedVector2Array()
 	points.append(maze_renderer.cell_to_world(player.mover.nearest_cell()))
 	for cell in path:
@@ -3269,8 +4282,21 @@ func _on_wave_launched(ability: Ability, path: Array, duration: float) -> void:
 
 
 func _on_blast_fired(ability: Ability, cell: Vector2i) -> void:
-	# Son coup se voit par le geste et l'arc de lame, que joue `Player`.
-	if character.id == "test":
+	# Leur coup se voit par le geste et l'arc de lame, que joue `Player`.
+	if character.id == CharacterCatalog.AEL and character.ultimate != null \
+			and ability.id == character.ultimate.id:
+		_awaken_shard(ability)
+		return
+	if character.id == CharacterCatalog.AEL and character.hero_form >= 4:
+		_dragon_strike(ability)
+		return
+	# L'impact de la Comète est le seul éclatement en étoile d'Aël : rien de générique sur ses coups.
+	if character.id == "ael" and ability != character.attack:
+		if ability.kind == Ability.Kind.COMET:
+			_spawn_star_burst(cell, maxf(1.0, ability.radius) * 1.4, _ael_colour())
+			_shake(0.3, 0.9)
+		return
+	if character.id in ["test", "ael"]:
 		return
 	if character.id == "mort":
 		_spawn_sweep(ability, cell)
@@ -3428,6 +4454,10 @@ func _on_incantation_cast(cell: Vector2i, _ability: Ability) -> void:
 
 
 func _on_zone_created(zone_id: int, ability: Ability, cell: Vector2i) -> void:
+	# Les zones d'Aël sont dessinées par leurs sorts (`CrystalLine`, le sol en fusion de `DragonBreath`) :
+	# jamais la nappe générique des autres personnages.
+	if character.id == CharacterCatalog.AEL:
+		return
 	if ability.mark_seconds > 0.0:
 		var bell := TollingBell.new()
 		entities.add_child(bell)
@@ -3661,6 +4691,9 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 	# La teinte vient de l'ÉLÉMENT du mage : les braises du Feu sont orange, le
 	# Pas de l'ombre laisse une traînée violette, la Rafale une traînée blanche.
 	# Un seul effet, sept lectures.
+	if character.id == CharacterCatalog.AEL:
+		_ael_leap(from, to)
+		return
 	var tint := Element.color(character.element)
 	_spawn_warp(player.mover.nearest_cell(), tint, false)
 	if character.id == "lumiere":
@@ -3669,6 +4702,14 @@ func _on_blink(from: Vector2i, to: Vector2i) -> void:
 		flight.setup(maze_renderer.cell_to_world(from), maze_renderer.cell_to_world(to), TILE_SIZE)
 	elif character.id == "cherubin":
 		_lightning_trail(from, to)
+	elif character.id == "avide":
+		# Le Bond bestial : une traînée d'ombre verte, et le sol se fend au départ.
+		_bile_streak(from, to, 0.35)
+		_spawn_painted_burst(from, 1.3, 1.0, "avide_fissure")
+	elif character.id == "croupier":
+		# Il s'efface dans une gerbe de cartes, et elles se rassemblent là où il reparaît.
+		_card_spray(from, 12)
+		_card_spray(to, 8)
 	elif character.id == "dragon":
 		# Le bond de la Morsure et le recul des ailes : une langue de feu, et le sol se fend au départ.
 		_flame_streak(from, to, 0.3)
@@ -4033,6 +5074,14 @@ var _cloud: StormCloud = null
 func _on_storm_gathered(ability: Ability, duration: float) -> void:
 	if player == null:
 		return
+	if character.id == CharacterCatalog.AEL:
+		if _ael_orbit != null and is_instance_valid(_ael_orbit):
+			_ael_orbit.refresh(duration)
+			return
+		_ael_orbit = ShardOrbit.new()
+		player.add_child(_ael_orbit)
+		_ael_orbit.setup(TILE_SIZE, _ael_colour(), duration)
+		return
 	if _cloud != null and is_instance_valid(_cloud):
 		_cloud.refresh(duration)
 		return
@@ -4042,6 +5091,9 @@ func _on_storm_gathered(ability: Ability, duration: float) -> void:
 
 
 func _on_storm_dispersed() -> void:
+	if _ael_orbit != null and is_instance_valid(_ael_orbit):
+		_ael_orbit.stop()
+	_ael_orbit = null
 	if _cloud != null and is_instance_valid(_cloud):
 		_cloud.stop()
 	_cloud = null
@@ -4051,6 +5103,14 @@ func _on_storm_dispersed() -> void:
 ## rend l'orage lisible comme une chose à part, et non comme une attaque de plus.
 func _on_storm_struck(index: int, ability: Ability) -> void:
 	if index >= enemies.size() or _structure_at(index) != null:
+		return
+	if character.id == CharacterCatalog.AEL:
+		var from := player.position
+		if _ael_orbit != null and is_instance_valid(_ael_orbit):
+			from += _ael_orbit.strike() * player.scale
+		var blade := BladeThrow.new()
+		entities.add_child(blade)
+		blade.setup(from, enemies[index].position, TILE_SIZE, _ael_colour())
 		return
 	if _cloud != null and is_instance_valid(_cloud):
 		_cloud.discharge()
@@ -4074,6 +5134,12 @@ func _on_chain_arced(from_index: int, to_index: int) -> void:
 		if from_index >= enemies.size():
 			return
 		start = enemies[from_index].position
+	if character.id == CharacterCatalog.AEL:
+		var link := PrismLink.new()
+		entities.add_child(link)
+		link.setup(start, target.position, TILE_SIZE, _ael_colour())
+		_shake(0.1, 0.3)
+		return
 	var arc: LightningArc = ARC_SCENE.instantiate()
 	entities.add_child(arc)
 	arc.setup(start, target.position, Element.color(Element.Kind.THUNDER),
@@ -4102,6 +5168,7 @@ func _on_enemy_killed(index: int) -> void:
 			orb.burst()
 		_orbs.erase(index)
 	if index == _boss_index:
+		enemy_defeated.emit(enemy.species, true, enemy.position)
 		_on_boss_killed()
 		return
 	var fade := DeathFade.new()
@@ -4114,10 +5181,12 @@ func _on_enemy_killed(index: int) -> void:
 	_drop_stolen_gem(enemy)
 	enemy.set_dead(true)
 	if Bestiary.is_droplet(enemy.species):
+		enemy_defeated.emit(enemy.species, false, enemy.position)
 		enemy_killed.emit()
 		return
 	_respawns[index] = config.enemy_respawn_delay
 	if not _split(enemy):
+		enemy_defeated.emit(enemy.species, false, enemy.position)
 		enemy_killed.emit()
 
 
@@ -4391,6 +5460,8 @@ func _on_boss_strike(enemy: Enemy) -> void:
 			enemy.mover.teleport_to(out)
 			enemy.snap_to_mover()
 	var sheltered := teleport_system != null and teleport_system.is_invulnerable(player.mover)
+	# Le sol tremble à chaque volée, et plus fort sur le mage : c'est un boss qui frappe.
+	_shake(0.22, 0.6 if at in fight.struck else 0.3)
 	if at in fight.struck and not sheltered:
 		player_caught.emit()
 		_push_player(at, fight.push)
@@ -4757,7 +5828,7 @@ func _spawn_impact(cell: Vector2i, element: Element.Kind, radius: float,
 		flames = 0.0
 		_spawn_painted_burst(cell, radius, duration, painted_key)
 		# Ses ronds jaunes cachaient le mage, et l'éclaboussure dit déjà tout.
-		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon"]:
+		if character.id in ["peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "croupier", "avide"]:
 			return
 		# Le Feu n'a plus besoin de l'éclat tracé : ses triangles jaunes flottaient
 		# par-dessus les lobes et cassaient leur silhouette.
@@ -4876,11 +5947,39 @@ func _check_capture() -> void:
 				enemy.strike_cycle() + SWING_SYNC_MARGIN):
 			MeleeSwing.Event.STARTED:
 				enemy.strike()
+				_foe_charge(enemy)
 			MeleeSwing.Event.LANDED:
 				touched = true
+				_foe_strike(enemy, not sheltered)
+			MeleeSwing.Event.MISSED:
+				_foe_strike(enemy, false)
 	if touched and not sheltered:
 		player_caught.emit()
 	_check_throws(player_position, sheltered)
+
+
+## L'armement se voit sur la créature : c'est ce qui laisse le temps de l'esquiver.
+func _foe_charge(enemy: Enemy) -> void:
+	if FoeStrike.has_style(enemy.species):
+		FoeStrike.charge(enemy, enemy.species, Bestiary.windup(enemy.species), TILE_SIZE)
+
+
+## Le coup, qu'il touche ou non : le joueur doit voir où il est tombé. La caméra ne tremble
+## que s'il touche, ou pour un boss, dont chaque coup ébranle le sol.
+func _foe_strike(enemy: Enemy, hurts: bool) -> void:
+	if not FoeStrike.has_style(enemy.species):
+		return
+	FoeStrike.strike(entities, enemy.species, enemy.position, enemy.strike_facing(), TILE_SIZE)
+	if FoeStrike.is_big(enemy.species):
+		var wave: Shockwave = SHOCKWAVE_SCENE.instantiate()
+		entities.add_child(wave)
+		wave.position = enemy.position + Vector2(enemy.strike_facing()) * float(TILE_SIZE) \
+			* FoeStrike.BOSS_REACH + Vector2.UP * float(TILE_SIZE) * FoeStrike.BOSS_BODY_LIFT
+		var style: Dictionary = FoeStrike.STYLES[enemy.species]
+		wave.setup(TILE_SIZE, 2.4, style["light"], style["mid"], 0.55)
+		_shake(0.32, 0.6 if hurts else 0.4)
+	elif hurts:
+		_shake(0.12, 0.22)
 
 
 ## LES BOULES DE LAVE, côté écran. La RÈGLE, elle, vit dans `ThrowSystem` —
@@ -5106,3 +6205,67 @@ func _on_player_cell_entered(cell: Vector2i) -> void:
 	if in_house and not _player_was_in_house:
 		player_reached_house.emit()
 	_player_was_in_house = in_house
+
+
+func set_character(next: CharacterStats) -> void:
+	character = next
+	combat.change_form(next)
+	player.set_character(next)
+	player.mover.speed = next.move_speed
+	if is_instance_valid(_prism_aura):
+		_prism_aura.queue_free()
+		_prism_aura = null
+	if next.id == "ael" and next.hero_form == 3:
+		_prism_aura = PrismAura.new()
+		_prism_aura.tile_size = TILE_SIZE
+		player.add_child(_prism_aura)
+	if is_instance_valid(_ael_dragon_aura):
+		_ael_dragon_aura.queue_free()
+		_ael_dragon_aura = null
+	if next.id == "ael" and next.hero_form == 4:
+		_ael_dragon_aura = DragonAura.new()
+		_ael_dragon_aura.tile_size = TILE_SIZE
+		player.add_child(_ael_dragon_aura)
+	_load_character_fx()
+
+func show_experience(at: Vector2, amount: int) -> void:
+	var number: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	entities.add_child(number)
+	number.position = at
+	number.setup(amount, Color("#b9efff"), TILE_SIZE)
+	number.label.text = "+%d XP" % amount
+
+## L'évolution et la transformation d'Aël : une colonne de lumière, des ondes, des rayons. Quand le
+## Prisme se dissipe, la lumière retombe en éclats : on voit qu'il redevient lui-même.
+func show_evolution() -> void:
+	var form := character.hero_form
+	var falling := _ael_form_seen > form
+	var burst := AscensionBurst.new()
+	entities.add_child(burst)
+	burst.position = player.position
+	burst.setup(TILE_SIZE, AEL_FORM_COLORS[maxi(form, _ael_form_seen)] if falling else _ael_colour(), falling)
+	if falling:
+		_shake(0.2, 0.5)
+	else:
+		_shake(0.5, 1.4 if form >= 3 else 1.0)
+		# Le Dragon d'or s'éveille ailes ouvertes : elles se déploient et se replient sur lui.
+		if form >= 4:
+			var wings := BladeStreak.new()
+			entities.add_child(wings)
+			wings.setup(player.position, player.position, TILE_SIZE, _ael_colour(), player.sprite, player.scale,
+				BladeStreak.Style.SOAR)
+			_shake(0.8, 2.0)
+	_ael_form_seen = form
+
+
+func show_level_up(rank: int) -> void:
+	var number: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	entities.add_child(number)
+	number.position = player.position
+	number.setup(0, Color("#b9efff"), TILE_SIZE)
+	number.label.text = "NIVEAU %d !" % rank
+
+
+func _ael_comet(from: Vector2i, to: Vector2i) -> void:
+	_ael_leap(from, to)
+	_ael_blink["comet"] = true

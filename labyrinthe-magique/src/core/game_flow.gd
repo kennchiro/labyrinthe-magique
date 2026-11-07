@@ -77,8 +77,9 @@ func show_title() -> void:
 
 func show_select() -> void:
 	var screen: CharacterSelect = SELECT_SCENE.instantiate()
-	# Revenu d'un essai du Héros d'essai, qui n'a pas d'onglet : l'écran n'aurait rien à ouvrir.
-	if character_id == CharacterCatalog.TEST:
+	screen.hero_progress = HeroProgress.load_saved()
+	# Revenu d'un essai d'un personnage caché, sans onglet : l'écran n'aurait rien à ouvrir.
+	if character_id in CharacterCatalog.HIDDEN:
 		character_id = CharacterCatalog.default_id()
 	screen.character_id = character_id
 	_swap(screen)
@@ -107,13 +108,22 @@ func show_stages() -> void:
 
 func start_game(demo: bool = false) -> void:
 	# Revenu au titre après un essai, START ne doit pas partir en vraie partie avec lui.
-	if not demo and character_id == CharacterCatalog.TEST:
+	if not demo and character_id in CharacterCatalog.HIDDEN:
 		character_id = CharacterCatalog.default_id()
 	var game: GameManager = GAME_SCENE.instantiate()
 	# Renseigné AVANT l'entrée dans l'arbre : le _ready du GameManager démarre
 	# immédiatement le premier niveau, il lui faut déjà son personnage.
 	game.character_id = character_id
 	game.demo = demo
+	# UNE CARTE PAR FORME D'AËL. En jeu il n'y a qu'Aël : la carte dit seulement à quel niveau l'essayer.
+	var form := CharacterCatalog.AEL_FORMS.find(character_id)
+	if form >= 0:
+		character_id = CharacterCatalog.AEL
+		game.character_id = character_id
+	if demo and character_id == "ael":
+		game.hero_progress = HeroProgress.new()
+		game.demo_hero_form = maxi(0, form)
+		game.hero_progress.xp = HeroProgress.threshold(int(CharacterCatalog.AEL_FORM_LEVELS[game.demo_hero_form]))
 	game.start_index = start_index
 	# Le point d'entrée ne vaut que pour cette partie : revenir au menu et
 	# appuyer sur START doit reprendre au début, pas au dernier stage choisi.
@@ -126,6 +136,8 @@ func start_game(demo: bool = false) -> void:
 		# Quitter un ESSAI ramène à la sélection : on était en train de choisir
 		# son mage, on y retourne — l'accueil serait un détour.
 		if demo:
+			if game.character_id == "ael" and game.demo_hero_form >= 0:
+				character_id = CharacterCatalog.AEL_FORMS[game.demo_hero_form]
 			show_select()
 		else:
 			show_title())

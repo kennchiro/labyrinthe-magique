@@ -14,7 +14,7 @@ extends Node
 ##   --tap X Y          simule un tap sur la case (X,Y) après 3 frames
 ##   --debug            affiche le bandeau d'informations techniques
 ##   --on-portal        démarre le joueur sur un portail
-##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste, lumiere, mort, etoiles, acier, demon, discorde, braise, ecarlate, geolier, ciel, cherubin, dragon, test
+##   --character ID     mage joué : fire, water, earth, shadow, supreme, chrono, peste, lumiere, mort, etoiles, acier, demon, discorde, braise, ecarlate, geolier, ciel, cherubin, dragon, croupier, avide, test
 ##   --potion           boit une potion : charge l'Extra Power
 ##   --kills N          simule N ennemis éliminés (test de l'Extra Power)
 ##   --fx               rejoue en boucle les cinq éclats élémentaires (contrôle visuel)
@@ -51,6 +51,9 @@ func _ready() -> void:
 
 
 func apply_command_line() -> void:
+	var args := OS.get_cmdline_user_args()
+	if args.is_empty():
+		return
 	# UNE SESSION DE DÉVELOPPEMENT N'EST PAS UNE PARTIE.
 	#
 	# Dès qu'un argument de ligne de commande est passé, la progression cesse
@@ -59,14 +62,35 @@ func apply_command_line() -> void:
 	# du joueur — c'est arrivé deux fois, et la seconde après avoir déjà corrigé
 	# le même défaut du côté des tests.
 	game.progress.persistent = false
-
-	var args := OS.get_cmdline_user_args()
+	game.hero_progress.persistent = false
 
 	var character_arg := args.find("--character")
 	if character_arg >= 0 and character_arg + 1 < args.size():
-		game.character_id = args[character_arg + 1]
+		var selected := args[character_arg + 1]
+		var chosen := CharacterCatalog.AEL_FORMS.find(selected)
+		game.character_id = "ael" if chosen >= 0 else selected
+		# ⚠️ UNE FORME D'AËL PASSE PAR SON NIVEAU, démo ou non : `game.demo` n'est pas encore posé ici, et
+		# l'ancien chemin retombait sur l'Apprenti. Une revue entière a été faite ainsi sans voir ses effets.
+		if chosen > 0:
+			game.hero_progress.xp = HeroProgress.threshold(int(CharacterCatalog.AEL_FORM_LEVELS[chosen]))
+			game.demo_hero_form = chosen
 		game.start_level(game.level_index)
+		if chosen >= 3 and game.hero != null:
+			game.hero.transformation.begin(game.hero_progress.level(), chosen == 4)
 
+	var hero_arg := args.find("--hero-level")
+	var form_arg := args.find("--hero-form")
+	if hero_arg >= 0 or form_arg >= 0:
+		var rank := int(args[hero_arg + 1]) if hero_arg >= 0 and hero_arg + 1 < args.size() else 1
+		if form_arg >= 0 and form_arg + 1 < args.size():
+			rank = int(CharacterCatalog.AEL_FORM_LEVELS[clampi(int(args[form_arg + 1]), 0, 4)])
+		game.hero_progress.xp = HeroProgress.threshold(rank)
+		game.demo_hero_form = clampi(int(args[form_arg + 1]), 0, 4) if form_arg >= 0 and form_arg + 1 < args.size() else -1
+		game.character_id = "ael"
+		game.start_level(game.level_index)
+	var forced_form := int(args[form_arg + 1]) if form_arg >= 0 and form_arg + 1 < args.size() else -1
+	if ("--transform" in args or forced_form >= 3) and game.hero != null:
+		game.hero.transformation.begin(game.hero_progress.level(), forced_form == 4)
 	var seed_arg := args.find("--seed")
 	if seed_arg >= 0 and seed_arg + 1 < args.size():
 		game.forced_seed = int(args[seed_arg + 1])

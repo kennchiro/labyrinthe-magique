@@ -93,6 +93,8 @@ func _init() -> void:
 				sampled.append(levels[i])
 		levels = sampled
 	for config in levels:
+		if "--hero-campaign" in OS.get_cmdline_user_args():
+			reference = HeroCatalog.at_level(30 if config.stage >= 9 else (20 if config.stage >= 7 else (10 if config.stage >= 4 else 1)))
 		print("── %s   (%s)" % [config.level_name, reference.display_name])
 		_run_profile(config, reference, false)
 		_run_profile(config, reference, true)
@@ -206,6 +208,11 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	var combat := CombatSystem.new(grid, character, player_health, rng_seed * 31 + 7)
 	var context := CombatContext.new(grid)
 	var kills := KillSystem.new(character.ultimate_required_kills)
+	var hero: HeroRuntime = null
+	if character.id == "ael":
+		var saved := HeroProgress.new()
+		saved.xp = HeroProgress.threshold(character.hero_level)
+		hero = HeroRuntime.new(saved, combat)
 	var teleports := TeleportSystem.new(grid, rng_seed + 7)
 
 	var movers: Array[GridMover] = []
@@ -269,9 +276,15 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		if index < movers.size():
 			movers[index].teleport_to(to))
 	combat.dash_cut.connect(func(_from: Vector2i, to: Vector2i) -> void: player.teleport_to(to))
+	combat.comet_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: player.teleport_to(to))
 	# La Morsure du Dragon le fait bondir : seul sort hors fuite qui déplace le mage par ce signal.
-	if character.id == CharacterCatalog.DRAGON:
+	if character.id in [CharacterCatalog.DRAGON, "ael"]:
 		combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: player.teleport_to(to))
+	# Le Gouffre de l'Avide tire les ennemis vers lui : la simulation doit les déplacer aussi.
+	if character.id == CharacterCatalog.AVIDE:
+		combat.enemy_hauled.connect(func(index: int, cell: Vector2i) -> void:
+			if index < movers.size():
+				movers[index].teleport_to(cell))
 	combat.decoy_field.connect(func(field: PackedInt32Array) -> void:
 		for brain in brains:
 			brain.lure_field = field)
@@ -293,6 +306,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				gem_fields[dropped] = Pathfinder.distance_field(grid, [dropped] as Array[Vector2i])
 			dirty["objective"] = true
 		if Bestiary.is_droplet(slots[index]):
+			if hero != null:
+				hero.defeat(slots[index])
+				hero.kill()
 			kills.register_kill()
 			return
 		# Une gelée qui se scinde ne compte pas : ses petites compteront. Mêmes règles que
@@ -305,6 +321,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					and not context.enemy_health[other].is_alive():
 				waiting.append(other)
 		if waiting.is_empty():
+			if hero != null:
+				hero.defeat(slots[index])
+				hero.kill()
 			kills.register_kill()
 		else:
 			var cells := CreatureRules.split_cells(grid, movers[index].nearest_cell(),
@@ -405,6 +424,15 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			objective_field = _objective_field(grid, gem_fields, house_field, remaining, player.cell)
 
 		teleports.update(DT)
+		if hero != null:
+			hero.update(DT)
+			if character.hero_form != combat.stats.hero_form:
+				if combat.stats.hero_form == 3:
+					kills.charged = true
+				elif character.hero_form == 3:
+					kills.spend()
+			character = combat.stats
+			kills.needed = character.ultimate_required_kills
 		combat.update(DT, context)
 
 		# Les ennemis vivants empruntent les portails (appel identique à Level).
@@ -420,11 +448,14 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		# --- Décisions de combat --------------------------------------------------
 		# On tire dès qu'une cible est à portée : c'est ce que fait un joueur, et
 		# l'attaque de base ne coûte rien.
-		if combat.find_target(character.attack, context) >= 0:
+		if (hero == null or hero.can_act()) and combat.find_target(character.attack, context) >= 0:
 			combat.use(character.attack, context)
 		# Serré de près : l'ultime d'abord s'il est chargé, sinon un sort.
-		if threat_here >= 0 and threat_here <= CAST_RADIUS:
-			if kills.available() and combat.use(character.ultimate, context):
+		if (hero == null or hero.can_act()) and threat_here >= 0 and threat_here <= CAST_RADIUS:
+			# Aël se transforme dès que son bouton dédié est chargé, comme un joueur le ferait.
+			if hero != null and hero.transform():
+				pass
+			elif kills.available() and (hero == null or hero.transformation.state != Transformation.State.EXHAUSTED) and combat.use(character.ultimate, context):
 				kills.spend()
 			else:
 				_use_best_ability(combat, character, context, player_health)
@@ -452,6 +483,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		for i in range(remaining.size() - 1, -1, -1):
 			if Vector2(remaining[i]).distance_to(position) < PICKUP_DISTANCE:
 				remaining.remove_at(i)
+				if hero != null:
+					hero.gain(5)
 				picked = true
 		if picked:
 			objective_field = _objective_field(grid, gem_fields, house_field, remaining, player.cell)
@@ -469,6 +502,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 
 		# Victoire : toutes les gemmes ET la maison, comme dans le GameManager.
 		if remaining.is_empty() and carried.is_empty() and grid.is_house(player.cell):
+			if hero != null:
+				hero.dispose()
 			return _outcome("win", frame, grid.gems.size(), kills.kills, portal_uses)
 
 		# --- Ennemis -----------------------------------------------------------------
@@ -544,6 +579,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
 			if not player_health.is_alive():
+				if hero != null:
+					hero.dispose()
 				return _outcome("caught", frame, grid.gems.size() - remaining.size(),
 					kills.kills, portal_uses)
 			teleports.grant_invulnerability(player, HIT_INVULNERABILITY)
@@ -567,11 +604,15 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
 			if not player_health.is_alive():
+				if hero != null:
+					hero.dispose()
 				return _outcome("caught", frame, grid.gems.size() - remaining.size(),
 					kills.kills, portal_uses)
 			teleports.grant_invulnerability(player, HIT_INVULNERABILITY)
 			sheltered = true
 
+	if hero != null:
+		hero.dispose()
 	return _outcome("timeout", MAX_FRAMES, grid.gems.size() - remaining.size(),
 		kills.kills, portal_uses)
 
@@ -601,7 +642,7 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 		if ability.self_cost > 0 and hurt:
 			continue
 		if ability.kind in [Ability.Kind.SHIELD, Ability.Kind.HEAL, Ability.Kind.HOURGLASS,
-				Ability.Kind.TRANSFUSION, Ability.Kind.GUARD, Ability.Kind.MAGMA_SCALES]:
+				Ability.Kind.TRANSFUSION, Ability.Kind.GUARD, Ability.Kind.MAGMA_SCALES, Ability.Kind.COIN]:
 			defensive.append(ability)
 		else:
 			offensive.append(ability)

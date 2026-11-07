@@ -27,6 +27,11 @@ func _init(p_needed: int = 5) -> void:
 	needed = maxi(1, p_needed)
 
 
+## Remplit l’Extra sans inventer de kills : utilisé par le terrain d’essai.
+func fill() -> void:
+	_charge(needed)
+
+
 func register_kill() -> void:
 	kills += 1
 	_charge(1)

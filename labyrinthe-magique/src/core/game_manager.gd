@@ -18,6 +18,8 @@ const SLOT_ATTACK := 0
 ## 1 à 3 : les sorts, tous disponibles dès le départ.
 const SLOT_ESCAPE := 4
 const SLOT_ULTIMATE := 5
+## Le bouton dédié à la Transformation d'Aël, hors de l'éventail (`TransformButton`, touche T).
+const SLOT_TRANSFORM := 6
 
 signal state_changed(state: State)
 signal level_started(config: LevelConfig, index: int)
@@ -58,6 +60,10 @@ var start_index := 0
 ## Mode démo : tout débloqué, rien de sauvegardé. Posé par le GameFlow AVANT
 ## l'entrée dans l'arbre.
 var demo := false
+## Forme choisie pour l’essai. -1 : déduite du niveau de développement.
+var demo_hero_form := -1
+var hero_progress: HeroProgress = null
+var hero: HeroRuntime = null
 
 
 func _ready() -> void:
@@ -71,6 +77,11 @@ func _ready() -> void:
 		world.adopt(level)
 		level.world_stage = world
 
+	var development := development_run()
+	if hero_progress == null:
+		hero_progress = HeroProgress.load_saved() if not demo and not development else HeroProgress.new()
+	if demo or development:
+		hero_progress.persistent = false
 	if demo:
 		# Progression FICTIVE, tout ouvert — et incapable d'écrire sur le
 		# disque : un essai ne doit jamais toucher la partie du joueur.
@@ -83,6 +94,8 @@ func _ready() -> void:
 			levels.append(LevelConfig.demo(stage))
 	else:
 		progress = Progress.load_saved()
+		if development:
+			progress.persistent = false
 		levels = LevelConfig.all_levels()
 	level.player_reached_house.connect(_on_player_reached_house)
 	level.player_caught.connect(on_player_caught)
@@ -91,6 +104,7 @@ func _ready() -> void:
 	level.all_gems_collected.connect(_on_all_gems_collected)
 	level.potion_collected.connect(_on_potion_collected)
 	level.enemy_killed.connect(_on_enemy_killed)
+	level.enemy_defeated.connect(_on_enemy_defeated)
 	level.boss_appeared.connect(func(name: String) -> void:
 		ui.flash("%s surgit !" % name, Color("#ff9a7a")))
 	level.boss_defeated.connect(_on_boss_defeated)
@@ -120,6 +134,8 @@ func _ready() -> void:
 		# La barre de visite est branchée AVANT le premier niveau : `set_level`
 		# y écrit le nom du décor, elle doit donc déjà exister.
 		ui.show_demo_bar(demo_stage, demo_call_boss)
+		if character_id == "ael":
+			ui.show_demo_hero(demo_form)
 	start_level(start_index)
 	# Appelé explicitement : les _ready() des enfants s'exécutent AVANT celui du
 	# parent, DevTools ne peut donc pas s'initialiser tout seul.
@@ -129,9 +145,12 @@ func _ready() -> void:
 # --- Cycle de vie ---------------------------------------------------------------
 
 func start_level(index: int) -> void:
+	if hero != null:
+		hero.dispose()
 	level_index = clampi(index, 0, levels.size() - 1)
 	var config := levels[level_index]
-	character = CharacterCatalog.by_id(character_id)
+	character = HeroCatalog.at_level(hero_progress.level()) if character_id == "ael" else CharacterCatalog.by_id(character_id)
+	hero = null
 	elapsed = 0.0
 
 	# Le compteur d'ultime repart à chaque niveau : un pouvoir gardé d'un stage
@@ -152,6 +171,15 @@ func start_level(index: int) -> void:
 	# Les soins et les pactes changent les PV hors de tout coup reçu.
 	level.player_health.healed.connect(_on_player_health_changed)
 	level.player_health.damaged.connect(_on_player_health_changed)
+	if character_id == "ael":
+		hero = HeroRuntime.new(hero_progress, level.combat)
+		hero.character_changed.connect(_on_hero_changed)
+		hero.progressed.connect(_on_hero_progressed)
+		character = level.combat.stats
+		level.set_character(character)
+
+	if demo:
+		level.player_health.minimum_current = 1
 
 	# LE CARNET DE QUÊTE du niveau. Reconstruit à chaque départ : il ne porte que
 	# la config, et une config recyclée d'un niveau à l'autre mentirait.
@@ -159,6 +187,9 @@ func start_level(index: int) -> void:
 	ui.set_quest_available(not config.is_demo)
 
 	ui.set_character(character)
+	ui.set_hero_progress(hero_progress if hero != null else null)
+	if hero == null:
+		ui.set_transform_state(false, {})
 	ui.set_level(config, level_index + 1)
 	ui.set_health(level.player_health.current, level.player_health.maximum)
 	ui.set_shield(0)
@@ -169,8 +200,7 @@ func start_level(index: int) -> void:
 	if demo:
 		# L'ultime arrive CHARGÉ : la page d'essai sert à voir les sorts, pas à
 		# les mériter — les kills du joueur, eux, se gagnent en campagne.
-		for i in character.ultimate_required_kills:
-			kills.register_kill()
+		kills.fill()
 		ui.set_kills(kills.progress, character.ultimate_required_kills, kills.available())
 		ui.flash("MODE DÉMO — sorts illimités, sans recharge", Color("#9fe8b4"))
 	# LE CARNET S'OUVRE TOUT SEUL LA PREMIÈRE FOIS qu'on entre dans un épisode,
@@ -181,6 +211,8 @@ func start_level(index: int) -> void:
 	if not config.is_demo and not Settings.quest_seen(config.stage, config.episode):
 		Settings.mark_quest_seen(config.stage, config.episode)
 		toggle_quest()
+	if demo and hero != null and demo_hero_form >= 3:
+		hero.transformation.begin(hero_progress.level(), demo_hero_form == 4)
 	level_started.emit(config, level_index)
 
 
@@ -261,6 +293,8 @@ func _on_player_reached_house() -> void:
 		return
 	_set_state(State.VICTORY)
 	progress.reach(config_of_level().stage, config_of_level().episode)
+	if hero != null and not demo:
+		hero.victory(config_of_level().stage, config_of_level().episode)
 	ui.show_victory(elapsed, level.teleport_count, level.gems_total, kills.kills,
 		level_index + 1 < levels.size())
 
@@ -302,11 +336,21 @@ func _process(delta: float) -> void:
 	if state != State.PLAYING or level.player == null:
 		return
 	elapsed += delta
+	if hero != null:
+		hero.update(delta)
+		ui.set_hero_progress(hero_progress, hero.transformation)
+		ui.set_transform_state(hero_progress.level() >= 30, {"ratio": 1.0 if demo else hero.charge_ratio(),
+			"ready": hero.can_transform(demo), "state": hero.transformation.state,
+			"seconds": hero.transformation.left, "dragon": hero.next_is_dragon()})
+		if demo:
+			ui.set_demo_hero_state(3 if hero.transformation.state == Transformation.State.CHARGING else character.hero_form, hero_progress.level())
 	# Le joueur est recréé à chaque chargement : on relie ici plutôt que par
 	# signal, pour ne pas avoir à gérer les reconnexions.
 	level.player.touch_direction = ui.touch_direction()
 	ui.set_counters(level.teleport_count)
 	ui.set_action_state(_action_state())
+	if ui.touch_mode:
+		ui.show_beneath_controls(_watched_things())
 	if level.boss_is_fighting():
 		ui.show_boss(level.boss_name(), level.boss_health_ratio())
 	if demo:
@@ -323,6 +367,9 @@ func _action_state() -> Dictionary:
 		var ability: Ability = bar[slot]
 		var is_ultimate := slot == SLOT_ULTIMATE
 		var ready := level.can_use(slot) and (not is_ultimate or kills.available())
+		ready = ready and (hero == null or hero.can_act())
+		if ability.kind == Ability.Kind.HERO_TRANSFORM:
+			ready = ready and level.combat.hero_transform_allowed
 		var ratio := level.combat.cooldown_ratio(ability)
 		if is_ultimate:
 			ratio = kills.ratio()
@@ -397,6 +444,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Page précédente / suivante : le tour des décors au clavier. Elles ne
 	# servent à rien hors démo, `demo_stage` s'en assure.
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_T and hero != null:
+			use_slot(SLOT_TRANSFORM)
+			return
 		if event.keycode == KEY_PAGEDOWN or event.keycode == KEY_BRACKETRIGHT:
 			demo_stage(1)
 			return
@@ -424,12 +474,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Point d'entrée unique des gestes du joueur, clavier comme tactile.
 func use_slot(slot: int) -> void:
-	if state != State.PLAYING:
+	if state != State.PLAYING or (hero != null and not hero.can_act()):
 		return
 	if slot == SLOT_PORTAL:
 		level.try_teleport_player()
 		return
+	if slot == SLOT_TRANSFORM:
+		var dragon := hero != null and hero.next_is_dragon()
+		if hero != null and hero.transform(demo):
+			level.show_transformation_charge()
+			ui.flash("ÉVEIL DU DRAGON !" if dragon else "TRANSFORMATION !", Color("#ffd15a"))
+		return
 	if slot == SLOT_ULTIMATE:
+		if hero != null and hero.transformation.state == Transformation.State.EXHAUSTED:
+			return
 		if not kills.available():
 			ui.flash("Extra Hit verrouillé — encore %d kills, ou une potion" % maxi(0,
 				kills.needed - kills.progress), Color("#7b8bb0"))
@@ -437,11 +495,14 @@ func use_slot(slot: int) -> void:
 		# L'ultime n'est dépensé QUE s'il est réellement parti : un ultime perdu
 		# parce qu'aucun ennemi n'était à portée serait une punition absurde.
 		# En DÉMO il ne se dépense pas du tout — il est là pour être regardé.
+		# LE PRISME ULTIME NE MET PLUS FIN À LA FORME (2026-11-04) : le joueur ne comprenait pas pourquoi
+		# son Extra le détransformait. Le Prisme se dissipe quand sa jauge est vide, ou à 1 PV.
+		var title := level.ability_at(slot).display_name
 		if level.use_ability(slot):
 			if not demo:
 				kills.spend()
 			ui.set_kills(kills.progress, kills.needed, demo)
-			ui.flash("%s !" % level.ability_at(slot).display_name, Color("#ffd15a"))
+			ui.flash("%s !" % title, Color("#ffd15a"))
 		return
 	level.use_ability(slot)
 
@@ -478,6 +539,8 @@ func _on_ability_refused(reason: String) -> void:
 # --- Progression -----------------------------------------------------------------
 
 func _on_enemy_killed() -> void:
+	if hero != null:
+		hero.kill()
 	kills.register_kill()
 	ui.set_kills(kills.progress, kills.needed, kills.available())
 	if not kills.available():
@@ -489,6 +552,8 @@ func _on_ultimate_ready() -> void:
 
 
 func _on_gem_collected(collected: int, total: int) -> void:
+	if hero != null and not demo:
+		hero.gain(5)
 	ui.set_gems(level.missing_gem_colors(), total)
 	if collected < total:
 		ui.flash("Gemme %d/%d" % [collected, total], Color("#9ef0ff"))
@@ -541,3 +606,75 @@ func _on_player_teleported(advantageous: bool) -> void:
 		ui.flash("Le portail te rapproche !", Color("#8fe6ff"))
 	else:
 		ui.flash("Le portail t'éloigne…", Color("#e0a05c"))
+
+
+func _on_enemy_defeated(species: String, boss: bool, at: Vector2) -> void:
+	if hero != null and not demo:
+		var amount := hero.defeat(species, boss)
+		level.show_experience(at, amount)
+
+func _on_hero_changed(next: CharacterStats) -> void:
+	var before := character.hero_form
+	character = next
+	level.set_character(next)
+	ui.set_character(next)
+	# Changer de seuil conserve la fraction chargée ; revenir de Prisme vide la jauge.
+	var charge := kills.ratio()
+	kills.needed = next.ultimate_required_kills
+	kills.progress = kills.needed if kills.charged else mini(kills.needed - 1, roundi(charge * kills.needed))
+	if next.hero_form >= 3:
+		kills.charged = true
+	elif before >= 3:
+		kills.spend()
+	if demo:
+		kills.fill()
+		level.player_health.minimum_current = 1
+	if next.hero_form != before:
+		level.show_evolution()
+		level.grant_player_invulnerability(0.8 if next.hero_form >= 3 else 1.5)
+		ui.flash(next.display_name, Color("#b9efff"))
+	ui.set_health(level.player_health.current, level.player_health.maximum)
+	ui.set_kills(kills.progress, kills.needed, kills.available())
+
+## Ce que le joueur ne doit pas perdre de vue, en coordonnées d'interface.
+func _watched_things() -> Array[Dictionary]:
+	var things: Array[Dictionary] = []
+	for gem in level.gems:
+		if is_instance_valid(gem) and not gem.carried:
+			things.append({"at": level.to_screen(gem.position), "color": gem.tint})
+	for potion in level.potions:
+		if is_instance_valid(potion):
+			things.append({"at": level.to_screen(potion.position), "color": Potion.TINT})
+	for enemy in level.enemies:
+		if is_instance_valid(enemy) and not enemy.dead:
+			things.append({"at": level.to_screen(enemy.position), "color": Color("#ff5a4a")})
+	return things
+
+
+func _on_hero_progressed(_amount: int, levels_gained: int) -> void:
+	ui.set_hero_progress(hero_progress)
+	# Gagné avec la victoire, le niveau s'annonce sur son écran : `UIManager.show_victory`.
+	if levels_gained > 0 and state != State.VICTORY:
+		level.show_level_up(hero_progress.level())
+		ui.flash("NIVEAU %d !" % hero_progress.level(), Color("#b9efff"))
+
+func _exit_tree() -> void:
+	if hero != null:
+		hero.dispose()
+
+
+static func development_run() -> bool:
+	var args := OS.get_cmdline_args()
+	return not OS.get_cmdline_user_args().is_empty() or "--script" in args or "-s" in args or "--headless" in args
+
+
+## Le choix d’une forme est un outil de démo, jamais une modification de sauvegarde.
+func demo_form(form: int) -> void:
+	if not demo or character_id != "ael" or form < 0 or form >= CharacterCatalog.AEL_FORMS.size():
+		return
+	demo_hero_form = form
+	hero_progress = HeroProgress.new()
+	hero_progress.xp = HeroProgress.threshold(int(CharacterCatalog.AEL_FORM_LEVELS[form]))
+	get_tree().paused = false
+	start_level(level_index)
+	ui.set_demo_hero_state(form, hero_progress.level())

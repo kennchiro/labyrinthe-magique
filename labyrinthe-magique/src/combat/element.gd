@@ -7,7 +7,7 @@ extends RefCounted
 ## effets et les projectiles la lisent ici. Sans ça, le rouge du Mage de Feu finit
 ## par exister en cinq nuances différentes dans cinq fichiers.
 
-enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM, EMBER, BLADE, COLDFIRE, SKY, SACRED, INFERNO }
+enum Kind { FIRE, WATER, EARTH, SHADOW, THUNDER, AIR, SUPREME, TIME, POISON, LIGHT, DEATH, STARS, STEEL, BLOOD, CHARM, EMBER, BLADE, COLDFIRE, SKY, SACRED, INFERNO, PRISM, LUCK, HUNGER }
 
 const COLORS := {
 	Kind.FIRE: Color("#ff6a2a"),
@@ -31,6 +31,10 @@ const COLORS := {
 	Kind.SKY: Color("#34e07a"),
 	Kind.SACRED: Color("#3d6bff"),
 	Kind.INFERNO: Color("#ff3a14"),
+	Kind.LUCK: Color("#c9a227"),
+	Kind.HUNGER: Color("#c8e830"),
+	# Aël. Cyan clair, loin du magenta du fond des planches.
+	Kind.PRISM: Color("#8fe3ff"),
 }
 const NAMES := {
 	Kind.FIRE: "Feu",
@@ -54,6 +58,9 @@ const NAMES := {
 	Kind.SKY: "Ciel",
 	Kind.SACRED: "Feu sacré",
 	Kind.INFERNO: "Feu infernal",
+	Kind.LUCK: "Hasard",
+	Kind.HUNGER: "Faim",
+	Kind.PRISM: "Prisme",
 }
 
 
@@ -88,6 +95,8 @@ static func trait_name(kind: Kind) -> String:
 		Kind.SKY: return "Vue d'en haut"
 		Kind.SACRED: return "Nul n'approche"
 		Kind.INFERNO: return "Terre brûlée"
+		Kind.LUCK: return "Coup de chance"
+		Kind.HUNGER: return "Faim insatiable"
 	return ""
 
 
@@ -114,6 +123,8 @@ static func trait_hint(kind: Kind) -> String:
 		Kind.SKY: return "ses coups visés tombent du ciel : leur portée se mesure à vol d'oiseau, par-dessus les haies"
 		Kind.SACRED: return "chaque coup pose un œil sur l'ennemi ; s'il arrive à son contact, l'œil s'embrase et le brûle"
 		Kind.INFERNO: return "chaque crachat enflamme le sol sous la cible ; dans le feu, il va plus vite"
+		Kind.LUCK: return "un coup sur cinq environ est un coup critique, qui frappe trois fois plus fort"
+		Kind.HUNGER: return "chaque ennemi tué est une bouchée : il grandit et frappe plus fort, jusqu'à 5"
 	return ""
 
 

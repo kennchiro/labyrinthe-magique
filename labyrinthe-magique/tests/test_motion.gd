@@ -69,6 +69,15 @@ func _test_others_untouched() -> void:
 			_fail("%s a reçu un gabarit" % stats.id)
 	if CharacterCatalog.by_id(CharacterCatalog.TEST).id != CharacterCatalog.TEST:
 		_fail("--character test ne donne pas le Héros d'essai")
+	# Aël a le déplacement du Héros d'essai, et reste hors des vrais personnages tant qu'il n'a pas ses niveaux.
+	if CharacterCatalog.by_id(CharacterCatalog.AEL).id != CharacterCatalog.AEL:
+		_fail("--character ael ne donne pas Aël")
+	for stats in CharacterCatalog.all():
+		if stats.id == CharacterCatalog.AEL:
+			_fail("Aël compte déjà parmi les vrais personnages")
+	var ael_frames := FileAccess.get_file_as_string("res://assets/characters/ael/frames.json")
+	if not (JSON.parse_string(ael_frames) as Dictionary).has("motion"):
+		_fail("Aël n'a pas le gabarit du Héros d'essai")
 
 
 func _player() -> Player:

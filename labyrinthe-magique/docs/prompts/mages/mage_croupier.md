@@ -3,7 +3,8 @@
 > Élément **Hasard** · teinte du jeu `#c9a227` · costume bordeaux, noir et or. Onglet **Démon**.
 > Un homme élégant, démon joueur. Cartes, dés, pièce et roulette : chaque sort est un pari, et il gagne toujours quelque chose.
 
-**Il n'est pas encore jouable.** Les sept images sont à commander dans cet ordre : la première sert de modèle aux autres.
+**Il est jouable** (`--demo --character croupier`). Les sept images sont livrées ; pour en regénérer une, garder cet
+ordre : la première sert de modèle aux autres.
 
 | # | Image | Prompt | À déposer dans `assets/peso&cover/` | À joindre |
 |---|---|---|---|---|
@@ -30,19 +31,33 @@ cache ses jambes.
 - ⚠️ Son or ancien (`#c9a227`) reste voisin du Suprême et de la Foudre : c'est le bordeaux du costume et les cartes qui
   le distinguent.
 
+## Ce qui est programmé
+
+Tout est dans `CombatSystem` (section Croupier des Enfers), et chaque tirage passe par `_rng` : la même graine rejoue la
+même partie.
+
+- **Le coup de chance** (`_gamble`) : 20 % des coups d'origine font x3, et `lucky_hit` fait jaillir l'or.
+- **Les Dés** (`Kind.DICE`) suivent le couloir (`_corridor_ahead`) ; le `Level` affiche leur total en grand.
+- **La Carte piège** (`Kind.TRAP_CARD`) : deux au plus au sol, la plus ancienne s'efface. Elle se retourne sous le
+  premier ennemi qui entre sur sa case (`Suit` : feu, glace, foudre).
+- **Pile ou face** (`Kind.COIN`) : Face passe par l'intouchabilité commune ; Pile double les 3 prochaines cartes.
+- **La fuite** est un `BLINK` avec `decoy_seconds` : le leurre du Roi de Braise, que le `Level` dessine en carte.
+- **La Roulette** (`Kind.ROULETTE`) tire son `Slot` au lancer, et frappe après `ROULETTE_SPIN`. Le `Level` arrête la
+  roue sur la case tirée.
+
 ## L'idée
 
 Les autres démons humains ont le pacte de sang, la possession, l'armure et l'épée. Le Croupier joue **le hasard** :
 chaque sort tire au sort son résultat. Le tirage se fait dans `CombatSystem`, avec la graine de la partie, pour que
 l'équilibrage le mesure comme le reste. Aucun tirage ne le laisse perdant : le pire résultat reste utile.
 
-## Ses six sorts (chiffres de départ, à régler en passe d'équilibrage)
+## Ses six sorts
 
 | créneau | sort | ce qu'il fait | chiffres de départ |
 |---|---|---|---|
-| Base | | 4 PV, vitesse 5,0 | |
+| Base | | 4 PV, vitesse 5,0, extra à 5 kills | |
 | TRAIT | **Coup de chance** | environ un coup sur cinq est un coup critique : triple dégâts, éclat d'or | 20 % de chance, x3 |
-| ATTAQUE | **Carte tranchante** | une carte file en tournoyant et tranche | 22 dégâts, portée 8, 0,6 s |
+| ATTAQUE | **Carte tranchante** | une carte file en tournoyant et tranche | 22 dégâts, portée 7, 0,6 s |
 | SKILL 1 | **Dés pipés** | deux dés roulent dans le couloir devant lui. Le total des faces (2 à 12) fixe les dégâts ; un double sonne ce qu'ils touchent | 6 cases, 6 dégâts par point, double : sonné 1,5 s, recharge 9 s |
 | SKILL 2 | **Carte piège** | une carte face cachée posée au sol ; le premier ennemi qui passe la retourne et elle frappe au hasard : As de feu (brûle), Dame de glace (fige), Roi de foudre (saute à 3 ennemis) | 40 dégâts, 12 s au sol, 2 cartes à la fois, recharge 8 s |
 | SKILL 3 | **Pile ou face** | une pièce d'or tourne. Face : intouchable 2 s et +1 PV. Pile : ses 3 prochains coups font double dégâts | recharge 14 s |

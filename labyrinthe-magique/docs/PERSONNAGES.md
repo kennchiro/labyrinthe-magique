@@ -1,9 +1,9 @@
 # Les mages — fiches de référence
 
 > ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : `godot --headless --path . --script res://tools/dump_reference.gd`.
-> La source est `src/characters/character_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
+> Les sources sont `src/characters/character_catalog.gd` et `hero_catalog.gd` ; corriger un chiffre se fait là-bas, puis on régénère.
 
-22 mages jouables. La barre d'action a toujours la même forme —
+29 profils jouables, formes comprises. La barre d'action a toujours la même forme —
 attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches
 comparables d'un personnage à l'autre.
 
@@ -11,6 +11,11 @@ comparables d'un personnage à l'autre.
 
 | Mage | Élément | Vie | Vitesse | Extra à | Trait élémentaire |
 |---|---|---:|---:|---:|---|
+| **Aël · Apprenti** | Prisme | 3 | 5.0 | 5 kills | — |
+| **Aël · Éveillé** | Prisme | 4 | 5.2 | 5 kills | — |
+| **Aël · Ascendant** | Prisme | 4 | 5.4 | 6 kills | — |
+| **Aël · Prisme** | Prisme | 4 | 6.0 | 6 kills | — |
+| **Aël · Dragon d’or** | Prisme | 4 | 6.4 | 6 kills | — |
 | **Mage du Feu** | Feu | 3 | 5.0 | 4 kills | **Brûlure** — 30 % de dégâts en plus, étalés sur 1.5 s |
 | **Mage de l'Eau** | Eau | 4 | 4.9 | 2 kills | **Trempe** — la cible ralentit de 38 % pendant 2.2 s |
 | **Mage de la Terre** | Terre | 5 | 4.5 | 6 kills | **Ébranlement** — la cible s'arrête net 0.7 s (une fois toutes les 3 s) |
@@ -33,10 +38,142 @@ comparables d'un personnage à l'autre.
 | **Chevalier Écarlate** | Lame | 4 | 5.2 | 5 kills | **Entailles** — jusqu'à 5 par ennemi, 8 s depuis la dernière ; elles éclatent quand il rengaine |
 | **Geôlier** | Flamme froide | 5 | 4.8 | 6 kills | **Entraves** — au 3e poing sur le même ennemi, il est cloué au sol 1.5 s |
 | **Dragon des Abysses** | Feu infernal | 5 | 4.4 | 6 kills | **Terre brûlée** — chaque crachat enflamme la case de sa cible 4 s, à 10 dégâts/s ; dans le feu, il va 20 % plus vite |
+| **Croupier des Enfers** | Hasard | 4 | 5.0 | 5 kills | **Coup de chance** — 20 % des coups sont critiques et frappent 3 fois plus fort |
+| **L'Avide** | Faim | 5 | 4.5 | 6 kills | **Faim insatiable** — chaque kill est une bouchée, 5 au plus : +8 % de dégâts et +6 % de taille chacune ; une fond toutes les 10 s sans manger |
 
 La **vie** est celle de base : le stage y ajoute son bonus (`LevelConfig.player_health_bonus`, de 0 au stage 1 à +7 au stage 10).
 La **vitesse** est en cases par seconde ; celle des poursuivants ne s'en déduit pas — voir la fiche du bestiaire.
 
+
+---
+
+## Aël · Apprenti — Prisme
+
+> L'Enfant sans élément. Il absorbe la lumière des gemmes pour évoluer. Niveau 1.
+
+`id: ael` · puissance affichée 3/5 · vie 3 · vitesse 5.0 · extra à 5 kills
+
+Trait : —
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Coup d'épée** | explosion | 26 dégâts · rayon 2.2 · recharge 0.5 s · balaie 150° devant | 0.5 s |
+| SKILL 1 | **Tranche-vent** | projectile | 24 dégâts · portée 7 · recharge 3 s | 3.0 s |
+| SKILL 2 | **Ruée** | translation | charge de 4 cases · 28 dégâts · renverse · recharge 6 s · projette de 1 cases | 6.0 s |
+| SKILL 3 | **Parade** | bouclier | INTOUCHABLE 2 s · immobile · renvoie 30 · recharge 9 s | 9.0 s |
+| FUITE | **Roulade** | translation | saut de 3 cases · recharge 5 s | 5.0 s |
+| EXTRA | **Éveil de l'éclat** | explosion | 70 dégâts · rayon 3.5 | 1.0 s |
+
+- **Coup d'épée** — Un coup d'épée en arc devant lui.
+- **Tranche-vent** — Un coup d'épée si vif qu'il lance une lame d'air, qui file dans le couloir.
+- **Ruée** — Il fonce l'épée en avant et bouscule tout ce qu'il traverse.
+- **Parade** — Il plante ses pieds et lève l'épée : intouchable un instant, il rend chaque coup paré.
+- **Roulade** — Une roulade de trois cases, pour sortir d'un mauvais pas.
+- **Éveil de l'éclat** — La gemme s'éveille un instant : il tourne sur lui-même, et sa lame trace un cercle immense.
+
+---
+
+## Aël · Éveillé — Prisme
+
+> L'Enfant sans élément. Il absorbe la lumière des gemmes pour évoluer. Niveau 10.
+
+`id: ael_eveille` · puissance affichée 3/5 · vie 4 · vitesse 5.2 · extra à 5 kills
+
+Trait : —
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Lame d’éclat** | explosion | 33 dégâts · rayon 2.2 · recharge 0.5 s · balaie 150° devant | 0.5 s |
+| SKILL 1 | **Gerbe de gemmes** | volée | 3 lames · 28 dégâts à l'aller et au retour · portée 6 · recharge 5 s | 5.0 s |
+| SKILL 2 | **Percée de cristal** | translation | charge de 5 cases · 38 dégâts · renverse · recharge 6 s · projette de 1 cases | 6.0 s |
+| SKILL 3 | **Frappe éclair** | ligne | 35 dégâts · ligne de 7 cases · recharge 6 s · pics plantés 2 s à 0 dégâts/s | 6.0 s |
+| FUITE | **Pas de lumière** | translation | saut de 5 cases · recharge 5 s | 5.0 s |
+| EXTRA | **Rayon de gemme** | rayon | 88 dégâts · rayon de 12 cases dans les couloirs | 1.0 s |
+
+- **Lame d’éclat** — Lame d’éclat
+- **Gerbe de gemmes** — Gerbe de gemmes
+- **Percée de cristal** — Percée de cristal
+- **Frappe éclair** — Frappe éclair
+- **Pas de lumière** — Pas de lumière
+- **Rayon de gemme** — Rayon de gemme
+
+---
+
+## Aël · Ascendant — Prisme
+
+> L'Enfant sans élément. Il absorbe la lumière des gemmes pour évoluer. Niveau 20.
+
+`id: ael_ascendant` · puissance affichée 3/5 · vie 4 · vitesse 5.4 · extra à 6 kills
+
+Trait : —
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Double coup** | explosion | 39 dégâts · rayon 2.2 · 2 charges · recharge 0.8 s · balaie 150° devant | 0.8 s |
+| SKILL 1 | **Pluie d’éclats** | pluie | 6 étoiles de 33 dégâts · rayon 5 · recharge 7 s | 7.0 s |
+| SKILL 2 | **Fente prismatique** | translation | charge de 6 cases · 51 dégâts · renverse · recharge 6 s · projette de 2 cases | 6.0 s |
+| SKILL 3 | **Onde prismatique** | chaîne | 42 dégâts · 4 relais · portée 7 · recharge 6 s | 6.0 s |
+| FUITE | **Ailes de lumière** | translation | saut de 5 cases · recharge 6 s · TRAVERSE LES MURS | 6.0 s |
+| EXTRA | **Nova prismatique** | explosion | 105 dégâts · rayon 3.5 | 1.0 s |
+
+- **Double coup** — Double coup
+- **Pluie d’éclats** — Pluie d’éclats
+- **Fente prismatique** — Fente prismatique
+- **Onde prismatique** — Onde prismatique
+- **Ailes de lumière** — Ailes de lumière
+- **Nova prismatique** — Nova prismatique
+
+---
+
+## Aël · Prisme — Prisme
+
+> L'Enfant sans élément. Il absorbe la lumière des gemmes pour évoluer. Niveau 30.
+
+`id: ael_prisme` · puissance affichée 3/5 · vie 4 · vitesse 6.0 · extra à 6 kills
+
+Trait : —
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Rafale de lumière** | projectile | 40 dégâts · portée 9 · recharge 0.2 s | 0.2 s |
+| SKILL 1 | **Comète** | comète | 70 dégâts à l’arrivée · rayon 2 · portée 8 · recharge 5 s | 5.0 s |
+| SKILL 2 | **Lames filantes** | translation | charge de 7 cases · 80 dégâts · renverse · recharge 5 s · TRAVERSE LES MURS · projette de 2 cases | 5.0 s |
+| SKILL 3 | **Éclats en orbite** | phénomène | 36 dégâts toutes les 0.9 s · 6 s · portée 5 · recharge 9 s | 9.0 s |
+| FUITE | **Transmission** | transmission | réapparaît derrière la cible · portée 10 · recharge 5 s | 5.0 s |
+| EXTRA | **Prisme ultime** | explosion | 200 dégâts · rayon 7 · TRAVERSE LES MURS | 1.0 s |
+
+- **Rafale de lumière** — Rafale de lumière
+- **Comète** — Comète
+- **Lames filantes** — Lames filantes
+- **Éclats en orbite** — Éclats en orbite
+- **Transmission** — Transmission
+- **Prisme ultime** — Prisme ultime
+
+---
+
+## Aël · Dragon d’or — Prisme
+
+> L'Enfant sans élément. Il absorbe la lumière des gemmes pour évoluer. Niveau 80.
+
+`id: ael_dragon` · puissance affichée 3/5 · vie 4 · vitesse 6.4 · extra à 6 kills
+
+Trait : —
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Griffes de soleil** | explosion | 78 dégâts · rayon 2.2 · recharge 0.3 s · balaie 160° devant | 0.3 s |
+| SKILL 1 | **Souffle du Dragon** | explosion | 94 dégâts · rayon 5 · recharge 5 s · balaie 70° devant · laisse une ombre 3 s | 5.0 s |
+| SKILL 2 | **Chute du Dragon** | comète | 117 dégâts à l’arrivée · rayon 2.5 · portée 6 · recharge 6 s | 6.0 s |
+| SKILL 3 | **Écailles de soleil** | bouclier | INTOUCHABLE 2 s · immobile · renvoie 78 · recharge 10 s | 10.0 s |
+| FUITE | **Ailes d’or** | translation | saut de 7 cases · recharge 5 s · TRAVERSE LES MURS | 5.0 s |
+| EXTRA | **Rugissement du Roi-Dragon** | explosion | 364 dégâts · rayon 9 · TRAVERSE LES MURS | 1.0 s |
+
+- **Griffes de soleil** — Griffes de soleil
+- **Souffle du Dragon** — Souffle du Dragon
+- **Chute du Dragon** — Chute du Dragon
+- **Écailles de soleil** — Écailles de soleil
+- **Ailes d’or** — Ailes d’or
+- **Rugissement du Roi-Dragon** — Rugissement du Roi-Dragon
 
 ---
 
@@ -260,10 +397,10 @@ Trait : **Retard** — la cible ralentit de 40 % pendant 1.4 s
 |---|---|---|---|---:|
 | ATTAQUE | **Aiguille** | projectile | 16 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
 | SKILL 1 | **Bulle de lenteur** | zone | 12 dégâts/s · rayon 2.6 · 8 s · recharge 12 s · englue à 35 % tant qu'on y reste | 12.0 s |
-| SKILL 2 | **Écho** | ? | 60 dégâts · rejoue 5 s de marche · recharge 9 s | 9.0 s |
-| SKILL 3 | **Sablier** | ? | rend 50 % des PV perdus en 8 s · recharge 28 s | 28.0 s |
+| SKILL 2 | **Écho** | écho | 60 dégâts · rejoue 5 s de marche · recharge 9 s | 9.0 s |
+| SKILL 3 | **Sablier** | sablier | rend 50 % des PV perdus en 8 s · recharge 28 s | 28.0 s |
 | FUITE | **Retour** | translation | revient 4 s en arrière · recharge 7 s | 7.0 s |
-| EXTRA | **Arrêt du temps** | ? | tout se fige 4 s | 1.0 s |
+| EXTRA | **Arrêt du temps** | arrêt du temps | tout se fige 4 s | 1.0 s |
 
 - **Aiguille** — Une aiguille d'horloge qui ralentit un court instant ce qu'elle touche.
 - **Bulle de lenteur** — Dans la bulle, ennemis et projectiles vont au ralenti. Lui, non.
@@ -285,11 +422,11 @@ Trait : **Venin** — jusqu'à 3 doses, 7 dégâts par seconde chacune pendant 5
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Dard venimeux** | projectile | 8 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Traînée toxique** | ? | flaques 5 s · pendant 6 s · recharge 14 s | 14.0 s |
-| SKILL 2 | **Contagion** | ? | passe le poison à 5 cases · portée 8 · recharge 8 s | 8.0 s |
-| SKILL 3 | **Transfusion** | ? | 1 PV par 2 ennemis empoisonnés · recharge 22 s | 22.0 s |
+| SKILL 1 | **Traînée toxique** | traînée | flaques 5 s · pendant 6 s · recharge 14 s | 14.0 s |
+| SKILL 2 | **Contagion** | contagion | passe le poison à 5 cases · portée 8 · recharge 8 s | 8.0 s |
+| SKILL 3 | **Transfusion** | transfusion | 1 PV par 2 ennemis empoisonnés · recharge 22 s | 22.0 s |
 | FUITE | **Brume** | translation | saut de 6 cases · recharge 7 s | 7.0 s |
-| EXTRA | **Pandémie** | ? | toute la carte empoisonnée 8 s · ils éclatent | 1.0 s |
+| EXTRA | **Pandémie** | pandémie | toute la carte empoisonnée 8 s · ils éclatent | 1.0 s |
 
 - **Dard venimeux** — Un trait faible, mais chaque coup ajoute une dose de poison, jusqu'à 3.
 - **Traînée toxique** — Pendant 6 s, il laisse du poison sur les cases où il passe.
@@ -311,11 +448,11 @@ Trait : **Éblouissement** — la cible perd sa trace 1.2 s, au plus toutes les 
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Trait d'aube** | projectile | 15 dégâts · portée 9 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Lance solaire** | ? | 55 dégâts · rayon de 14 cases dans les couloirs · recharge 6 s | 6.0 s |
+| SKILL 1 | **Lance solaire** | rayon | 55 dégâts · rayon de 14 cases dans les couloirs · recharge 6 s | 6.0 s |
 | SKILL 2 | **Sanctuaire** | zone | 14 dégâts/s · rayon 2.4 · 8 s · recharge 16 s | 16.0 s |
 | SKILL 3 | **Ailes gardiennes** | bouclier | absorbe 1 · 8 s · recharge 18 s | 18.0 s |
 | FUITE | **Envol** | translation | saut de 5 cases · recharge 8 s · TRAVERSE LES MURS | 8.0 s |
-| EXTRA | **L'Aube** | ? | 130 dégâts sur toute la carte · aveugle 5 s | 1.0 s |
+| EXTRA | **L'Aube** | aube | 130 dégâts sur toute la carte · aveugle 5 s | 1.0 s |
 
 - **Trait d'aube** — Un trait net. De temps en temps, il aveugle sa cible un instant.
 - **Lance solaire** — Un rayon qui suit les couloirs, vire vers les ennemis et touche tout ce qu'il traverse.
@@ -339,9 +476,9 @@ Trait : **Sentence** — un ennemi sous 15 % de ses PV après un coup est achev�
 | ATTAQUE | **Croissant noir** | projectile | 16 dégâts · portée 7 · recharge 0.5 s | 0.5 s |
 | SKILL 1 | **Moisson** | explosion | 45 dégâts · rayon 3 · recharge 5 s · balaie 150° devant | 5.0 s |
 | SKILL 2 | **Glas** | zone | 6 dégâts/s · rayon 2.6 · 7 s · recharge 15 s | 15.0 s |
-| SKILL 3 | **Âmes captives** | ? | 30 dégâts par âme · portée 14 · recharge 9 s | 9.0 s |
+| SKILL 3 | **Âmes captives** | âmes | 30 dégâts par âme · portée 14 · recharge 9 s | 9.0 s |
 | FUITE | **Passage** | translation | saut de 5 cases · recharge 8 s · TRAVERSE LES MURS | 8.0 s |
-| EXTRA | **L'Heure dernière** | ? | la moitié des PV de chaque ennemi · achève sous 15 % | 1.0 s |
+| EXTRA | **L'Heure dernière** | heure dernière | la moitié des PV de chaque ennemi · achève sous 15 % | 1.0 s |
 
 - **Croissant noir** — La faux lance un croissant de lame qui ne rate jamais.
 - **Moisson** — Un grand coup de faux en arc devant lui, qui achève ce qui est déjà blessé.
@@ -363,11 +500,11 @@ Trait : **Astre** — au 3e coup sur une cible, ses étoiles explosent pour 26 d
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Éclat stellaire** | projectile | 12 dégâts · portée 8 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Constellation** | ? | 28 dégâts/s · 3 étoiles · 16 s · recharge 3 s | 3.0 s |
-| SKILL 2 | **Pluie d'étoiles** | ? | 9 étoiles de 22 dégâts · rayon 3.5 · recharge 11 s | 11.0 s |
+| SKILL 1 | **Constellation** | constellation | 28 dégâts/s · 3 étoiles · 16 s · recharge 3 s | 3.0 s |
+| SKILL 2 | **Pluie d'étoiles** | pluie | 9 étoiles de 22 dégâts · rayon 3.5 · recharge 11 s | 11.0 s |
 | SKILL 3 | **Voile de lune** | bouclier | INTOUCHABLE 3 s · recharge 15 s | 15.0 s |
 | FUITE | **Étoile filante** | translation | saut de 5 cases · traînée de 25 dégâts · recharge 8 s | 8.0 s |
-| EXTRA | **Nuit éternelle** | ? | 120 dégâts sur toute la carte | 1.0 s |
+| EXTRA | **Nuit éternelle** | aube | 120 dégâts sur toute la carte | 1.0 s |
 
 - **Éclat stellaire** — Un petit trait d'étoile. Au troisième coup, les étoiles de la cible explosent.
 - **Constellation** — Pose une étoile à ses pieds. Des rayons les relient par-dessus les haies et brûlent ce qui passe.
@@ -390,7 +527,7 @@ Trait : **Plaques** — 3 plaques encaissent chacune un coup à la place des PV 
 |---|---|---|---|---:|
 | ATTAQUE | **Coup de marteau** | projectile | 22 dégâts · portée 6 · recharge 0.7 s | 0.7 s |
 | SKILL 1 | **Ailes-lames** | volée | 5 lames · 30 dégâts à l'aller et au retour · portée 5 · recharge 7 s | 7.0 s |
-| SKILL 2 | **Onde d'enclume** | ? | 34 dégâts · étourdit 1.5 s · 7 cases de couloirs · recharge 10 s | 10.0 s |
+| SKILL 2 | **Onde d'enclume** | enclume | 34 dégâts · étourdit 1.5 s · 7 cases de couloirs · recharge 10 s | 10.0 s |
 | SKILL 3 | **Rempart** | bouclier | INTOUCHABLE 4 s · immobile · renvoie 40 · recharge 18 s | 18.0 s |
 | FUITE | **Charge** | translation | charge de 4 cases · 30 dégâts · renverse · recharge 8 s · projette de 2 cases | 8.0 s |
 | EXTRA | **Acier en fusion** | explosion | 70 dégâts · rayon 3.5 · armure en fusion 10 s | 1.0 s |
@@ -467,7 +604,7 @@ Trait : **Rage** — jusqu'à +50 % de dégâts selon les PV perdus, au maximum 
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Griffe de sang** | projectile | 18 dégâts · portée 7 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Pacte de sang** | ? | coûte 1 PV · jamais le dernier · recharge 12 s · +8 dégâts 6 s | 12.0 s |
+| SKILL 1 | **Pacte de sang** | pacte | coûte 1 PV · jamais le dernier · recharge 12 s · +8 dégâts 6 s | 12.0 s |
 | SKILL 2 | **Sillon de soufre** | ligne | 42 dégâts · ligne de 7 cases · recharge 7 s · brûle 3 s à 6/s | 7.0 s |
 | SKILL 3 | **Festin** | explosion | 26 dégâts · rayon 2 · recharge 14 s · +1 PV s'il touche | 14.0 s |
 | FUITE | **Bond de soufre** | translation | saut de 4 cases · recharge 8 s | 8.0 s |
@@ -493,11 +630,11 @@ Trait : **Trouble** — au 3e murmure, la cible ralentit de 30 % pendant 4.0 s, 
 | Créneau | Sort | Forme | Effet | Recharge |
 |---|---|---|---|---:|
 | ATTAQUE | **Murmure** | projectile | 14 dégâts · portée 7 · recharge 0.5 s | 0.5 s |
-| SKILL 1 | **Mauvais Œil** | ? | possède 1 ennemi · portée 8 · 5 s · 20 par coup · recharge 10 s | 10.0 s |
+| SKILL 1 | **Mauvais Œil** | possession | possède 1 ennemi · portée 8 · 5 s · 20 par coup · recharge 10 s | 10.0 s |
 | SKILL 2 | **Cercle de Discorde** | zone | 16 dégâts/s · +50 % par ennemi en plus · rayon 2.5 · 6 s · recharge 12 s | 12.0 s |
-| SKILL 3 | **Lien de Souffrance** | ? | enchaîne 3 ennemis · portée 8 · 50 % des dégâts · 8 s · recharge 14 s | 14.0 s |
-| FUITE | **Échange** | ? | échange avec un ennemi · portée 6 · recharge 9 s | 9.0 s |
-| EXTRA | **Grande Discorde** | ? | tous les ennemis · 6 s · 22 par coup | 1.0 s |
+| SKILL 3 | **Lien de Souffrance** | lien | enchaîne 3 ennemis · portée 8 · 50 % des dégâts · 8 s · recharge 14 s | 14.0 s |
+| FUITE | **Échange** | échange | échange avec un ennemi · portée 6 · recharge 9 s | 9.0 s |
+| EXTRA | **Grande Discorde** | possession | tous les ennemis · 6 s · 22 par coup | 1.0 s |
 
 - **Murmure** — Un fil d'argent file de ses doigts. Au troisième, la cible est troublée.
 - **Mauvais Œil** — Un ennemi se retourne contre ses voisins et ne la chasse plus.
@@ -609,3 +746,55 @@ Trait : **Terre brûlée** — chaque crachat enflamme la case de sa cible 4 s, 
 - **Écailles de magma** — Ses écailles durcissent : elles encaissent un coup et brûlent qui le touche, puis éclatent en éclats de lave.
 - **Battement d'ailes** — Il déploie ses ailes : ce qui l'entoure est repoussé et prend feu, et lui recule d'un bond.
 - **L'Ombre du Dragon** — L'ombre géante d'un dragon traverse l'écran : chaque ennemi prend feu, puis explose en colonne de flammes.
+
+---
+
+## Croupier des Enfers — Hasard
+
+> Un démon joueur en costume. Cartes, dés, pièce et roulette : chaque sort est un pari, et il gagne toujours quelque chose.
+
+`id: croupier` · puissance affichée 3/5 · vie 4 · vitesse 5.0 · extra à 5 kills
+
+Trait : **Coup de chance** — 20 % des coups sont critiques et frappent 3 fois plus fort
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Carte tranchante** | projectile | 22 dégâts · portée 7 · recharge 0.6 s | 0.6 s |
+| SKILL 1 | **Dés pipés** | dés | 2 dés · 6 par point (2 à 12) · 6 cases · double : sonnés 1.5 s · recharge 9 s | 9.0 s |
+| SKILL 2 | **Carte piège** | piège | 40 dégâts · 2 cartes au sol · 12 s · feu, glace ou foudre · recharge 8 s | 8.0 s |
+| SKILL 3 | **Pile ou face** | pari | face : INTOUCHABLE 2 s, +1 PV · pile : 3 coups doublés · recharge 14 s | 14.0 s |
+| FUITE | **Tour de passe-passe** | translation | 4 cases · leurre 2 s · recharge 11 s | 11.0 s |
+| EXTRA | **La Roulette infernale** | roulette | tout l'écran · rouge : brûle 15/s 4 s · noir : figés 3 s, 30 · zéro : 120 | 1.0 s |
+
+- **Carte tranchante** — Une carte file en tournoyant et tranche.
+- **Dés pipés** — Deux dés roulent dans le couloir : leur total fixe les dégâts, et un double sonne ce qu'ils touchent.
+- **Carte piège** — Une carte face cachée posée sous lui. Le premier ennemi qui passe la retourne : As de feu, Dame de glace ou Roi de foudre.
+- **Pile ou face** — Une pièce d'or tourne. Face : intouchable et soigné. Pile : ses trois prochaines cartes frappent double.
+- **Tour de passe-passe** — Il disparaît dans une gerbe de cartes et reparaît plus loin ; une carte reste et attire les ennemis.
+- **La Roulette infernale** — Une roulette géante tourne, la bille tombe. Rouge : tout brûle. Noir : tout se fige. Zéro : le jackpot foudroie tout.
+
+---
+
+## L'Avide — Faim
+
+> Un démon pur sang à la gueule fendant le ventre. Chaque proie le fait grandir ; il peut tout recracher d'un coup.
+
+`id: avide` · puissance affichée 3/5 · vie 5 · vitesse 4.5 · extra à 6 kills
+
+Trait : **Faim insatiable** — chaque kill est une bouchée, 5 au plus : +8 % de dégâts et +6 % de taille chacune ; une fond toutes les 10 s sans manger
+
+| Créneau | Sort | Forme | Effet | Recharge |
+|---|---|---|---|---:|
+| ATTAQUE | **Langue-fouet** | projectile | 24 dégâts · portée 5 · recharge 0.7 s · brûle tout sur son trajet | 0.7 s |
+| SKILL 1 | **Gouffre béant** | gouffre | portée 5 · aspire 2 s · rayon 3 · puis 45 dégâts · recharge 11 s | 11.0 s |
+| SKILL 2 | **Dévorer** | dévoration | 60 dégâts · portée 2 · avale sous 35 % de ses PV : +1 PV · recharge 12 s | 12.0 s |
+| SKILL 3 | **Régurgitation** | salve | une boule par bouchée · 30 dégâts chacune · rayon 1.5 · portée 6 · recharge 8 s | 8.0 s |
+| FUITE | **Bond bestial** | bond | bond de 3 cases · sonnés 1 s · rayon 1.5 · recharge 11 s | 11.0 s |
+| EXTRA | **Le Festin** | festin | géant 6 s · avale un ennemi toutes les 0.6 s · rayon 6 · 80 dégâts · +1 PV par proie | 1.0 s |
+
+- **Langue-fouet** — Une langue noire claque en ligne droite et transperce tout ce qu'elle traverse.
+- **Gouffre béant** — Une gueule s'ouvre dans le sol sous l'ennemi le plus proche, aspire ce qui l'entoure, puis se referme.
+- **Dévorer** — Il saisit l'ennemi le plus proche et l'avale : un ennemi blessé meurt d'un coup, et le nourrit.
+- **Régurgitation** — Il recrache toutes ses bouchées en boules de bile qui explosent, et rapetisse.
+- **Bond bestial** — Un grand saut en avant ; l'atterrissage fait trembler le sol et sonne ce qui l'entoure.
+- **Le Festin** — Il devient gigantesque, et la gueule de son ventre avale les ennemis proches, un à un.

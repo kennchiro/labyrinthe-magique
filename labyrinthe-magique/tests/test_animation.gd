@@ -58,6 +58,8 @@ func _fail(msg: String) -> void:
 func _test_roster_slider() -> void:
 	var select: CharacterSelect = load("res://scenes/menu/character_select.tscn").instantiate()
 	root.add_child(select)
+	# L'onglet le plus garni : celui du héros principal, qui s'ouvre d'office, n'a qu'une carte.
+	select.select(CharacterCatalog.FIRE)
 	select.size = Vector2(844.0, 390.0)
 	select._layout()
 	if select._shown >= select._listed.size():

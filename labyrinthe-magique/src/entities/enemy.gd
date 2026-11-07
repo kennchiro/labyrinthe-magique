@@ -300,6 +300,11 @@ func strike() -> void:
 	queue_redraw()
 
 
+## Vers où part le coup en cours.
+func strike_facing() -> Vector2i:
+	return _strike_facing
+
+
 ## La direction cardinale qui regarde le mage, sur l'axe où il est le plus loin.
 func _toward_player() -> Vector2i:
 	var gap := player_cell - mover.nearest_cell()

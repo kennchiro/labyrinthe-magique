@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "croupier_carte",
+    "croupier_des",
+    "croupier_piege",
+    "croupier_piece",
+    "croupier_passe",
+    "croupier_roulette"
+  ],
+  "size": 256
+}

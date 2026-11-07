@@ -71,9 +71,13 @@ var _card_step := 1.0
 var _slide: Tween = null
 
 
+var hero_progress: HeroProgress = null
+
+
 func _ready() -> void:
 	_build_roster_slider()
-	for character in CharacterCatalog.roster():
+	for entry in CharacterCatalog.roster():
+		var character := _stats(entry.id)
 		var portrait := CharacterPortrait.new()
 		portrait.custom_minimum_size = Vector2(116.0, 142.0)   # recalculé par _layout
 		portrait.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -232,7 +236,7 @@ var card_room := 0.0
 
 func select(id: String) -> void:
 	character_id = id
-	var stats := CharacterCatalog.by_id(id)
+	var stats := _stats(id)
 	if stats.category != _category:
 		_open_category(stats.category)
 	_chosen_in[stats.category] = id
@@ -242,7 +246,7 @@ func select(id: String) -> void:
 		portrait.set_selected(portrait.stats.id == id)
 
 	# Le Héros d'essai n'a qu'une attaque : il ne lance jamais une vraie partie.
-	$Buttons/PlayButton.disabled = id == CharacterCatalog.TEST
+	$Buttons/PlayButton.disabled = id in CharacterCatalog.HIDDEN or _form_locked(id)
 	name_label.text = stats.display_name
 	name_label.add_theme_color_override("font_color", stats.color())
 	# Les étoiles disent la puissance d'un coup d'œil, là où « 4 » demanderait
@@ -255,8 +259,9 @@ func select(id: String) -> void:
 	stats_label.text = "Vie %d   ·   Vitesse %.1f   ·   Extra Power à %d kills" % [
 		stats.base_health, stats.move_speed, stats.ultimate_required_kills]
 
-	_trait_label.text = "%s — %s" % [Element.trait_name(stats.element),
-		Element.trait_hint(stats.element)]
+	# Un élément sans trait (le Prisme d'Aël) laisse la ligne vide plutôt qu'un tiret seul.
+	_trait_label.text = "" if Element.trait_name(stats.element).is_empty() else "%s — %s" % [
+		Element.trait_name(stats.element), Element.trait_hint(stats.element)]
 	_trait_label.add_theme_color_override("font_color",
 		Color(stats.color().r, stats.color().g, stats.color().b, 0.9))
 
@@ -434,3 +439,23 @@ func _layout_card(card: Panel) -> void:
 		slot_card.fit(cell, body)
 	_grid.position = Vector2(18.0, y)
 	_grid.size = Vector2(inner, room)
+
+
+## Les cartes d'Aël montrent chacune SA forme, au niveau qui l'ouvre : c'est un choix, pas l'état de la sauvegarde.
+func _stats(id: String) -> CharacterStats:
+	if id in CharacterCatalog.AEL_FORMS:
+		return CharacterCatalog.ael_form(CharacterCatalog.AEL_FORMS.find(id))
+	return CharacterCatalog.by_id(id)
+
+
+## JOUER part avec le niveau gagné : une forme pas encore atteinte s'essaie en DÉMO seulement, et le Prisme,
+## qui est une transformation, ne se choisit jamais au départ d'une vraie partie.
+func _form_locked(id: String) -> bool:
+	var form := CharacterCatalog.AEL_FORMS.find(id)
+	if form <= 0:
+		return false
+	# Le Prisme et le Dragon d'or sont des transformations : ils se prennent en combat.
+	if form >= 3:
+		return true
+	var reached := hero_progress.level() if hero_progress != null else 1
+	return reached < int(CharacterCatalog.AEL_FORM_LEVELS[form])

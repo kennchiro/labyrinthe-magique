@@ -171,6 +171,19 @@ a changé, en fractions d'écran : le reste suit toujours la géométrie déduit
 la pause, le carnet), sinon le placement libre recréerait le défaut de l'éventail.
 `--pause --settings --layout-editor` le capture, `--settings-file F` protège les réglages
 du joueur. `tests/test_touch_layout.gd` passe par ses gestes et par une vraie partie.
+⚠️ **La pause et le carnet ne sont PAS dans le coin en tactile.** Ils y couvraient l'ultime,
+le haut de l'éventail par défaut, qui ne passe pas par `settle`. `TouchLayout.fit_corner`
+les range à gauche de ce que l'éventail occupe en haut (`CombatPad.reach_from_right`), ce qui
+dépend de l'écran. Au clavier, ils restent dans le coin de `scenes/main.tscn`.
+- Les commandes se rangent derrière la pause, la victoire et les réglages
+  (`UIManager._refresh_controls`) : elles lisent leurs touches sans les nœuds, un sort posé
+  sur « Menu » partait avec lui.
+- Une gemme, une potion ou un ennemi sous un bouton de l'éventail rend ce bouton transparent
+  et reçoit un repère (`CombatPad.show_beneath`, nourri par `GameManager._watched_things`).
+  Le manche n'en fait rien : il est déjà translucide.
+- L'objectif s'affiche en bandeau au début de chaque niveau, sous la barre du mage, dans la
+  largeur laissée par l'éventail (`UIManager._show_objective`). Le niveau gagné à la victoire
+  s'annonce sur l'écran de victoire, et non plus dessous.
 ⚠️ Dans un Control construit en code, `set_anchors_and_offsets_preset` et jamais
 `set_anchors_preset` : il garde sa taille nulle, et un test qui pose les tailles à la main
 ne le voit pas.
@@ -231,11 +244,11 @@ godot --path . --resolution 2532x1170 -- --auto-walk --cast --bench 10
   l'ombre magenta peinte sur les planches, en s'arrêtant aux contours sombres. Au-delà de
   20 % de l'objet, il n'y touche pas : ce violet EST l'objet (stages 2 et 5).
 
-## Les vingt-deux personnages
+## Les vingt-quatre personnages
 
 `Mage du Feu` · `Mage de l'Eau` · `Mage de la Terre` · `Sorcier des Ténèbres` ·
 `Mage de la Foudre` · `Mage de l'Air` · `Invocateur` · `Sorcier Suprême` ·
-`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte` · `Démone de la Discorde` · `Roi de Braise` · `Chevalier Écarlate` · `Geôlier` · `Archange du Ciel` · `Chérubin` · `Dragon des Abysses`.
+`Chronomancien` · `Mage de la Peste` · `Porte-Lumière` · `Ange de la Mort` · `Ange des Étoiles` · `Archange d'Acier` · `Démon du Pacte` · `Démone de la Discorde` · `Roi de Braise` · `Chevalier Écarlate` · `Geôlier` · `Archange du Ciel` · `Chérubin` · `Dragon des Abysses` · `Croupier des Enfers` · `L'Avide`.
 
 ⚠️ **Pour tout nouveau personnage, n'oublie pas l'effet magique DRAMATIQUE de chaque sort**
 (demande du joueur, 2026-11-03). Les six créneaux (attaque, trois sorts, fuite, extra) ont chacun
@@ -326,6 +339,22 @@ coque d'un coup, qui éclate en éclats (`shard_count`). Sa fuite (`Kind.WINGBEA
 reculer ; l'ultime (`Kind.DRAGON_SHADOW`) fait passer la silhouette des pièces sur l'écran, puis des colonnes. Ses
 pièces sortent de `tools/build_dragon_pieces.py`. ⚠️ Sa planche d'attaque le dessine plus grand que sa marche :
 `strike_scale` 0,94.
+
+Le **Croupier des Enfers** (élément Hasard, onglet Démon) est un humain chibi qui joue : tout tirage passe par `_rng`
+de `CombatSystem`, donc par la graine. Son trait, Coup de chance, est dans `_gamble` (`LUCK_CHANCE`, `LUCK_MULT`), appelé
+par `_apply_damage` ; Pile y double aussi ses prochaines cartes (`_doubled_left`). `Kind.DICE` roule dans le couloir
+comme le Souffle, `Kind.TRAP_CARD` pose des cartes (`_traps`) qui se retournent sous un ennemi (`Suit`), `Kind.COIN`
+le rend intouchable ou double ses coups, et `Kind.ROULETTE` tire `Slot` puis frappe après `ROULETTE_SPIN`. Sa fuite est
+le leurre du Roi de Braise, dessiné en carte. La roue de l'image est posée zéro en haut : le `Level` l'arrête d'une
+case à droite (rouge 32) ou à gauche (noir 26). Pièces : `tools/build_croupier_pieces.py`.
+
+L'**Avide** (élément Faim, onglet Démon) est un démon pur sang, PAS chibi (`body_scale` 1,3). Chaque kill est une
+bouchée (`_bites`, `BITES_MAX`) : +8 % de dégâts chacune dans `_apply_damage`, et une fond toutes les `BITE_DECAY`
+secondes. Le `Level` le fait GRANDIR avec elles, et au Festin (`FEAST_SIZE`), par `Player.set_growth`, qui ne change
+que le dessin. Sa langue est un projectile `pierce_line` que le `Level` dessine en `Line2D` étirée (`_lash_tongue`).
+`Kind.GULF` aspire par les couloirs (`enemy_hauled`, que `test_balance` applique pour lui seul), `Kind.DEVOUR`
+achève sous `execute_below`, `Kind.REGURGITATE` dépense toutes les bouchées, `Kind.LEAP` est sa fuite, et
+`Kind.FEAST` avale un ennemi par `FEAST_GAP`. Pièces : `tools/build_avide_pieces.py`.
 
 L'**Archange du Ciel** (élément Ciel, onglet Ange) frappe par-dessus les haies : son trait, Vue d'en haut,
 c'est `Ability.from_sky`. La cible se choisit à vol d'oiseau, le coup tombe après `sky_fall`, et le `Level` dessine
@@ -434,6 +463,25 @@ de `test_balance` et des fiches. Il ne part jamais en vraie partie.
   (`slash_color` transparent) et avec `impact_pose` sur l'image où jaillit son sort.
 - ⚠️ Sur un mage, le joueur a trouvé bizarre la marche du gabarit : le Démon garde le rebond des mages
   (`bob` à 1, soit `WALK_BOB`), sans écrasement, à-coup ni poussière. Seule son attaque garde le gabarit.
+- **Aël**, le héros principal (`docs/HEROS_PRINCIPAL.md`), reprend tout le gabarit : planche `ael_marche.png`
+  ENTIÈRE sur `template/guide_heros.png` (course de face et de dos, marche des mages de profil). Premier onglet
+  (« Héros ») et personnage par défaut (`default_id()`, et `by_id` d'un identifiant inconnu), jouable, mais hors
+  de `all()` (roster des mages). `HeroProgress` conserve ses niveaux ; `HeroCatalog` fournit ses quatre
+  formes et 24 compétences. La simulation le mesure avec `--mage ael --hero-campaign`.
+  Son élément, le Prisme, n'a pas de trait.
+  ⚠️ L'Apprenti est un épéiste SANS MAGIE : chaque sort est un geste d'épée, avec son propre effet tracé
+  (`FlyingCrescent`, `BladeStreak`, `GuardFlash`, `SlashArc.setup_ring`), jamais le visuel d'un autre personnage.
+  `tools/preview_ael.gd` les montre image par image.
+  Ses formes (mécanique de Codex : `HeroCatalog`, `HeroProgress`, `Transformation`, `HeroRuntime`) ont chacune leur
+  matière et leurs effets : ⚠️ AUCUN effet partagé, ni avec un autre personnage, ni entre deux de ses 24 sorts
+  (tableau dans `docs/HEROS_PRINCIPAL.md`). Le Prisme ultime ne met plus fin à la transformation.
+  La Transformation a son bouton dédié (`TransformButton`, `GameManager.SLOT_TRANSFORM`, touche T), hors de
+  l'éventail de six : sa charge est à part (`HeroRuntime.TRANSFORM_KILLS`), l'Extra de l'Ascendant reste la Nova.
+  Au niveau 80 (`HeroProgress.MAX_LEVEL`), le même bouton mène du Prisme au DRAGON D'OR (`Transformation.ascend`,
+  `DRAGON_KILLS`), sa cinquième forme : un dragon humanoïde qui rôde, ses effets à lui, une cinquième carte. Une carte par forme dans l'onglet Héros
+  (`AEL_FORMS`), qui ne sert qu'au menu : en jeu, c'est toujours `ael`, et `--hero-form N` y mène.
+  En démo, le sélecteur dans l’arène permet de choisir Apprenti ou les évolutions I, II, III ; l’Extra
+  reste disponible après le retour du Prisme. La démo ne sauvegarde ni niveaux ni progression.
 - ⚠️ Les planches `test_repos` et `test_gestes` ne sont encore lues par aucun outil.
 - ⚠️ Le générateur peut répéter son demi-cycle : même foulée mesurée, mais il court sur une seule jambe.
   `repeat_complaint` le signale (planches `every_step` seulement). `test_profil.png` remplace la rangée.
@@ -604,6 +652,18 @@ cette référence, puis découpées par `build_enemies.py`.
 ses planches (`creatures/seigneur_demon*`) sont ignorées par git, seules les bandes
 réduites du jeu sont suivies. Un clone neuf garde le jeu complet, mais ne peut pas
 les redécouper.
+
+**Chaque coup ennemi se voit en trois temps** (2026-11-04, demande du joueur) : l'armement sur la
+créature (`foe_charge`), puis le coup devant son arme, puis ce qui en reste. `FoeStrike` porte une
+forme par façon de frapper (lame, choc au sol, morsure, souffle, éclaboussure, dard) et les couleurs
+de chaque espèce et de chaque boss, joués par `Level._foe_charge` et `_foe_strike`. Le coup se voit
+même s'il est esquivé ; la caméra tremble s'il touche, et à chaque coup d'un boss, qui ajoute une
+onde de choc. Les zones de boss restent les images de leur planche, elles ne gagnent qu'une secousse.
+- ⚠️ Les positions d'entités sont celles des PIEDS : un coup posé là semblait tomber sous le mage en
+  2,5D. `BODY_LIFT` le remonte à hauteur du corps, et `ANCHORS` pose le point d'impact de chaque
+  dessin sur le mage, à une case.
+- Toute créature qui frappe au contact doit avoir son style : `test_creatures` le vérifie. Banc :
+  `tools/preview_foe_strikes.gd` (armement, puis le coup à trois instants, sur un sol clair).
 
 **Quatre créatures ne se contentent pas de poursuivre** (2026-11-01), et leurs règles
 vivent dans `CreatureRules` et `SporeClouds`, en RefCounted, pour que `test_balance` les

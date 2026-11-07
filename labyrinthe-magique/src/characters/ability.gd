@@ -60,6 +60,18 @@ enum Kind {
 	MAGMA_SCALES, ## absorbe un coup, brûle ce qui le touche, puis éclate en écailles de lave
 	WINGBEAT,     ## repousse et enflamme ce qui l'entoure, et le lanceur recule d'un bond
 	DRAGON_SHADOW, ## une ombre de dragon survole l'écran : tout brûle, puis explose en colonnes
+	DICE,         ## deux dés roulent dans le couloir : leur total fixe les dégâts, un double sonne
+	TRAP_CARD,    ## une carte posée au sol ; le premier ennemi la retourne et elle frappe au hasard
+	COIN,         ## pile ou face : intouchable et soigné, ou ses prochains coups doublés
+	ROULETTE,     ## une roulette tourne, la bille tombe : rouge brûle, noir fige, zéro foudroie
+	GULF,         ## une gueule s'ouvre au sol, aspire ce qui l'entoure, puis se referme
+	DEVOUR,       ## avale l'ennemi le plus proche ; un ennemi blessé meurt d'un coup
+	REGURGITATE,  ## recrache toutes les bouchées en boules de bile qui explosent
+	LEAP,         ## un bond en avant ; l'atterrissage sonne ce qui l'entoure
+	FEAST,        ## le lanceur devient géant et avale les ennemis proches, un à un
+	HERO_TRANSFORM,
+	COMET,
+	TRANSMISSION,
 }
 
 @export var id: String = ""
@@ -71,6 +83,8 @@ enum Kind {
 ## Dégâts au centre de l'effet. Une ZONE les inflige PAR SECONDE, les autres en
 ## une fois — la distinction est portée par `kind`, pas par un second champ.
 @export var damage: int = 0
+## Petite onde qui suit une attaque au contact (Éveillé).
+@export var follow_wave: int = 0
 ## Rayon d'effet, en cases. 0 = cible unique.
 @export var radius: float = 0.0
 ## Portée maximale, en distance de CHEMIN (les couloirs, pas le vol d'oiseau).
@@ -604,6 +618,14 @@ enum Kind {
 ## Brûlure posée sur les ennemis touchés, en dégâts par seconde, pendant `duration`.
 @export var burn_dps: int = 0
 
+## LE CROUPIER DES ENFERS. Combien de cartes pièges tiennent au sol à la fois.
+@export var trap_count: int = 0
+## Pile ou face : ce que rend Face, et combien de coups Pile double.
+@export var coin_heal: int = 0
+@export var doubled_hits: int = 0
+## La Roulette : les dégâts du Noir (ceux du Zéro sont `damage`).
+@export var black_damage: int = 0
+
 
 ## Fabrique lisible : `Ability.make({"id": "fireball", "damage": 30, …})`.
 ## Un _init à douze paramètres positionnels serait illisible au point d'être
@@ -697,6 +719,12 @@ func summary() -> String:
 ## voisine y a ajouté les invocations pendant ce travail.
 func _base_summary() -> String:
 	match kind:
+		Kind.HERO_TRANSFORM:
+			return "Prisme %s s · +2 s par kill (plafond %s s)" % [_number(Transformation.START_TIME), _number(Transformation.MAX_TIME)]
+		Kind.COMET:
+			return "%d dégâts à l’arrivée · rayon %s · portée %d" % [damage, _number(radius), range]
+		Kind.TRANSMISSION:
+			return "réapparaît derrière la cible · portée %d" % range
 		Kind.PROJECTILE when radius > 0.0 and stun_seconds > 0.0:
 			return "%d dégâts · rayon %s · cloue %s s · portée %d" % [damage, _number(radius),
 				_number(stun_seconds), range]
@@ -710,6 +738,31 @@ func _base_summary() -> String:
 		Kind.GARDEN:
 			return "rayon %s · %s s · aucun ennemi n'entre · %d dégâts au rejet" % [
 				_number(radius), _number(duration), damage]
+		Kind.GULF:
+			return "portée %d · aspire %s s · rayon %s · puis %d dégâts" % [range, _number(duration), _number(radius), damage]
+		Kind.DEVOUR:
+			return "%d dégâts · portée %d · avale sous %d %% de ses PV : +%d PV" % [damage, range,
+				int(execute_below * 100.0), bite_heal]
+		Kind.REGURGITATE:
+			return "une boule par bouchée · %d dégâts chacune · rayon %s · portée %d" % [damage, _number(radius), range]
+		Kind.LEAP:
+			return "bond de %d cases · sonnés %s s · rayon %s" % [range, _number(stun_seconds), _number(radius)]
+		Kind.FEAST:
+			return "géant %s s · avale un ennemi toutes les %s s · rayon %s · %d dégâts · +%d PV par proie" % [
+				_number(duration), _number(CombatSystem.FEAST_GAP), _number(radius), damage, bite_heal]
+		Kind.DICE:
+			return "2 dés · %d par point (2 à 12) · %d cases · double : sonnés %s s" % [damage, range,
+				_number(stun_seconds)]
+		Kind.TRAP_CARD:
+			return "%d dégâts · %d cartes au sol · %s s · feu, glace ou foudre" % [damage, trap_count, _number(duration)]
+		Kind.COIN:
+			return "face : INTOUCHABLE %s s, +%d PV · pile : %d coups doublés" % [_number(duration), coin_heal,
+				doubled_hits]
+		Kind.ROULETTE:
+			return "tout l'écran · rouge : brûle %d/s %s s · noir : figés %s s, %d · zéro : %d" % [burn_dps,
+				_number(duration), _number(stun_seconds), black_damage, damage]
+		Kind.BLINK when decoy_seconds > 0.0 and damage <= 0:
+			return "%d cases · leurre %s s" % [range, _number(decoy_seconds)]
 		Kind.BREATH:
 			return "%d dégâts · %d cases de couloir · en feu %s s" % [damage, range, _number(ground_fire)]
 		Kind.BITE:

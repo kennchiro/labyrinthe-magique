@@ -22,6 +22,7 @@ func _run() -> void:
 	_test_thief_flees()
 	_test_clouds()
 	_test_phasing()
+	_test_strike_styles()
 	await _test_stolen_gem()
 	await _test_split()
 	await _test_spit()
@@ -137,6 +138,20 @@ func _test_phasing() -> void:
 	if CreatureRules.anchor_cell(grid, Vector2i(4, 2), Vector2i(4, 3)) != Vector2i(4, 3):
 		_fail("dans la haie, la raie doit rester à portée des sorts")
 	print("raie : elle traverse, sans sortir, et reste touchable : OK")
+
+
+## Toute créature qui frappe au contact a son coup peint, et chaque boss aussi.
+func _test_strike_styles() -> void:
+	for id: String in Bestiary.SPECIES:
+		var tuning := Bestiary.of(id)
+		var melee := not bool(tuning.get("harmless", false)) \
+			and not bool(tuning.get("ranged_only", false))
+		if melee and not FoeStrike.has_style(id):
+			_fail("%s frappe au contact sans effet de coup" % id)
+	for id: String in FoeStrike.STYLES:
+		if not FoeStrike.SHADERS.has(str(FoeStrike.STYLES[id]["key"])):
+			_fail("le coup de %s demande une forme inconnue" % id)
+	print("coups : chaque créature qui frappe a le sien : OK")
 
 
 ## LA GEMME NE SORT JAMAIS DU JEU : c'est ce qui rend le vol juste, et ce qui bloquerait la

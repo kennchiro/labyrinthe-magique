@@ -43,10 +43,12 @@ var _base_scale := 1.0
 func setup(character_id: String, tile_size: int, tint: Color = Color(1, 1, 1),
 		arriving: bool = false) -> void:
 	_embers(tile_size, tint, arriving)
-	var texture: Texture2D = load(CHARACTERS_PATH + character_id + "/warp.png")
-	if texture == null:
-		queue_free()
+	var path := CHARACTERS_PATH + character_id + "/warp.png"
+	# Aël utilise ses éclats procéduraux ; aucune planche de colonne n’existe.
+	# Garder les particules vivantes même lorsqu’il n’y a pas de colonne dessinée.
+	if not ResourceLoader.exists(path):
 		return
+	var texture: Texture2D = load(path)
 	sprite.texture = texture
 	var extent := maxf(float(texture.get_width()), float(texture.get_height()))
 	_base_scale = (tile_size * TARGET_EXTENT_TILES) / extent

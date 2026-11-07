@@ -17,6 +17,9 @@ extends Resource
 ## Points de vie de BASE. Le stage y ajoute son bonus (LevelConfig), ce qui
 ## permet de durcir un niveau sans toucher aux personnages, et inversement.
 @export var base_health: int = 3
+@export var hero_level: int = 1
+@export var hero_form: int = 0
+@export var base_plates: int = 0
 ## Vitesse du mage, en cases par seconde. Celle des ennemis ne s'en déduit PAS :
 ## elle est calée sur une vitesse de référence, sinon choisir le mage le plus
 ## lent ralentirait aussi ses poursuivants et supprimerait le risque.
@@ -51,3 +54,10 @@ func action_bar() -> Array[Ability]:
 	if ultimate != null:
 		out.append(ultimate)
 	return out
+
+
+## Les formes partagent l’identité de combat mais ont leurs propres images.
+func visual_id() -> String:
+	if id == "ael" and hero_form > 0:
+		return "ael_" + ["apprenti", "eveille", "ascendant", "prisme", "dragon"][clampi(hero_form, 0, 4)]
+	return id

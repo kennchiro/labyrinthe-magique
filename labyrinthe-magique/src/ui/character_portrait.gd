@@ -29,7 +29,7 @@ extends Control
 ## n'oblige à fournir les huit planches d'un coup.
 
 const CHARACTERS_PATH := "res://assets/characters/"
-const PORTRAITS_PATH := "res://assets/peso&cover/interface/portraits/"
+const PORTRAITS_PATH := "res://assets/ui/portraits/"
 const FRAME_PATH := "res://assets/ui/portraits/"
 
 var stats: CharacterStats = null
@@ -53,7 +53,10 @@ var _time := 0.0
 
 func setup(p_stats: CharacterStats) -> void:
 	stats = p_stats
-	var portrait_path := PORTRAITS_PATH + "portrait_" + stats.id + ".png"
+	_portrait = null
+	var portrait_path := PORTRAITS_PATH + "portrait_" + stats.visual_id() + ".jpg"
+	if not ResourceLoader.exists(portrait_path):
+		portrait_path = PORTRAITS_PATH + "portrait_" + stats.id + ".jpg"
 	if ResourceLoader.exists(portrait_path):
 		_portrait = load(portrait_path)
 	var frame_path := FRAME_PATH + "cadre_carte.png"

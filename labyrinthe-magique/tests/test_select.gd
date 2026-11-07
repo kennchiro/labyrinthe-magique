@@ -29,6 +29,27 @@ func _init() -> void:
 	var default_stats := CharacterCatalog.by_id(CharacterCatalog.default_id())
 	if screen._category != default_stats.category:
 		failures.append("ouvre sur le mauvais onglet : %s" % screen._category)
+	# Aël, le héros principal, est le premier qu'on voit : premier onglet, choisi d'office.
+	if CharacterCatalog.CATEGORIES.keys()[0] != CharacterCatalog.CATEGORY_HEROS:
+		failures.append("l'onglet Héros n'est pas le premier")
+	if screen.character_id != CharacterCatalog.AEL or CharacterCatalog.roster()[0].id != CharacterCatalog.AEL:
+		failures.append("Aël n'est pas le premier personnage affiché : %s" % screen.character_id)
+	if (screen.get_node("Buttons/PlayButton") as Button).disabled:
+		failures.append("Aël ne peut pas lancer une vraie partie")
+	# Ses quatre formes ont chacune leur carte, et s'essaient en DÉMO.
+	var forms := 0
+	for portrait: CharacterPortrait in screen._portraits:
+		if portrait.stats.id in CharacterCatalog.AEL_FORMS:
+			forms += 1
+	if forms != CharacterCatalog.AEL_FORMS.size():
+		failures.append("onglet Héros : %d formes d'Aël sur 4" % forms)
+	screen.select("ael_prisme")
+	if not (screen.get_node("Buttons/PlayButton") as Button).disabled \
+			or (screen.get_node("Buttons/DemoButton") as Button).disabled:
+		failures.append("le Prisme se choisit en DÉMO seulement")
+	if CharacterCatalog.by_id("ael_ascendant").hero_form != 2:
+		failures.append("la carte Ascendant ne donne pas sa forme")
+	screen.select(CharacterCatalog.AEL)
 
 	# Changer d'onglet choisit un personnage de cet onglet, et n'affiche que lui.
 	screen.select(CharacterCatalog.FIRE)

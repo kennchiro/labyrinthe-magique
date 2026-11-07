@@ -57,6 +57,9 @@ const CROSS_HUB := 0.16
 ## Au-delà de 45° du bras tenu on changerait de direction, et il faut ces quelques
 ## degrés de plus : un pouce posé sur la diagonale ferait sinon vibrer le mage.
 const CROSS_STICKY := deg_to_rad(8.0)
+## La croix est plus grande que le manche : le pouce y vise un bras au lieu de pousser
+## un bouton, et des bras de la taille du manche se trouvaient trop petits en jouant.
+const CROSS_SIZE := 1.3
 
 var direction: Vector2 = Vector2.ZERO
 var style := Style.ANALOG
@@ -102,15 +105,25 @@ func set_preview() -> void:
 
 
 func _origin() -> Vector2:
-	var fallback := Vector2(margin.x + radius, size.y - margin.y - radius)
+	var corner := _style_radius()
+	var fallback := Vector2(margin.x + corner, size.y - margin.y - corner)
 	if layout == null:
 		return fallback
 	return layout.centre_of(TouchLayout.MOVE, size, fallback, visual_radius())
 
 
-## Le rayon à l'écran, réglage du joueur compris.
+## Le rayon à l'écran, style et réglage du joueur compris.
 func visual_radius() -> float:
-	return radius * (layout.scale_of(TouchLayout.MOVE) if layout != null else 1.0)
+	return _style_radius() * (layout.scale_of(TouchLayout.MOVE) if layout != null else 1.0)
+
+
+## La croix ne grandit que dans la hauteur libre sous la barre du mage : sur un très
+## petit écran, elle montait sur la vie. Jamais plus petite que le manche pour autant.
+func _style_radius() -> float:
+	if style != Style.CROSS:
+		return radius
+	var room := (size.y - margin.y - TouchLayout.TOP_LEFT.y - TouchLayout.GAP) * 0.5
+	return maxf(radius, minf(radius * CROSS_SIZE, room))
 
 
 ## Jusqu'où un pouce posé attrape la commande.

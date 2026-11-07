@@ -10,6 +10,14 @@ un outil. Les deux vont ensemble : le prompt impose ce que l'outil sait vérifie
 (grille régulière, marges, une taille unique, un côté de profil annoncé), et
 l'outil refuse en silence tout ce que le prompt n'a pas exigé.
 
+## Aël, l'Enfant sans élément — le héros principal
+
+Quatre formes, de l'Apprenti au Prisme. La planche de concept du joueur (`refonte/ael_concept.png`) est
+jointe aux modèles : [mages/heros_ael](prompts/mages/heros_ael.md), puis
+[mages_animes/ael](prompts/mages_animes/ael.md). Le plan de jeu : [HEROS_PRINCIPAL](HEROS_PRINCIPAL.md).
+Toutes les images qui restent, en une seule commande : [mages/ael_commande_complete](prompts/mages/ael_commande_complete.md).
+Sa forme du niveau 80, le Dragon d'or : [mages/ael_dragon](prompts/mages/ael_dragon.md).
+
 ## Le Héros d'essai — le gabarit d'animation
 
 Pour régler un mouvement très dynamique sans toucher aux personnages existants. Cinq images,
@@ -104,8 +112,12 @@ l'approche, et son extra ferme un cercle où aucun ennemi n'entre. Pas encore jo
 ## Le Croupier des Enfers — démon humain
 
 La fiche et la commande complète, dans l'ordre : [mages/mage_croupier](prompts/mages/mage_croupier.md). Un homme
-élégant, démon joueur, chibi comme les autres démons humains : cartes, dés, pièce et roulette. Pas encore jouable :
-les images sont à commander.
+élégant, démon joueur, chibi comme les autres démons humains : cartes, dés, pièce et roulette. Il est jouable.
+
+## L'Avide, Démon de la Faim — démon pur sang
+
+La fiche et la commande complète, dans l'ordre : [mages/mage_avide](prompts/mages/mage_avide.md). Un démon sans rien
+d'humain, pas chibi, à la gueule fendant le ventre : plus il dévore, plus il grandit. Il est jouable.
 
 ## Les anges — refaire le sprite comme les mages
 
@@ -179,6 +191,8 @@ bâton est tenu à droite dans les quatre orientations et reste dans la case.
 | les icônes de sorts du Croupier des Enfers | [sorts/icones_croupier](prompts/sorts/icones_croupier.md) |
 | les pièces du Croupier (cartes, dé, pièce, jeton, bille) | [sorts/pieces_croupier](prompts/sorts/pieces_croupier.md) |
 | la Roulette infernale du Croupier | [sorts/roulette_croupier](prompts/sorts/roulette_croupier.md) |
+| les icônes de sorts de l'Avide | [sorts/icones_avide](prompts/sorts/icones_avide.md) |
+| les pièces de l'Avide (langue, gouffre, bile, gueule) | [sorts/pieces_avide](prompts/sorts/pieces_avide.md) |
 | les terrains de stage | [PROMPT_TERRAIN.md](PROMPT_TERRAIN.md) *(index des 30 pages de `prompts/`)* |
 
 ### Les impacts — la frappe au sol

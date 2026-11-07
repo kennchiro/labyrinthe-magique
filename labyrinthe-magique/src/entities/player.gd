@@ -55,6 +55,7 @@ var touch_direction: Vector2 = Vector2.ZERO
 var debug_direction: Vector2 = Vector2.ZERO
 
 var character_id := CharacterCatalog.default_id()
+var hero_form := 0
 
 ## Ordre de marche « toucher le chemin » : champ de distances BFS depuis la case
 ## visée, que l'on descend pas à pas — exactement le mécanisme des ennemis, mais
@@ -93,6 +94,16 @@ var _last_step := -1
 var _struck := false
 var _slashed := false
 var _dust: FootDust = null
+## La ruée et la roulade d'Aël : le mage est déjà arrivé, c'est le DESSIN qui rattrape le trajet.
+var _dash_from := Vector2.ZERO
+var _dash_left := 0.0
+var _dash_time := 1.0
+var _dash_turns := 0.0
+## Le pas des ressorts du gabarit, et la plus forte déformation qu'ils peuvent donner au dessin.
+const SPRING_STEP := 1.0 / 120.0
+const JOLT_LIMIT := 0.3
+## Les coups portés, pour croiser les arcs d'un gabarit qui alterne (`slash_alternate`).
+var _slash_count := 0
 ## L'Envol de l'Archange du Ciel : de combien de pixels le dessin s'élève, et de combien il grandit.
 ## Seul le DESSIN monte : l'origine du nœud, son ombre et ses collisions restent au sol.
 var lift := 0.0
@@ -100,9 +111,23 @@ var lift_scale := 1.0
 var _hover := 0.0
 
 
+## L'Avide grandit avec ses bouchées, et le Festin le rend géant : seul le DESSIN change d'échelle,
+## pas sa case ni ses collisions.
+var growth := 1.0
+
+
+func set_growth(value: float) -> void:
+	growth = value
+	if sprite != null and not _textures.is_empty() and _cell.y > 0.0:
+		var factor := target_height / _cell.y
+		_sprite_scale = Vector2(factor, factor) * growth
+		sprite.scale = _sprite_scale
+
+
 ## Appelée par le Level AVANT setup() : la planche à charger dépend du mage.
 func set_character(stats: CharacterStats) -> void:
 	character_id = stats.id if stats != null else CharacterCatalog.default_id()
+	hero_form = stats.hero_form if stats != null else 0
 	_load_character()
 
 
@@ -169,6 +194,17 @@ func play_warp() -> void:
 	_warp_left = WARP_FADE
 
 
+## Le dessin part de `from` (en coordonnées du parent) et glisse jusqu'au nœud, déjà arrivé, en
+## `seconds`. `turns` le fait tourner sur lui-même : une roulade. Joué par le gabarit seulement.
+func play_dash(from: Vector2, seconds: float, turns: float = 0.0) -> void:
+	_dash_from = (from - position) / scale
+	_dash_time = maxf(0.01, seconds)
+	_dash_left = _dash_time
+	_dash_turns = turns
+	if _motion != null:
+		_step_dust(1.0)
+
+
 ## Fondu de réapparition, en secondes.
 const WARP_FADE := 0.26
 
@@ -176,7 +212,12 @@ var _warp_left := 0.0
 
 
 func _load_character() -> void:
-	var folder := CHARACTERS_PATH + character_id + "/"
+	var visual_id := character_id
+	if character_id == "ael" and hero_form > 0:
+		visual_id = "ael_" + ["apprenti", "eveille", "ascendant", "prisme", "dragon"][clampi(hero_form, 0, 4)]
+	var folder := CHARACTERS_PATH + visual_id + "/"
+	if not FileAccess.file_exists(folder + "frames.json"):
+		folder = CHARACTERS_PATH + character_id + "/"
 	var text := FileAccess.get_file_as_string(folder + "frames.json")
 	var parsed: Variant = JSON.parse_string(text)
 	if parsed == null:
@@ -220,7 +261,7 @@ func _apply_visual() -> void:
 	foot_left.visible = false
 	foot_right.visible = false
 	var factor := target_height / _cell.y
-	_sprite_scale = Vector2(factor, factor)
+	_sprite_scale = Vector2(factor, factor) * growth
 	sprite.scale = _sprite_scale
 	sprite.region_enabled = false
 	sprite.vframes = 1
@@ -390,10 +431,30 @@ func _animate_motion(delta: float) -> void:
 			sprite.modulate = Color(1.35, 1.35, 1.35)
 
 	# Deux ressorts amortis, qui franchissent leur cible avant de s'y poser.
-	_lean_speed += (lean_goal - _lean) * 170.0 * delta - _lean_speed * 17.0 * delta
-	_lean += _lean_speed * delta
-	_jolt_speed += -_jolt * 240.0 * delta - _jolt_speed * 15.0 * delta
-	_jolt += _jolt_speed * delta
+	# ⚠️ PAR PETITS PAS. Calculés d'un seul pas sur une image longue (une saccade au départ d'un saut, une
+	# capture), ils divergeaient : l'écrasement passait de 0,3 à 12 et le héros remplissait l'écran, géant
+	# et flou (revue du 2026-11-05). Un pas de 1/120 s reste stable avec ces raideurs.
+	var left := minf(delta, 0.1)
+	while left > 0.0:
+		var step := minf(left, SPRING_STEP)
+		left -= step
+		_lean_speed += (lean_goal - _lean) * 170.0 * step - _lean_speed * 17.0 * step
+		_lean += _lean_speed * step
+		_jolt_speed += -_jolt * 240.0 * step - _jolt_speed * 15.0 * step
+		_jolt += _jolt_speed * step
+	_lean = clampf(_lean, -0.4, 0.4)
+	_jolt = clampf(_jolt, -JOLT_LIMIT, JOLT_LIMIT)
+
+	# La ruée : vite au départ, en douceur à l'arrivée, pour que l'œil suive le trajet.
+	sprite.rotation = 0.0
+	if _dash_left > 0.0:
+		_dash_left = maxf(0.0, _dash_left - delta)
+		var eased := 1.0 - pow(_dash_left / _dash_time, 3.0)
+		offset += _dash_from * (1.0 - eased)
+		sprite.rotation = _dash_turns * TAU * eased * (-1.0 if _facing.x < 0 else 1.0)
+		# Il roule autour de son ventre, pas de ses pieds, où est l'origine du dessin.
+		var belly := Vector2(0.0, -BODY_SCREEN_HEIGHT * 0.5)
+		offset += belly - belly.rotated(sprite.rotation)
 
 	sprite.position = offset
 	sprite.skew = _lean
@@ -408,8 +469,16 @@ func _spawn_slash() -> void:
 	add_child(arc)
 	# À hauteur de poitrine, et assez large pour dépasser la silhouette.
 	arc.position = Vector2(0.0, -BODY_SCREEN_HEIGHT * 0.5)
+	_slash_count += 1
 	arc.setup(_strike_facing(), BODY_SCREEN_HEIGHT * SLASH_RADIUS, _motion.slash_color)
 	arc.z_index = 1
+	# Le Double coup de l'Ascendant : le revers part avec le coup droit, et les deux arcs se croisent en X.
+	if _motion.slash_alternate:
+		var back := SlashArc.new()
+		add_child(back)
+		back.position = arc.position
+		back.setup(_strike_facing(), BODY_SCREEN_HEIGHT * SLASH_RADIUS * 1.15, _motion.slash_color.lerp(Color("#e0b84a"), 0.5), true)
+		back.z_index = 1
 
 
 func _step_dust(strength: float) -> void:

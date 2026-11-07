@@ -58,6 +58,8 @@ signal summon_projectile_hit(id: int, target_index: int, cell: Vector2i, ability
 signal summon_expired(id: int)
 signal enemy_damaged(index: int, dealt: int, ability: Ability)
 signal enemy_killed(index: int)
+signal hero_transformation_requested
+signal comet_performed(from: Vector2i, to: Vector2i)
 signal player_healed(amount: int)
 ## Le bouclier est posé, avec sa durée. Il en avait une dans sa fiche (8 s) et
 ## le code l'IGNORAIT : une fois posé, il tenait jusqu'à ce qu'on le consomme,
@@ -230,6 +232,26 @@ signal wings_beaten(cell: Vector2i, radius: float)
 signal dragon_shadow_cast(cell: Vector2i, direction: Vector2i, indices: Array, delay: float)
 signal shadow_column(cell: Vector2i, first: bool)
 signal shadow_ended
+# Le Croupier des Enfers : le hasard, tiré ici avec la graine de la partie.
+signal lucky_hit(index: int, cell: Vector2i)
+signal dice_rolled(from: Vector2i, cells: Array, first: int, second: int)
+signal trap_posed(cell: Vector2i, seconds: float)
+signal trap_faded(cell: Vector2i)
+signal trap_flipped(cell: Vector2i, suit: int, targets: Array)
+signal coin_flipped(face: bool)
+signal doubled_spent
+signal roulette_spun(cell: Vector2i, result: int, seconds: float)
+signal roulette_landed(result: int, cells: Array)
+# L'Avide : ses bouchées, et ce qu'il avale.
+signal bites_changed(count: int, gained: bool)
+signal gulf_opened(cell: Vector2i, radius: float, seconds: float)
+signal gulf_closed(cell: Vector2i, cells: Array)
+signal devoured(index: int, cell: Vector2i, swallowed: bool)
+signal regurgitated(from: Vector2i, cells: Array)
+signal leap_landed(cell: Vector2i, radius: float)
+signal feast_started(seconds: float)
+signal feast_bite(index: int, cell: Vector2i, killed: bool)
+signal feast_ended
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -430,6 +452,32 @@ const INFERNO_SPEED := 0.2
 ## L'Ombre du Dragon : la première colonne attend que l'ombre soit passée, puis elles se suivent.
 const SHADOW_DELAY := 1.2
 const SHADOW_GAP := 0.12
+## Le Croupier : la chance d'un coup critique, et ce qu'il multiplie.
+const LUCK_CHANCE := 0.2
+const LUCK_MULT := 3
+## Les figures de la Carte piège.
+enum Suit { FIRE, ICE, THUNDER }
+## Le Roi de foudre saute à ce nombre d'ennemis en plus, à cette distance de la carte.
+const TRAP_CHAIN := 2
+const TRAP_REACH := 4
+const TRAP_BURN_SECONDS := 3.0
+## La Roulette tourne ce temps avant que la bille tombe. Le Zéro sort une fois sur sept.
+const ROULETTE_SPIN := 1.8
+const ROULETTE_ZERO := 1.0 / 7.0
+enum Slot { ZERO, RED, BLACK }
+## L'Avide : ses bouchées, ce que chacune ajoute, et le temps qu'il faut pour en perdre une.
+const BITES_MAX := 5
+const BITE_DAMAGE := 0.08
+const BITE_SIZE := 0.06
+const BITE_DECAY := 10.0
+## Le Gouffre tire d'une case à cet intervalle, et mord ce qui est à ce rayon de son centre.
+const GULF_PULL_GAP := 0.4
+const GULF_BITE_RADIUS := 1.5
+## Le Festin avale un ennemi à cet intervalle, après une première attente, et soigne au plus trois fois.
+const FEAST_GAP := 0.6
+const FEAST_FIRST := 0.45
+const FEAST_HEALS := 3
+const FEAST_SIZE := 1.8
 const BLADE_OUT := 0.4
 const BLADE_BACK := 0.35
 const BLADE_FAN := 30.0
@@ -468,6 +516,7 @@ var health: Health
 ## sorts sous toutes les coutures, pas les rationner. La campagne, elle, garde
 ## ses recharges ; ce drapeau n'est posé que par un LevelConfig en `is_demo`.
 var free_use := false
+var hero_transform_allowed := false
 
 var _cooldowns := {}        # id de compétence -> secondes restantes
 var _charges := {}          # id -> charges restantes (sorts à charges)
@@ -583,6 +632,13 @@ var _scales: Ability = null            # les Écailles de magma, tant qu'elles t
 var _scales_tick := 0.0
 var _shadow: Array[Dictionary] = []    # {index, left, first, ability} : les colonnes à venir
 var _dragon_cell := Vector2i(-1, -1)   # où il se tenait à la dernière mise à jour
+var _traps: Array[Dictionary] = []     # {cell, left, ability} : les cartes pièges au sol
+var _doubled_left := 0                 # coups doublés qu'il reste après Pile
+var _roulette := {}                    # {left, result, ability}
+var _bites := 0                        # bouchées de l'Avide
+var _bite_decay := 0.0                 # secondes avant qu'une bouchée fonde
+var _gulf := {}                        # {cell, left, pull, ability}
+var _feast := {}                       # {left, gap, eaten, heals, ability}
 var _flight_left := 0.0
 
 
@@ -594,6 +650,7 @@ func _init(p_grid: MazeGrid, p_stats: CharacterStats, p_health: Health,
 	grid = p_grid
 	stats = p_stats
 	health = p_health
+	health.plates = maxi(health.plates, stats.base_plates)
 	_rng.seed = p_seed if p_seed != 0 else 60611
 	if stats.element == Element.Kind.STEEL:
 		health.plates = PLATE_MAX
@@ -671,6 +728,8 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_gaoler(delta, context)
 	_update_cherubin(delta, context)
 	_update_dragon(delta, context)
+	_update_croupier(delta, context)
+	_update_avide(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
 	for id in _cooldowns.keys():
 		var left: float = _cooldowns[id] - delta
@@ -975,8 +1034,21 @@ func use(ability: Ability, context: CombatContext) -> bool:
 	if not _can_pay(ability):
 		use_refused.emit("pacte")
 		return false
+	if stats.id == "ael" and ability == stats.attack and ability.kind == Ability.Kind.BLAST:
+		var target := find_target(ability, context)
+		if target >= 0:
+			var toward := context.enemy_cells[target] - context.player_cell
+			context.player_facing = Vector2i(signi(toward.x), 0) if absi(toward.x) > absi(toward.y) else Vector2i(0, signi(toward.y))
 	var fired := false
 	match ability.kind:
+		Ability.Kind.HERO_TRANSFORM:
+			if not hero_transform_allowed:
+				return false
+			_cast_blast(ability, context)
+			hero_transformation_requested.emit()
+			fired = true
+		Ability.Kind.COMET, Ability.Kind.TRANSMISSION:
+			fired = _cast_prism_move(ability, context)
 		Ability.Kind.PROJECTILE:
 			fired = _cast_projectile(ability, context)
 		Ability.Kind.BLAST:
@@ -1108,6 +1180,24 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_wingbeat(ability, context)
 		Ability.Kind.DRAGON_SHADOW:
 			fired = _cast_dragon_shadow(ability, context)
+		Ability.Kind.DICE:
+			fired = _cast_dice(ability, context)
+		Ability.Kind.TRAP_CARD:
+			fired = _cast_trap(ability, context)
+		Ability.Kind.COIN:
+			fired = _cast_coin(ability)
+		Ability.Kind.ROULETTE:
+			fired = _cast_roulette(ability, context)
+		Ability.Kind.GULF:
+			fired = _cast_gulf(ability, context)
+		Ability.Kind.DEVOUR:
+			fired = _cast_devour(ability, context)
+		Ability.Kind.REGURGITATE:
+			fired = _cast_regurgitate(ability, context)
+		Ability.Kind.LEAP:
+			fired = _cast_leap(ability, context)
+		Ability.Kind.FEAST:
+			fired = _cast_feast(ability)
 
 	# L'EXALTATION EST RENDUE PAR LE SORT, PAS PAR SON GENRE.
 	#
@@ -1290,6 +1380,13 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 	if ability.stun_seconds > 0.0:
 		_freeze_around(ability, context)
 	blast_fired.emit(ability, context.player_cell)
+	if ability.follow_wave > 0:
+		var wave := ability.duplicate() as Ability
+		wave.kind = Ability.Kind.WAVE
+		wave.range = ability.follow_wave
+		wave.damage = maxi(1, ability.damage / 3)
+		wave.follow_wave = 0
+		_cast_wave(wave, context)
 	# L'ASPIRATION PASSE AVANT LES DÉGÂTS, sinon elle ne sert à rien : ce qu'elle
 	# ramène doit encore trouver l'explosion en arrivant.
 	if ability.pull_radius > 0.0:
@@ -2624,7 +2721,15 @@ func _burst_wings(context: CombatContext) -> void:
 
 
 func _cast_beam(ability: Ability, context: CombatContext) -> bool:
-	var cells := _beam_path(ability.range, context)
+	var cells: Array[Vector2i] = []
+	if ability.pierces_walls:
+		for step in range(1, ability.range + 1):
+			var cell := context.player_cell + context.player_facing * step
+			if cell.x < 0 or cell.y < 0 or cell.x >= grid.cols or cell.y >= grid.rows:
+				break
+			cells.append(cell)
+	else:
+		cells = _beam_path(ability.range, context)
 	if cells.is_empty():
 		use_refused.emit("mur")
 		return false
@@ -4324,6 +4429,367 @@ func _cast_dragon_shadow(ability: Ability, context: CombatContext) -> bool:
 	return true
 
 
+# --- Le Croupier des Enfers -----------------------------------------------------------
+#
+# Chaque sort tire au sort son résultat, avec `_rng` : la même graine rejoue la même partie, et
+# l'équilibrage mesure le hasard comme le reste. Aucun tirage ne le laisse perdant.
+
+## Pile double ses prochains coups ; le trait, lui, fait un critique de loin en loin.
+func _gamble(index: int, power: int, ability: Ability, with_trait: bool, context: CombatContext) -> int:
+	if _doubled_left > 0 and ability == stats.attack:
+		_doubled_left -= 1
+		power *= 2
+		if _doubled_left == 0:
+			doubled_spent.emit()
+	if with_trait and _rng.randf() < LUCK_CHANCE:
+		power *= LUCK_MULT
+		lucky_hit.emit(index, context.enemy_cells[index])
+	return power
+
+
+func doubled_left() -> int:
+	return _doubled_left
+
+
+func traps() -> Array[Dictionary]:
+	return _traps
+
+
+## Les Dés pipés roulent dans le couloir devant lui, comme le Souffle du Dragon.
+func _cast_dice(ability: Ability, context: CombatContext) -> bool:
+	var facing := context.player_facing
+	if facing == Vector2i.ZERO:
+		facing = Vector2i.DOWN
+	var path := _corridor_ahead(context.player_cell, facing, ability.range)
+	if path.is_empty():
+		use_refused.emit("mur")
+		return false
+	var first := _rng.randi_range(1, 6)
+	var second := _rng.randi_range(1, 6)
+	var cells := []
+	var on_path := {}
+	for cell in path:
+		cells.append(cell)
+		on_path[cell] = true
+	dice_rolled.emit(context.player_cell, cells, first, second)
+	var roll := Ability.make({"id": ability.id, "display_name": ability.display_name, "kind": ability.kind,
+		"element": ability.element, "damage": ability.damage * (first + second)})
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or not on_path.has(context.enemy_cells[i]):
+			continue
+		_apply_damage(i, roll, context)
+		if first == second and context.enemy_alive(i) and not context.bosses.has(i) \
+				and not context.is_structure(i):
+			enemy_staggered.emit(i, ability.stun_seconds)
+	return true
+
+
+## La carte se pose sous lui. Au-delà de `trap_count`, la plus ancienne s'efface.
+func _cast_trap(ability: Ability, context: CombatContext) -> bool:
+	for trap in _traps:
+		if trap["cell"] == context.player_cell:
+			trap["left"] = ability.duration
+			trap_posed.emit(context.player_cell, ability.duration)
+			return true
+	while _traps.size() >= maxi(1, ability.trap_count):
+		trap_faded.emit(_traps[0]["cell"])
+		_traps.remove_at(0)
+	_traps.append({"cell": context.player_cell, "left": ability.duration, "ability": ability})
+	trap_posed.emit(context.player_cell, ability.duration)
+	return true
+
+
+func _flip_trap(trap: Dictionary, index: int, context: CombatContext) -> void:
+	var ability: Ability = trap["ability"]
+	var cell: Vector2i = trap["cell"]
+	var suit := _rng.randi_range(0, 2)
+	var targets: Array[int] = [index]
+	if suit == Suit.THUNDER:
+		var field := _field_from(cell)
+		var near := _creatures_within(cell, float(TRAP_REACH), context)
+		near.erase(index)
+		near.sort_custom(func(a: int, b: int) -> bool:
+			return Pathfinder.value_at(grid, field, context.enemy_cells[a]) \
+				< Pathfinder.value_at(grid, field, context.enemy_cells[b]))
+		for k in mini(TRAP_CHAIN, near.size()):
+			targets.append(near[k])
+	var cells := []
+	for t in targets:
+		cells.append(context.enemy_cells[t])
+	trap_flipped.emit(cell, suit, cells)
+	for t in targets:
+		_apply_damage(t, ability, context)
+		if not context.enemy_alive(t):
+			continue
+		if suit == Suit.FIRE:
+			_ignite(t, ability.burn_dps, TRAP_BURN_SECONDS)
+		elif suit == Suit.ICE and not context.bosses.has(t):
+			enemy_staggered.emit(t, ability.stun_seconds)
+
+
+## Pile ou face : il gagne toujours quelque chose.
+func _cast_coin(ability: Ability) -> bool:
+	var face := _rng.randf() < 0.5
+	coin_flipped.emit(face)
+	if face:
+		health.immune = true
+		_immune_left = maxf(_immune_left, ability.duration)
+		player_made_immune.emit(ability.duration)
+		var gained := health.heal(ability.coin_heal)
+		if gained > 0:
+			player_healed.emit(gained)
+	else:
+		_doubled_left = ability.doubled_hits
+	return true
+
+
+func _cast_roulette(ability: Ability, context: CombatContext) -> bool:
+	var result := Slot.ZERO if _rng.randf() < ROULETTE_ZERO \
+		else (Slot.RED if _rng.randf() < 0.5 else Slot.BLACK)
+	_roulette = {"left": ROULETTE_SPIN, "result": result, "ability": ability}
+	roulette_spun.emit(context.player_cell, result, ROULETTE_SPIN)
+	return true
+
+
+func _update_croupier(delta: float, context: CombatContext) -> void:
+	for trap in _traps.duplicate():
+		trap["left"] = float(trap["left"]) - delta
+		if float(trap["left"]) <= 0.0:
+			_traps.erase(trap)
+			trap_faded.emit(trap["cell"])
+			continue
+		for i in context.enemy_cells.size():
+			if context.enemy_alive(i) and not context.is_structure(i) \
+					and context.enemy_cells[i] == trap["cell"]:
+				_traps.erase(trap)
+				_flip_trap(trap, i, context)
+				break
+	if _roulette.is_empty():
+		return
+	_roulette["left"] = float(_roulette["left"]) - delta
+	if float(_roulette["left"]) > 0.0:
+		return
+	var ability: Ability = _roulette["ability"]
+	var result: int = _roulette["result"]
+	_roulette = {}
+	var targets := _creatures_in_sky(context.player_cell, ability.radius, context)
+	var cells := []
+	for t in targets:
+		cells.append(context.enemy_cells[t])
+	roulette_landed.emit(result, cells)
+	var hit := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"is_ultimate": true,
+		"damage": ability.damage if result == Slot.ZERO else (ability.black_damage if result == Slot.BLACK else 0)})
+	for t in targets:
+		if result == Slot.RED:
+			_ignite(t, ability.burn_dps, ability.duration)
+			continue
+		_apply_damage(t, hit, context, false, true)
+		if result == Slot.BLACK and context.enemy_alive(t) and not context.bosses.has(t):
+			enemy_staggered.emit(t, ability.stun_seconds)
+
+
+# --- L'Avide, Démon de la Faim ---------------------------------------------------------
+#
+# Chaque ennemi tué est une bouchée : il grandit et frappe plus fort. Il peut les garder, ou
+# les recracher toutes d'un coup. Le jeu lit `bites()` pour sa taille, la simulation pour ses dégâts.
+
+func bites() -> int:
+	return _bites
+
+
+func feasting() -> bool:
+	return not _feast.is_empty()
+
+
+func _gain_bite() -> void:
+	_bite_decay = BITE_DECAY
+	if _bites >= BITES_MAX:
+		return
+	_bites += 1
+	bites_changed.emit(_bites, true)
+
+
+## La faim : un coup plus fort par bouchée, sur le coup d'origine seulement.
+func _hunger_bonus(power: int) -> int:
+	return int(round(float(power) * (1.0 + BITE_DAMAGE * float(_bites))))
+
+
+func _cast_gulf(ability: Ability, context: CombatContext) -> bool:
+	var target := _nearest_in_reach(context.player_cell, ability.range, context)
+	if target < 0 or context.is_structure(target):
+		use_refused.emit("cible")
+		return false
+	var cell: Vector2i = context.enemy_cells[target]
+	_gulf = {"cell": cell, "left": ability.duration, "pull": 0.0, "ability": ability}
+	gulf_opened.emit(cell, ability.radius, ability.duration)
+	return true
+
+
+## Le Gouffre tire d'une case, à intervalles, tout ce qui est dans son rayon — par les couloirs.
+func _pull_gulf(delta: float, context: CombatContext) -> void:
+	var ability: Ability = _gulf["ability"]
+	var centre: Vector2i = _gulf["cell"]
+	_gulf["left"] = float(_gulf["left"]) - delta
+	_gulf["pull"] = float(_gulf["pull"]) - delta
+	if float(_gulf["pull"]) <= 0.0 and float(_gulf["left"]) > 0.0:
+		_gulf["pull"] = GULF_PULL_GAP
+		var field := _field_from(centre)
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or context.is_structure(i) or context.bosses.has(i):
+				continue
+			var cell: Vector2i = context.enemy_cells[i]
+			var here := Pathfinder.value_at(grid, field, cell)
+			if here <= 0 or float(here) > ability.radius:
+				continue
+			var next := Pathfinder.step_toward(grid, field, cell) + cell
+			if grid.is_floor_v(next) and next != context.player_cell:
+				context.enemy_cells[i] = next
+				enemy_hauled.emit(i, next)
+	if float(_gulf["left"]) > 0.0:
+		return
+	_gulf = {}
+	var caught := _creatures_within(centre, GULF_BITE_RADIUS, context)
+	var cells := []
+	for i in caught:
+		cells.append(context.enemy_cells[i])
+	gulf_closed.emit(centre, cells)
+	var bite := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.damage})
+	for i in caught:
+		_apply_damage(i, bite, context)
+
+
+func _cast_devour(ability: Ability, context: CombatContext) -> bool:
+	var target := _nearest_in_reach(context.player_cell, ability.range, context)
+	if target < 0 or context.is_structure(target):
+		use_refused.emit("cible")
+		return false
+	var life: Health = context.enemy_health[target]
+	var swallowed := not context.bosses.has(target) \
+		and float(life.current) <= float(life.maximum) * ability.execute_below
+	devoured.emit(target, context.enemy_cells[target], swallowed)
+	if swallowed:
+		var whole := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
+			"damage": life.current})
+		_apply_damage(target, whole, context, false, false)
+	else:
+		_apply_damage(target, ability, context)
+	if not context.enemy_alive(target):
+		var gained := health.heal(ability.bite_heal)
+		if gained > 0:
+			player_healed.emit(gained)
+	return true
+
+
+## Une boule par bouchée, sur les ennemis les plus proches ; sans proie, droit devant lui.
+func _cast_regurgitate(ability: Ability, context: CombatContext) -> bool:
+	if _bites <= 0:
+		use_refused.emit("faim")
+		return false
+	var count := _bites
+	_bites = 0
+	bites_changed.emit(0, false)
+	var field := _field_from(context.player_cell)
+	var prey: Array[int] = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance >= 0 and distance <= ability.range:
+			prey.append(i)
+	prey.sort_custom(func(a: int, b: int) -> bool:
+		return Pathfinder.value_at(grid, field, context.enemy_cells[a]) \
+			< Pathfinder.value_at(grid, field, context.enemy_cells[b]))
+	var facing := context.player_facing if context.player_facing != Vector2i.ZERO else Vector2i.DOWN
+	var ahead := _corridor_ahead(context.player_cell, facing, ability.range)
+	var cells := []
+	for k in count:
+		if not prey.is_empty():
+			cells.append(context.enemy_cells[prey[k % prey.size()]])
+		elif not ahead.is_empty():
+			cells.append(ahead[mini(ahead.size() - 1, k + 1)])
+		else:
+			cells.append(context.player_cell)
+	regurgitated.emit(context.player_cell, cells)
+	var ball := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.damage, "radius": ability.radius})
+	for cell: Vector2i in cells:
+		_apply_area(ball, cell, context)
+	return true
+
+
+## Le bond file droit devant jusqu'à une haie ; l'atterrissage sonne ce qui l'entoure, sauf un boss.
+func _cast_leap(ability: Ability, context: CombatContext) -> bool:
+	if player_rooted():
+		use_refused.emit("immobile")
+		return false
+	var facing := context.player_facing if context.player_facing != Vector2i.ZERO else Vector2i.DOWN
+	var to := context.player_cell
+	for _step in ability.range:
+		var next: Vector2i = to + facing
+		if not grid.is_floor_v(next):
+			break
+		to = next
+	if to == context.player_cell:
+		use_refused.emit("mur")
+		return false
+	blink_performed.emit(context.player_cell, to)
+	leap_landed.emit(to, ability.radius)
+	for i in _creatures_within(to, ability.radius, context):
+		if not context.bosses.has(i):
+			enemy_staggered.emit(i, ability.stun_seconds)
+	return true
+
+
+func _cast_feast(ability: Ability) -> bool:
+	_feast = {"left": ability.duration, "gap": FEAST_FIRST, "eaten": {}, "heals": 0, "ability": ability}
+	feast_started.emit(ability.duration)
+	return true
+
+
+func _update_avide(delta: float, context: CombatContext) -> void:
+	if _bites > 0 and _feast.is_empty():
+		_bite_decay -= delta
+		if _bite_decay <= 0.0:
+			_bite_decay = BITE_DECAY
+			_bites -= 1
+			bites_changed.emit(_bites, false)
+	if not _gulf.is_empty():
+		_pull_gulf(delta, context)
+	if _feast.is_empty():
+		return
+	var ability: Ability = _feast["ability"]
+	_feast["left"] = float(_feast["left"]) - delta
+	_feast["gap"] = float(_feast["gap"]) - delta
+	if float(_feast["gap"]) <= 0.0:
+		_feast["gap"] = FEAST_GAP
+		var eaten: Dictionary = _feast["eaten"]
+		var best := -1
+		var best_distance := INF
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or context.is_structure(i) or eaten.has(i):
+				continue
+			var distance := Vector2(context.enemy_cells[i] - context.player_cell).length()
+			if distance <= ability.radius and distance < best_distance:
+				best_distance = distance
+				best = i
+		if best >= 0:
+			eaten[best] = true
+			var cell: Vector2i = context.enemy_cells[best]
+			_apply_damage(best, ability, context, false, true)
+			var killed := not context.enemy_alive(best)
+			feast_bite.emit(best, cell, killed)
+			if killed and int(_feast["heals"]) < FEAST_HEALS:
+				var gained := health.heal(ability.bite_heal)
+				if gained > 0:
+					_feast["heals"] = int(_feast["heals"]) + 1
+					player_healed.emit(gained)
+	if float(_feast["left"]) <= 0.0:
+		_feast = {}
+		feast_ended.emit()
+
+
 # --- Invocations ------------------------------------------------------------------
 
 func _cast_summon(ability: Ability, context: CombatContext) -> bool:
@@ -4669,6 +5135,10 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 	var structure := context.is_structure(index)
 	if empowered and not structure:
 		power = int(round(float(power) * (1.0 + rage_bonus())))
+	if stats.element == Element.Kind.LUCK and empowered and not structure:
+		power = _gamble(index, power, ability, with_trait, context)
+	if stats.element == Element.Kind.HUNGER and empowered and not structure:
+		power = _hunger_bonus(power)
 	if not structure:
 		_blast_hits += 1
 	var dealt := context.enemy_health[index].take(
@@ -4696,6 +5166,8 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 			_gain_soul()
 		if ability.element == Element.Kind.STEEL:
 			_forge_plate()
+		if stats.element == Element.Kind.HUNGER and not structure:
+			_gain_bite()
 		enemy_killed.emit(index)
 
 
@@ -5077,3 +5549,50 @@ func trajectory(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 		if current == to:
 			break
 	return path
+
+
+## Changer de forme ne reconstruit ni la santé, ni les projectiles, ni les recharges.
+func change_form(next: CharacterStats) -> void:
+	stats = next
+
+func _cast_prism_move(ability: Ability, context: CombatContext) -> bool:
+	if player_rooted():
+		return false
+	var target := -1
+	var best := float(ability.range) + 1.0
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Vector2(context.player_cell).distance_to(Vector2(context.enemy_cells[i]))
+		if distance <= ability.range and distance < best:
+			target = i
+			best = distance
+	if target < 0:
+		use_refused.emit("cible")
+		return false
+	var prey := context.enemy_cells[target]
+	var toward := prey - context.player_cell
+	var approach := Vector2i(signi(toward.x), 0) if absi(toward.x) > absi(toward.y) else Vector2i(0, signi(toward.y))
+	var facing := -approach
+	if target < context.enemy_facings.size() and context.enemy_facings[target] != Vector2i.ZERO:
+		facing = context.enemy_facings[target]
+	var destination := prey - facing
+	if ability.kind == Ability.Kind.COMET:
+		destination = prey
+	if not grid.is_floor_v(destination) or grid.is_occupied(destination):
+		use_refused.emit("place")
+		return false
+	var from := context.player_cell
+	context.player_cell = destination
+	if ability.kind == Ability.Kind.COMET:
+		comet_performed.emit(from, destination)
+		_cast_blast(ability, context)
+	else:
+		blink_performed.emit(from, destination)
+	return true
+
+
+func grant_immunity(seconds: float) -> void:
+	health.immune = true
+	_immune_left = maxf(_immune_left, seconds)
+	player_made_immune.emit(seconds)

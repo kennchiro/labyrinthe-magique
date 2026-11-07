@@ -33,6 +33,8 @@ const TRAIT_TEXT := {
 	Element.Kind.STEEL: "**Plaques** — %d plaques encaissent chacune un coup à la place des PV ; %d kills en reforgent une",
 	Element.Kind.BLOOD: "**Rage** — jusqu'à +%d %% de dégâts selon les PV perdus, au maximum à 1 PV",
 	Element.Kind.CHARM: "**Trouble** — au %de murmure, la cible ralentit de %d %% pendant %.1f s, et sa possession dure %.1f s de plus",
+	Element.Kind.HUNGER: "**Faim insatiable** — chaque kill est une bouchée, %d au plus : +%d %% de dégâts et +%d %% de taille chacune ; une fond toutes les %.0f s sans manger",
+	Element.Kind.LUCK: "**Coup de chance** — %d %% des coups sont critiques et frappent %d fois plus fort",
 	Element.Kind.INFERNO: "**Terre brûlée** — chaque crachat enflamme la case de sa cible %.0f s, à %d dégâts/s ; dans le feu, il va %d %% plus vite",
 	Element.Kind.COLDFIRE: "**Entraves** — au %de poing sur le même ennemi, il est cloué au sol %.1f s",
 	Element.Kind.BLADE: "**Entailles** — jusqu'à %d par ennemi, %.0f s depuis la dernière ; elles éclatent quand il rengaine",
@@ -64,14 +66,14 @@ func _write(path: String, text: String) -> void:
 # --- Personnages ------------------------------------------------------------------
 
 func _characters() -> String:
-	var characters := CharacterCatalog.all()
+	var characters := CharacterCatalog.roster()
 	var out := PackedStringArray()
 	out.append("# Les mages — fiches de référence\n")
 	out.append("> ⚙️ **Fichier GÉNÉRÉ.** Ne pas éditer à la main : "
 		+ "`godot --headless --path . --script res://tools/dump_reference.gd`.")
-	out.append("> La source est `src/characters/character_catalog.gd` ; "
+	out.append("> Les sources sont `src/characters/character_catalog.gd` et `hero_catalog.gd` ; "
 		+ "corriger un chiffre se fait là-bas, puis on régénère.\n")
-	out.append("%d mages jouables. La barre d'action a toujours la même forme —"
+	out.append("%d profils jouables, formes comprises. La barre d'action a toujours la même forme —"
 		% characters.size())
 	out.append("attaque, trois sorts, fuite, extra — et c'est ce qui rend les fiches")
 	out.append("comparables d'un personnage à l'autre.\n")
@@ -131,6 +133,11 @@ func _trait_line(element: Element.Kind) -> String:
 				CombatSystem.TROUBLE_BONUS]
 		Element.Kind.COLDFIRE:
 			return TRAIT_TEXT[element] % [CombatSystem.SHACKLE_HITS, CombatSystem.SHACKLE_SECONDS]
+		Element.Kind.HUNGER:
+			return TRAIT_TEXT[element] % [CombatSystem.BITES_MAX, int(CombatSystem.BITE_DAMAGE * 100.0),
+				int(CombatSystem.BITE_SIZE * 100.0), CombatSystem.BITE_DECAY]
+		Element.Kind.LUCK:
+			return TRAIT_TEXT[element] % [int(CombatSystem.LUCK_CHANCE * 100.0), CombatSystem.LUCK_MULT]
 		Element.Kind.INFERNO:
 			return TRAIT_TEXT[element] % [CombatSystem.FIRE_CELL_SECONDS, CombatSystem.FIRE_CELL_DAMAGE,
 				int(CombatSystem.INFERNO_SPEED * 100.0)]
@@ -213,12 +220,42 @@ func _kind_label(kind: Ability.Kind) -> String:
 		Ability.Kind.MAGMA_SCALES: return "carapace"
 		Ability.Kind.WINGBEAT: return "ailes"
 		Ability.Kind.DRAGON_SHADOW: return "ombre"
+		Ability.Kind.DICE: return "dés"
+		Ability.Kind.TRAP_CARD: return "piège"
+		Ability.Kind.COIN: return "pari"
+		Ability.Kind.ROULETTE: return "roulette"
+		Ability.Kind.GULF: return "gouffre"
+		Ability.Kind.DEVOUR: return "dévoration"
+		Ability.Kind.REGURGITATE: return "salve"
+		Ability.Kind.LEAP: return "bond"
+		Ability.Kind.FEAST: return "festin"
 		Ability.Kind.GUARD: return "parade"
 		Ability.Kind.SHEATHE: return "éclat"
 		Ability.Kind.CHAIN: return "chaîne"
 		Ability.Kind.WAVE: return "vague"
 		Ability.Kind.LINE: return "ligne"
 		Ability.Kind.TURRET: return "tourelle"
+		Ability.Kind.ECHO: return "écho"
+		Ability.Kind.HOURGLASS: return "sablier"
+		Ability.Kind.TIME_STOP: return "arrêt du temps"
+		Ability.Kind.TRAIL: return "traînée"
+		Ability.Kind.CONTAGION: return "contagion"
+		Ability.Kind.TRANSFUSION: return "transfusion"
+		Ability.Kind.PANDEMIC: return "pandémie"
+		Ability.Kind.BEAM: return "rayon"
+		Ability.Kind.DAWN: return "aube"
+		Ability.Kind.SOULS: return "âmes"
+		Ability.Kind.CONSTELLATION: return "constellation"
+		Ability.Kind.STARFALL: return "pluie"
+		Ability.Kind.LAST_HOUR: return "heure dernière"
+		Ability.Kind.ANVIL: return "enclume"
+		Ability.Kind.PACT: return "pacte"
+		Ability.Kind.POSSESS: return "possession"
+		Ability.Kind.BOND: return "lien"
+		Ability.Kind.SWAP: return "échange"
+		Ability.Kind.HERO_TRANSFORM: return "transformation"
+		Ability.Kind.COMET: return "comète"
+		Ability.Kind.TRANSMISSION: return "transmission"
 	# ⚠️ Un « ? » dans une fiche GÉNÉRÉE est un trou que personne ne remarque :
 	# la ligne reste lisible, le tableau reste droit, et le type du sort a
 	# simplement disparu. Trois familles manquaient ici depuis leur création.

@@ -58,6 +58,16 @@ func _init() -> void:
 					narrow = minf(narrow, pad._centre(i).distance_to(pad._centre(j))
 						- pad._radius(i) - pad._radius(j))
 			print("%s : six boutons, jeu minimal %.1f px : OK" % [viewport, narrow])
+
+	# 3. CE QU'UN BOUTON CACHE SE VOIT : le bouton s'efface, et seul ce qu'il couvre est gardé.
+	var hidden: Array[Dictionary] = [{"at": pad._centre(1), "color": Color.RED},
+		{"at": Vector2(4.0, 4.0), "color": Color.RED}]
+	pad.show_beneath(hidden)
+	if pad._beneath.size() != 1 or not pad._hides_something(1) or pad._hides_something(0):
+		failures.append("le pad ne signale pas ce qu'il cache, ou signale ce qu'il ne cache pas")
+	pad.show_beneath([] as Array[Dictionary])
+	if not pad._beneath.is_empty():
+		failures.append("le repère reste après le passage")
 	pad.free()
 
 	print("")

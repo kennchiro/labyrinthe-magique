@@ -61,6 +61,8 @@ func _init() -> void:
 	_test_ciel()
 	_test_cherubin()
 	_test_dragon()
+	_test_croupier()
+	_test_avide()
 	_test_water_promises()
 	_test_empowerment()
 	_test_shield_expiry()
@@ -233,8 +235,8 @@ func _test_catalog() -> void:
 	# se bat pas lui-même, il délègue à ses invocations), le Chronomancien, la Peste et le
 	# Porte-Lumière, et l'Ange de la Mort. Le
 	# compte protège contre un doublon ou une disparition, pas contre l'évolution du roster.
-	if characters.size() != 22:
-		_fail("le catalogue contient %d personnages au lieu de 22" % characters.size())
+	if characters.size() != 24:
+		_fail("le catalogue contient %d personnages au lieu de 24" % characters.size())
 	var seen := {}
 	for character in characters:
 		if seen.has(character.id):
@@ -250,7 +252,7 @@ func _test_catalog() -> void:
 		# impasse et non une erreur du joueur.
 		# Le Battement d'ailes du Dragon le fait reculer d'un bond : c'est une fuite.
 		if character.escape == null or not (character.escape.kind in [Ability.Kind.BLINK, Ability.Kind.SWAP,
-				Ability.Kind.FLIGHT, Ability.Kind.WINGBEAT]):
+				Ability.Kind.FLIGHT, Ability.Kind.WINGBEAT, Ability.Kind.LEAP]):
 			_fail("%s n'a pas de sort de fuite" % character.id)
 		if character.action_bar().size() != 6:
 			_fail("%s : barre d'action de %d emplacements au lieu de 6" % [
@@ -3934,6 +3936,229 @@ func _test_etoiles() -> void:
 
 
 ## L'ARCHANGE DU CIEL : ses coups passent par-dessus les haies, et l'Envol le rend intouchable.
+func _test_avide() -> void:
+	var avide := CharacterCatalog.avide()
+	var gouffre: Ability = avide.abilities[0]
+	var devorer: Ability = avide.abilities[1]
+	var recracher: Ability = avide.abilities[2]
+	var parts := _context(avide)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	# RIEN NE PART À VIDE : ni Dévorer sans proie, ni la Régurgitation sans bouchée.
+	if combat.use(devorer, context) or combat.use(recracher, context):
+		_fail("avide : un sort part à vide")
+	# CHAQUE KILL EST UNE BOUCHÉE, et chaque bouchée frappe plus fort.
+	var cell := _cell_at(grid, context.player_field, 4)
+	for i in 3:
+		_add_enemy(context, cell, 10)
+		combat._apply_damage(i, avide.attack, context)
+	if combat.bites() != 3:
+		_fail("avide : %d bouchées après 3 kills" % combat.bites())
+	_add_enemy(context, cell, 5000)
+	combat._apply_damage(3, avide.attack, context)
+	var expected := int(round(avide.attack.damage * (1.0 + CombatSystem.BITE_DAMAGE * 3.0)))
+	if 5000 - context.enemy_health[3].current != expected:
+		_fail("avide : avec 3 bouchées, la langue retire %d au lieu de %d" % [5000 - context.enemy_health[3].current, expected])
+	# ELLES FONDENT SANS MANGER.
+	for frame in int(CombatSystem.BITE_DECAY / 0.016) + 4:
+		combat.update(0.016, context)
+	if combat.bites() != 2:
+		_fail("avide : %d bouchées après %s s de jeûne" % [combat.bites(), CombatSystem.BITE_DECAY])
+	# LA RÉGURGITATION LES DÉPENSE TOUTES.
+	var balls := {"count": 0}
+	combat.regurgitated.connect(func(_from: Vector2i, cells: Array) -> void: balls["count"] = cells.size())
+	if not combat.use(recracher, context) or balls["count"] != 2 or combat.bites() != 0:
+		_fail("avide : la régurgitation lance %d boules, reste %d bouchées" % [balls["count"], combat.bites()])
+	# DÉVORER : un blessé est avalé d'un coup et le soigne ; un ennemi en forme ne l'est pas.
+	parts = _context(avide)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1000)
+	context.enemy_health[0].take(Damage.new(700, Element.Kind.FIRE, "test"))
+	health.take(Damage.new(1, Element.Kind.FIRE, "enemy"))
+	combat.use(devorer, context)
+	if context.enemy_alive(0) or health.current != health.maximum or combat.bites() != 1:
+		_fail("avide : Dévorer n'avale pas le blessé")
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1000)
+	combat.use(devorer, context)
+	if not context.enemy_alive(1) or context.enemy_health[1].current != 1000 - int(round(devorer.damage * (1.0 + CombatSystem.BITE_DAMAGE))):
+		_fail("avide : Dévorer avale un ennemi en forme")
+	# LE GOUFFRE ASPIRE, puis mord en se refermant ; le boss ne bouge pas.
+	parts = _context(avide)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var mouth := _cell_at(grid, context.player_field, 4)
+	var mouth_field := Pathfinder.distance_field(grid, [mouth] as Array[Vector2i])
+	var around := Vector2i(-1, -1)
+	var boss_cell := Vector2i(-1, -1)
+	for other in grid.all_floor_cells():
+		if Pathfinder.value_at(grid, mouth_field, other) == 2 \
+				and Pathfinder.value_at(grid, context.player_field, other) > 4:
+			if around == Vector2i(-1, -1):
+				around = other
+			elif boss_cell == Vector2i(-1, -1):
+				boss_cell = other
+	_add_enemy(context, mouth, 5000)
+	if around != Vector2i(-1, -1):
+		_add_enemy(context, around, 5000)
+	if boss_cell != Vector2i(-1, -1):
+		_add_enemy(context, boss_cell, 5000)
+		context.bosses[2] = true
+	if not combat.use(gouffre, context):
+		_fail("avide : le gouffre ne s'ouvre pas")
+	for frame in int(gouffre.duration / 0.016) + 4:
+		combat.update(0.016, context)
+	if around != Vector2i(-1, -1) and Pathfinder.value_at(grid, mouth_field, context.enemy_cells[1]) >= 2:
+		_fail("avide : le gouffre n'aspire pas")
+	if boss_cell != Vector2i(-1, -1) and context.enemy_cells[2] != boss_cell:
+		_fail("avide : le gouffre aspire un boss")
+	if context.enemy_health[0].current >= 5000:
+		_fail("avide : le gouffre ne mord pas en se refermant")
+	# LE BOND sonne ce qui l'entoure à l'arrivée.
+	parts = _context(avide)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + facing):
+			context.player_facing = facing
+			break
+	var landed := {"to": context.player_cell}
+	combat.blink_performed.connect(func(_from: Vector2i, to: Vector2i) -> void: landed["to"] = to)
+	if not combat.use(avide.escape, context) or landed["to"] == context.player_cell:
+		_fail("avide : le bond ne part pas")
+	# LE FESTIN avale un ennemi à la fois, et finit.
+	parts = _context(avide)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	for steps in [2, 3, 4]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 50)
+	var swallowed := {"count": 0}
+	combat.feast_bite.connect(func(_index: int, _cell: Vector2i, _killed: bool) -> void: swallowed["count"] += 1)
+	combat.use(avide.ultimate, context)
+	for frame in int(avide.ultimate.duration / 0.016) + 4:
+		combat.update(0.016, context)
+	if swallowed["count"] != 3 or combat.feasting():
+		_fail("avide : le festin avale %d ennemis" % swallowed["count"])
+	print("l'avide : bouchées, gouffre, dévorer, régurgitation, bond et festin : OK")
+
+
+func _test_croupier() -> void:
+	var croupier := CharacterCatalog.croupier()
+	var des: Ability = croupier.abilities[0]
+	var piege: Ability = croupier.abilities[1]
+	var piece: Ability = croupier.abilities[2]
+	var parts := _context(croupier)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	# LE COUP DE CHANCE : environ un coup sur cinq, trois fois plus fort.
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 1000000)
+	var lucky := {"count": 0}
+	combat.lucky_hit.connect(func(_index: int, _cell: Vector2i) -> void: lucky["count"] += 1)
+	var before := context.enemy_health[0].current
+	for i in 400:
+		combat._apply_damage(0, croupier.attack, context)
+	var dealt := before - context.enemy_health[0].current
+	var expected: int = croupier.attack.damage * (400 + int(lucky["count"]) * (CombatSystem.LUCK_MULT - 1))
+	if lucky["count"] < 40 or lucky["count"] > 130 or dealt != expected:
+		_fail("croupier : %d critiques sur 400, %d dégâts au lieu de %d" % [lucky["count"], dealt, expected])
+	# LES DÉS : leur total fixe les dégâts, à un critique près.
+	parts = _context(croupier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	for facing: Vector2i in [Vector2i.DOWN, Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + facing):
+			context.player_facing = facing
+			break
+	_add_enemy(context, context.player_cell + context.player_facing, 5000)
+	var roll := {"total": 0}
+	combat.dice_rolled.connect(func(_from: Vector2i, _cells: Array, a: int, b: int) -> void:
+		roll["total"] = a + b)
+	if not combat.use(des, context) or roll["total"] < 2 or roll["total"] > 12:
+		_fail("croupier : les dés ne roulent pas")
+	else:
+		var lost := 5000 - context.enemy_health[0].current
+		if lost != des.damage * roll["total"] and lost != des.damage * roll["total"] * CombatSystem.LUCK_MULT:
+			_fail("croupier : les dés (%d) retirent %d" % [roll["total"], lost])
+	# LA CARTE PIÈGE se retourne sous le premier ennemi qui passe.
+	parts = _context(croupier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 4), 5000)
+	var flipped := {"suit": -1}
+	combat.trap_flipped.connect(func(_cell: Vector2i, suit: int, _targets: Array) -> void: flipped["suit"] = suit)
+	combat.use(piege, context)
+	combat.update(0.016, context)
+	if flipped["suit"] != -1 or combat.traps().size() != 1:
+		_fail("croupier : la carte part sans personne")
+	context.enemy_cells[0] = context.player_cell
+	combat.update(0.016, context)
+	if flipped["suit"] < 0 or context.enemy_health[0].current > 5000 - piege.damage or not combat.traps().is_empty():
+		_fail("croupier : la carte piège ne se retourne pas")
+	# PILE OU FACE : il gagne toujours quelque chose, et les deux côtés sortent.
+	parts = _context(croupier)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	var sides := {"face": 0, "pile": 0}
+	combat.coin_flipped.connect(func(face: bool) -> void: sides["face" if face else "pile"] += 1)
+	for i in 30:
+		combat.use(piece, context)
+		if not health.immune and combat.doubled_left() != piece.doubled_hits:
+			_fail("croupier : la pièce ne donne rien")
+			break
+		combat._immune_left = 0.0
+		health.immune = false
+		combat._doubled_left = 0
+	if sides["face"] == 0 or sides["pile"] == 0:
+		_fail("croupier : la pièce tombe toujours du même côté (%s)" % str(sides))
+	# LA ROULETTE : la bille tombe après la rotation, et chaque issue frappe tout l'écran.
+	var outcomes := {}
+	for attempt in 40:
+		parts = _context(croupier)
+		grid = parts[0]
+		combat = parts[1]
+		context = parts[2]
+		combat._rng.seed = 1000 + attempt
+		_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+		var landed := {"result": -1}
+		var burning := {}
+		combat.roulette_landed.connect(func(result: int, _cells: Array) -> void: landed["result"] = result)
+		combat.enemy_burning.connect(func(index: int, _seconds: float) -> void: burning[index] = true)
+		combat.use(croupier.ultimate, context)
+		for frame in int(CombatSystem.ROULETTE_SPIN / 0.016) + 2:
+			combat.update(0.016, context)
+		var result: int = landed["result"]
+		outcomes[result] = true
+		var hurt := context.enemy_health[0].current < 5000 or burning.has(0)
+		if result < 0 or not hurt:
+			_fail("croupier : la roulette (%d) ne frappe pas" % result)
+			break
+	if outcomes.size() < 2:
+		_fail("croupier : la roulette ne sort que %s" % str(outcomes.keys()))
+	print("croupier des enfers : chance, dés, carte piège, pile ou face et roulette : OK")
+
+
 func _test_dragon() -> void:
 	var dragon := CharacterCatalog.dragon()
 	var souffle: Ability = dragon.abilities[0]

@@ -44,6 +44,16 @@ OUT = Path("assets/icons")
 ## demandés en sixième et troisième. On relève donc ce que chaque case MONTRE,
 ## et on l'associe au sort correspondant — jamais l'inverse.
 SHEETS = {
+    "mage_ael_eveille_skills.png": ("ael_eveille", ['ael_lame', 'ael_gerbe', 'ael_gardien', 'ael_eclair', 'ael_pas', 'ael_rayon']),
+    "mage_ael_ascendant_skills.png": ("ael_ascendant", ['ael_double', 'ael_pluie', 'ael_sentinelle', 'ael_onde', 'ael_ailes', 'ael_transformation']),
+    "mage_ael_dragon_skills.png": ("ael_dragon", ['ael_griffes', 'ael_souffle', 'ael_ecailles', 'ael_chute', 'ael_envol', 'ael_rugissement']),
+    "mage_ael_prisme_skills.png": ("ael_prisme", ['ael_rafale', 'ael_comete', 'ael_barriere', 'ael_orbite', 'ael_transmission', 'ael_ultime']),
+    # Aël l'Apprenti, ses sorts d'épéiste. ⚠️ La planche livrée le 2026-11-03 dessine encore l'ancien
+    # jeu (gemme lancée, bouclier) : à regénérer, puis à relever case par case comme les autres.
+    "mage_ael_skills.png": ("ael", [
+        "ael_slash", "ael_wind_cut", "ael_parry",
+        "ael_rush", "ael_roll", "ael_great_slash",
+    ]),
     "mage_fire_skills.png": ("fire", [
         "fire_bolt", "fire_ball", "fire_ground",
         "fire_aura", "fire_ember", "fire_nova",
@@ -178,6 +188,18 @@ SHEETS = {
     "mage_dragon_skills.png": ("dragon", [
         "dragon_crachat", "dragon_souffle", "dragon_morsure",
         "dragon_ecailles", "dragon_ailes", "dragon_ombre",
+    ], {"undust": 12}),
+    # Relevé case par case : carte qui file · deux dés · carte qui se dresse dans les flammes //
+    # pièce qui tourne · éventail de cartes · roulette et éclair. L'ordre demandé.
+    "mage_croupier_skills.png": ("croupier", [
+        "croupier_carte", "croupier_des", "croupier_piege",
+        "croupier_piece", "croupier_passe", "croupier_roulette",
+    ], {"undust": 12}),
+    # Relevé case par case : langue et harpon · gouffre de crocs · gueule sur une silhouette //
+    # éventail de boules · sabot sur l'onde · gueule à cornes. L'ordre demandé.
+    "mage_avide_skills.png": ("avide", [
+        "avide_langue", "avide_gouffre", "avide_devorer",
+        "avide_regurgitation", "avide_bond", "avide_festin",
     ], {"undust": 12}),
     # Relevé case par case : lance qui tombe sur son cercle · éventail de cinq plumes · colonne sur
     # anneau d'or // cloche et ses ondes · deux ailes sur une haie · épée et six ailes. L'ordre demandé.

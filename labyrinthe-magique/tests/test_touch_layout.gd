@@ -17,7 +17,6 @@ var failures: Array[String] = []
 func _init() -> void:
 	Settings.path_override = TEST_SETTINGS
 	_clean_settings()
-	_test_reserved_matches_scene()
 	_test_empty_layout_is_the_old_game()
 	_test_data_survives_bad_files()
 	_test_settle()
@@ -25,6 +24,7 @@ func _init() -> void:
 	_test_cross()
 	for view: Vector2 in VIEWS:
 		await _test_editor(view)
+	await _test_reserved_matches_scene()
 	await _test_in_a_real_game()
 	_clean_settings()
 
@@ -48,15 +48,34 @@ func _check(condition: bool, message: String) -> void:
 		failures.append(message)
 
 
-## Les zones réservées recopient la scène : elles ne doivent pas s'en éloigner en silence.
+## La pause et le carnet tombent dans leur zone réservée, et l'éventail par défaut n'y
+## touche pas. Il ne passe pas par `settle` : posés dans le coin, ils couvraient l'ultime.
 func _test_reserved_matches_scene() -> void:
 	var game: Node = load("res://scenes/main.tscn").instantiate()
-	var pause: Control = game.get_node("UI/PauseButton")
-	var quest: Control = game.get_node("UI/QuestButton")
-	_check(is_equal_approx(-pause.offset_left, TouchLayout.TOP_RIGHT.x)
-		and is_equal_approx(quest.offset_bottom, TouchLayout.TOP_RIGHT.y),
-		"le coin réservé ne recouvre plus la pause et le carnet")
+	root.add_child(game)
+	await process_frame
+	var ui: UIManager = game.get_node("UI")
+	var pad := ui.combat_pad
+	var slots: Array[Dictionary] = []
+	for i in 6:
+		slots.append({})
+	pad.entries = slots
+	for view: Vector2 in [Vector2(690.0, 330.0), Vector2(844.0, 390.0), Vector2(1266.0, 585.0)]:
+		ui._lay_corner(view)
+		var zone := TouchLayout.corner(view)
+		_check(zone.position.x >= TouchLayout.TOP_LEFT.x, "la pause et le carnet n'ont pas de place en %s" % view)
+		for button: Control in [ui.pause_button, ui.quest_button]:
+			var rect := Rect2(view.x + button.offset_left, button.offset_top,
+				button.offset_right - button.offset_left, button.offset_bottom - button.offset_top)
+			_check(zone.encloses(rect), "%s sort de sa zone en %s" % [button.name, view])
+		for i in slots.size():
+			var at := pad._centre(i)
+			for reserved in TouchLayout.reserved(view):
+				_check(at.distance_to(at.clamp(reserved.position, reserved.end)) >= pad._radius(i),
+					"le bouton %d de l'éventail touche une zone réservée en %s" % [i, view])
 	game.free()
+	get_root().get_tree().paused = false
+	TouchLayout.corner_right = 204.0
 
 
 ## Une disposition vide ne change RIEN : ni place, ni taille.
@@ -103,7 +122,7 @@ func _test_settle() -> void:
 	_check(Vector2(items[0]["at"]).distance_to(items[1]["at"]) >= 88.0 - 0.01,
 		"pas assez d'écart après la séparation")
 	# Un bouton posé sur la pause, ou sur la barre de vie, en sort.
-	for point: Vector2 in [Vector2(1250.0, 30.0), Vector2(120.0, 40.0)]:
+	for point: Vector2 in [TouchLayout.corner(view).get_center(), Vector2(120.0, 40.0)]:
 		var alone: Array[Dictionary] = [
 			{"id": "a", "at": point, "radius": 40.0, "extent": 40.0}]
 		_check(TouchLayout.settle(alone, view, moved), "pas de sortie depuis %s" % point)
@@ -192,8 +211,15 @@ func _test_cross() -> void:
 	_check(stick.direction == Vector2.ZERO, "croix : le centre fait marcher le mage")
 	stick._input(_touch(0, centre, false))
 
-	# Le manche, lui, reste analogique : une zone morte, puis un vecteur continu.
+	# Plus grande que le manche, elle garde pourtant la même marge au coin de l'écran.
+	var cross_radius := stick.visual_radius()
 	stick.set_style(TouchStick.Style.ANALOG)
+	_check(cross_radius > stick.visual_radius(), "croix : pas plus grande que le manche")
+	_check(is_equal_approx(centre.x - cross_radius, stick._origin().x - stick.visual_radius()),
+		"croix : elle ne garde pas la marge du manche")
+
+	# Le manche, lui, reste analogique : une zone morte, puis un vecteur continu.
+	centre = stick._origin()
 	stick._input(_touch(0, centre + Vector2(2.0, 0.0), true))
 	_check(stick.direction == Vector2.ZERO, "manche : la zone morte a disparu")
 	stick._input(_slide(0, centre + Vector2(stick.radius, stick.radius * 0.5)))
@@ -360,11 +386,15 @@ func _test_in_a_real_game() -> void:
 	panel.closed.emit()
 	await process_frame
 	_check(ui.settings_panel() == null, "le panneau ne se ferme pas")
+	_check(not ui.combat_pad.visible and not ui.stick.visible, "les commandes passent devant la pause")
+	game.resume()
+	await process_frame
 	_check(ui.stick.style == TouchStick.Style.CROSS and ui.stick.visible, "la partie n'a pas la croix")
 	_check(ui.combat_pad.visible, "le pad ne revient pas")
 	_check(ui.combat_pad._centre(1).is_equal_approx(placed), "la partie ne suit pas la disposition")
 
 	# Reprendre la main au clavier, réglages ouverts, ne laisse rien derrière.
+	game.toggle_pause()
 	ui.open_settings()
 	game.resume()
 	_check(ui.settings_panel() == null, "reprendre laisse le panneau ouvert")

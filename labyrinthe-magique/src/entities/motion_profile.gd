@@ -36,6 +36,8 @@ var kick := 1.3
 var dust := true
 ## L'arc de lame à l'impact. Transparent : pas d'arc.
 var slash_color := Color("#dff4ff")
+## Un coup sur deux, l'arc part dans l'autre sens : deux coups de suite se croisent en X.
+var slash_alternate := false
 
 
 ## Null quand le personnage n'a pas de clé `motion` : c'est ce qui laisse les autres intacts.
@@ -58,6 +60,7 @@ static func from_data(data: Variant) -> MotionProfile:
 	profile.lunge = float(values.get("lunge", profile.lunge))
 	profile.kick = float(values.get("kick", profile.kick))
 	profile.dust = bool(values.get("dust", profile.dust))
+	profile.slash_alternate = bool(values.get("slash_alternate", false))
 	if values.has("slash_color"):
 		profile.slash_color = Color(str(values["slash_color"]))
 	return profile

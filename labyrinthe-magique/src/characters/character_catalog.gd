@@ -52,10 +52,24 @@ const GEOLIER := "geolier"
 const CIEL := "ciel"
 const CHERUBIN := "cherubin"
 const DRAGON := "dragon"
+const CROUPIER := "croupier"
+const AVIDE := "avide"
 ## Le gabarit d'animation : il est absent de `all()`, donc de l'équilibrage, des fiches et
 ## des tests qui parcourent les vrais personnages. `--demo --character test` y mène.
 const TEST := "test"
+## Aël, le héros principal (`docs/HEROS_PRINCIPAL.md`), en Apprenti. Premier onglet de la sélection et
+## personnage par défaut, mais hors de `all()`, donc de l'équilibrage et des fiches, tant que ses niveaux ne
+## sont pas écrits.
+const AEL := "ael"
+## Ses quatre formes, une carte chacune dans l'onglet Héros. Elles ne servent qu'au menu : en jeu, c'est
+## toujours `AEL`, et sa forme vient de son niveau (`HeroCatalog`, `HeroProgress`).
+const AEL_FORMS := ["ael", "ael_eveille", "ael_ascendant", "ael_prisme", "ael_dragon"]
+## Le niveau qui ouvre chaque forme. Le Prisme ne se choisit pas : il se prend en combat, au niveau 30.
+const AEL_FORM_LEVELS := [1, 10, 20, 30, 80]
+## Ceux qui ne partent jamais en vraie partie et n'ont pas d'onglet.
+const HIDDEN := [TEST]
 
+const CATEGORY_HEROS := "heros"
 const CATEGORY_MAGE := "mage"
 const CATEGORY_ANGE := "ange"
 const CATEGORY_DEMON := "demon"
@@ -63,6 +77,7 @@ const CATEGORY_TEST := "essai"
 ## Les onglets de l'écran de sélection, dans l'ordre. Une famille de plus ne demande
 ## qu'une ligne ici et le champ `category` de ses personnages.
 const CATEGORIES := {
+	CATEGORY_HEROS: {"tab": "Héros", "accent": Color("#8fe3ff")},
 	CATEGORY_MAGE: {"tab": "Mage", "accent": Color("#9fc4ff")},
 	CATEGORY_ANGE: {"tab": "Ange", "accent": Color("#ffd479")},
 	CATEGORY_DEMON: {"tab": "Démon", "accent": Color("#ff6b82")},
@@ -71,13 +86,26 @@ const CATEGORIES := {
 
 static func all() -> Array[CharacterStats]:
 	return [fire(), water(), earth(), shadow(), thunder(), air(), invocateur(), supreme(), chrono(),
-		peste(), lumiere(), mort(), etoiles(), acier(), ciel(), cherubin(), demon(), discorde(), braise(), ecarlate(), geolier(), dragon()]
+		peste(), lumiere(), mort(), etoiles(), acier(), ciel(), cherubin(), demon(), discorde(), braise(), ecarlate(), geolier(), dragon(), croupier(), avide()]
 
 
-## Ce que montre l'écran de sélection. Le Héros d'essai en est caché pour l'instant : pour
-## le remontrer, l'ajouter ici et rendre son onglet à `CATEGORIES`.
+## Ce que montre l'écran de sélection : Aël d'abord, le héros principal, puis les autres. Le Héros
+## d'essai en est caché pour l'instant : pour le remontrer, l'ajouter ici et rendre son onglet à `CATEGORIES`.
 static func roster() -> Array[CharacterStats]:
-	return all()
+	var out: Array[CharacterStats] = []
+	for form in AEL_FORMS.size():
+		out.append(ael_form(form))
+	out.append_array(all())
+	return out
+
+
+## Une forme d'Aël telle que le menu la montre : au niveau qui l'ouvre, sous son propre identifiant.
+static func ael_form(form: int) -> CharacterStats:
+	var rank := clampi(form, 0, AEL_FORMS.size() - 1)
+	var c := HeroCatalog.at_level(AEL_FORM_LEVELS[rank], rank >= 3, rank == 4)
+	c.id = AEL_FORMS[rank]
+	c.category = CATEGORY_HEROS
+	return c
 
 
 static func in_category(category: String) -> Array[CharacterStats]:
@@ -91,14 +119,19 @@ static func in_category(category: String) -> Array[CharacterStats]:
 static func by_id(id: String) -> CharacterStats:
 	if id == TEST:
 		return test_hero()
+	if id == AEL:
+		return ael()
+	if id in AEL_FORMS:
+		return ael_form(AEL_FORMS.find(id))
 	for character in all():
 		if character.id == id:
 			return character
-	return shadow()
+	return ael()
 
 
+## Le héros principal : c'est avec lui que s'ouvrent le titre et la sélection.
 static func default_id() -> String:
-	return SHADOW
+	return AEL
 
 
 # --- Sorcier des Ténèbres : l'étalon. Précis, mobile, portée maximale. -----------
@@ -1587,6 +1620,114 @@ static func dragon() -> CharacterStats:
 	return c
 
 
+static func croupier() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = CROUPIER
+	c.display_name = "Croupier des Enfers"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.LUCK
+	c.description = "Un démon joueur en costume. Cartes, dés, pièce et roulette : chaque sort est un pari, et il gagne toujours quelque chose."
+	c.power_level = 3
+	c.base_health = 4
+	c.move_speed = 5.0
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "croupier_carte", "display_name": "Carte tranchante",
+		"description": "Une carte file en tournoyant et tranche.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.LUCK,
+		"projectile_visual": "carte_tranchante",
+		"damage": 22, "range": 7, "cooldown": 0.6, "projectile_speed": 1.3,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "croupier_des", "display_name": "Dés pipés",
+			"description": "Deux dés roulent dans le couloir : leur total fixe les dégâts, et un double sonne ce qu'ils touchent.",
+			"kind": Ability.Kind.DICE, "element": Element.Kind.LUCK,
+			"damage": 6, "range": 6, "stun_seconds": 1.5, "cooldown": 9.0,
+		}),
+		Ability.make({
+			"id": "croupier_piege", "display_name": "Carte piège",
+			"description": "Une carte face cachée posée sous lui. Le premier ennemi qui passe la retourne : As de feu, Dame de glace ou Roi de foudre.",
+			"kind": Ability.Kind.TRAP_CARD, "element": Element.Kind.LUCK,
+			"damage": 40, "duration": 12.0, "trap_count": 2, "burn_dps": 10, "stun_seconds": 2.0,
+			"cooldown": 8.0,
+		}),
+		Ability.make({
+			"id": "croupier_piece", "display_name": "Pile ou face",
+			"description": "Une pièce d'or tourne. Face : intouchable et soigné. Pile : ses trois prochaines cartes frappent double.",
+			"kind": Ability.Kind.COIN, "element": Element.Kind.LUCK,
+			"duration": 2.0, "coin_heal": 1, "doubled_hits": 3, "cooldown": 14.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "croupier_passe", "display_name": "Tour de passe-passe",
+		"description": "Il disparaît dans une gerbe de cartes et reparaît plus loin ; une carte reste et attire les ennemis.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.LUCK,
+		"range": 4, "decoy_seconds": 2.0, "cooldown": 11.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "croupier_roulette", "display_name": "La Roulette infernale",
+		"description": "Une roulette géante tourne, la bille tombe. Rouge : tout brûle. Noir : tout se fige. Zéro : le jackpot foudroie tout.",
+		"kind": Ability.Kind.ROULETTE, "element": Element.Kind.LUCK,
+		"damage": 120, "radius": 10.0, "burn_dps": 15, "duration": 4.0, "stun_seconds": 3.0,
+		"black_damage": 30, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+static func avide() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = AVIDE
+	c.display_name = "L'Avide"
+	c.category = CATEGORY_DEMON
+	c.element = Element.Kind.HUNGER
+	c.description = "Un démon pur sang à la gueule fendant le ventre. Chaque proie le fait grandir ; il peut tout recracher d'un coup."
+	c.power_level = 3
+	c.base_health = 5
+	c.move_speed = 4.5
+	c.ultimate_required_kills = 6
+	c.attack = Ability.make({
+		"id": "avide_langue", "display_name": "Langue-fouet",
+		"description": "Une langue noire claque en ligne droite et transperce tout ce qu'elle traverse.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.HUNGER,
+		"projectile_visual": "langue_fouet", "pierce_line": true,
+		"damage": 24, "range": 5, "cooldown": 0.7, "projectile_speed": 1.6,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "avide_gouffre", "display_name": "Gouffre béant",
+			"description": "Une gueule s'ouvre dans le sol sous l'ennemi le plus proche, aspire ce qui l'entoure, puis se referme.",
+			"kind": Ability.Kind.GULF, "element": Element.Kind.HUNGER,
+			"damage": 45, "range": 5, "radius": 3.0, "duration": 2.0, "cooldown": 11.0,
+		}),
+		Ability.make({
+			"id": "avide_devorer", "display_name": "Dévorer",
+			"description": "Il saisit l'ennemi le plus proche et l'avale : un ennemi blessé meurt d'un coup, et le nourrit.",
+			"kind": Ability.Kind.DEVOUR, "element": Element.Kind.HUNGER,
+			"damage": 60, "range": 2, "execute_below": 0.35, "bite_heal": 1, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "avide_regurgitation", "display_name": "Régurgitation",
+			"description": "Il recrache toutes ses bouchées en boules de bile qui explosent, et rapetisse.",
+			"kind": Ability.Kind.REGURGITATE, "element": Element.Kind.HUNGER,
+			"damage": 30, "radius": 1.5, "range": 6, "cooldown": 8.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "avide_bond", "display_name": "Bond bestial",
+		"description": "Un grand saut en avant ; l'atterrissage fait trembler le sol et sonne ce qui l'entoure.",
+		"kind": Ability.Kind.LEAP, "element": Element.Kind.HUNGER,
+		"range": 3, "radius": 1.5, "stun_seconds": 1.0, "cooldown": 11.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "avide_festin", "display_name": "Le Festin",
+		"description": "Il devient gigantesque, et la gueule de son ventre avale les ennemis proches, un à un.",
+		"kind": Ability.Kind.FEAST, "element": Element.Kind.HUNGER,
+		"damage": 80, "radius": 6.0, "duration": 6.0, "bite_heal": 1, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
 # --- Mage de l'Air : contrôle, souffle et esquive. --------------------------------
 
 static func air() -> CharacterStats:
@@ -1947,5 +2088,66 @@ static func test_hero() -> CharacterStats:
 		"description": "Un coup d'épée devant lui.",
 		"kind": Ability.Kind.BLAST, "element": Element.Kind.STEEL,
 		"damage": 30, "radius": 2.0, "arc": 150.0, "cooldown": 0.4,
+	})
+	return c
+
+
+# --- Aël, le héros principal ---------------------------------------------------------
+#
+# Sa première forme, l'Apprenti. Les chiffres sont ceux de départ du plan : ils seront réglés
+# avec ses niveaux. Il reprend l'animation du Héros d'essai (`motion` dans son frames.json).
+# ⚠️ Le Prisme n'a pas encore de trait : ce qui le distingue, ce sont ses évolutions.
+
+static func ael() -> CharacterStats:
+	var c := CharacterStats.new()
+	c.id = AEL
+	c.display_name = "Aël"
+	c.category = CATEGORY_HEROS
+	c.element = Element.Kind.PRISM
+	c.description = "L'Enfant sans élément. Il absorbe la lumière des gemmes pour évoluer."
+	c.power_level = 3
+	c.base_health = 3
+	c.move_speed = 5.0
+	c.ultimate_required_kills = 5
+	c.attack = Ability.make({
+		"id": "ael_slash", "display_name": "Coup d'épée",
+		"description": "Un coup d'épée en arc devant lui.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.PRISM,
+		"damage": 26, "radius": 2.2, "range": 2, "arc": 150.0, "cooldown": 0.45,
+	})
+	# UN ÉPÉISTE, PAS ENCORE UN MAGE. Chaque sort est un geste d'épée, lisible d'un coup d'œil, et
+	# aucun n'emprunte le visuel d'un autre : la Ruée était une vague, elle se lisait comme celle
+	# de l'Eau. Seul l'Extra laisse voir la gemme s'éveiller, ce qu'il deviendra.
+	c.abilities = [
+		Ability.make({
+			"id": "ael_wind_cut", "display_name": "Tranche-vent",
+			"description": "Un coup d'épée si vif qu'il lance une lame d'air, qui file dans le couloir.",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.PRISM,
+			"damage": 24, "range": 7, "cooldown": 3.0, "projectile_visual": "tranche_vent",
+		}),
+		Ability.make({
+			"id": "ael_rush", "display_name": "Ruée",
+			"description": "Il fonce l'épée en avant et bouscule tout ce qu'il traverse.",
+			"kind": Ability.Kind.BLINK, "element": Element.Kind.PRISM,
+			"range": 4, "cooldown": 6.0, "trail_damage": 28, "blow_cells": 1,
+		}),
+		Ability.make({
+			"id": "ael_parry", "display_name": "Parade",
+			"description": "Il plante ses pieds et lève l'épée : intouchable un instant, il rend chaque coup paré.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.PRISM,
+			"immune": true, "duration": 1.5, "cooldown": 9.0, "reflect_damage": 30,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "ael_roll", "display_name": "Roulade",
+		"description": "Une roulade de trois cases, pour sortir d'un mauvais pas.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.PRISM,
+		"range": 3, "cooldown": 5.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "ael_great_slash", "display_name": "Éveil de l'éclat",
+		"description": "La gemme s'éveille un instant : il tourne sur lui-même, et sa lame trace un cercle immense.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.PRISM,
+		"damage": 70, "radius": 3.5,
 	})
 	return c

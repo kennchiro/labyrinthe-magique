@@ -26,9 +26,16 @@ const MIN_ALPHA := 0.25
 const GAP := 8.0
 ## Marge au bord de l'écran, comme l'éventail en garde une.
 const EDGE := 4.0
-## Le coin du bouton de pause et du carnet (`scenes/main.tscn`). Ils se pressent : une
-## commande posée dessus se déclencherait en même temps qu'eux.
-const TOP_RIGHT := Vector2(78.0, 144.0)
+## La pause et le carnet, côte à côte en haut de l'écran. Ils se pressent : une commande
+## posée dessus se déclencherait en même temps qu'eux.
+##
+## ⚠️ PAS DANS LE COIN. Ils y couvraient l'ultime, le bouton le plus haut de l'éventail,
+## sur tous les écrans mesurés : l'éventail par défaut ne passe pas par `settle`. Ils se
+## rangent donc à sa gauche, en mode tactile. Combien à gauche dépend de l'écran : sur un
+## petit téléphone l'éventail se resserre et un deuxième bouton monte dans la bande.
+const CORNER_SIZE := Vector2(124.0, 76.0)
+## Distance de la zone au bord droit, que `fit_corner` déduit de l'éventail réel.
+static var corner_right := 204.0
 ## La barre du mage (`HUD`). Elle ne se presse pas, mais elle dit combien de vie il
 ## reste : un bouton opaque par-dessus coûterait une partie sans qu'on sache pourquoi.
 const TOP_LEFT := Vector2(HUD.FRAME_WIDTH + 18.0, 104.0)
@@ -45,7 +52,17 @@ static func button_id(index: int) -> String:
 
 ## Les zones qu'une commande déplacée n'a pas le droit de recouvrir.
 static func reserved(view: Vector2) -> Array[Rect2]:
-	return [Rect2(Vector2.ZERO, TOP_LEFT), Rect2(Vector2(view.x - TOP_RIGHT.x, 0.0), TOP_RIGHT)]
+	return [Rect2(Vector2.ZERO, TOP_LEFT), corner(view)]
+
+
+## La place de la pause et du carnet en mode tactile, que l'UIManager leur donne.
+static func corner(view: Vector2) -> Rect2:
+	return Rect2(Vector2(view.x - corner_right - CORNER_SIZE.x, 0.0), CORNER_SIZE)
+
+
+## Range la zone à gauche de ce que l'éventail par défaut occupe en haut de l'écran.
+static func fit_corner(pad: CombatPad) -> void:
+	corner_right = pad.reach_from_right(CORNER_SIZE.y + GAP) + GAP
 
 
 ## Relit ce qu'a écrit le disque. Un fichier abîmé ou une valeur hors bornes ne doit

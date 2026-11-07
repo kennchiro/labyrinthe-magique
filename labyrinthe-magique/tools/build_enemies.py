@@ -213,6 +213,45 @@ MAGES = {
              # (`test_profil_course.png` garde la course d'avant). Même alternance que
              # `SMALL_STEP_FRAMES`, mais cette planche ouvre ses pieds aux images 1 et 5, et non 2 et 6.
              "small_steps_right": [3, 1, 1, 3, 7, 5, 5, 7]},
+    # Aël, le héros principal, en Apprenti : le déplacement du Héros d'essai, sur une planche ENTIÈRE
+    # (`template/guide_heros.png`). Il court de face et de dos, et marche comme les mages de profil,
+    # pieds joints aux images 3 et 7.
+    "ael": {"id": "ael", "name": "Aël l'Apprenti", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "whole_shapes": True,
+            "every_step": True,
+            "motion": {"side_phase": 0.25},
+            "standing_right": ("assets/peso&cover/refonte/ael_apprenti.png", 3, 2),
+            "small_steps_right": [3, 2, 2, 3, 7, 6, 6, 7]},
+    # Chaque forme a la couleur de sa lame : cristal cyan, cristal bleu, lumière d'or.
+    "ael_eveille": {"id": "ael_eveille", "name": "Aël Éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "whole_shapes": True,
+            "every_step": True, "motion": {"side_phase": 0.25, "slash_color": "#7fe3ff"},
+            "standing_right": ("assets/peso&cover/refonte/ael_eveille.png", 3, 2),
+            "small_steps_right": [3, 2, 2, 3, 7, 6, 6, 7]},
+    # Son Double coup croise ses deux arcs : `slash_alternate`.
+    "ael_ascendant": {"id": "ael_ascendant", "name": "Aël Ascendant", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "whole_shapes": True,
+            "every_step": True, "motion": {"side_phase": 0.25, "slash_color": "#a9dcff",
+                                           "slash_alternate": True},
+            "standing_right": ("assets/peso&cover/refonte/ael_ascendant.png", 3, 2),
+            "small_steps_right": [3, 2, 2, 3, 7, 6, 6, 7]},
+    # Le Dragon d'or, au niveau 80 : un dragon humanoïde qui RÔDE, pas un garçon qui marche. Ses huit images
+    # de déplacement sont gardées (`every_step`), et sa démarche est plus lourde que celle d'Aël : rebond plus
+    # profond, à-coup plus fort. Pas d'arc de lame : ses Griffes de soleil sont dessinées par le niveau. Le
+    # générateur a rendu des cases hautes, comme pour le Geôlier (`tall_cells`).
+    "ael_dragon": {"id": "ael_dragon", "name": "Aël Dragon d'or", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "whole_shapes": True, "tall_cells": True,
+            "every_step": True,
+            "motion": {"side_phase": 0.25, "bob": 3.0, "side_bob": 3.0, "squash": 0.06, "side_squash": 0.06,
+                       "kick": 1.8, "slash_color": "#00000000"},
+            "standing_right": ("assets/peso&cover/refonte/ael_dragon.png", 3, 2),
+            # Le joueur le veut plus grand que ses autres formes (2026-11-06) : un dragon de niveau 80 domine.
+            "body_scale": 1.3},
+    "ael_prisme": {"id": "ael_prisme", "name": "Aël Prisme", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "whole_shapes": True,
+            "every_step": True, "motion": {"side_phase": 0.25, "slash_color": "#f2c94c"},
+            "standing_right": ("assets/peso&cover/refonte/ael_prisme.png", 3, 2),
+            "small_steps_right": [3, 2, 2, 3, 7, 6, 6, 7]},
     # Sa marche de dos a gardé une ombre sous les pieds : prise pour le sol, elle le faisait flotter.
     # Premier mage à essayer le gabarit. Sans arme, donc sans arc de lame, et son sort jaillit à l'image 3.
     # Le joueur a trouvé bizarre le rebond du gabarit : sa marche redevient celle des mages (`WALK_BOB`
@@ -243,6 +282,14 @@ MAGES = {
     "dragon": {"id": "dragon", "name": "Dragon des Abysses", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
             "walk_body_only": True, "body_scale": 1.3, "strike_scale": 0.94},
+    # Humain chibi en costume, comme le Chevalier Écarlate. Bordeaux sans bleu : `demagenta` n'y touche pas.
+    "croupier": {"id": "croupier", "name": "Croupier des Enfers", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True},
+    # Démon pur sang, voûté, non chibi : grand comme le Dragon. Noir vert-gris, os et vert bile.
+    "avide": {"id": "avide", "name": "L'Avide", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "demagenta": True,
+            "walk_body_only": True, "body_scale": 1.3},
     # ⚠️ Le Suprême garde son ANCIENNE marche, choisie par le joueur : avec le guide, ses
     # pieds s'écartent trop, dans les trois rangées (de 40 à 134 de dos).
     "supreme": {"id": "supreme", "name": "Sorcier Suprême", "source": MAGES_SOURCE,

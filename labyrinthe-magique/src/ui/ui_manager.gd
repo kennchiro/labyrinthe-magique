@@ -18,6 +18,12 @@ signal action_requested(slot: int)
 
 ## Durée d'affichage d'un message ponctuel avant retour à l'invite normale.
 const FLASH_DURATION := 1.4
+## L'objectif, dit au début de chaque niveau : il n'apparaissait que dans la pause. En
+## bandeau et non dans l'invite du bas, trop étroite entre le manche et l'éventail.
+const OBJECTIVE_DURATION := 3.2
+const OBJECTIVE_FADE := 0.8
+## Hauteur que le bandeau se donne sous la barre du mage, sur deux lignes au besoin.
+const OBJECTIVE_HEIGHT := 64.0
 
 @onready var hud: HUD = $HUD
 @onready var prompt_label: Label = $PromptLabel
@@ -40,6 +46,15 @@ var _boss_bar: BossBar = null
 ## Le panneau des réglages, créé à son ouverture.
 var _settings: SettingsPanel = null
 var _character_id := CharacterCatalog.default_id()
+var hero_demo_picker: HeroDemoPicker = null
+## Le bouton de la Transformation d'Aël, à droite de la barre du mage. Caché pour tous les autres.
+var transform_button: TransformButton = null
+## Niveau du héros au début du niveau : la victoire dit s'il en a gagné un. -1 tant
+## qu'aucune progression n'est arrivée depuis le début du niveau.
+var _hero_rank_at_start := -1
+var _objective_banner: Label = null
+var _objective_fade: Tween = null
+var _hero_rank := -1
 
 
 func _ready() -> void:
@@ -60,8 +75,15 @@ func _ready() -> void:
 		Platform.apply_ui_scale(get_window())
 		_place_prompt()
 		get_viewport().size_changed.connect(_place_prompt)
+		get_viewport().size_changed.connect(_place_corner_buttons)
+		_place_corner_buttons()
+	result_screen.visibility_changed.connect(_refresh_controls)
 
 	combat_pad.action_requested.connect(func(slot: int) -> void: action_requested.emit(slot))
+	transform_button = TransformButton.new()
+	transform_button.visible = false
+	add_child(transform_button)
+	transform_button.pressed.connect(func() -> void: action_requested.emit(GameManager.SLOT_TRANSFORM))
 	pause_button.pressed.connect(func() -> void: pause_requested.emit())
 	# Le bouton du carnet est habillé comme les boutons de menu : le bouton gris
 	# par défaut de Godot se perd sur un labyrinthe clair, et celui-ci doit
@@ -90,8 +112,11 @@ func set_character(stats: CharacterStats) -> void:
 
 func set_level(config: LevelConfig, number: int) -> void:
 	hud.set_level(config, number)
+	_hero_rank_at_start = _hero_rank
 	_flash_timer = 0.0
 	prompt_label.text = ""
+	if not config.is_demo:
+		_show_objective(_objective(config))
 	if demo_bar.visible:
 		demo_bar.get_node("Label").text = "%d / %d — %s" % [
 			config.stage, LevelConfig.STAGE_COUNT, config.level_name]
@@ -107,6 +132,8 @@ func show_demo_bar(on_step: Callable, on_boss: Callable) -> void:
 	demo_bar.get_node("Next").pressed.connect(func() -> void: on_step.call(1))
 	MenuStyle.apply(demo_bar.get_node("Boss"), Color("#ff9a7a"), 16)
 	demo_bar.get_node("Boss").pressed.connect(on_boss)
+	_layout_demo()
+	get_viewport().size_changed.connect(_layout_demo)
 
 
 ## Le bouton laisse sa place à la barre de vie pendant le combat.
@@ -157,9 +184,15 @@ func set_action_state(state: Dictionary) -> void:
 		_set_prompt("", Color.WHITE)
 
 
-func flash(text: String, color: Color) -> void:
+## Gemmes, potions et ennemis à l'écran : le pad signale ceux qu'il cache.
+func show_beneath_controls(things: Array[Dictionary]) -> void:
+	if combat_pad.visible:
+		combat_pad.show_beneath(things)
+
+
+func flash(text: String, color: Color, duration := FLASH_DURATION) -> void:
 	_set_prompt(text, color)
-	_flash_timer = FLASH_DURATION
+	_flash_timer = duration
 
 
 ## Direction demandée par le manche tactile. Vector2.ZERO doigt levé ou pouce au
@@ -184,6 +217,10 @@ func touch_reserved(point: Vector2) -> bool:
 	if pause_button.visible and pause_button.get_global_rect().has_point(point):
 		return true
 	if quest_button.visible and quest_button.get_global_rect().has_point(point):
+		return true
+	if transform_button != null and transform_button.visible and transform_button.get_global_rect().has_point(point):
+		return true
+	if hero_demo_picker != null and hero_demo_picker.visible and (hero_demo_picker.get_global_rect().has_point(point) or hero_demo_picker.choice.get_popup().visible):
 		return true
 	if demo_bar.visible and (demo_bar.get_global_rect().has_point(point)
 			or demo_bar.get_node("Boss").get_global_rect().has_point(point)):
@@ -231,9 +268,7 @@ func hide_settings() -> void:
 		return
 	_settings.queue_free()
 	_settings = null
-	combat_pad.visible = touch_mode
-	combat_pad.queue_redraw()
-	_apply_control_scheme()
+	_refresh_controls()
 
 
 ## Le panneau, pour les captures et les tests. Null quand il est fermé.
@@ -245,7 +280,36 @@ func settings_panel() -> SettingsPanel:
 func _apply_control_scheme() -> void:
 	stick.set_style(TouchStick.Style.CROSS if Settings.move_mode() == Settings.MOVE_CROSS
 		else TouchStick.Style.ANALOG)
-	stick.set_enabled(touch_mode and not Settings.tap_to_move())
+	stick.set_enabled(touch_mode and not Settings.tap_to_move() and _controls_shown())
+
+
+## Les commandes se rangent derrière la pause, la victoire et les réglages. Elles lisent
+## leurs touches sans passer par les nœuds : un sort posé sur « Menu » partait avec lui.
+func _controls_shown() -> bool:
+	return not result_screen.visible and _settings == null
+
+
+func _refresh_controls() -> void:
+	combat_pad.visible = touch_mode and _controls_shown()
+	combat_pad.queue_redraw()
+	_apply_control_scheme()
+
+
+func _place_corner_buttons() -> void:
+	_lay_corner(get_viewport().get_visible_rect().size)
+
+
+func _lay_corner(view: Vector2) -> void:
+	combat_pad.size = view
+	TouchLayout.fit_corner(combat_pad)
+	var right := -TouchLayout.corner_right
+	var width := (TouchLayout.CORNER_SIZE.x - 6.0) * 0.5
+	for button: Button in [pause_button, quest_button]:
+		button.offset_top = TouchLayout.CORNER_SIZE.y - 60.0
+		button.offset_bottom = TouchLayout.CORNER_SIZE.y
+		button.offset_right = right
+		button.offset_left = right - width
+		right -= width + 6.0
 
 
 # --- Écrans ----------------------------------------------------------------------
@@ -255,6 +319,12 @@ func show_victory(seconds: float, portals: int, gems: int, kills: int, has_next:
 	# renvoie simplement au début de l'aventure.
 	var subtitle := "Toutes les gemmes, et la maison." if has_next else "Tu as terminé tous les stages."
 	var next_text := "Niveau suivant" if has_next else "Rejouer depuis le début"
+	# Le niveau gagné se dit ICI. Annoncé à part, il passait sous le voile de la victoire
+	# et dans l'invite du bas, au même instant que le titre.
+	if _hero_rank_at_start >= 0 and _hero_rank > _hero_rank_at_start:
+		subtitle += "   Niveau %d atteint !" % _hero_rank
+	_flash_timer = 0.0
+	_set_prompt("", Color.WHITE)
 	result_screen.show_result("VICTOIRE", subtitle,
 		_stats(seconds, portals, gems, gems, kills), Color("#ffd479"), false, true, next_text)
 
@@ -266,7 +336,7 @@ func show_defeat(seconds: float, portals: int, gems: int, kills: int) -> void:
 
 func show_pause(config: LevelConfig, character: CharacterStats) -> void:
 	result_screen.show_result("PAUSE", "%s  —  %s" % [character.display_name, config.level_name],
-		"Ramasse les %d gemmes pour ouvrir la porte." % config.gem_count,
+		_objective(config),
 		Color("#9fb4e8"), true, false)
 
 
@@ -301,6 +371,43 @@ func hide_result() -> void:
 
 
 # --- Interne ---------------------------------------------------------------------
+
+func _show_objective(text: String) -> void:
+	if _objective_banner == null:
+		_objective_banner = Label.new()
+		_objective_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+		_objective_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_objective_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_objective_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_objective_banner.add_theme_font_size_override("font_size", 22)
+		_objective_banner.add_theme_color_override("font_color", Color("#ffe6a8"))
+		_objective_banner.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.1, 0.9))
+		_objective_banner.add_theme_constant_override("outline_size", 8)
+		add_child(_objective_banner)
+		move_child(_objective_banner, 0)
+	# Sous la barre du mage, au-dessus du héros, et dans la largeur que l'éventail laisse.
+	var top := TouchLayout.TOP_LEFT.y + 24.0
+	var right := 24.0
+	if combat_pad.visible:
+		right = combat_pad.reach_from_right(top + OBJECTIVE_HEIGHT) + TouchLayout.GAP
+	_objective_banner.offset_left = 24.0
+	_objective_banner.offset_right = -right
+	_objective_banner.offset_top = top
+	_objective_banner.text = text
+	_objective_banner.modulate.a = 1.0
+	_objective_banner.visible = true
+	if _objective_fade != null:
+		_objective_fade.kill()
+	_objective_fade = create_tween()
+	_objective_fade.tween_interval(OBJECTIVE_DURATION)
+	_objective_fade.tween_property(_objective_banner, "modulate:a", 0.0, OBJECTIVE_FADE)
+	_objective_fade.tween_callback(_objective_banner.hide)
+
+
+func _objective(config: LevelConfig) -> String:
+	var lairs := ", abats les repaires" if config.must_destroy_lairs else ""
+	return "Ramasse les %d gemmes%s, puis rentre à la maison." % [config.gem_count, lairs]
+
 
 func _stats(seconds: float, portals: int, gems: int, total: int, kills: int) -> String:
 	return "Temps : %.1f s   ·   Gemmes : %d/%d   ·   Kills : %d   ·   Portails : %d" % [
@@ -338,3 +445,70 @@ func _place_prompt() -> void:
 		return
 	prompt_label.offset_top = -(stick.margin.y + stick.radius * 2.4)
 	prompt_label.offset_bottom = prompt_label.offset_top + 44.0
+
+
+func set_hero_progress(progress: HeroProgress, transformation: Transformation = null) -> void:
+	hud.set_hero_progress(progress, transformation)
+	if progress != null:
+		_hero_rank = progress.level()
+		if _hero_rank_at_start < 0:
+			_hero_rank_at_start = _hero_rank
+
+
+## Le bouton de la Transformation : visible pour Aël à partir du niveau 30, à droite de la barre du mage.
+func set_transform_state(shown: bool, info: Dictionary) -> void:
+	if transform_button == null:
+		return
+	var changed := transform_button.visible != shown
+	transform_button.visible = shown
+	if not shown:
+		if changed:
+			_layout_demo()
+		return
+	transform_button.position = hud.position + Vector2(hud.size.x + 6.0, 0.0)
+	transform_button.set_info(info)
+	if changed:
+		_layout_demo()
+
+
+func show_demo_hero(on_form: Callable) -> void:
+	if hero_demo_picker == null:
+		hero_demo_picker = HeroDemoPicker.new()
+		add_child(hero_demo_picker)
+		hero_demo_picker.form_requested.connect(on_form)
+	_layout_demo()
+
+func set_demo_hero_state(form: int, rank: int) -> void:
+	if hero_demo_picker != null:
+		hero_demo_picker.set_form(form, rank)
+
+## Le bandeau de visite évite le HUD à gauche et la pause à droite, même sur téléphone.
+func _layout_demo() -> void:
+	if not demo_bar.visible:
+		return
+	var view := get_viewport().get_visible_rect().size
+	var narrow := view.x < 600.0
+	var top := hud.position.y + hud.size.y + 30.0
+	var width := minf(420.0, view.x - 32.0) if narrow else minf(420.0, view.x - 370.0)
+	width = maxf(120.0, width)
+	demo_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	# Le bouton de la Transformation tient à droite de la barre du mage : le bandeau se pousse d'autant.
+	var beside := 304.0 + (70.0 if transform_button != null and transform_button.visible else 0.0)
+	demo_bar.position = Vector2(16.0 if narrow else beside, top + (42.0 if hero_demo_picker != null else 0.0) if narrow else 16.0)
+	demo_bar.size = Vector2(width, 44.0)
+	var prev := demo_bar.get_node("Prev") as Button
+	var next := demo_bar.get_node("Next") as Button
+	var label := demo_bar.get_node("Label") as Label
+	prev.position = Vector2.ZERO
+	prev.size = Vector2(40, 44)
+	next.position = Vector2(width - 40.0, 0)
+	next.size = Vector2(40, 44)
+	label.position = Vector2(44, 4)
+	label.size = Vector2(maxf(20.0, width - 88.0), 36)
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var boss := demo_bar.get_node("Boss") as Button
+	boss.position = Vector2(maxf(0.0, (width - 160.0) * 0.5), 50)
+	boss.size = Vector2(minf(160.0, width), 36)
+	if hero_demo_picker != null:
+		hero_demo_picker.position = Vector2(16, top)
+		hero_demo_picker.size = Vector2(minf(280.0, view.x - 32.0), 36)

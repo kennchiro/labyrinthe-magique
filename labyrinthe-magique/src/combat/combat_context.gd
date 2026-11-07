@@ -13,6 +13,7 @@ var player_cell: Vector2i = Vector2i.ZERO
 ## Direction regardée : sert aux sorts qui partent devant (mur, translation).
 var player_facing: Vector2i = Vector2i.DOWN
 var enemy_cells: Array[Vector2i] = []
+var enemy_facings: Array[Vector2i] = []
 var enemy_health: Array[Health] = []
 ## Index à partir duquel les entrées ne sont plus des ennemis mais des
 ## STRUCTURES immobiles — les repaires, sur les niveaux où il faut les abattre.

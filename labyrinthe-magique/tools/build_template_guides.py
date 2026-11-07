@@ -240,11 +240,111 @@ def side_guide(path: Path) -> None:
     print(f"  {path}")
 
 
+## Les jambes du Chronomancien sur trois rangées : sa rangée de profil est la marche voulue.
+CHRONO_GUIDE = Path("docs/prompts/mages_animes/guide_complet.png")
+
+
+def hero_guide(path: Path) -> None:
+    """La planche ENTIÈRE d'un héros au gabarit : la course de face et de dos, la marche des mages
+    de profil. C'est le Héros d'essai tel que le joueur l'a validé, en une seule commande, car une
+    bande de profil générée à part sort plus fine que la face."""
+    with Image.open(OUT / "guide_course.png") as course, Image.open(CHRONO_GUIDE) as chrono:
+        guide = course.convert("RGB").copy()
+        side = chrono.convert("RGB").crop((0, CELL * 2, COLUMNS * CELL, CELL * 3))
+    guide.paste(side, (0, CELL * 2))
+    guide.save(path)
+    print(f"  {path}")
+
+
+## LA MARCHE DU DRAGON D'OR : sur deux pattes, mais en PRÉDATEUR, pas en humain. Voûté et penché en
+## avant, la tête basse et projetée, les genoux fléchis ; des pattes de dragon (on marche sur les orteils,
+## le talon haut), de longs bras qui pendent jusqu'aux genoux, griffes ouvertes, et une queue qui fait
+## contrepoids. Le pas : (avancée du pied, hauteur du pied) sur huit images, l'autre pied avec quatre
+## images d'écart ; les épaules roulent à l'opposé du pied qui avance.
+## ⚠️ ÉLARGI le 2026-11-06 : à ±30, le joueur trouvait son pas « trop serré », et le générateur avait encore
+## rétréci la foulée (25 px de course de pied sur 256). ±52, soit un écart d'environ une demi-hauteur, comme
+## les mages, et le genou qui monte franchement au passage.
+PROWL = [(52, 0), (30, 0), (0, 0), (-30, 0), (-52, 6), (-26, 28), (10, 34), (40, 14)]
+TAIL_SWAY = [0, 6, 10, 6, 0, -6, -10, -6]
+CLAW = (255, 215, 0)
+
+
+def _dragon_leg(pen: ImageDraw.ImageDraw, hip: tuple, foot: tuple, facing: int, colour: tuple) -> None:
+	"""Une patte de dragon : cuisse vers l'avant, jarret qui repart en arrière, pied sur les orteils."""
+	knee = (hip[0] + facing * 14 + (foot[0] - hip[0]) * 0.4, hip[1] + 26)
+	hock = (foot[0] - facing * 14, foot[1] - 18)
+	pen.line([hip, knee, hock, foot], fill=colour, width=LIMB_WIDTH, joint="curve")
+	pen.line([foot, (foot[0] + facing * 16, foot[1] + 2)], fill=colour, width=LIMB_WIDTH - 2)
+
+
+def dragon_prowl(pen: ImageDraw.ImageDraw, cx: int, oy: int, i: int, row: int) -> None:
+	floor = oy + 232
+	sway = TAIL_SWAY[i]
+	if row == 2:
+		# De profil, tourné vers la droite : penché en avant, la tête loin devant, la queue loin derrière.
+		hip = (cx - 6, oy + 150)
+		chest = (cx + 22, oy + 104)
+		head = (cx + 46, oy + 84)
+		pen.line([hip, (cx - 50, oy + 150 + sway), (cx - 92, oy + 132 + sway * 1.3)], fill=BODY, width=14, joint="curve")
+		for phase, colour in ((i + 4, FAR), (i, NEAR)):
+			forward, lift = PROWL[phase % COLUMNS]
+			_dragon_leg(pen, hip, (cx + forward, floor - lift), 1, colour)
+		pen.polygon([(hip[0] - 18, hip[1] + 8), (chest[0] - 8, chest[1] - 22), (chest[0] + 20, chest[1] - 6),
+			(hip[0] + 16, hip[1] + 10)], fill=BODY)
+		pen.ellipse([head[0] - 20, head[1] - 18, head[0] + 20, head[1] + 18], fill=BODY)
+		for horn in (0, 12):
+			pen.line([(head[0] - 6 + horn, head[1] - 14), (head[0] - 30 + horn, head[1] - 46)], fill=BODY, width=7)
+		# Les bras pendent bas, en balancier opposé au pied proche ; griffes ouvertes au bout.
+		for phase, colour in ((i, FAR), (i + 4, NEAR)):
+			swing = PROWL[phase % COLUMNS][0] * 0.6
+			hand = (chest[0] + swing, oy + 168)
+			pen.line([chest, (chest[0] + swing * 0.4, oy + 136), hand], fill=colour, width=LIMB_WIDTH, joint="curve")
+			for f in (-1, 0, 1):
+				pen.line([hand, (hand[0] + 10 + f * 3, hand[1] + 10 + f * 4)], fill=CLAW, width=3)
+		return
+	# De face (rangée 1) ou de dos (rangée 2) : large carrure voûtée, bras ballants, queue derrière.
+	shoulders = oy + 104
+	if row == 1:
+		pen.line([(cx, oy + 160), (cx + sway, oy + 196), (cx + sway * 1.8, oy + 226)], fill=BODY, width=14)
+	for side, phase in ((-1, i + 4), (1, i)):
+		forward, lift = PROWL[phase % COLUMNS]
+		hip = (cx + side * 16, oy + 156)
+		foot = (cx + side * 22, floor - lift - max(0, forward) * 0.35)
+		colour = NEAR if side == 1 else FAR
+		pen.line([hip, (hip[0] + side * 12, oy + 186), foot], fill=colour, width=LIMB_WIDTH, joint="curve")
+		pen.line([foot, (foot[0] + side * 8, foot[1] + 4)], fill=colour, width=LIMB_WIDTH - 2)
+	pen.polygon([(cx - 40, shoulders), (cx + 40, shoulders), (cx + 22, oy + 160), (cx - 22, oy + 160)], fill=BODY)
+	pen.ellipse([cx - 20, oy + 76, cx + 20, oy + 112], fill=BODY)
+	for horn in (-1, 1):
+		pen.line([(cx + horn * 12, oy + 82), (cx + horn * 34, oy + 50)], fill=BODY, width=7)
+	for side, phase in ((-1, i), (1, i + 4)):
+		swing = PROWL[phase % COLUMNS][0] * 0.25
+		hand = (cx + side * 46, oy + 176 + swing)
+		colour = NEAR if side == 1 else FAR
+		pen.line([(cx + side * 38, shoulders + 4), (cx + side * 50, oy + 142), hand], fill=colour, width=LIMB_WIDTH, joint="curve")
+		for f in (-1, 0, 1):
+			pen.line([hand, (hand[0] + f * 6, hand[1] + 12)], fill=CLAW, width=3)
+	if row == 0:
+		pen.line([(cx, oy + 160), (cx + sway, oy + 190)], fill=BODY, width=12)
+
+
+def dragon_guide(path: Path) -> None:
+	guide = Image.new("RGB", (COLUMNS * CELL, ROWS * CELL), MAGENTA)
+	pen = ImageDraw.Draw(guide)
+	for row in range(ROWS):
+		for i in range(COLUMNS):
+			dragon_prowl(pen, i * CELL + CENTRE, row * CELL, i, row)
+	guide.save(path)
+	print(f"  {path}")
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     side_guide(OUT / "guide_profil.png")
     sheet(OUT / "guide_course.png", run_frontal, run_side)
     sheet(OUT / "guide_attaque.png", strike_frontal, strike_side)
+    hero_guide(OUT / "guide_heros.png")
+    dragon_guide(OUT / "guide_dragon.png")
 
 
 if __name__ == "__main__":

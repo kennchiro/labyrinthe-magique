@@ -82,6 +82,9 @@ var portrait_region := Rect2()
 var kills := 0
 var kills_needed := 5
 var kills_ready := false
+var hero_level := 0
+var xp_ratio := 0.0
+var prism_seconds := 0.0
 
 ## La vie qu'on vient de perdre reste affichée un instant : c'est ce qui fait voir
 ## la TAILLE du coup, qu'une jauge qui saute d'un cran ne montre pas.
@@ -185,7 +188,9 @@ static func shield_band(rect: Rect2, health_ratio: float, part: float) -> Rect2:
 ## Le bandeau montre le VRAI mage, dans son portrait peint. Une silhouette générique
 ## pour tous les personnages ne dit rien : on ne sait plus qui on incarne.
 func set_character(stats: CharacterStats) -> void:
-	var path := "res://assets/ui/portraits/portrait_%s.jpg" % stats.id
+	var path := "res://assets/ui/portraits/portrait_%s.jpg" % stats.visual_id()
+	if not ResourceLoader.exists(path):
+		path = "res://assets/ui/portraits/portrait_%s.jpg" % stats.id
 	if ResourceLoader.exists(path):
 		portrait = load(path)
 		var side := float(portrait.get_width()) * PORTRAIT_CROP_WIDTH
@@ -262,7 +267,22 @@ func _pulse() -> float:
 	return 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.006)
 
 
+func set_hero_progress(progress: HeroProgress, transformation: Transformation = null) -> void:
+	hero_level = progress.level() if progress != null else 0
+	xp_ratio = progress.ratio() if progress != null else 0.0
+	prism_seconds = transformation.left if transformation != null and transformation.state == Transformation.State.PRISM else 0.0
+	queue_redraw()
+
+
 func _draw() -> void:
+	if hero_level > 0:
+		var rect := Rect2(8.0, size.y + 3.0, size.x - 16.0, 4.0)
+		draw_rect(rect, GAUGE_BG)
+		draw_rect(Rect2(rect.position, Vector2(rect.size.x * xp_ratio, rect.size.y)), Color("#8deaff"))
+		var text := "Niv. %d" % hero_level
+		if prism_seconds > 0.0:
+			text += " · Prisme %.0f s" % prism_seconds
+		draw_string(ThemeDB.fallback_font, Vector2(8.0, size.y + 20.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, TEXT)
 	_draw_portrait()
 	_draw_health()
 	_draw_teleport()
