@@ -57,6 +57,9 @@ var maze: MazeView3D = null
 var camera: Camera3D = null
 
 var _level: Level = null
+## La scène 2D adoptée et sa caméra : le `Level` en campagne, l'`ArenaView` en arène.
+var _view: Node2D = null
+var _camera2d: Camera2D = null
 var _canvas: SubViewport = null
 var _ground: MeshInstance3D = null
 var _ground_material: ShaderMaterial = null
@@ -79,6 +82,18 @@ static func requested() -> bool:
 ## Prend le `Level` en charge. À appeler une fois dans l'arbre, avant le premier niveau.
 func adopt(level: Level) -> void:
 	_level = level
+	# Le Level est adopté VIDE, avant le premier niveau : ce qui entrera dans `entities` sera redressé
+	# à son arrivée, et rien de ce qu'il porte déjà dans sa scène ne doit l'être (comme avant l'arène).
+	adopt_view(level, level.camera, level.maze_renderer, [level.entities], false)
+
+
+## Prend en charge n'importe quelle scène 2D posée sur une grille : sa caméra cadrera ce que voit la
+## caméra 3D, son rendu à plat est caché, et ce qui entre dans ses `entities` est redressé — y compris
+## ce qui s'y trouve déjà (l'arène pose ses héros et ses décors avant d'être adoptée).
+func adopt_view(view: Node2D, camera2d: Camera2D, renderer: MazeRenderer, entities: Array,
+		stand_present: bool = true) -> void:
+	_view = view
+	_camera2d = camera2d
 	_build_scene()
 	_canvas = SubViewport.new()
 	_canvas.transparent_bg = true
@@ -87,11 +102,21 @@ func adopt(level: Level) -> void:
 	_canvas.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_canvas)
 	_ground_material.set_shader_parameter("canvas", _canvas.get_texture())
-	_level.reparent(_canvas, false)
-	_level.camera.position_smoothing_enabled = false
-	_level.camera.make_current()
-	_level.maze_renderer.visible = false
-	_level.entities.child_entered_tree.connect(_stand_up)
+	view.reparent(_canvas, false)
+	camera2d.position_smoothing_enabled = false
+	camera2d.offset = Vector2.ZERO
+	camera2d.make_current()
+	renderer.visible = false
+	for group in entities:
+		add_entities(group, stand_present)
+
+
+## Un calque d'entités de plus à redresser (les `Level` hôtes de l'arène).
+func add_entities(group: Node2D, stand_present: bool = true) -> void:
+	if stand_present:
+		for child in group.get_children():
+			_stand_up(child)
+	group.child_entered_tree.connect(_stand_up)
 
 
 func _build_scene() -> void:
@@ -140,18 +165,26 @@ func _build_scene() -> void:
 	add_child(_mage_light)
 
 
-func build(grid: MazeGrid, stage: int) -> void:
+## `folder` : un dossier de tuiles à la place de celui du stage ; sans maison, aucune lueur de maison
+## (l'arène n'en a pas).
+func build(grid: MazeGrid, stage: int, folder: String = "", with_house: bool = true) -> void:
 	_mood = StageMood.of(stage)
 	_environment.background_color = _mood.sky
 	_environment.ambient_light_color = _mood.ambient
 	_moon.light_color = _mood.moon
-	maze.build(grid, stage, _mood)
+	maze.build(grid, stage, _mood, folder)
 	for glow in _glows.get_children():
 		_glows.remove_child(glow)
 		glow.queue_free()
 	for cell in grid.portals:
 		_add_glow(cell, PORTAL_GLOW_RADIUS, PORTAL_GLOW)
-	_add_glow(grid.house_center, HOUSE_GLOW_RADIUS, HOUSE_GLOW)
+	if with_house:
+		_add_glow(grid.house_center, HOUSE_GLOW_RADIUS, HOUSE_GLOW)
+
+
+## Une lueur posée sur une case, hors campagne (la gemme de l'arène).
+func add_glow(cell: Vector2i, radius: float, tint: Color) -> void:
+	_add_glow(cell, radius, tint)
 
 
 ## Un mur levé ou tombé : seul le maillage change, la texture du sol suit d'elle-même.
@@ -215,10 +248,23 @@ func aim(mage: Vector2, maze_pixels: Vector2, overview: bool, snap: bool, shake:
 	var view := Vector2(get_viewport().get_visible_rect().size)
 	var aspect := view.x / maxf(1.0, view.y)
 	_rows = maxf(cells.y, cells.x / aspect) + 2.0 if overview else CameraRules.VIEW_ROWS
+	_aim_at(mage, mage, cells, aspect, overview, snap, shake)
+
+
+## Cadre `rows` rangées autour de `centre` (pixels du monde) : l'arène suit la mêlée et non un mage.
+## Les rangées doivent être ENTIÈRES — la texture du sol est retaillée à chaque changement.
+func aim_rows(centre: Vector2, rows: float, maze_pixels: Vector2, snap: bool, shake: Vector2) -> void:
+	var view := Vector2(get_viewport().get_visible_rect().size)
+	_rows = rows
+	_aim_at(centre, centre, maze_pixels / CELL_PIXELS, view.x / maxf(1.0, view.y), false, snap, shake)
+
+
+func _aim_at(mage: Vector2, focus: Vector2, cells: Vector2, aspect: float, overview: bool, snap: bool,
+		shake: Vector2) -> void:
 	_fit_canvas(aspect)
 	var wanted := cells * 0.5
 	if not overview:
-		var at := mage / CELL_PIXELS
+		var at := focus / CELL_PIXELS
 		wanted = Vector2(_clamp_axis(at.x, _rows * aspect, cells.x),
 			_clamp_axis(at.y + CameraRules.AIM_SOUTH, _rows, cells.y))
 	if snap or overview:
@@ -240,7 +286,7 @@ func _place(mage: Vector2, shake: Vector2) -> void:
 	# chaque image pendant que le sol glisse sous eux.
 	var middle := _centre + _footprint.get_center()
 	middle = (middle * _density).round() / _density
-	_level.camera.position = middle * CELL_PIXELS
+	_camera2d.position = middle * CELL_PIXELS
 	_ground.position = Vector3(middle.x, 0.02, middle.y)
 	_mage_light.position = Vector3(mage.x / CELL_PIXELS, MAGE_LIGHT_HEIGHT, mage.y / CELL_PIXELS)
 
@@ -257,7 +303,7 @@ func _fit_canvas(aspect: float) -> void:
 	_density = minf(minf(MAX_DENSITY, window_height / _rows * SHARPNESS), MAX_CANVAS_SIDE / longest)
 	_canvas.size = Vector2i((_footprint.size * _density).ceil())
 	(_ground.mesh as PlaneMesh).size = Vector2(_canvas.size) / _density
-	_level.camera.zoom = Vector2.ONE * _density / CELL_PIXELS
+	_camera2d.zoom = Vector2.ONE * _density / CELL_PIXELS
 
 
 static func _clamp_axis(value: float, visible: float, world: float) -> float:

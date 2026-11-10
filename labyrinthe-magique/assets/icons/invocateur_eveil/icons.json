@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "invocateur_eveil_marque",
+    "invocateur_eveil_nuee",
+    "invocateur_eveil_gargouille",
+    "invocateur_eveil_porte",
+    "invocateur_eveil_echange",
+    "invocateur_eveil_dragon"
+  ],
+  "size": 256
+}

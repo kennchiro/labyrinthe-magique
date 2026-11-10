@@ -22,6 +22,8 @@ var character_id := CharacterCatalog.default_id()
 ## Niveau par lequel commencer, en index PLAT. Renseigné par la sélection de
 ## stage ; zéro veut dire « au début de la campagne ».
 var start_index := 0
+## La dernière composition de l'arène, pour la retrouver en y revenant.
+var _arena_setup := {}
 
 var _current: Node = null
 
@@ -38,8 +40,11 @@ func _ready() -> void:
 		if Screenshot.requested(args):
 			_capture(args)
 		return
-	if args.is_empty() or "--menu" in args or "--select" in args or "--stages" in args:
-		if "--stages" in args:
+	if args.is_empty() or "--menu" in args or "--select" in args or "--stages" in args \
+			or _wants_arena(args):
+		if _wants_arena(args):
+			show_arena()
+		elif "--stages" in args:
 			show_stages()
 		elif "--select" in args:
 			show_select()
@@ -68,6 +73,7 @@ func show_title() -> void:
 	screen.start_requested.connect(start_game)
 	screen.journey_requested.connect(show_stages)
 	screen.select_requested.connect(show_select)
+	screen.arena_requested.connect(show_arena)
 	screen.settings_requested.connect(func() -> void:
 		var panel := SettingsPanel.new()
 		panel.character_id = character_id
@@ -104,6 +110,24 @@ func show_stages() -> void:
 		start_index = LevelConfig.flat_index(stage, episode)
 		start_game())
 	screen.back_requested.connect(show_title)
+
+
+## L'ARÈNE (2026-11-09) : les héros se battent seuls, le joueur compose les équipes et regarde.
+## Toute la composition vit dans l'écran lui-même ; on garde la dernière pour y revenir.
+func show_arena() -> void:
+	var screen := ArenaScreen.new()
+	screen.last_setup = _arena_setup
+	_swap(screen)
+	screen.menu_requested.connect(func() -> void:
+		_arena_setup = screen.last_setup
+		show_title())
+
+
+static func _wants_arena(args: PackedStringArray) -> bool:
+	for arg in args:
+		if arg.begins_with("--arena"):
+			return true
+	return false
 
 
 func start_game(demo: bool = false) -> void:

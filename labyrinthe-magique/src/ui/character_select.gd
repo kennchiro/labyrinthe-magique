@@ -49,6 +49,11 @@ var _ability_cards: Array[AbilityCard] = []
 ## donc avec sa vie et sa vitesse plutôt qu'au milieu de ses sorts. Rangé parmi
 ## eux, il se lisait comme un septième sort qu'on cherchait en vain sur la barre.
 var _trait_label: Label = null
+## L'ÉVEIL (2026-11-09, demande du joueur) : un bouton doré sous le grand portrait bascule toute la fiche sur la
+## forme éveillée du mage — portrait, nom, trait et six sorts. Il reste enclenché d'un mage à l'autre, pour comparer
+## les Éveils entre eux, et disparaît sur qui n'en a pas. JOUER part toujours avec le mage : l'Éveil se gagne en partie.
+var _awaken_button: Button = null
+var _showing_awakening := false
 
 var character_id := CharacterCatalog.default_id()
 
@@ -114,8 +119,17 @@ func _ready() -> void:
 	_selected_preview = CharacterPortrait.new()
 	_selected_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Card.add_child(_selected_preview)
+	_awaken_button = Button.new()
+	_awaken_button.toggle_mode = true
+	_awaken_button.text = "ÉVEIL ✦"
+	_awaken_button.focus_mode = Control.FOCUS_NONE
+	MenuStyle.apply(_awaken_button, Color("#ffd479"), 16)
+	_awaken_button.toggled.connect(_on_awaken_toggled)
+	$Card.add_child(_awaken_button)
 	resized.connect(_layout)
 	_layout()
+	# Capture : `--select --character fire --eveil` ouvre la fiche sur l'Éveil.
+	_showing_awakening = "--eveil" in OS.get_cmdline_user_args()
 	select(character_id)
 
 
@@ -240,10 +254,27 @@ func select(id: String) -> void:
 	if stats.category != _category:
 		_open_category(stats.category)
 	_chosen_in[stats.category] = id
-	_selected_preview.setup(stats)
-	_selected_preview.set_selected(true)
 	for portrait in _portraits:
 		portrait.set_selected(portrait.stats.id == id)
+	var awakened := CharacterCatalog.awakening_of(id) if not id in CharacterCatalog.AEL_FORMS else null
+	_awaken_button.visible = awakened != null
+	_awaken_button.set_pressed_no_signal(_showing_awakening and awakened != null)
+	if _awaken_button.button_pressed:
+		_fill_sheet(awakened, id, id + "_eveil")
+	else:
+		_fill_sheet(stats, id, id)
+	_reveal(id)
+
+
+func _on_awaken_toggled(on: bool) -> void:
+	_showing_awakening = on
+	select(character_id)
+
+
+## Remplit la fiche et le grand portrait. `icons` est le dossier d'icônes : celui de l'Éveil pour sa forme éveillée.
+func _fill_sheet(stats: CharacterStats, id: String, icons: String) -> void:
+	_selected_preview.setup(stats)
+	_selected_preview.set_selected(true)
 
 	# Le Héros d'essai n'a qu'une attaque : il ne lance jamais une vraie partie.
 	$Buttons/PlayButton.disabled = id in CharacterCatalog.HIDDEN or _form_locked(id)
@@ -258,10 +289,16 @@ func select(id: String) -> void:
 
 	stats_label.text = "Vie %d   ·   Vitesse %.1f   ·   Extra Power à %d kills" % [
 		stats.base_health, stats.move_speed, stats.ultimate_required_kills]
+	if stats.awakened:
+		stats_label.text = "Éveil : %d kills pour %d s   ·   Vitesse %.1f   ·   puis %d s d'épuisement" % [
+			Awakening.KILLS, int(Awakening.DURATION), stats.move_speed, int(Awakening.EXHAUST_TIME)]
 
 	# Un élément sans trait (le Prisme d'Aël) laisse la ligne vide plutôt qu'un tiret seul.
 	_trait_label.text = "" if Element.trait_name(stats.element).is_empty() else "%s — %s" % [
 		Element.trait_name(stats.element), Element.trait_hint(stats.element)]
+	if stats.awakened:
+		var awakened_trait: Array = CharacterCatalog.AWAKENING_TRAITS.get(id, [])
+		_trait_label.text = "" if awakened_trait.is_empty() else "%s — %s" % [awakened_trait[0], awakened_trait[1]]
 	_trait_label.add_theme_color_override("font_color",
 		Color(stats.color().r, stats.color().g, stats.color().b, 0.9))
 
@@ -287,11 +324,10 @@ func select(id: String) -> void:
 		card.visible = i < slots.size()
 		if not card.visible:
 			continue
-		card.fill(str(slots[i][0]), slots[i][1] as Ability, id, stats.color())
+		card.fill(str(slots[i][0]), slots[i][1] as Ability, icons, stats.color())
 		if i == slots.size() - 1 and stats.ultimate != null:
 			card.mark_ultimate(stats.ultimate_required_kills)
 	_layout()
-	_reveal(id)
 
 
 ## Les cinq vignettes doivent tenir sur la largeur DISPONIBLE. En portrait sur
@@ -381,6 +417,11 @@ func _layout_card(card: Panel) -> void:
 	var inner := card.size.x - 36.0 - preview_width - preview_gap
 	_selected_preview.position = Vector2(card.size.x - preview_width - 18.0, 14.0)
 	_selected_preview.size = Vector2(preview_width, maxf(80.0, card.size.y - 28.0))
+	# Le bouton ÉVEIL chevauche le bas du grand portrait, sur son cadre : il appartient à la carte du personnage.
+	var button_size := Vector2(minf(preview_width * 0.78, 150.0), 34.0)
+	_awaken_button.size = button_size
+	_awaken_button.position = _selected_preview.position + Vector2(
+		(preview_width - button_size.x) * 0.5, _selected_preview.size.y - button_size.y * 0.55)
 	var compact := card.size.y < 210.0
 	var y := 6.0
 

@@ -24,6 +24,8 @@ const TRAIL_POINTS := 16
 const TRAIL_WIDTH := 0.22
 const MOVING := 3.0
 
+## L'Empereur des Cendres : pendant l'Éveil, ses pièces chauffent à blanc, fissures rallumées.
+var molten := false
 var _tile := 64.0
 var _player: Node2D = null
 var _sprites: Array[Sprite2D] = []
@@ -147,6 +149,8 @@ func _dress(sprite: Sprite2D, i: int, state: int, heading: Vector2) -> void:
 	sprite.flip_h = i == 0 and turn == 0.0
 	var unit := tiles * _tile / float(sprite.texture.get_height())
 	sprite.scale = Vector2(unit, unit * _stand)
+	if molten:
+		heat = maxf(heat, 0.6 + 0.15 * sin(_time * 4.0 + float(i)))
 	var shaded := sprite.material as ShaderMaterial
 	shaded.set_shader_parameter("heat", heat)
 	shaded.set_shader_parameter("flash", _flash[i])

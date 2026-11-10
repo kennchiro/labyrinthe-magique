@@ -54,14 +54,16 @@ var _wall_gain := 0.0
 var _notch := 0.0
 
 
-func build(grid: MazeGrid, stage: int, mood: StageMood) -> void:
+## `folder` remplace le dossier de tuiles du stage : l'arène y passe celui du Colisée.
+func build(grid: MazeGrid, stage: int, mood: StageMood, folder: String = "") -> void:
 	_grid = grid
 	_mood = mood
 	_wall_gain = 0.0
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
-	var folder := TILES_PATH + "stage_%d/" % stage
+	if folder == "":
+		folder = TILES_PATH + "stage_%d/" % stage
 	var atlas: Texture2D = load(folder + "wall_atlas.png")
 	var floor_sheet: Texture2D = load(folder + "floor_sheet.png")
 	_atlas = atlas

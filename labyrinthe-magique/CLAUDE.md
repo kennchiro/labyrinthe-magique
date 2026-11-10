@@ -413,9 +413,205 @@ charge, le mage serait éveillé six secondes sur sept. Le bouton est celui de l
   Souffle du titan), un bouclier `immune` + `repel_cells` (le Cocon, comme le Chérubin), `Kind.FLIGHT` +
   `end_blast_push` (le Vol du zéphyr, comme l'Envol du Ciel), `eye_seconds` (l'Ouragan : une zone `zone_follows`
   fabriquée par `_open_eye`). Effets : `souverain_*`, palette dans `souverain.gdshaderinc`. `tools/preview_souverain.gd`.
+- Le **Sorcier des Ténèbres** a le **Seigneur du Néant** (`shadow_awakened`, `docs/prompts/mages/eveil_tenebres.md`).
+  Son trait, le Double, est `CombatSystem.start_double` : chaque coup visé est répété par son ombre à moitié de
+  sa force (ni la fuite, ni l'Extra). L'ombre est `ShadowDouble` : elle recopie à chaque image le sprite du mage
+  (`neant_silhouette.gdshader`), et sert aussi de leurre figé à la Marche des ombres. Ses sorts : `impact_pull`
+  (l'Orbe), zone `sceau_gouffre`, `decoy_seconds` (la Marche), `hole_seconds` (le Trou noir), `Kind.FLIGHT` peint
+  en Fusion (son sprite s'efface par `self_modulate`, la flaque reste), `eclipse_seconds` (l'Éclipse). Effets :
+  `neant_*`, palette dans `neant.gdshaderinc`. `tools/preview_neant.gd`.
+- ⚠️ Ses planches sont sur FOND VERT (il est violet) : l'entrée `tenebres_eveil` de `build_enemies.py` prend
+  `degreen` au lieu de `demagenta`, et `keep_cast` pour sauter `without_magenta_cast`, qui ramenait son violet au
+  rouge ; ses icônes prennent `key: flat` et `degreen`.
+- L'**Invocateur** a le **Maître des Légions** (`invocateur_awakened`, `docs/prompts/mages/eveil_invocateur.md`). Son
+  trait, la Légion, est `CombatSystem.start_legion` : les créatures nées pendant l'Éveil ont `legion` (dégâts ×
+  `LEGION_RATIO`, plafond `LEGION_CAP`), le `Level` les grandit (`SummonVisual.set_legion`) et les relie au mage
+  (`LegionChains`). Le `Level` lit leur apparence et leur taille par `combat.summon_info(id)`. Ses sorts :
+  `prey_mark_seconds` (la Marque : `_nearest_prey` la préfère ; distincte de `mark_seconds`, celle de l'Ange de la
+  Mort), `summon_burst_damage` (la Nuée, explosion quand la créature s'en va), `summon_drop_damage` (la Gargouille
+  colossale tombe près de la proie), zone `porte_abysses` avec `zone_spawn_every`, `swap_with_summon` (l'Échange),
+  `flyover_damage` + `summon_look` `dragon_eveil` (le Roi-Dragon, dont la boule de feu `brasier_roi` explose sur
+  `ROYAL_FIREBALL_RADIUS`). Effets : `legion_*`, palette dans `legion.gdshaderinc`. `tools/preview_legion.gd`.
+- ⚠️ Ses planches sont sur FOND VERT, comme le Seigneur du Néant (`degreen`, `keep_cast`). Son dragon embrasé vient
+  de `creatures/invocateur_dragon_eveil.png`, détouré par `green_keyed` dans `tools/build_invocateur.py --dragon-eveil`.
+- Le **Chronomancien** a le **Seigneur des Heures** (`chrono_awakened`, `docs/prompts/mages/eveil_chrono.md`). Son
+  trait, Temps accéléré, est `CombatSystem.start_haste` : les recharges courent à `Awakening.HASTE_FACTOR`, et le
+  `Level` pose l'horloge `heures_horloge` sous ses pieds. Ses sorts : `volley` 3 (les Trois Aiguilles),
+  `entry_freeze` (le Dôme de stase fige une seule fois chaque créature qui entre, zone `dome_stase`),
+  `echo_second_seconds` + `echo_end_damage` (le Paradoxe : deux doubles, une onde au bout ; `TRAIL_KEEP` monté à
+  11 s pour le second), `rewind_heal_seconds` (le Rembobinage lit `health_at_past`), `clock_bomb_*` (le Saut
+  temporel pose une bombe-horloge), `judgement_ratio` (le Jugement des Heures : pendant l'arrêt, `_apply_damage`
+  accumule au lieu de blesser, puis `_release_judgement` rend le tout multiplié). Effets : `heures_*`, palette dans
+  `heures.gdshaderinc`. `tools/preview_heures.gd`. Fond magenta, `demagenta`.
+- Le **Mage de la Peste** a le **Seigneur du Fléau** (`peste_awakened`, `docs/prompts/mages/eveil_peste.md`). Son
+  trait, le Miasme, est `CombatSystem.start_miasma` : une dose par seconde aux créatures collées, et `venom_cap()`
+  monte à `Awakening.MIASMA_CAP` (5) tant qu'il dure — la teinte d'`Enemy` est plafonnée à trois doses. Le `Level` pose
+  l'anneau `fleau_miasme` et la ronde de `PlagueCrows` (trois corbeaux de `assets/allies/peste_corbeau_top.png`,
+  vus de dessus et tournés dans le sens du vol, `tools/build_corbeau.py`). Ses sorts : `radius` sur le Crachat (la
+  gerbe passe par `_apply_area`, une dose par le trait), `trail_doses`/`trail_slow` (le Sillage), `epidemic_jumps`
+  (l'Épidémie), `bleed_per_dose` (la Saignée fait éclater toutes les doses du rayon), `flock_damage` +
+  `cloud_at_arrival` (la Nuée de corbeaux), `plague_slow` + `cloud_venom_doses` (la Grande Peste, ciel `fleau_ciel`
+  accroché au mage). Effets : `fleau_*`, palette dans `fleau.gdshaderinc`. `tools/preview_fleau.gd`.
+- Le **Sorcier Suprême** a l'**Archimage Primordial** (`supreme_awakened`, `docs/prompts/mages/eveil_supreme.md`).
+  Son trait, la Roue des éléments, est `CombatSystem.start_wheel` : chaque coup porte le trait de l'orbe en tête
+  (feu, eau, terre, air, l'ordre de `SEAL_ORDER`) en plus de l'Écho, et l'attaque fait tourner la roue. Le tir
+  emporte son rang (`_in_flight[...]["wheel"]`, relu par `_wheel_hit`) : la roue tourne au lancer, pas à l'impact.
+  Le `Level` pose l'anneau `primordial_anneau` et les quatre orbes d'`ElementOrbs`. Ses sorts : `element_shards`
+  (la Grande Convergence se brise en éclats), `seals_follow` (la Couronne : chaque sceau garde son point cardinal
+  par `_seal_cell`), `double_echo` (l'Apothéose), `element_ray_damage` (le Pas des éléments : un rayon par
+  couloir à l'arrivée), `rain_elements` + `nova_damage` (la Genèse : les météores suivent la roue, puis
+  `primal_nova`). Effets : `primordial_*`, anneau et palette dans `primordial.gdshaderinc`.
+  `tools/preview_primordial.gd`. ⚠️ Planches sur FOND VERT (`degreen`, `keep_cast`), icônes sur magenta.
+- `--awaken` remplit aussi la charge de kills hors démo : le Paradoxe et le Saut temporel demandent de marcher, et
+  la démo se gagne en six secondes. Pour les capturer : `--stage 6 --character chrono --awaken --auto-walk`.
 - ⚠️ Une zone `zone_follows` est déplacée par `Level._on_zone_moved` : avant le 2026-11-07, seules les tornades
   bougeaient à l'écran, et la Cage de l'Avatar blessait autour du mage en restant dessinée où elle était posée.
+- Le **Démon du Pacte** a l'**Archidémon du Pacte** (`demon_awakened`, `docs/prompts/mages/eveil_demon.md`), le
+  premier Éveil d'un DÉMON. Son trait, le Prix du Sang, est `CombatSystem.start_blood_price` : 1 PV coule toutes les
+  `Awakening.BLOOD_EVERY` s (`Health.sacrifice`, jamais le dernier, rien pendant qu'il est intouchable), chaque kill
+  en rend 1 (`_feed_blood`), et `rage_bonus` est multipliée par `BLOOD_RAGE`. Ses sorts : `volley` 3 (les Serres),
+  un `PACT` qui porte `damage` et `radius` (l'onde du Pacte écarlate), `line_cross` sur le Sillon (les Fleuves),
+  `heal_per_hit` (la Gueule rend 1 PV par ennemi happé, `heal_self` au plus), `Kind.FLIGHT` (les Ailes), et
+  `pact_claw_damage`/`pact_claw_gap` sur le Dernier Pacte (l'Apocalypse : une serre par seconde sur l'ennemi le
+  plus proche tant qu'il est intouchable, `pact_claw_struck`). Effets : `archi_*`, palette dans `archi.gdshaderinc`
+  (les fonctions du Fléau, recolorées en sang et or) ; l'aura lit la Rage par `PaintedBurst.set_shader_value`.
+  Fond magenta, `demagenta` ; ses icônes se découpent seules (`build_skill_icons` filtré sur sa planche).
+- La **Démone de la Discorde** a la **Reine de la Discorde** (`discorde_awakened`, `docs/prompts/mages/eveil_discorde.md`).
+  Son trait, la Discorde contagieuse, est `CombatSystem.start_contagion` : chaque coup trouble (`_add_whisper` sans
+  attendre `WHISPER_MARKS`), et la possession d'un pantin mort saute sur le plus proche à `CONTAGION_REACH`, pour le
+  temps qui restait et au moins `CONTAGION_MIN` (`possession_jumped`). Ses sorts : `bounces` (le Fil d'argent, dessiné
+  par `_on_water_bounced`), `possess_neighbors` (l'Œil de la Reine, `queen_eye_opened`), une zone `discord_bonus` +
+  `zone_pull` (l'Arène, `arene_peinte`), un `BOND` à cinq (la Toile, `web_spun`), un `SWAP` avec `decoy_seconds` (le
+  Ballet : `PuppetDecoy` recopie son sprite en argent), et `ball_burst_damage` sur la Grande Discorde (le Grand Bal :
+  chaque mort éclate à l'image suivante, en cascade, `ball_burst`). Effets : `reine_*`, palette et œil peint dans
+  `reine.gdshaderinc`. ⚠️ Ses planches prennent `keep_cast` : `without_magenta_cast` bordait ses cheveux et sa croix
+  d'une frange rouge. Le leurre se met à jour dans `_update_discord` : `_update_king` ne tourne qu'avec des pièces.
+- Le **Roi de Braise** a l'**Empereur des Cendres** (`braise_awakened`, `docs/prompts/mages/eveil_braise.md`). Son
+  trait, le Sillage de cendres, est `CombatSystem.start_ashes` : chaque pièce qui vole met le feu aux cases qu'elle
+  franchit (`_leave_ashes`, les cases en feu du Dragon pendant `ASH_SECONDS`), et une pièce arrachée revient en
+  `ASH_RETURN`. ⚠️ `armor_speed` ne donne l'allure du feu qu'au Dragon (`INFERNO`) : sans cette garde, le Roi courait
+  dans ses propres cendres. Ses sorts : un projectile à `radius` (le Poing impérial), `HUNTERS` à `radius` (la gerbe
+  des Gantelets, `gauntlet_splashed`), `forge_pull` + `forge_blast_*` sur le plastron (la Forge impériale),
+  `recall_fire_seconds` + `recall_wave_*` (le Retour de l'Empire : l'onde ne part que si les trois pièces rentrent
+  ensemble, `_empire_wave`), le leurre de base (la Statue, colonne de lave), `cage_burst_*` sur les cages (l'Empire des
+  Cendres, ciel `empereur_ciel`). `KingArmor.molten` chauffe les pièces. Effets : `empereur_*`, palette dans
+  `empereur.gdshaderinc`. ⚠️ Son anneau de pointes flotte, détaché : `speck_share` abaissé dans `build_enemies.py`, sinon
+  `deblorded` les prenait pour de la poussière. `despill` et `keep_cast` sur ses planches.
+- Le **Chevalier Écarlate** a le **Seigneur Écarlate** (`ecarlate_awakened`, `docs/prompts/mages/eveil_ecarlate.md`).
+  Son trait, la Lame affûtée, est `CombatSystem.start_keen` : `_add_cuts` pose une entaille de plus et plafonne à
+  `KEEN_CUTS_MAX`, et un ennemi arrivé au bout ouvre ses entailles à l'image suivante (`_keen_pending`, `keen_burst`).
+  ⚠️ La Nuit Écarlate pose ses huit entailles avec `may_open` faux : sinon elles s'ouvraient avant la rengaine. Ses
+  sorts : `pierce_line` (le Croissant), `dash_echo_*` (la lame fantôme repasse, `dash_echoed`), `guard_all` (la Garde
+  pare tout et riposte une fois par `PARRY_LOCK`), `petal_cuts`/`petal_radius` (la Rengaine écarlate, `petals_flung`),
+  un `BLINK` arrière avec `decoy_seconds` et `cuts` (la Danse : le leurre éclate en entailles ; il se met à jour dans
+  `_update_blade`), et `crimson` dans `ecarlate_nuit` (noir et rouge, lune de sang). Effets : `seigneur_*`, palette
+  et pétale peint dans `seigneur.gdshaderinc`. Planches `demagenta` + `keep_cast`.
+- Le **Geôlier** a le **Gardien de l'Abîme** (`geolier_awakened`, `docs/prompts/mages/eveil_geolier.md`), grand et
+  massif comme lui (`body_scale` 1,4, mais PAS de `tall_cells` : ses planches sont carrées). Son trait, le Poids des
+  chaînes, est `CombatSystem.start_abyss` : entravé à `ABYSS_SHACKLE_HITS`, et ce qui est sonné prend
+  `ABYSS_HELD_BONUS` de plus. Le registre `_held` se remplit par `_note_held`, branché dans `_init` sur
+  `enemy_staggered` : tout étourdissement passe par ce signal. Ses sorts : un projectile à `radius` (le Poing),
+  `hook_count` (trois crochets, chacun sur sa case), `snap_damage`/`snap_stun` sur les Chaînes (`chains_snapped`),
+  `frost_seconds` sur le Souffle (une zone `givre_abime` qui ralentit), `end_blast_stun` sur la Traversée (`frost_wave`),
+  `gaol_pull_gap` + `gaol_end_damage` sur la Geôle (l'Abîme : il tire ses prisonniers par `enemy_pushed`, puis
+  `abyss_closed`). Effets : `abime_*`, maillon et serrure peints dans `abime.gdshaderinc`.
+- Le **Dragon des Abysses** a le **Dragon Primordial** (`dragon_awakened`, `docs/prompts/mages/eveil_dragon.md`), PAS
+  chibi et dessiné 30 % plus grand comme lui. Son trait, le Feu primordial, est `CombatSystem.start_primal` :
+  `_ignite_cells` multiplie la durée par `PRIMAL_FIRE_LONGER` (les `ground_fire` de son kit sont donc la MOITIÉ de ce
+  qu'annonce la fiche), les cases rongent `PRIMAL_FIRE_DAMAGE`, et ce qui meurt en feu (`_is_aflame`) explose à
+  l'image suivante (`_burst_primal`, `primal_burst`). Ses sorts : un projectile à `radius` + `ground_fire` (la Bombe
+  enflamme son rayon, `_floor_within`), `breath_spill` (le Souffle déborde sur les bords), `execute_below` sur la
+  `BITE` (le Dévoreur avale une proie en feu blessée, jamais un boss), des Écailles à deux coups, `Kind.FLIGHT` +
+  `ground_fire` (l'Envol retombe dans le feu, dans `_land`), `meteor_radius` sur l'Ombre (le Ciel en feu). Effets :
+  `premier_*`, palette dans `premier.gdshaderinc` (jamais doré : ce serait le Dragon d'or d'Aël).
+- Le **Croupier des Enfers** a le **Maître du Casino** (`croupier_awakened`, `docs/prompts/mages/eveil_croupier.md`).
+  Son trait, la Maison gagne toujours, est `CombatSystem.start_house` : `_gamble` multiplie `LUCK_CHANCE` par
+  `HOUSE_LUCK`, et chaque Coup de chance paie une gerbe de jetons à l'image suivante (`_payouts`, `house_payout`).
+  Ses sorts : `volley` 3 (la Main gagnante), `dice_count` 3 (les Dés du Diable : un brelan fige et brûle,
+  `devil_die`), `trap_cross` + `joker_chance` (la Table piégée ; `Suit.JOKER` joue les trois figures),
+  `coin_both` (la Pièce truquée), le leurre de base avec dégâts (le Grand tour, `casino_chapeau`), et
+  `roulette_spins` (le Grand Jeu relance `roulette_spun` entre deux tours). Effets : `casino_*`, jeton et carte
+  peints dans `casino.gdshaderinc`. ⚠️ Son leurre n'était JAMAIS mis à jour (il vit dans `_update_king`, qui ne tourne
+  qu'avec les pièces du Roi) : `_update_croupier` l'appelle maintenant, comme la Discorde et l'Écarlate.
+- Le **Porte-Lumière** a l'**Étoile du Matin** (`lumiere_awakened`, `docs/prompts/mages/eveil_lumiere.md`), le premier
+  Éveil d'un ANGE. Son trait, l'Éblouissement, est `CombatSystem.start_dazzle` : `_apply_damage` ajoute `DAZZLE_BONUS`
+  sur une créature aveuglée (`is_blinded`, le verrou dépasse `BLIND_LOCK`), et ce qui reste collé `DAZZLE_CONTACT` s
+  est aveuglé, sans passer outre `_blind_locks`. Ses sorts : `pierce_line` + `blind_every` (le Trait solaire),
+  `beam_linger`/`linger_damage` sur la Lance (`_light_walls`, `light_wall_raised`), `zone_heal_every` (la Cathédrale,
+  zone `cathedrale_peinte`), `aegis_ray_damage` sur le bouclier (l'Égide renvoie chaque point de bouclier perdu,
+  `aegis_ray`), un `DASH` qui aveugle (le Trait de l'étoile), et `sun_seconds` sur la forme DAWN (le Soleil de midi :
+  `SUN_EVERY`, champ `SUN_VIEW`, puis `sun_set`). Effets : `aurore_*`, étoile à huit branches et palette dans
+  `aurore.gdshaderinc`. `tools/preview_aurore.gd`. Planches sur FOND VERT (`degreen`, `keep_cast`), icônes sur magenta.
+  ⚠️ `without_grid` de `build_enemies.py` prenait des rangées de fond vert et de dessin blanc pour des traits de grille
+  et les effaçait : il ne compte plus que les pixels éloignés du fond. Les autres planches vertes n'ont pas été
+  redécoupées depuis.
+- L'**Avide** a **Faim Sans Fond** (`avide_awakened`, `docs/prompts/mages/eveil_avide.md`), PAS chibi, sans yeux. Son
+  trait, la Faim sans fond, est `CombatSystem.start_endless` : `ENDLESS_BITES` bouchées, `ENDLESS_GAIN` par kill, et
+  aucune ne fond ; `stop_endless` le ramène à `BITES_MAX`. Ses sorts : `volley` 3 + `pierce_line` (les Langues voraces ;
+  `_launch_at` sait maintenant percer), un Gouffre plus grand (l'Abîme affamé), `devour_count` (Tout dévorer,
+  `_devour_one`), `bile_seconds`/`bile_damage` (le Déluge laisse des zones `bile_peinte`), un `LEAP` à `damage` (le Bond
+  mord), `feast_gap` + `feast_heal_cap` (le Grand Festin). Effets : `faim_*`, gueule de crocs peinte dans
+  `faim.gdshaderinc` ; il garde aussi les effets `avide_*` de sa forme de base.
+- L'**Ange de la Mort** a le **Faucheur des Âmes** (`mort_awakened`, `docs/prompts/mages/eveil_mort.md`). Son trait, la
+  Récolte, est `CombatSystem.start_harvest` : `_sentence` achève sous `HARVEST_BELOW`, `soul_cap()` monte à
+  `HARVEST_SOULS`, et une âme en orbite frappe ce qui arrive à son contact (`_update_harvest`, `soul_guarded`, une fois
+  par `HARVEST_GUARD_LOCK`). `SoulOrbit` dessine déjà les âmes. Ses sorts : `returns` (le Croissant revient, `_returns`,
+  `crescent_returned`), une Moisson `BLAST` sans arc à `execute_below` 0,45, `toll_count` sur un `BLAST` (le Glas
+  funèbre : `_tolls`, `toll_rang`), `souls_base` (la Légion), `blink_mark_seconds` (le Pas de l'ombre),
+  `hour_passes` 2 (Minuit : le retour part après `HOUR_RETURN_GAP`). ⚠️ Minuit achève sous 20 % et non 25 : deux
+  moitiés laissent un ennemi indemne à 25 % pile, et toute la carte mourait. Effets : `faucheur_*`, lame et âme dans
+  `faucheur.gdshaderinc`. `tools/preview_faucheur.gd`. Planches sur FOND VERT, icônes sur magenta.
+- L'**Ange des Étoiles** a la **Reine du Firmament** (`etoiles_awakened`, `docs/prompts/mages/eveil_etoiles.md`). Son
+  trait, le Firmament, est `CombatSystem.start_firmament` : `star_cap()` monte à `FIRMAMENT_STARS` et les rayons
+  frappent à `FIRMAMENT_RAY`. Avec cinq étoiles, `_figure_hull` ferme la figure (enveloppe convexe) : ce qui est dedans
+  sans toucher un rayon prend `figure_damage` (`figure_changed`, remplie par `Constellation.set_figure`). Ses sorts :
+  `spark_seconds` (l'étoile éphémère du Trait de comète, `_sparks`, deux au plus), `big_meteor_damage` (la Pluie de
+  météores vise le plus solide en s'annonçant, `big_meteor_falling`/`_struck`), `moon_ring_*` (l'anneau de fin de
+  l'Éclipse ; `eclipse_slow` était déjà pris), `blink_star` (la Comète pose une étoile), `galaxy_seconds` (chaque
+  impact devient une étoile reliée à ses deux voisines, `galaxy_changed`, un second `Constellation` en `set_links`).
+  Effets : `firmament_*` (⚠️ le préfixe `reine_` est celui de la Reine de la Discorde), palette et étoile dans
+  `firmament.gdshaderinc`, `tools/preview_firmament.gd`. Planches sur magenta avec `keep_cast` (sans lui, le bord de
+  ses ailes tournait au rouge brun). Son portrait est revenu sur magenta : `build_menu.py` le repeint (`NAPPES`).
+  `--stars --awaken` plante cinq étoiles en pentagone.
+- L'**Archange d'Acier** a le **Forgeron Céleste** (`acier_awakened`, `docs/prompts/mages/eveil_acier.md`). Son trait,
+  la Forge vivante, est `CombatSystem.start_forge` : `plate_cap()` monte à `FORGE_PLATES`, `_forge_plate` reforge à
+  chaque kill, et une plaque qui casse (`_on_plate_torn`) fait `FORGE_SHARD_DAMAGE` autour de lui (`plate_shattered`).
+  `PlatePips` suit `plate_cap()`. Ses sorts : `stun_every` (le Marteau étourdit un coup sur trois, `hammer_stunned` ;
+  sans lui `stun_seconds` d'un projectile passe par `_freeze_around`, qui dessine le givre du Geôlier), `blades_circle`
+  (la roue de huit lames), `anvil_drop_*` (l'enclume tombe sur l'ennemi le plus proche après `ANVIL_DROP_LEAD`, puis
+  `_anvil_wave` part de l'impact), `bastion_*` (gerbe et plaque à la fin de l'intouchabilité), `trail_stun` et
+  `molten_trail_seconds` (la Charge laisse des cases en feu, dessinées `forgeron_fusion`), `molten_steps_seconds` (les
+  pas du Cœur de la forge). Effets : `forgeron_*`, palette, fissures et gerbe dans `forgeron.gdshaderinc`,
+  `tools/preview_forgeron.gd`. Planches sur magenta avec `keep_cast`.
+- Le **Chérubin** a le **Gardien du Trône** (`cherubin_awakened`, `docs/prompts/mages/eveil_cherubin.md`). Son trait,
+  le Regard du Trône, est `CombatSystem.start_throne` : l'œil brûle à `THRONE_REACH` au lieu de `EYE_REACH`, pour
+  `THRONE_EYE_DAMAGE`, et se rallume en `THRONE_EYE_LOCK`. Ses sorts : `line_fire` (la flamme laisse le couloir en
+  feu, des cases en feu dessinées `eden_flamme`), un `WHIRL` dont le `Level` double l'épée (rotation PI),
+  `wheel_count` 4 (`_cast_four_wheels`, une roue par direction ouverte), `veil_eyes_radius` (à la fin de
+  l'intouchabilité, `_open_throne_eyes` pose un œil sur ce qui est proche, `throne_eyes_opened`), le `BLINK` avec
+  `end_blast_*` (l'éclair, `eden_eclair` debout à l'arrivée), `garden_sword_damage` (une épée tourne sur le bord de
+  l'Éden en `GARDEN_SWORD_PERIOD`, `_swing_garden_sword`, `garden_sword_struck` ; `eden_bord` lit `seconds` pour
+  tourner au même angle). L'arbre de vie (`eden_arbre`) pousse derrière l'épée plantée. Effets : `eden_*`, œil et
+  flamme dans `eden.gdshaderinc`, `tools/preview_eden.gd`. Planches sur magenta avec `keep_cast` ; portrait revenu sur
+  magenta, repeint par `NAPPES`. ⚠️ Sa planche d'attaque a les cheveux plus orangés que sa marche.
+- L'**Archange du Ciel** a le **Séraphin** (`ciel_awakened`, `docs/prompts/mages/eveil_ciel.md`), dernier des six Éveils
+  d'anges. Son trait, les Yeux du ciel, est `CombatSystem.start_skies` : tout coup de son élément marque
+  (`_sky_marks`, `SKY_MARK_SECONDS`), et une cible marquée prend `SKY_MARK_BONUS`. Ses sorts : `sky_twin` (une seconde
+  lance sur l'ennemi le plus proche, `_sky_neighbour` ; le tir du ciel passe par `_sky_drop`), `feather_rain` sur un
+  `BLADES` (`_rain_feathers` : des projectiles `from_sky` au visuel `plume_seraphin`, que `_sky_falls` dessine en
+  `seraphin_plume`), `column_linger`/`column_burn` (`_columns`, `column_lingered`), le Glas du Faucheur réutilisé pour le
+  Carillon (`toll_count` + `pierces_walls` mesure à vol d'oiseau, `stun_seconds` étourdit, la marque n'est posée que si
+  `mark_seconds`), `flight_lance_gap` (des lances pendant l'Envol, `FLIGHT_LANCE_REACH`), `great_sword_*` (l'épée
+  géante tombe sur lui après la pluie, `GREAT_SWORD_PAUSE`, `great_sword_falling`/`_struck`). Effets : `seraphin_*`, aile
+  de lumière et épée dans `seraphin.gdshaderinc`, `tools/preview_seraphin.gd`. Planches carrées sur magenta (pas de
+  `tall_cells`, contrairement à sa forme de base), `keep_cast`.
 - ⚠️ Les bots de `test_balance` ne s'éveillent jamais : rien n'y mesure l'Éveil.
+- **Le bouton ÉVEIL de la sélection** (2026-11-09) bascule la fiche sur la forme éveillée : portrait, nom, trait
+  (`CharacterCatalog.AWAKENING_TRAITS`) et six sorts, avec les icônes `<id>_eveil`. Il reste enclenché d'un mage
+  à l'autre et JOUER part toujours avec le mage. Le portrait est `portrait_<id>_eveil.jpg` (`build_menu.py`, prompts
+  `docs/prompts/menu/portrait_*_eveil.md`) ; sans lui, `CharacterPortrait` montre le sprite de l'Éveil. `--select
+  --character X --eveil` le capture. Un nouvel Éveil demande une ligne dans `AWAKENING_TRAITS` et dans `EVEILS` de
+  `build_prompts_menu.py`.
 
 L'**Invocateur** est à part sur toute la ligne :
 - sa planche est `mage_invocateur.png` (**remplace le JPEG le 2026-08-24** —
@@ -535,6 +731,154 @@ de `test_balance` et des fiches. Il ne part jamais en vraie partie.
   Resserrer les jambes à la découpe a été essayé et rejeté : c'est le pas qu'il faut redessiner.
 - De profil, l'arrêt vient de la fiche de modèle (`standing_right`) : la première image de course a les
   pieds écartés. Son échelle se prend sur la tête, sinon il rétrécit à chaque arrêt.
+
+## L'Arène (2026-11-09)
+
+Les héros se battent SEULS, en équipes : le joueur choisit le mode (**Gemme-Cœur** ou **Duel à
+mort**), le format (1, 2 ou 3 contre autant), ses héros et leur posture (Assaillant, Gardien,
+Chasseur), puis il regarde. Quatrième bouton de l'écran-titre, `GameFlow.show_arena`.
+
+```bash
+godot --path . -- --arena                     # la préparation ; --arena-pick ouvre le choix d'un héros
+godot --path . -- --arena-fight --arena-mode duel --arena-format 2 --arena-a fire,acier --arena-b peste,mort
+#   --arena-stage N (décor)  --arena-skip S (joue S s d'un coup)  --arena-speed 2  --arena-result
+godot --headless --path . --script res://tests/test_arena.gd               # dans tools/verifier.sh
+godot --headless --path . --script res://tests/test_arena.gd -- --durees   # durée des duels, règle HP_PER_PV
+godot --headless --path . --script res://tests/test_arena.gd -- --matrice  # qui bat qui en 1 contre 1
+tools/arena_matrix.sh                         # la même, sur 6 processus
+python3 tools/arena_tune.py 0.8              # matrice, puis corrige ArenaRules.VIGOR
+tools/.venv/bin/python tools/build_arena.py   # le Colisée : sol, gemme, décors, fond
+```
+
+- **Chaque héros a son `CombatSystem`**, et dans son `CombatContext` les héros d'en face tiennent
+  la place des ennemis (`ArenaFighter`). Sorts, traits, zones et invocations marchent donc entre
+  héros sans une ligne réécrite. L'ordre des adversaires ne bouge jamais, même mort : même règle que
+  les repaires et les gelées.
+- **Tout ce qui décide est en RefCounted** (`src/arena/` : `ArenaRules`, `ArenaFighter`,
+  `ArenaBrain`, `ArenaMatch`), et `test_arena` joue de vrais matchs sans affichage. `ArenaView`
+  montre, `ArenaHud` affiche, `ArenaScreen` enchaîne préparation, match et verdict.
+- ⚠️ **Un PV de héros vaut `ArenaRules.HP_PER_PV` points** (400). En campagne, un ennemi retire un
+  PV par coup ; un sort de héros en retire 20 à 200. Sans cette échelle, un coup tuait. Les soins
+  écrits en PV valent `HEAL_PER_PV` (`ArenaFighter._scale_heal`, `SMALL_HEAL`) ;
+  le prix d'un pacte (`self_cost`) ne l'est pas et ne coûte presque rien en arène.
+  Mesuré le 2026-11-09 : duel 1 contre 1 en 28 s en moyenne contre le Mage du Feu, Gemme-Cœur
+  gagnée en 1 à 2 minutes, Duel à mort 3 contre 3 en 30 à 45 s.
+- Les effets de contrôle du combat (`enemy_staggered`, `enemies_frozen`, `enemy_pushed`…) sont
+  appliqués au héros visé par `ArenaMatch._wire`. Possédé ou aveuglé, un héros erre au lieu de se
+  retourner contre les siens : son combat ne connaît que ses adversaires.
+- **L'équilibrage de l'arène ne touche à aucune fiche de campagne** (2026-11-10). Trois règles d'arène :
+  les boucliers du jeu comptent des COUPS (45 pour la Bulle) et valent `SHIELD_PER_HIT` points, au plus
+  `SHIELD_CAP` et `SHIELD_SHARE` de la vie ; une immunité dure au plus `IMMUNE_CAP` (l'Égide de la Terre
+  durait trente secondes) ; un étourdissement au plus `STUN_CAP` (les Chaînes du Geôlier en duraient six).
+  Puis `ArenaRules.VIGOR`, un multiplicateur de vie par personnage, réglé par passes sur la matrice :
+  `tools/arena_matrix.sh` (6 processus, environ 6 minutes). Mesuré après le réglage du 2026-11-10 (esquive,
+  mobilité, cadence et tactique comprises) : 28 personnages sur 29 gagnent de 43 à 61 % de leurs duels, l'Eau 64 %.
+  Aël · Prisme est à 61 % au plancher de vigueur (0,4) grâce à `ATTACK_EXTRA`. ⚠️ Aël de base (l'Apprenti, portée 2)
+  demande près de quatre fois sa vie (3,9) : sans portée, les tireurs le tiennent à distance. Le réglage passe
+  par `python3 tools/arena_tune.py GAIN`, 1,4 puis 0,8 : à gain fort, il oscille (la Peste de 84 à 18 %).
+  ⚠️ Toute modification d'un sort ou du cerveau (`ArenaBrain`) déplace ces chiffres : relancer la matrice.
+- L'Extra se charge aussi avec le temps (`ULTIMATE_TICK`) : un héros ne tue que deux ou trois fois
+  par match. Un kill le remplit d'un coup.
+- **Les effets sont ceux du `Level`, sort par sort** : chaque héros reçoit un `Level` HÔTE
+  (`Level.host_arena`), avec son `combat`, son nœud en guise de `player` et des fantômes d'`Enemy`
+  sur ses adversaires en guise d'`enemies` (même `GridMover`, même `Health`, dessin caché,
+  `Enemy.hide_health_bar`). Le Level dessine donc comme en campagne, marques d'état comprises, et
+  `host_tick` ne fait que ce qui dessine. ⚠️ Pour cela, `load_level` est coupé en `_wire_combat`
+  (tous les `combat.*.connect`) et `_populate` : un nouveau signal de sort se branche DANS
+  `_wire_combat`, sinon l'arène ne le verra pas. `_on_enemy_killed` est débranché chez l'hôte :
+  la chute appartient à l'arène. L'Éveil passe par `show_awakening_charge`, `set_character`,
+  `show_awakening` et `end_awakening` de l'hôte, comme le fait le `GameManager`.
+- ⚠️ Six lanceurs ont révélé un défaut latent du `Level` : un nœud déjà libéré rangé dans une
+  variable TYPÉE (`var orb: MagicOrb = _orbs[i]`) fait une SCRIPT ERROR, même suivi de
+  `is_instance_valid`. Ces lectures sont en `Variant` (orbes, zones, nuages, tourelles, marques,
+  invocations). Tout nouveau dictionnaire de nœuds doit suivre la même règle.
+- `--arena-generic` rejoue la première version : effets génériques par héros (`ArenaView._burst`,
+  bornés par `MAX_BURSTS`), qui sert de repli et de comparaison.
+- **L'Éveil en arène** : `Awakening` par héros (`ArenaFighter.attach_awakening`), chargé surtout
+  par le temps (`AWAKEN_TICK`, `AWAKEN_KILL_STEPS`), défait par la chute. Les bleus s'éveillent au
+  bouton (`ArenaHud`, `ArenaMatch.manual_team`), les rouges seuls ; `--arena-auto` les rend tous
+  automatiques. La coque des Marées vaut un PV d'arène. Aël n'a pas d'Éveil ici.
+- ⚠️ Un héros s'arrête à portée de SES SORTS (`CAST_REACH`), pas au bout de son attaque : deux
+  tireurs s'échangeaient des tirs de base à sept cases sans jamais lancer un sort ni s'éveiller.
+- **Le combat bouge** (2026-11-10, demande du joueur : « plus de mobilité, esquiver, pas rester à un
+  endroit ») :
+  - **L'esquive.** En arène, un tir ne suit plus sa cible. Il vole jusqu'à la case où elle était au
+    départ (`lane`), et `ArenaMatch._misses` décide à l'arrivée : la cible est touchée si elle est
+    restée sur la ligne, si elle a reculé tout droit ou si elle est dans le rayon de l'explosion ;
+    sortie de côté, elle a esquivé.
+    - Le crochet est générique : `CombatContext.dodge_rule`, vide en campagne, où l'attaque ne rate
+      jamais, et `CombatSystem.projectile_dodged`.
+    - Le pas de côté est décidé par `ArenaBrain.incoming`, au départ du tir : perpendiculaire à
+      l'arrivée, `DODGE_BOOST` d'allure, `DODGE_COOLDOWN` d'attente.
+    - Un sort se voit venir (`DODGE_SPELL`), une attaque de base beaucoup moins (`DODGE_ATTACK`).
+    - Sans case libre, contre un sort, le héros PARE avec son bouclier s'il en a un de prêt.
+    - Mesuré : 40 % des sorts-projectiles esquivés, 23 % des tirs en tout.
+    - ⚠️ Une `MagicOrb` n'éclate que sur `projectile_hit`. Esquivée, elle restait figée au bout de sa
+      course (vu sur iPhone).
+      - Le `Level` l'éteint maintenant sur `projectile_dodged`. En arène (`hosting`), il ne la fait
+        plus suivre sa cible, ce qui laisse voir l'esquive.
+      - `MagicOrb.LINGER` efface toute orbe arrivée sans impact.
+      - Les autres dessins de tir (croissant, flamme, langue, chute du ciel) finissaient déjà seuls.
+- ⚠️ **La Nuit écarlate** (l'Extra du Chevalier) ne se levait que sur `sheathe_ended`. Un Éveil, une autre
+  Rengaine ou une chute en pleine nuit défont la rengaine sans ce signal, et l'écran restait BLANC (vu sur
+  iPhone, 2026-11-10). Mesuré sur 30 duels : c'était l'Éveil, la plupart du temps.
+  - Le voile se lève maintenant seul au bout de sa course (`Level.NIGHT_GRACE`). Le défaut existait aussi
+    en campagne.
+  - `ArenaBrain` ne s'éveille plus pendant une rengaine.
+  - **Il change de case** (`_battle_cell`) toutes les `STRAFE_MIN` à `STRAFE_MAX` s, dans sa bande de
+    portée, de préférence hors de la ligne de l'adversaire. Un tireur ne se laisse pas approcher à
+    moins de deux cases.
+    ⚠️ Trois cases face à un héros de contact a été essayé : Aël tombait à 13 % de victoires.
+  - **Il sort des sorts adverses** : zones posées et météores annoncés (`is_dangerous`,
+    `ArenaMatch.dangers`).
+  - **L'attaque de base attend `ATTACK_EXTRA` (0,3 s) de plus qu'en campagne**, ce qui a ramené
+    Aël · Prisme de 82 % à environ 60 %.
+  - « ESQUIVE » s'affiche au-dessus du héros, et l'écran de fin compte les esquives.
+- **La tactique** (2026-11-10, deuxième demande du joueur) :
+  - **La cible commune** (`ArenaBrain._choose_focus`, 3 fois par seconde). Le héros préfère le plus
+    blessé à portée, puis le plus proche, et d'abord ce qu'un allié vise ou ce qui est tenu. La cible
+    reste un peu collante. `CombatContext.focus` la fait passer avant le plus proche dans
+    `find_target` ; il est vide en campagne.
+  - **Les combos.** Sur une cible libre, le héros lance d'abord un sort de contrôle
+    (`ArenaBrain.controls`, lu dans les champs du sort). Sur une cible tenue (étourdie, ralentie,
+    perdue), il lance d'abord son plus gros sort. Ce gros sort attend un contrôle prêt sous
+    `COMBO_WAIT`, au plus `COMBO_HOLD_MAX`.
+  - **L'Extra au bon moment** (`_ultimate_moment`). Il part quand il prend deux adversaires ou plus,
+    quand il peut achever, en duel sur une cible entamée, ou en dernier recours. Il ne reste jamais
+    gardé plus de `ULTIMATE_PATIENCE`.
+  - Mesuré sur 12 matchs de 3 contre 3 :
+    - 91 % du temps, un héros vise la même cible qu'un allié ;
+    - 53 % des gros sorts tombent sur une cible tenue ;
+    - 23 Extras sur 37 prennent au moins deux adversaires ;
+    - un match dure 31 s.
+- Le ralenti de certains sorts rend `Engine.time_scale` à 1 : `ArenaScreen._process` remet le ×2.
+- La caméra cadre les héros debout et la gemme (`ArenaView._aim`), sans sortir du terrain.
+- Les héros sont des `Player` en `puppet` (`Actor.puppet`) : le nœud suit le `GridMover` que fait
+  avancer `ArenaMatch`, sans lire le clavier ni avancer une seconde fois.
+- Le terrain est `ArenaRules.LAYOUT`, symétrique (`test_arena` le vérifie), sur le décor d'un des
+  dix stages au choix.
+- **En volume, comme les stages** (2026-11-10, demande du joueur : « joli comme le stage ») :
+  - `WorldStage.adopt_view` prend n'importe quelle scène 2D (sa caméra, son rendu à plat, ses calques
+    d'entités). `adopt(level)` n'en est plus qu'un cas.
+  - `ArenaScreen` crée le `WorldStage` et `ArenaView.enter_world` y entre avec ses `Level` hôtes, dont
+    les effets sont redressés comme en campagne.
+  - La caméra suit la mêlée (`WorldStage.aim_rows`), de `WORLD_ROWS_MIN` à `WORLD_ROWS_MAX` rangées
+    ENTIÈRES : la texture du sol se retaille à chaque changement.
+  - Le Colisée a son ambiance : `StageMood` 0 (plein soleil, sol plus clair que les stages), poussière
+    dorée `Ambience.AIR[0]`, et une lueur sur la gemme. La gemme se redresse (`ArenaHeart.stand`), son
+    cercle reste couché.
+  - `--2d` rend l'ancienne vue à plat.
+  - ⚠️ Six `Level` hôtes en 3D n'ont jamais été mesurés sur iPhone : à faire avec `--bench` si ça rame.
+- **Le Colisée** est le décor par défaut (`ArenaRules.COLISEUM`, les dix stages restent au choix) :
+  `tools/.venv/bin/python tools/build_arena.py` découpe sol, gemme, décors et fond de
+  `docs/prompts/arene/` vers `assets/arena/` et `assets/tiles/arena/` (`MazeRenderer.set_tiles`).
+  Les murs (`arene_mur.png`, livré le 2026-11-10) passent par `build_terrain.build_walls` et
+  `enforce_contrast`, comme ceux des stages : l'outil leur prête un dossier `stage_0` de travail.
+  ⚠️ La planche de gemme montre le socle SEUL en bas, pas la gemme seule, et plus haut dans sa case :
+  l'outil le recale sur celui du haut et coupe la gemme au-dessus de son rebord, pour qu'elle flotte.
+  ⚠️ La planche de décors ne suit pas l'ordre du prompt : `DECOR_NAMES` dit ce que chaque case MONTRE.
+  `ArenaDecor` ne pose rien sur une case de sol, seulement sur l'enceinte, les piliers et les bornes.
+- ⚠️ Aël ne se transforme pas en arène.
 
 ## Le mode démo
 
@@ -694,6 +1038,40 @@ cette référence, puis découpées par `build_enemies.py`.
 ses planches (`creatures/seigneur_demon*`) sont ignorées par git, seules les bandes
 réduites du jeu sont suivies. Un clone neuf garde le jeu complet, mais ne peut pas
 les redécouper.
+
+**La meute** (2026-11-09, `PackTactics`, appelé au rafraîchissement d'IA par le `Level` et par
+`test_balance`, `--sans-meute` pour comparer). Deux règles :
+- **L'appel** : un poursuivant lève les patrouilleurs à 12 cases de couloir ou moins (`RALLY_RADIUS`).
+  Ils courent vers l'endroit où le mage a été vu (`EnemyAI.rally`, état SEARCH), avec un « ! » jaune
+  au-dessus d'eux. `--meute` met la scène en place pour la voir.
+- **Le contournement** : parmi les poursuivants venus du même côté, le plus proche va tout droit, les
+  suivants prennent un autre chemin qui évite sa dernière approche (deux au plus, 14 cases de détour).
+  ⚠️ Mesuré sur 2 400 cas de vrais labyrinthes, il n'est possible que dans 5 % des cas : le suivant
+  est le plus souvent coincé dans un cul-de-sac derrière le premier, ou l'autre chemin dépasse 40 cases.
+  Viser une coupure à six cases devant le mage marchait encore moins bien.
+- Ne contournent ni n'appellent : le Rat, la Raie, les tireurs, les inoffensifs et les boss.
+- **Le sprint** (`EnemyAI.update_sprint`, `--sans-sprint` pour comparer) : en poursuite, le mage dans
+  son couloir à 6 cases ou moins, il se ramasse 0,35 s (teinte orange et cercle à ses pieds), puis
+  court 1,2 s à 5,75 cases/s, en valeur absolue, juste au-dessus du mage le plus rapide (5,3). Il attend
+  ensuite 5 s. Ne sprintent pas : `no_sprint` (Spectre, les deux Golems, le Démon de Cristal, les
+  Gelées) ni ce qui ne contourne pas. Mesuré en passe rapide : le bot prend plus souvent les portails
+  pour s'échapper (Sanctuaire, 1,0 à 2,5), mais personne ne meurt davantage.
+- Mesuré en passe rapide : la meute amène plus d'ennemis au mage (kills de l'explorateur au Sanctuaire,
+  14 à 22), mais personne ne meurt davantage, 0 % avant comme après.
+
+**Les ennemis se battent contre les créatures invoquées** (2026-11-08, demande du joueur) :
+celles de l'Invocateur, les ombres de la Faille des ténèbres, et leurs versions de l'Éveil (Légion,
+Gargouille colossale). Elles ont des points de vie comptés en COUPS (`CombatSystem.SUMMON_HITS` :
+diablotin 3, gargouille 6, ombre 3), doublés pour la Légion et multipliés par la taille. Un coup
+d'ennemi en retire 1, un coup de boss 3, et une barre VERTE s'affiche dès le premier coup reçu.
+- Le mage passe d'abord : un ennemi à son contact le frappe, lui. Sinon il s'arrête (`Enemy.engaged`)
+  et frappe la créature à son contact, avec le même `MeleeSwing` et le même effet de coup.
+- Le dragon et le cyclone sont hors d'atteinte : ils volent, et le dragon tire de loin.
+- La règle est `CombatSystem.defend_against_summons`, appelée par le `Level` et par `test_balance`
+  (`--sans-defense` rejoue l'ancien jeu pour comparer). Mesuré en passe rapide : les kills des
+  créatures baissent nettement (Ténèbres, explorateur au Sanctuaire : 30 à 14), mais personne ne
+  meurt davantage.
+- Les tireurs (Golem de Lave, Archer d'Os, Golem de Givre) ne visent que le mage.
 
 **Chaque coup ennemi se voit en trois temps** (2026-11-04, demande du joueur) : l'armement sur la
 créature (`foe_charge`), puis le coup devant son arme, puis ce qui en reste. `FoeStrike` porte une
@@ -919,7 +1297,8 @@ l'Air.
   Invariant vérifié par `test_combat` (`_test_rosters`).
 - **Braiding obligatoire** (~30-38 % des culs-de-sac supprimés) : un labyrinthe parfait
   rend la poursuite injuste (impasse = mort sans recours).
-- **Points de vie** = ceux du personnage + le bonus du stage (0/+1/+2) : la tournée dure 1 à 3 minutes,
+- **Points de vie** = ceux du personnage + le bonus du stage (0, +1, +1, puis +1 à +3 du stage 4 au 10,
+  baissé le 2026-11-10 : le mage ne finissait jamais une partie sous 2 PV) : la tournée dure 1 à 3 minutes,
   un seul PV donnait 90 % de captures en simulation.
 - **Boussole** : direction à vol d'oiseau vers la gemme la plus proche **en distance de
   chemin**. Elle donne un cap, jamais un itinéraire — sinon le labyrinthe ne sert plus.

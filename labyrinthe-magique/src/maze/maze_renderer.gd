@@ -93,7 +93,12 @@ var show_spawn_markers := false
 ## c'est le cas du 9, dont la planche manque, et ce serait celui de tout stage
 ## ajouté avant que son décor n'existe.
 func set_stage(index: int) -> void:
-	var folder := TILES_PATH + "stage_%d/" % index
+	set_tiles(TILES_PATH + "stage_%d/" % index)
+
+
+## Le terrain d'un dossier quelconque : celui d'un stage, ou celui du Colisée de l'arène
+## (`assets/tiles/arena/`, `tools/build_arena.py`).
+func set_tiles(folder: String) -> void:
 	floor_sheet = _tile_or(folder + "floor_sheet.png", FLOOR_SHEET)
 	hedge_sheet = _tile_or(folder + "hedge_sheet.png", HEDGE_SHEET)
 	hedge_top = _tile_or(folder + "hedge_top.png", HEDGE_TOP)

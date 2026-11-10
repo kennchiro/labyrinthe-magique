@@ -21,8 +21,38 @@ extends RefCounted
 ##   `Level` applique au sprite.
 ## - SURTENSION (l'Avatar de la Tempête) : chaque coup le charge, et la `SURGE_CHARGES`-ième fait tomber
 ##   la foudre du ciel sur la cible de l'attaque suivante (`CombatSystem.start_surge`).
+## - LE PRIX DU SANG (l'Archidémon du Pacte) : sa vie coule d'1 PV toutes les `BLOOD_EVERY` s, jamais le
+##   dernier, chaque kill la lui rend, et sa Rage est multipliée par `BLOOD_RAGE` (`CombatSystem.start_blood_price`).
+## - LA DISCORDE CONTAGIEUSE (la Reine de la Discorde) : chaque coup trouble, et la possession d'un pantin mort
+##   saute sur son plus proche voisin (`CombatSystem.start_contagion`).
+## - LE SILLAGE DE CENDRES (l'Empereur des Cendres) : chaque pièce qui vole met le feu aux cases qu'elle
+##   franchit, et une pièce arrachée revient deux fois plus vite (`CombatSystem.start_ashes`).
+## - LA LAME AFFÛTÉE (le Seigneur Écarlate) : une entaille de plus par coup, huit au plus, et à huit elles
+##   s'ouvrent seules (`CombatSystem.start_keen`).
+## - LE POIDS DES CHAÎNES (le Gardien de l'Abîme) : entravé au deuxième coup, et ce qui est sonné prend
+##   `ABYSS_HELD_BONUS` de dégâts en plus (`CombatSystem.start_abyss`).
+## - LE FEU PRIMORDIAL (le Dragon Primordial) : ses cases en feu durent et rongent plus, et ce qui meurt dans le
+##   feu explose en l'étendant (`CombatSystem.start_primal`).
+## - LA MAISON GAGNE TOUJOURS (le Maître du Casino) : le Coup de chance tombe deux fois plus souvent, et chacun
+##   paie une gerbe de jetons sur les voisins (`CombatSystem.start_house`).
+## - LA FAIM SANS FOND (Faim Sans Fond) : huit bouchées, qui ne fondent plus, deux par kill
+##   (`CombatSystem.start_endless`).
 ## - REMPART DE VENT (le Souverain des Vents) : le pas du Colosse sans dégâts. Un voisin est repoussé de
 ##   `GALE_CELLS` cases et ralenti `GALE_SLOW` s, une fois toutes les `GALE_LOCK` s.
+## - LE DOUBLE (le Seigneur du Néant) : son ombre répète chaque coup visé à `DOUBLE_RATIO` de sa force,
+##   `DOUBLE_DELAY` secondes après (`CombatSystem.start_double`).
+## - LA LÉGION (le Maître des Légions) : ses créatures naissent éveillées, frappent à `LEGION_RATIO`,
+##   et il en garde `LEGION_CAP` (`CombatSystem.start_legion`).
+## - TEMPS ACCÉLÉRÉ (le Seigneur des Heures) : ses recharges courent à `HASTE_FACTOR` fois l'allure du
+##   monde (`CombatSystem.start_haste`) ; sa marche plus rapide est dans sa forme.
+## - LE MIASME (le Seigneur du Fléau) : une dose toutes les `MIASMA_EVERY` s à chaque créature collée à lui,
+##   et le poison monte à `MIASMA_CAP` doses (`CombatSystem.start_miasma`).
+## - LA ROUE DES ÉLÉMENTS (l'Archimage Primordial) : chaque coup porte le trait de l'orbe en tête (feu, eau,
+##   terre, air), et son attaque fait tourner la roue (`CombatSystem.start_wheel`).
+## - LA RÉCOLTE (le Faucheur des Âmes) : il achève plus haut, et ses âmes, jusqu'à six, frappent ce qui l'approche
+##   (`CombatSystem.start_harvest`).
+## - L'ÉBLOUISSEMENT (l'Étoile du Matin) : ce qu'il aveugle prend plus cher, et ce qui reste collé à lui finit
+##   aveuglé (`CombatSystem.start_dazzle`).
 
 enum State { NORMAL, CHARGING, AWAKE, EXHAUSTED }
 
@@ -46,6 +76,16 @@ const SURGE_RADIUS := 1.5
 const GALE_CELLS := 2
 const GALE_LOCK := 2.0
 const GALE_SLOW := 1.0
+const DOUBLE_DELAY := 0.25
+const DOUBLE_RATIO := 0.5
+const LEGION_RATIO := 1.5
+const LEGION_CAP := 6
+const HASTE_FACTOR := 1.5
+## LE PRIX DU SANG (l'Archidémon du Pacte) : 1 PV coule toutes les `BLOOD_EVERY` s, et sa Rage est multipliée.
+const BLOOD_EVERY := 8.0
+const BLOOD_RAGE := 2.0
+const MIASMA_EVERY := 1.0
+const MIASMA_CAP := 5
 
 signal changed(state: State)
 ## La forme à appliquer : l'éveillée au réveil, la forme de base à l'épuisement.
@@ -170,6 +210,44 @@ func _change(next: State, seconds: float) -> void:
 			combat.start_surge(DURATION, SURGE_CHARGES, SURGE_DAMAGE, SURGE_RADIUS)
 		elif base.id == CharacterCatalog.AIR:
 			combat.start_trample(DURATION, 0, GALE_CELLS, GALE_LOCK, GALE_SLOW)
+		elif base.id == CharacterCatalog.SHADOW:
+			combat.start_double(DURATION, DOUBLE_DELAY, DOUBLE_RATIO)
+		elif base.id == CharacterCatalog.INVOCATEUR:
+			combat.start_legion(DURATION, LEGION_RATIO, LEGION_CAP)
+		elif base.id == CharacterCatalog.CHRONO:
+			combat.start_haste(DURATION, HASTE_FACTOR)
+		elif base.id == CharacterCatalog.PESTE:
+			combat.start_miasma(DURATION, MIASMA_EVERY, MIASMA_CAP)
+		elif base.id == CharacterCatalog.SUPREME:
+			combat.start_wheel(DURATION)
+		elif base.id == CharacterCatalog.DEMON:
+			combat.start_blood_price(DURATION, BLOOD_EVERY, BLOOD_RAGE)
+		elif base.id == CharacterCatalog.DISCORDE:
+			combat.start_contagion()
+		elif base.id == CharacterCatalog.BRAISE:
+			combat.start_ashes()
+		elif base.id == CharacterCatalog.ECARLATE:
+			combat.start_keen()
+		elif base.id == CharacterCatalog.GEOLIER:
+			combat.start_abyss()
+		elif base.id == CharacterCatalog.DRAGON:
+			combat.start_primal()
+		elif base.id == CharacterCatalog.CROUPIER:
+			combat.start_house()
+		elif base.id == CharacterCatalog.AVIDE:
+			combat.start_endless()
+		elif base.id == CharacterCatalog.LUMIERE:
+			combat.start_dazzle(DURATION)
+		elif base.id == CharacterCatalog.MORT:
+			combat.start_harvest()
+		elif base.id == CharacterCatalog.ETOILES:
+			combat.start_firmament()
+		elif base.id == CharacterCatalog.ACIER:
+			combat.start_forge()
+		elif base.id == CharacterCatalog.CHERUBIN:
+			combat.start_throne()
+		elif base.id == CharacterCatalog.CIEL:
+			combat.start_skies()
 		form_changed.emit(awakened)
 	elif before == State.AWAKE or (before == State.CHARGING and next == State.EXHAUSTED):
 		if before == State.AWAKE:
@@ -180,6 +258,44 @@ func _change(next: State, seconds: float) -> void:
 				combat.stop_trample()
 			if base.id == CharacterCatalog.THUNDER:
 				combat.stop_surge()
+			if base.id == CharacterCatalog.SHADOW:
+				combat.stop_double()
+			if base.id == CharacterCatalog.INVOCATEUR:
+				combat.stop_legion()
+			if base.id == CharacterCatalog.CHRONO:
+				combat.stop_haste()
+			if base.id == CharacterCatalog.PESTE:
+				combat.stop_miasma()
+			if base.id == CharacterCatalog.SUPREME:
+				combat.stop_wheel()
+			if base.id == CharacterCatalog.DEMON:
+				combat.stop_blood_price()
+			if base.id == CharacterCatalog.DISCORDE:
+				combat.stop_contagion()
+			if base.id == CharacterCatalog.BRAISE:
+				combat.stop_ashes()
+			if base.id == CharacterCatalog.ECARLATE:
+				combat.stop_keen()
+			if base.id == CharacterCatalog.GEOLIER:
+				combat.stop_abyss()
+			if base.id == CharacterCatalog.DRAGON:
+				combat.stop_primal()
+			if base.id == CharacterCatalog.CROUPIER:
+				combat.stop_house()
+			if base.id == CharacterCatalog.AVIDE:
+				combat.stop_endless()
+			if base.id == CharacterCatalog.LUMIERE:
+				combat.stop_dazzle()
+			if base.id == CharacterCatalog.MORT:
+				combat.stop_harvest()
+			if base.id == CharacterCatalog.ETOILES:
+				combat.stop_firmament()
+			if base.id == CharacterCatalog.ACIER:
+				combat.stop_forge()
+			if base.id == CharacterCatalog.CHERUBIN:
+				combat.stop_throne()
+			if base.id == CharacterCatalog.CIEL:
+				combat.stop_skies()
 			if base.id == CharacterCatalog.WATER and _shell_up:
 				# La coque s'en va avec l'Éveil ; une Bulle encore en place garde le reste.
 				health.shield = maxi(0, health.shield - 1)

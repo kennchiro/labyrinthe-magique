@@ -35,6 +35,10 @@ offset_bottom = 40.0
 offset_right = 100.0
 offset_bottom = 40.0
 
+[node name="ArenaButton" type="Button" parent="Buttons"]
+offset_right = 100.0
+offset_bottom = 40.0
+
 [node name="SettingsButton" type="Button" parent="."]
 visible = false
 anchor_left = 1.0

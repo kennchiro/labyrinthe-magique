@@ -15,6 +15,9 @@ extends RefCounted
 
 signal projectile_launched(ability: Ability, target: int, path: Array, duration: float)
 signal projectile_hit(ability: Ability, target: int, cell: Vector2i)
+## L'ARÈNE seulement (`CombatContext.dodge_rule`) : la cible a quitté la ligne du tir, il se perd là où
+## elle était. En campagne, aucune règle n'est posée et l'attaque ne rate jamais.
+signal projectile_dodged(ability: Ability, target: int, cell: Vector2i)
 signal blast_fired(ability: Ability, cell: Vector2i)
 ## Un front DÉFERLE : le chemin qu'il va parcourir et le temps qu'il y mettra.
 ## Émis au lancement pour que le jeu puisse l'animer d'un bout à l'autre.
@@ -56,6 +59,10 @@ signal summon_projectile_launched(id: int, target_index: int, from: Vector2,
 	to: Vector2, duration: float, ability: Ability)
 signal summon_projectile_hit(id: int, target_index: int, cell: Vector2i, ability: Ability)
 signal summon_expired(id: int)
+## Un ennemi a frappé une créature invoquée, et ce qu'il lui reste à encaisser.
+signal summon_hurt(id: int, hits_left: int, hits_max: int)
+## Elle est tombée sous les coups, avant la fin de sa vie.
+signal summon_slain(id: int)
 signal enemy_damaged(index: int, dealt: int, ability: Ability)
 signal enemy_killed(index: int)
 signal hero_transformation_requested
@@ -122,6 +129,9 @@ signal meteor_incoming(cell: Vector2i, delay: float, ability: Ability)
 ## `seals_cast` : `meteor_incoming` part douze fois, le geste ne se fait qu'une.
 signal incantation_cast(cell: Vector2i, ability: Ability)
 signal meteor_landed(cell: Vector2i, ability: Ability)
+## La météore qui vient d'être annoncée (`meteor_incoming`) suit la créature `index` jusqu'au sol : une pluie qui
+## vise ne tombe pas là où la proie était.
+signal meteor_aimed(index: int)
 ## Le mage est EXALTÉ : ses coups portent plus fort pendant `duration`.
 ## L'interface doit le montrer — un bonus invisible n'est pas un pouvoir, c'est
 ## une bizarrerie de chiffres.
@@ -132,6 +142,92 @@ signal echo_walked(ability: Ability, cells: Array, times: Array)
 signal hourglass_turned(duration: float)
 signal hourglass_ended(healed: int)
 signal time_stopped(duration: float)
+## LE SEIGNEUR DES HEURES (l'Éveil du Chronomancien).
+## Temps accéléré : ses recharges filent plus vite, tant que dure l'Éveil.
+signal haste_changed(active: bool)
+## Le Dôme de stase vient de figer une créature qui y entrait.
+signal stasis_caught(index: int, seconds: float)
+## Un double du Paradoxe explose en onde d'horloge au bout de son trajet.
+signal echo_burst(cell: Vector2i, radius: float)
+## Le Rembobinage : les PV rendus (zéro si rien à reprendre).
+signal wounds_rewound(healed: int)
+## La bombe-horloge du Saut temporel : posée, puis sonnée.
+signal clock_bomb_set(bomb_id: int, cell: Vector2i, delay: float)
+signal clock_bomb_rang(bomb_id: int, cell: Vector2i, radius: float)
+## Le Jugement des Heures : un coup s'ajoute au total accumulé sur une créature, puis tout tombe à midi.
+signal judgement_stacked(index: int, total: int)
+signal judgement_fell(hits: Dictionary)
+## LE SEIGNEUR DU FLÉAU (l'Éveil du Mage de la Peste).
+## Le Miasme : l'aura monte ou retombe, et elle vient de mordre une créature collée à lui.
+signal miasma_changed(active: bool)
+signal miasma_bit(index: int)
+## L'Épidémie saute d'une case à l'autre (la première part du mage).
+signal epidemic_jumped(from: Vector2i, to: Vector2i)
+## La Saignée : les cases qui éclatent, les doses de chacune, et les PV repris.
+signal bled(cells: Array, doses: Array, healed: int)
+## La Nuée de corbeaux passe d'une case à l'autre.
+signal flock_flew(from: Vector2i, to: Vector2i)
+## La Grande Peste tombe sur la carte.
+signal great_plague(duration: float)
+## L'ARCHIMAGE PRIMORDIAL (l'Éveil du Sorcier Suprême).
+## La Roue des éléments monte ou retombe, puis tourne : `rank` est l'orbe en tête (0 feu, 1 eau, 2 terre, 3 air).
+signal wheel_changed(active: bool)
+signal wheel_turned(rank: int)
+## La Grande Convergence se brise : un éclat par cible, chacun de son rang d'élément.
+signal element_shards_flew(from: Vector2i, targets: Array, ranks: Array)
+## Le Pas des éléments : les rayons partis de l'arrivée, un chemin et un rang par couloir.
+signal element_rays_cast(from: Vector2i, paths: Array, ranks: Array)
+## Une météore de la Genèse touche le sol, de son rang d'élément.
+signal element_meteor_struck(cell: Vector2i, rank: int, radius: float)
+## La lumière de l'origine, au bout de la Genèse.
+signal primal_nova(cell: Vector2i, radius: float)
+## L'ÉTOILE DU MATIN (l'Éveil du Porte-Lumière) : l'Éblouissement commence ou s'achève.
+signal dazzle_changed(active: bool)
+## LE FAUCHEUR DES ÂMES (l'Éveil de l'Ange de la Mort) : la Récolte commence ou s'achève.
+signal harvest_changed(active: bool)
+## La Reine du Firmament (l'Éveil de l'Ange des Étoiles).
+signal firmament_changed(active: bool)
+## Le Forgeron Céleste (l'Éveil de l'Archange d'Acier).
+signal forge_changed(active: bool)
+## Le Gardien du Trône (l'Éveil du Chérubin).
+signal throne_changed(active: bool)
+## Le Séraphin (l'Éveil de l'Archange du Ciel).
+signal skies_changed(active: bool)
+signal column_lingered(cell: Vector2i, seconds: float, radius: float)
+signal great_sword_falling(cell: Vector2i, lead: float, radius: float)
+signal great_sword_struck(cell: Vector2i, radius: float)
+signal throne_eyes_opened(cell: Vector2i, radius: float)
+signal garden_sword_struck(cell: Vector2i)
+signal plate_shattered(cell: Vector2i)
+signal hammer_stunned(cell: Vector2i, radius: float)
+signal anvil_falling(cell: Vector2i, lead: float, radius: float)
+signal anvil_dropped(cell: Vector2i, radius: float)
+signal bastion_opened(cell: Vector2i, radius: float)
+## La figure fermée de ses cinq étoiles, en cases (le contour, sans répéter le premier point) ; vide = ouverte.
+signal figure_changed(points: Array)
+signal big_meteor_falling(cell: Vector2i, lead: float, radius: float)
+signal big_meteor_struck(cell: Vector2i, radius: float)
+signal eclipse_ended(cell: Vector2i, radius: float)
+## Les étoiles de la galaxie (cases) et leurs liens (paires d'indices dans `cells`).
+signal galaxy_changed(cells: Array, links: Array)
+## Une âme en orbite part frapper ce qui est arrivé à son contact.
+signal soul_guarded(from: Vector2i, to: Vector2i)
+## Le Croissant de l'au-delà revient vers lui par ce chemin.
+signal crescent_returned(path: Array, duration: float)
+## Un coup du Glas funèbre.
+signal toll_rang(cell: Vector2i, radius: float)
+## Un coup sur une créature aveuglée a porté son supplément.
+signal dazzle_struck(cell: Vector2i)
+## La Lance de l'Aurore reste allumée sur ces cases pendant `seconds`.
+signal light_wall_raised(cells: Array, seconds: float)
+## La Cathédrale de lumière vient de lui rendre un PV.
+signal sanctuary_healed(cell: Vector2i)
+## L'Égide solaire a encaissé un coup et le renvoie en rayon.
+signal aegis_ray(from: Vector2i, to: Vector2i)
+## Le Soleil de midi se lève pour `seconds`, lance ses rayons, puis tombe.
+signal sun_risen(seconds: float)
+signal sun_rays(cells: Array)
+signal sun_set(cell: Vector2i, radius: float)
 ## Le venin d'une créature a changé. Zéro dose : elle est guérie.
 signal enemy_venomed(index: int, doses: int, duration: float)
 signal trail_started(duration: float)
@@ -169,6 +265,16 @@ signal enemy_possessed(index: int, duration: float)
 ## Le champ qui mène les possédés à leur proie. Vide, ils errent : ils n'ont personne.
 signal possession_field(field: PackedInt32Array)
 signal great_discord_cast(cell: Vector2i)
+## LA REINE DE LA DISCORDE (l'Éveil de la Démone) : la Discorde contagieuse commence ou s'achève.
+signal contagion_changed(active: bool)
+## Un pantin possédé est mort, et ses fils sautent sur son voisin.
+signal possession_jumped(from: Vector2i, to: Vector2i)
+## L'Œil de la Reine s'ouvre au-dessus de sa cible, et ses fils tombent sur ces cases.
+signal queen_eye_opened(cell: Vector2i, cells: Array)
+## Un lien (Lien ou Toile de Souffrance) vient d'enchaîner ces ennemis.
+signal web_spun(indices: Array)
+## Un ennemi est mort pendant le Grand Bal : ses fils éclatent sur ses voisins.
+signal ball_burst(cell: Vector2i, radius: float)
 signal brawl_struck(cell: Vector2i)
 signal bond_struck(cell: Vector2i)
 signal enemy_swapped(index: int, cell: Vector2i)
@@ -188,6 +294,17 @@ signal decoy_blew(cell: Vector2i, radius: float)
 signal decoy_field(field: PackedInt32Array)
 signal cages_cast(cell: Vector2i, indices: Array, seconds: float)
 signal cages_crushed(cells: Array)
+## L'EMPEREUR DES CENDRES (l'Éveil du Roi de Braise) : le Sillage de cendres commence ou s'achève.
+signal ashes_changed(active: bool)
+## Un gantelet de l'Empereur crache sa gerbe de lave.
+signal gauntlet_splashed(cell: Vector2i, radius: float)
+## La Forge impériale aspire, puis explose.
+signal forge_pulled(cell: Vector2i)
+signal forge_blew(cell: Vector2i, radius: float)
+## Le Retour de l'Empire : les trois pièces sont rentrées ensemble, l'onde de cendres part.
+signal empire_wave(cell: Vector2i, radius: float)
+## L'Empire des Cendres : une cage éclate en colonne de lave.
+signal cage_burst(cell: Vector2i, radius: float)
 ## Le Chevalier Écarlate.
 signal enemy_cuts(index: int, count: int)
 signal dash_cut(from: Vector2i, to: Vector2i)
@@ -196,6 +313,34 @@ signal guard_parried(cell: Vector2i)
 signal sheathe_begun(cell: Vector2i, cells: Array, seconds: float, final: bool)
 signal cut_burst(cell: Vector2i, count: int)
 signal sheathe_ended(final: bool)
+## LE SEIGNEUR ÉCARLATE (l'Éveil du Chevalier) : la Lame affûtée commence ou s'achève, et un ennemi arrivé au
+## bout de ses entailles les ouvre de lui-même.
+signal keen_changed(active: bool)
+## LE GARDIEN DE L'ABÎME (l'Éveil du Geôlier) : le Poids des chaînes commence ou s'achève.
+signal abyss_changed(active: bool)
+## LE DRAGON PRIMORDIAL (l'Éveil du Dragon) : le Feu primordial commence ou s'achève, et ce qui meurt dans le
+## feu explose en le répandant.
+signal primal_changed(active: bool)
+## LE MAÎTRE DU CASINO (l'Éveil du Croupier) : la Maison gagne toujours commence ou s'achève, et chaque Coup
+## de chance paie une gerbe de jetons sur les voisins.
+signal house_changed(active: bool)
+## FAIM SANS FOND (l'Éveil de l'Avide) : la Faim sans fond commence ou s'achève.
+signal endless_changed(active: bool)
+signal house_payout(cell: Vector2i, radius: float)
+## Les Dés du Diable : le troisième dé, et le brelan.
+signal devil_die(from: Vector2i, cells: Array, value: int, triple: bool)
+signal primal_burst(cell: Vector2i)
+## Les Chaînes de l'Abîme cèdent en se resserrant : ces ennemis sont pris dans la glace.
+signal chains_snapped(indices: Array, seconds: float)
+## L'onde de givre du Pas de l'Abîme, à l'arrivée.
+signal frost_wave(cell: Vector2i, radius: float)
+## L'Abîme se referme sur ses prisonniers.
+signal abyss_closed(cells: Array)
+signal keen_burst(cell: Vector2i, count: int)
+## La lame fantôme repasse sur le couloir du Pas des Mille Lames.
+signal dash_echoed(from: Vector2i, to: Vector2i)
+## La Rengaine écarlate projette ses pétales-lames d'un éclat vers un voisin.
+signal petals_flung(from: Vector2i, to: Vector2i)
 ## Le Geôlier.
 signal enemy_shackled(index: int, seconds: float)
 signal enemy_hooked(index: int, from: Vector2i, to: Vector2i)
@@ -233,6 +378,21 @@ signal surge_changed(charges: int)
 signal surge_struck(cell: Vector2i)
 signal lightning_hopped(cells: Array)
 signal wrath_bolt(cell: Vector2i, index: int)
+## L'Éveil du Seigneur du Néant : son ombre répète un coup, un trou noir s'ouvre puis s'effondre,
+## l'orbe ouvre un gouffre, l'éclipse tombe.
+signal double_struck(index: int, ability: Ability)
+signal hole_opened(cell: Vector2i, seconds: float, ability: Ability)
+signal hole_collapsed(cell: Vector2i, ability: Ability)
+signal void_opened(cell: Vector2i)
+signal eclipse_fell(seconds: float)
+## LE MAÎTRE DES LÉGIONS (l'Éveil de l'Invocateur) : la Légion commence ou finit, une proie est
+## marquée, un diablotin explose, une gargouille tombe, il échange sa place, le dragon passe.
+signal legion_changed(active: bool)
+signal prey_marked(index: int, seconds: float)
+signal summon_burst(id: int, cell: Vector2i, radius: float)
+signal summon_dropped(id: int, cell: Vector2i, radius: float)
+signal summon_swapped(id: int, from: Vector2i, to: Vector2i)
+signal dragon_flyover(cell: Vector2i, reach: float, width: float)
 signal eye_burst(cell: Vector2i)
 signal whirl_started(duration: float, radius: float)
 signal whirl_cut(cell: Vector2i)
@@ -271,6 +431,12 @@ signal leap_landed(cell: Vector2i, radius: float)
 signal feast_started(seconds: float)
 signal feast_bite(index: int, cell: Vector2i, killed: bool)
 signal feast_ended
+## L'Archidémon du Pacte : le Prix du Sang commence ou s'arrête ; sa vie vient de couler ; un kill la lui rend
+## (la case de la proie) ; une serre de l'Apocalypse s'abat.
+signal blood_price_changed(active: bool)
+signal blood_price_paid(remaining: int)
+signal blood_fed(cell: Vector2i)
+signal pact_claw_struck(cell: Vector2i)
 
 ## Vitesse des projectiles, en cases par seconde. Trois fois le joueur : le tir
 ## se voit partir et arriver, sans jamais laisser le temps de fuir.
@@ -324,9 +490,22 @@ const SUMMON_KINDS := {
 	"cyclone": {"speed": 3.0, "damage": 18, "period": 1.5, "reach": 1.4,
 		"flies": true},
 }
+## LES ENNEMIS SE DÉFENDENT. Ce qu'une créature encaisse, en coups : un coup d'ennemi en
+## retire un, comme au mage, un coup de boss `BOSS_BLOW`. Absente d'ici, elle est hors d'atteinte :
+## le dragon tire de loin en volant, le cyclone n'est qu'une colonne de vent.
+##
+## Sans ça, l'Invocateur et la Faille des ténèbres jouaient avec une armée intouchable : les
+## créatures chassaient pendant que les ennemis leur passaient au travers.
+const SUMMON_HITS := {"imp": 3, "gargouille": 6, "ombre": 3}
+## La Légion de l'Éveil encaisse deux fois plus : elle est censée tenir la ligne.
+const LEGION_HITS := 2.0
+const BOSS_BLOW := 3
+
 ## Créatures simultanées au maximum. Au-delà, la PLUS ANCIENNE disparaît : une
 ## armée sans plafond viderait le labyrinthe à la place du joueur.
 const MAX_SUMMONS := 4
+## Rayon de l'explosion de la boule de feu du Roi-Dragon embrasé (l'Éveil de l'Invocateur).
+const ROYAL_FIREBALL_RADIUS := 1.3
 ## Cadence de recalcul du champ des proies. 0,35 s comme l'IA ennemie : les
 ## invocations n'ont pas besoin d'être plus réactives que ce qu'elles chassent.
 const SUMMON_FIELD_REFRESH := 0.35
@@ -387,7 +566,7 @@ const ECHO_DELAY := 0.6
 const RETARD_DURATION := 1.4
 const RETARD_FACTOR := 0.6
 ## La trace gardée, en secondes : assez pour le plus long sort qui la relit.
-const TRAIL_KEEP := 8.0
+const TRAIL_KEEP := 11.0   # le second double du Paradoxe rejoue 10 s
 ## Le venin : des doses qui s'additionnent et prélèvent ensemble, une fois par seconde.
 ## Mesuré aux bots, comme le reste : voir la note du catalogue.
 const VENOM_MAX := 3
@@ -404,6 +583,16 @@ const STAR_TICK := 0.25
 ## L'écart entre deux étoiles qui tombent, et l'avance que prend leur dessin sur leur impact.
 const STAR_FALL_GAP := 0.22
 const STAR_FALL_LEAD := 0.34
+## LE FIRMAMENT de la Reine : cinq étoiles au lieu de trois, des rayons 50 % plus forts, deux étoiles éphémères au
+## plus. Le gros météore s'annonce plus tôt que les petites étoiles, et tombe un peu après la dernière.
+const FIRMAMENT_STARS := 5
+const FIRMAMENT_RAY := 1.5
+const SPARK_MAX := 2
+const BIG_METEOR_LEAD := 0.9
+const BIG_METEOR_PAUSE := 0.35
+## Une étoile de la galaxie se relie à ses deux voisines les plus proches, jusqu'à cette distance en cases.
+const GALAXY_LINK := 8.0
+const GALAXY_NEIGHBOURS := 2
 
 ## Le gain de force du Démon du Pacte, atteint à 1 PV quel que soit le stage.
 const RAGE_MAX := 0.5
@@ -414,6 +603,10 @@ const WHISPER_MARKS := 3
 const TROUBLE_SECONDS := 4.0
 const TROUBLE_FACTOR := 0.7
 const TROUBLE_BONUS := 2.0
+## La Discorde contagieuse : un pantin mort passe ses fils au plus proche à cette distance, par les couloirs,
+## pour le temps qui lui restait et au moins `CONTAGION_MIN` secondes.
+const CONTAGION_REACH := 3
+const CONTAGION_MIN := 2.0
 ## L'échangé reste sonné un instant : sinon il frappait à l'arrivée, sans qu'on puisse fuir.
 const SWAP_STUN := 0.7
 
@@ -439,18 +632,40 @@ const EJECT_DAMAGE := 16
 const EJECT_RADIUS := 2.0
 ## Le boss ne se laisse pas retenir : il prend ce coup, et le plastron repart.
 const CHEST_BOSS_BITE := 40
+## LE SILLAGE DE CENDRES de l'Empereur : chaque pièce qui vole laisse ses cases en cendres ardentes
+## ce temps-là (les cases en feu du Dragon, `FIRE_CELL_DAMAGE` par seconde), et une pièce arrachée
+## par un coup revient en `ASH_RETURN` au lieu de `PIECE_AUTO_RETURN`.
+const ASH_SECONDS := 2.0
+const ASH_RETURN := 4.0
+## La Forge impériale aspire d'une case à cet intervalle.
+const FORGE_PULL_GAP := 0.5
 
 ## Le Chevalier Écarlate : ce qu'un ennemi porte d'entailles, et combien de temps elles tiennent.
 const CUTS_MAX := 5
 const CUT_SECONDS := 8.0
+## La Lame affûtée : une entaille de plus par coup, jusqu'à `KEEN_CUTS_MAX`, et à ce compte elles s'ouvrent seules
+## pour `KEEN_CUT_DAMAGE` chacune. La Garde du Seigneur ne riposte qu'une fois par `PARRY_LOCK`.
+const KEEN_CUTS_MAX := 8
+const KEEN_CUT_DAMAGE := 18
+const PARRY_LOCK := 0.3
 ## Le silence entre le claquement du fourreau et l'éclat : c'est lui qui fait le geste.
 const SHEATHE_SILENCE := 0.28
 
 ## Le Geôlier : au troisième poing sur le même ennemi, une entrave le cloue au sol ce temps-là.
 const SHACKLE_HITS := 3
 const SHACKLE_SECONDS := 1.5
+## LE POIDS DES CHAÎNES du Gardien : entravé au deuxième coup, et ce qui est entravé, figé ou cloué prend
+## `ABYSS_HELD_BONUS` de dégâts en plus de ses coups.
+const ABYSS_SHACKLE_HITS := 2
+const ABYSS_HELD_BONUS := 0.4
 ## Sous cette part de ses PV, un ennemi touché par l'Ange de la Mort est achevé.
 const PLATE_MAX := 3
+## LA FORGE VIVANTE du Forgeron Céleste : cinq plaques, et une plaque qui casse blesse ce qui est à son contact.
+const FORGE_PLATES := 5
+const FORGE_SHARD_DAMAGE := 30
+const FORGE_SHARD_REACH := 1.5
+## L'enclume s'annonce ce temps avant de tomber.
+const ANVIL_DROP_LEAD := 0.7
 ## Les kills qu'il faut pour reforger une plaque.
 const PLATE_KILLS := 2
 ## Le Chérubin : ce que brûle l'œil qui s'embrase, à quelle distance, et après combien de temps
@@ -461,12 +676,34 @@ const EYE_REACH := 1.05
 const EYE_LOCK := 3.0
 ## Le Jardin gardé ne brûle un même ennemi qu'une fois par ce délai, même s'il revient sans cesse.
 const GARDEN_LOCK := 0.5
+## LE REGARD DU TRÔNE : l'œil brûle à cette distance au lieu du contact, plus fort, et se rallume plus vite.
+const THRONE_REACH := 2.1
+## LES YEUX DU CIEL du Séraphin : ce que ses coups touchent prend ce bonus, ce temps.
+const SKY_MARK_BONUS := 0.2
+const SKY_MARK_SECONDS := 3.0
+## L'épée géante du Jugement dernier tombe ce temps après la dernière épée, et s'annonce `GREAT_SWORD_LEAD` avant.
+const GREAT_SWORD_PAUSE := 0.6
+const GREAT_SWORD_LEAD := 1.0
+## Les lances de l'Ascension cherchent jusqu'à cette distance, à vol d'oiseau.
+const FLIGHT_LANCE_REACH := 6.0
+const THRONE_EYE_DAMAGE := 35
+const THRONE_EYE_LOCK := 1.5
+## L'épée du bord de l'Éden fait un tour en ce temps, et frappe à cette distance de sa pointe.
+const GARDEN_SWORD_PERIOD := 3.0
+const GARDEN_SWORD_REACH := 1.2
+const GARDEN_SWORD_LOCK := 1.0
 ## Les Ailes voilées ne repoussent un même ennemi qu'une fois par ce délai.
 const VEIL_LOCK := 0.6
 ## Le Dragon : une case en feu dure FIRE_CELL_SECONDS et ronge FIRE_CELL_DAMAGE par seconde ce
 ## qui s'y tient. Lui y gagne INFERNO_SPEED de son allure.
 const FIRE_CELL_SECONDS := 4.0
 const FIRE_CELL_DAMAGE := 10
+## LE FEU PRIMORDIAL du Dragon éveillé : ses cases brûlent `PRIMAL_FIRE_LONGER` fois plus longtemps et rongent
+## `PRIMAL_FIRE_DAMAGE`, et ce qui meurt dans le feu explose (`PRIMAL_BURST_DAMAGE`, `PRIMAL_BURST_RADIUS`).
+const PRIMAL_FIRE_LONGER := 2.0
+const PRIMAL_FIRE_DAMAGE := 15
+const PRIMAL_BURST_DAMAGE := 20
+const PRIMAL_BURST_RADIUS := 1.2
 const INFERNO_SPEED := 0.2
 ## L'Ombre du Dragon : la première colonne attend que l'ombre soit passée, puis elles se suivent.
 const SHADOW_DELAY := 1.2
@@ -475,7 +712,12 @@ const SHADOW_GAP := 0.12
 const LUCK_CHANCE := 0.2
 const LUCK_MULT := 3
 ## Les figures de la Carte piège.
-enum Suit { FIRE, ICE, THUNDER }
+enum Suit { FIRE, ICE, THUNDER, JOKER }
+## LA MAISON GAGNE TOUJOURS : le Coup de chance tombe `HOUSE_LUCK` fois plus souvent, et chacun paie une gerbe de
+## jetons (`PAYOUT_DAMAGE`, `PAYOUT_RADIUS`) sur les voisins.
+const HOUSE_LUCK := 2.0
+const PAYOUT_DAMAGE := 15
+const PAYOUT_RADIUS := 1.2
 ## Le Roi de foudre saute à ce nombre d'ennemis en plus, à cette distance de la carte.
 const TRAP_CHAIN := 2
 const TRAP_REACH := 4
@@ -489,6 +731,10 @@ const BITES_MAX := 5
 const BITE_DAMAGE := 0.08
 const BITE_SIZE := 0.06
 const BITE_DECAY := 10.0
+## LA FAIM SANS FOND : tant qu'elle dure, il garde jusqu'à `ENDLESS_BITES` bouchées, qui ne fondent plus, et chaque
+## kill lui en donne `ENDLESS_GAIN`.
+const ENDLESS_BITES := 8
+const ENDLESS_GAIN := 2
 ## Le Gouffre tire d'une case à cet intervalle, et mord ce qui est à ce rayon de son centre.
 const GULF_PULL_GAP := 0.4
 const GULF_BITE_RADIUS := 1.5
@@ -551,6 +797,8 @@ var _summons: Array[Dictionary] = []
 var _next_summon_id := 1
 ## Champ de distances vers les proies, partagé par tous les marcheurs.
 var _summon_field := PackedInt32Array()
+## Le coup de chaque ennemi contre les créatures, au même index que les ennemis.
+var _foe_swings := {}
 var _summon_field_timer := 0.0
 var _burning := {}                     # index -> {ticks, timer, damage}
 var _poisoned := {}                    # index -> {time_left, timer, damage}
@@ -590,6 +838,59 @@ var _hourglass_left := 0.0
 var _hourglass_health := 0
 var _hourglass_ratio := 0.5
 var _time_stop_left := 0.0
+var _haste_left := 0.0
+var _haste_factor := 1.0
+var _health_log: Array = []            # [instant, PV], à chaque changement : le Rembobinage
+var _clock_bombs: Array[Dictionary] = []   # {id, cell, left, ability}
+var _next_bomb := 0
+var _judgement_left := 0.0
+var _judgement_ability: Ability = null
+var _judgement_bank := {}              # index -> dégâts accumulés pendant l'arrêt
+var _miasma_left := 0.0
+var _miasma_tick := 0.0
+var _miasma_every := 1.0
+var _miasma_cap := VENOM_MAX
+var _puddle_doses := 1                 # le Sillage pestilent : doses et ralentissement de ses flaques
+var _puddle_slow := 0.0
+var _wheel_left := 0.0                 # la Roue des éléments de l'Archimage
+var _wheel_rank := 0
+var _wheel_hit := -1                   # le rang que porte le tir qui touche ; -1 = la roue telle qu'elle est
+var _double_echo_left := 0.0           # l'Apothéose : son Écho frappe deux fois
+var _harvest := false                  # la Récolte du Faucheur des Âmes
+var _firmament := false                # le Firmament de la Reine
+var _forge := false                    # la Forge vivante du Forgeron
+var _throne := false                   # le Regard du Trône du Gardien
+var _skies := false                    # les Yeux du ciel du Séraphin
+var _sky_marks := {}                   # index -> secondes de marque du ciel
+var _columns: Array[Dictionary] = []   # {cell, left, tick, ability}
+var _flight_lance_timer := 0.0
+var _great_swords: Array[Dictionary] = []  # {cell, time_left, warned, ability}
+var _throne_veil: Ability = null
+var _sword_locks := {}                 # index -> secondes, l'épée du bord de l'Éden
+var _shards_pending := 0
+var _hammer_count := 0
+var _anvil_drops: Array[Dictionary] = []  # {cell, time_left, ability}
+var _bastion: Ability = null
+var _molten_steps := 0.0
+var _step_cell := Vector2i(-1, -1)
+var _sparks: Array[Dictionary] = []    # {cell, time_left} : les étoiles éphémères du Trait de comète
+var _figure_closed := false
+var _eclipse: Ability = null
+var _galaxy: Array[Dictionary] = []    # {cell, time_left}
+var _galaxy_links: Array = []          # [a, b] dans `_galaxy`
+var _galaxy_ability: Ability = null
+var _galaxy_tick := 0.0
+var _guard_locks := {}                 # index -> secondes avant qu'une âme en orbite le frappe de nouveau
+var _returns: Array[Dictionary] = []   # {cells, time_left, ability} : les croissants sur le chemin du retour
+var _tolls: Array[Dictionary] = []     # {left, timer, ability} : les coups du Glas funèbre à venir
+var _dazzle_left := 0.0               # l'Éblouissement de l'Étoile du Matin
+var _contact := {}                     # index -> secondes passées collé à lui, pendant l'Éblouissement
+var _glare_count := 0                  # les coups du Trait solaire, pour en aveugler un sur `blind_every`
+var _light_walls: Array[Dictionary] = []   # {cells, time_left, tick, ability} : la Lance de l'Aurore restée allumée
+var _aegis: Ability = null             # l'Égide solaire en place
+var _aegis_seen := 0                   # le bouclier qu'elle avait à l'image d'avant
+var _sun: Dictionary = {}              # {left, tick, ability} : le Soleil de midi
+var _novas: Array[Dictionary] = []     # {time_left, ability} : la lumière de l'origine, au bout de la Genèse
 var _venom := {}                       # index -> {doses, time_left, timer, plague}
 var _venom_locks := {}                 # index -> secondes avant la dose de sol suivante
 var _plague: Ability = null            # l'ultime : ce qui éclate laisse son nuage
@@ -619,18 +920,41 @@ var _bond_relaying := false
 var _pieces: Array[Dictionary] = []
 var _torn_pending := 0
 var _decoy := {}                       # {cell, left, ability}
+var _ashes := false                    # le Sillage de cendres de l'Empereur, tant qu'il dure
+var _empire_wave: Ability = null       # le Retour de l'Empire attend ses trois pièces
+var _contagious := false               # la Discorde contagieuse de la Reine, tant qu'elle dure
+var _jumps_pending: Array = []         # [{cell, left, strike}] : les fils des pantins morts, à passer
+var _ball := {}                        # le Grand Bal : {left, ability}
+var _bursts_pending: Array = []        # les cases des morts du bal, à faire éclater
 var _caged := {}                       # index -> vrai
 var _cage_left := 0.0
 var _cage_ability: Ability = null
 var _cuts := {}                        # index -> {count, left}
 var _guard: Ability = null
 var _parry_pending := false
+var _keen := false                     # la Lame affûtée du Seigneur Écarlate, tant qu'elle dure
+var _keen_pending: Array = []          # les ennemis arrivés au bout de leurs entailles, à ouvrir
+var _dash_echo := {}                   # {left, from, to, cells, ability} : la lame fantôme qui repasse
+var _parry_lock := 0.0
 var _sheathe := {}                     # {left, targets, ability}
 var _shackle_hits := {}                # index -> poings reçus, avant l'entrave
 var _soul_chains := {}                 # {members, left, tick, ability}
 var _gaol := {}                        # {members, left, tick, ability}
+var _abyss := false                    # le Poids des chaînes du Gardien, tant qu'il dure
+var _primal := false                   # le Feu primordial du Dragon, tant qu'il dure
+var _primal_pending: Array = []        # les cases où un ennemi est mort dans le feu, à faire exploser
+var _house := false                    # la Maison gagne toujours du Maître du Casino, tant qu'elle dure
+var _endless := false                  # la Faim sans fond de l'Avide, tant qu'elle dure
+var _payouts: Array = []               # les cases où un Coup de chance doit payer ses jetons
+var _held := {}                        # index -> secondes : ce qui est entravé, figé ou cloué
 var _blast_hits := 0                   # ennemis touchés par le souffle en cours
 var _pact_owed := 0                    # PV rendus à la fin du Dernier Pacte
+var _blood_left := 0.0                 # le Prix du Sang de l'Archidémon, tant qu'il dure
+var _blood_every := 8.0
+var _blood_timer := 0.0
+var _blood_rage := 1.0
+var _claw_ability: Ability = null      # l'Apocalypse de Sang, tant que tombent ses serres
+var _claw_timer := 0.0
 var _souls := 0                        # âmes récoltées par l'Ange de la Mort
 var _marked := {}                      # index -> secondes de marque du Glas
 var _flying: Array[Dictionary] = []    # {index, time_left, ability}
@@ -662,6 +986,15 @@ var _surge_max := 0
 var _surge_damage := 0
 var _surge_radius := 0.0
 var _wrath := []                       # éclairs de la Colère du ciel à venir : {index, time_left, ability}
+var _double_left := 0.0                # le Double du Seigneur du Néant, tant qu'il dure
+var _double_delay := 0.25
+var _double_ratio := 0.5
+var _doubles := []                     # coups de l'ombre à venir : {index, time_left, ability}
+var _holes := []                       # trous noirs ouverts : {cell, time_left, tick, ability}
+var _legion_left := 0.0                # la Légion du Maître des Légions, tant qu'elle dure
+var _legion_ratio := 1.0               # facteur de dégâts de ses créatures
+var _legion_cap := 0                   # plafond de créatures pendant la Légion
+var _legion_mark := {}                 # {index, left} : la proie marquée
 var _eye_locks := {}                   # index -> secondes avant qu'un nouvel œil s'ouvre
 var _whirl := {}                       # {left, tick, ability}
 var _veil: Ability = null              # les Ailes voilées, tant qu'elles tiennent
@@ -691,12 +1024,14 @@ func _init(p_grid: MazeGrid, p_stats: CharacterStats, p_health: Health,
 		p_seed: int = 0) -> void:
 	grid = p_grid
 	stats = p_stats
+	# Tout ce qui sonne un ennemi passe par ce signal : le Poids des chaînes y lit ce qui ne peut plus fuir.
+	enemy_staggered.connect(_note_held)
 	health = p_health
 	health.plates = maxi(health.plates, stats.base_plates)
 	_rng.seed = p_seed if p_seed != 0 else 60611
 	if stats.element == Element.Kind.STEEL:
 		health.plates = PLATE_MAX
-		health.plate_torn.connect(func() -> void: plates_changed.emit(health.plates))
+		health.plate_torn.connect(_on_plate_torn)
 		health.deflected.connect(func() -> void: _reflect_waiting = _rampart != null)
 	if stats.element == Element.Kind.BLADE:
 		health.deflected.connect(func() -> void: _parry_pending = _guard != null)
@@ -755,10 +1090,14 @@ func can_use(ability: Ability) -> bool:
 
 func update(delta: float, context: CombatContext) -> void:
 	_record_trail(delta, context)
+	_record_health()
 	_time_stop_left = maxf(0.0, _time_stop_left - delta)
+	_update_hours(delta, context)
 	_update_walkers(delta, context)
 	_update_hourglass(delta)
 	_update_venom(delta, context)
+	_update_miasma(delta, context)
+	_update_wheel(delta)
 	_update_puddles(delta, context)
 	_update_light(delta, context)
 	_update_death(delta, context)
@@ -772,14 +1111,19 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_phoenix(delta, context)
 	_update_colossus(delta, context)
 	_update_tempest(delta, context)
+	_update_void(delta, context)
+	_update_legion(delta, context)
 	if not _leviathan.is_empty():
 		_swim_leviathan(delta, context)
 	_update_dragon(delta, context)
 	_update_croupier(delta, context)
 	_update_avide(delta, context)
+	_update_archdemon(delta, context)
 	_leech_left = maxf(0.0, _leech_left - delta)
+	# TEMPS ACCÉLÉRÉ : ses recharges courent plus vite que le monde.
+	var spent := delta * (_haste_factor if _haste_left > 0.0 else 1.0)
 	for id in _cooldowns.keys():
-		var left: float = _cooldowns[id] - delta
+		var left: float = _cooldowns[id] - spent
 		if left <= 0.0:
 			_cooldowns.erase(id)
 			# La recharge d'un sort à charges les rend TOUTES.
@@ -788,7 +1132,7 @@ func update(delta: float, context: CombatContext) -> void:
 		else:
 			_cooldowns[id] = left
 	for id in _recover.keys():
-		var gap: float = _recover[id] - delta
+		var gap: float = _recover[id] - spent
 		if gap <= 0.0:
 			_recover.erase(id)
 		else:
@@ -803,6 +1147,9 @@ func update(delta: float, context: CombatContext) -> void:
 	_update_poisons(delta, context)
 	_update_echoes(delta, context)
 	_update_meteors(delta, context)
+	_update_novas(delta, context)
+	_update_morning_star(delta, context)
+	_update_harvest(delta, context)
 	_update_waves(delta, context)
 	_update_lines(delta, context)
 	_update_turrets(delta, context)
@@ -825,6 +1172,15 @@ func update(delta: float, context: CombatContext) -> void:
 			health.immune = false
 			_rampart = null
 			_veil = null
+			if _eclipse != null:
+				_end_eclipse(_eclipse, context)
+			_eclipse = null
+			if _bastion != null:
+				_open_bastion(_bastion, context)
+			_bastion = null
+			if _throne_veil != null:
+				_open_throne_eyes(_throne_veil, context)
+			_throne_veil = null
 			_guard = null
 			if _pact_owed > 0:
 				player_healed.emit(health.heal(_pact_owed))
@@ -835,6 +1191,10 @@ func update(delta: float, context: CombatContext) -> void:
 		# Il tombe de DEUX façons : l'échéance, ou les coups qui l'ont vidé.
 		# Les deux comptent — un bouclier à zéro qui resterait affiché mentirait
 		# autant qu'un bouclier éternel.
+		if _aegis != null and health.shield < _aegis_seen:
+			for _hit in _aegis_seen - health.shield:
+				_answer_aegis(context)
+		_aegis_seen = health.shield
 		if _wings != null and health.shield <= 0 and _shield_left > 0.0:
 			_burst_wings(context)
 		if _shield_left <= 0.0 or health.shield <= 0:
@@ -846,6 +1206,7 @@ func update(delta: float, context: CombatContext) -> void:
 				shield_held.emit(healed)
 			_held_heal = 0
 			_wings = null
+			_aegis = null
 			_shield_left = 0.0
 			health.shield = 0
 			player_shield_faded.emit()
@@ -865,6 +1226,7 @@ func update(delta: float, context: CombatContext) -> void:
 
 func _update_projectiles(delta: float, context: CombatContext) -> void:
 	for i in range(_in_flight.size() - 1, -1, -1):
+		_wheel_hit = int(_in_flight[i].get("wheel", -1))
 		_in_flight[i]["time_left"] = float(_in_flight[i]["time_left"]) - delta
 		if _in_flight[i].has("path"):
 			if _fly_free_shot(_in_flight[i], context):
@@ -878,9 +1240,23 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 		var ability: Ability = shot["ability"]
 		if not context.enemy_alive(index):
 			continue
+		var lane: Array = shot.get("lane", [])
+		if not lane.is_empty() and context.dodges(index, ability, lane):
+			projectile_dodged.emit(ability, index, lane[-1])
+			continue
 		var cell: Vector2i = context.enemy_cells[index]
 		projectile_hit.emit(ability, index, cell)
+		# Le Poing impérial laisse ses cendres là où il frappe.
+		if _ashes and ability == stats.attack:
+			_ignite_cells([cell], ASH_SECONDS)
+		# La Bombe de magma met le feu à tout son rayon.
+		if ability.ground_fire > 0.0 and ability.radius > 0.0 and ability.kind == Ability.Kind.PROJECTILE:
+			_ignite_cells(_floor_within(cell, ability.radius), ability.ground_fire)
+		if ability.prey_mark_seconds > 0.0 and not context.is_structure(index):
+			_mark_prey(index, ability.prey_mark_seconds)
 		# La flamme du Chérubin brûle aussi ce qu'elle a croisé en chemin, une fois chacun.
+		if shot.has("line") and ability.line_fire > 0.0:
+			_ignite_cells(shot["line"], ability.line_fire)
 		if shot.has("line"):
 			var line: Array = shot["line"]
 			for other in context.enemy_cells.size():
@@ -891,7 +1267,15 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 			_shove(index, ability.pierce_push, context)
 		# La Colonne du ciel cloue ce qu'elle entoure, AVANT ses dégâts : un ennemi qu'elle tue
 		# ne doit pas être compté parmi les cloués.
-		if ability.stun_seconds > 0.0:
+		if ability.column_linger > 0.0:
+			_columns.append({"cell": cell, "left": ability.column_linger, "tick": 0.0, "ability": ability})
+			column_lingered.emit(cell, ability.column_linger, ability.radius)
+		if ability.stun_every > 0:
+			_hammer_count += 1
+			if _hammer_count % ability.stun_every == 0:
+				_stun_within(cell, ability.radius, ability.stun_seconds, context)
+				hammer_stunned.emit(cell, ability.radius)
+		elif ability.stun_seconds > 0.0:
 			_freeze_around(ability, context, cell)
 		# Le Soleil captif : une seconde explosion au même endroit, et du magma qui reste.
 		if ability.echo_damage > 0:
@@ -906,6 +1290,21 @@ func _update_projectiles(delta: float, context: CombatContext) -> void:
 			_apply_damage(index, ability, context)
 		if ability.bounces > 0:
 			_bounce_from(index, cell, ability, context)
+		# L'Orbe du néant s'ouvre en gouffre là où il frappe.
+		if ability.impact_pull > 0.0:
+			void_opened.emit(cell)
+			_pull_toward(cell, 0.0, ability.impact_pull, context)
+		# La Grande Convergence se brise en éclats d'élément.
+		if ability.element_shards > 0:
+			_break_into_shards(cell, ability, context)
+		# Le Croissant de l'au-delà revient vers lui, et frappe ce qu'il croise au retour.
+		if ability.returns:
+			var back := trajectory(cell, context.player_cell)
+			if back.size() >= 2:
+				var flight := float(back.size() - 1) / (PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed))
+				_returns.append({"cells": back, "time_left": flight, "ability": ability})
+				crescent_returned.emit(back, flight)
+	_wheel_hit = -1
 
 
 ## LE TRIDENT rebondit d'ennemi en ennemi, par les couloirs, en perdant de sa force à chaque saut.
@@ -946,6 +1345,22 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 		if (zone["ability"] as Ability).zone_follows and zone["cell"] != context.player_cell:
 			zone["cell"] = context.player_cell
 			zone_moved.emit(int(zone["id"]), context.player_cell)
+		# La Couronne des sceaux : chaque sceau garde son point cardinal autour de lui, sans passer les haies.
+		if zone.has("orbit"):
+			var held := _seal_cell(context.player_cell, zone["orbit"], int(zone["ring"]))
+			if held != zone["cell"]:
+				zone["cell"] = held
+				zone_moved.emit(int(zone["id"]), held)
+		# La Porte des abysses fait sortir ses diablotins, tant qu'il y a quelque chose à chasser.
+		var gate: Ability = zone["ability"]
+		if gate.zone_spawn_every > 0.0:
+			zone["spawn"] = float(zone.get("spawn", 0.0)) - delta
+			if float(zone["spawn"]) <= 0.0:
+				zone["spawn"] = gate.zone_spawn_every
+				if not _closest_prey(1, context).is_empty():
+					_spawn_summon(gate.summon_id, zone["cell"], gate.zone_spawn_life, gate)
+					_trim_summons(context)
+					_summon_field_timer = 0.0
 		# Le Grand vortex aspire ce qui l'entoure, au rythme des tics.
 		var pulling: Ability = zone["ability"]
 		if pulling.zone_pull > 0.0 and float(zone["tick"]) <= 0.0:
@@ -955,8 +1370,21 @@ func _update_zones(delta: float, context: CombatContext) -> void:
 		# retrouverait son allure deux fois par seconde entre deux passages. Les
 		# dégâts, eux, restent sur le tick — c'est une usure, pas une rafale.
 		var held: Ability = zone["ability"]
+		# LA CATHÉDRALE DE LUMIÈRE lui rend un PV toutes les `zone_heal_every` secondes passées dedans.
+		if held.zone_heal_every > 0.0:
+			var inside := Pathfinder.value_at(grid, _field_from(zone["cell"]), context.player_cell)
+			if inside >= 0 and float(inside) <= held.radius:
+				zone["heal"] = float(zone.get("heal", held.zone_heal_every)) - delta
+				if float(zone["heal"]) <= 0.0:
+					zone["heal"] = held.zone_heal_every
+					var healed := health.heal(1)
+					if healed > 0:
+						player_healed.emit(healed)
+					sanctuary_healed.emit(context.player_cell)
 		if held.slow_sustained and held.slow_duration > 0.0:
 			_apply_chill(held, zone["cell"], context)
+		if held.entry_freeze > 0.0:
+			_freeze_entrants(zone, context)
 		if float(zone["tick"]) <= 0.0:
 			zone["tick"] = ZONE_TICK
 			# Les dégâts d'une zone sont exprimés PAR SECONDE : on n'en applique
@@ -1138,6 +1566,8 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		if target >= 0:
 			var toward := context.enemy_cells[target] - context.player_cell
 			context.player_facing = Vector2i(signi(toward.x), 0) if absi(toward.x) > absi(toward.y) else Vector2i(0, signi(toward.y))
+	# LA ROUE : le tir de l'attaque emporte l'élément de l'orbe en tête, puis elle tourne.
+	var wheel_shot := ability == stats.attack and _wheel_left > 0.0
 	var fired := false
 	match ability.kind:
 		Ability.Kind.HERO_TRANSFORM:
@@ -1151,7 +1581,11 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.PROJECTILE:
 			fired = _cast_projectile(ability, context)
 		Ability.Kind.BLAST:
-			fired = _cast_blast(ability, context)
+			if ability.toll_count > 0:
+				_tolls.append({"left": ability.toll_count, "timer": 0.0, "ability": ability})
+				fired = true
+			else:
+				fired = _cast_blast(ability, context)
 		Ability.Kind.ZONE:
 			fired = _cast_zone(ability, context)
 		Ability.Kind.SHIELD:
@@ -1165,12 +1599,18 @@ func use(ability: Ability, context: CombatContext) -> bool:
 				_immune_left = ability.duration
 				_rampart = ability if ability.reflect_damage > 0 else null
 				_veil = ability if ability.repel_cells > 0 else null
+				_eclipse = ability if ability.moon_ring_radius > 0.0 else null
+				_bastion = ability if ability.bastion_burst_damage > 0 else null
+				_throne_veil = ability if ability.veil_eyes_radius > 0.0 else null
 				player_made_immune.emit(ability.duration)
 			else:
 				health.add_shield(ability.damage)
 				_shield_left = ability.duration
 				_held_heal = ability.heal_if_held
-				_wings = ability if ability.blind_seconds > 0.0 else null
+				# L'Égide solaire renvoie chaque coup ; elle n'éclate pas comme les Ailes gardiennes.
+				_aegis = ability if ability.aegis_ray_damage > 0 else null
+				_aegis_seen = health.shield
+				_wings = ability if ability.blind_seconds > 0.0 and _aegis == null else null
 				player_shielded.emit(ability.damage, ability.duration)
 			fired = true
 		Ability.Kind.HEAL:
@@ -1194,6 +1634,9 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_summon(ability, context)
 		Ability.Kind.ECHO:
 			fired = _cast_echo(ability)
+		Ability.Kind.HOURGLASS when ability.rewind_heal_seconds > 0.0:
+			_rewind_wounds(ability)
+			fired = true
 		Ability.Kind.HOURGLASS:
 			_hourglass_left = ability.duration
 			_hourglass_health = health.current
@@ -1206,6 +1649,8 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.TRAIL:
 			_seep_left = ability.duration
 			_seep_life = ability.trail_life
+			_puddle_doses = maxi(1, ability.trail_doses)
+			_puddle_slow = ability.trail_slow
 			trail_started.emit(ability.duration)
 			fired = true
 		Ability.Kind.CONTAGION:
@@ -1221,6 +1666,11 @@ func use(ability: Ability, context: CombatContext) -> bool:
 			fired = _cast_starfall(ability, context)
 		Ability.Kind.PACT:
 			pact_signed.emit(context.player_cell)
+			# Le Pacte écarlate : l'onde de sang part de lui au moment du sacrifice.
+			if ability.damage > 0 and ability.radius > 0.0:
+				_apply_area(Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST,
+					"element": ability.element, "damage": ability.damage, "radius": ability.radius}),
+					context.player_cell, context, ability)
 			fired = true
 		Ability.Kind.POSSESS:
 			fired = _cast_possess(ability, context)
@@ -1249,7 +1699,7 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.GAOL:
 			fired = _cast_gaol(ability, context)
 		Ability.Kind.BLADES:
-			fired = _cast_blades(ability, context)
+			fired = _rain_feathers(ability, context) if ability.feather_rain > 0 else _cast_blades(ability, context)
 		Ability.Kind.ANVIL:
 			fired = _cast_anvil(ability, context)
 		Ability.Kind.SOULS:
@@ -1260,7 +1710,10 @@ func use(ability: Ability, context: CombatContext) -> bool:
 		Ability.Kind.BEAM:
 			fired = _cast_beam(ability, context)
 		Ability.Kind.DAWN:
-			_cast_dawn(ability, context)
+			if ability.sun_seconds > 0.0:
+				_cast_sun(ability)
+			else:
+				_cast_dawn(ability, context)
 			fired = true
 		Ability.Kind.FLIGHT:
 			fired = _cast_flight(ability)
@@ -1313,8 +1766,18 @@ func use(ability: Ability, context: CombatContext) -> bool:
 	#
 	# `empower_bonus` est une propriété de la COMPÉTENCE. N'importe laquelle
 	# peut donc en porter une, et c'est ici, au tronc commun, qu'on la lit.
+	if fired and wheel_shot:
+		if not _in_flight.is_empty():
+			_in_flight[-1]["wheel"] = _wheel_rank
+		_turn_wheel()
+	if fired and ability.double_echo:
+		_double_echo_left = ability.empower_duration
 	if fired and ability.eye_seconds > 0.0:
 		_open_eye(ability, context)
+	if fired and ability.eclipse_seconds > 0.0:
+		_fall_eclipse(ability, context)
+	if fired and _double_left > 0.0:
+		_shadow_repeats(ability, context)
 	if fired and ability == stats.attack and _surge_left > 0.0 and _surge_charges >= _surge_max:
 		_release_surge(ability, context)
 	if fired and ability.empower_bonus > 0 and ability.empower_duration > 0.0:
@@ -1370,6 +1833,9 @@ func find_target(ability: Ability, context: CombatContext) -> int:
 			if ability.from_sky else Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
 		if distance < 0 or distance > ability.range:
 			continue
+		# L'arène a choisi sa cible : à portée, elle passe avant le plus proche.
+		if i == context.focus:
+			return i
 		# Une maison ne poursuit personne. Entre un ennemi sur les talons et un
 		# repaire à abattre, c'est TOUJOURS l'ennemi qui prime : on l'obtient en
 		# reculant les structures derrière toutes les créatures à portée, sans
@@ -1418,9 +1884,11 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	# CE QUI TOMBE DU CIEL ne remonte pas le couloir : il part de lui et tombe sur la cible, après
 	# le même temps de chute à toute distance. Le chemin n'a donc que ses deux bouts.
 	if ability.from_sky:
-		var drop: Array[Vector2i] = [context.player_cell, context.enemy_cells[target]]
-		_in_flight.append({"ability": ability, "target": target, "time_left": ability.sky_fall})
-		projectile_launched.emit(ability, target, drop, ability.sky_fall)
+		_sky_drop(ability, target, context)
+		if ability.sky_twin:
+			var twin := _sky_neighbour(target, float(ability.range), context)
+			if twin >= 0:
+				_sky_drop(ability, twin, context)
 		return true
 	var path := trajectory(context.player_cell, context.enemy_cells[target])
 	if path.size() < 2:
@@ -1431,11 +1899,12 @@ func _cast_projectile(ability: Ability, context: CombatContext) -> bool:
 	# LA FLAMME DU CHÉRUBIN NE S'ARRÊTE PAS À SA CIBLE : la cible étant la plus proche, personne ne
 	# se tient avant elle. Elle continue le long du couloir jusqu'au bout de sa portée, et brûle
 	# ceux qui se pressent derrière.
+	var lane := path.duplicate()
 	if ability.pierce_line and path.size() >= 2:
 		path.append_array(_rolling_path(path[-1], path[-1] - path[-2], ability.range - (path.size() - 1)))
 	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
 	var duration := float(path.size() - 1) / speed
-	var shot := {"ability": ability, "target": target, "time_left": duration}
+	var shot := {"ability": ability, "target": target, "time_left": duration, "lane": lane}
 	if ability.pierce_line:
 		shot["line"] = path
 	_in_flight.append(shot)
@@ -1464,9 +1933,16 @@ func _launch_at(ability: Ability, target: int, context: CombatContext) -> void:
 	var path := trajectory(context.player_cell, context.enemy_cells[target])
 	if path.size() < 2:
 		path.append(context.enemy_cells[target])
+	# Les Langues voraces : chaque langue de la volée transperce aussi ce qui se tient derrière sa cible.
+	var lane := path.duplicate()
+	if ability.pierce_line and path.size() >= 2 and path[-1] != path[-2]:
+		path.append_array(_rolling_path(path[-1], path[-1] - path[-2], ability.range - (path.size() - 1)))
 	var speed := PROJECTILE_SPEED * maxf(0.15, ability.projectile_speed)
 	var duration := float(path.size() - 1) / speed
-	_in_flight.append({"ability": ability, "target": target, "time_left": duration})
+	var shot := {"ability": ability, "target": target, "time_left": duration, "lane": lane}
+	if ability.pierce_line:
+		shot["line"] = path
+	_in_flight.append(shot)
 	projectile_launched.emit(ability, target, path, duration)
 
 
@@ -1523,8 +1999,17 @@ func _fly_free_shot(shot: Dictionary, context: CombatContext) -> bool:
 
 
 func _cast_blast(ability: Ability, context: CombatContext) -> bool:
+	if ability.hole_seconds > 0.0:
+		return _open_hole(ability, context)
 	if ability.stun_seconds > 0.0:
 		_freeze_around(ability, context)
+	# L'Hiver de l'Abîme laisse une plaque de givre qui ralentit tant qu'on s'y tient.
+	if ability.frost_seconds > 0.0:
+		_cast_zone(Ability.make({"id": ability.id + "_givre", "display_name": ability.display_name,
+			"kind": Ability.Kind.ZONE, "element": ability.element, "damage": 0,
+			"radius": ability.radius, "duration": ability.frost_seconds,
+			"slow_factor": ability.slow_factor, "slow_duration": 0.6, "slow_sustained": true,
+			"zone_style": "givre_abime"}), context)
 	blast_fired.emit(ability, context.player_cell)
 	if ability.follow_wave > 0:
 		var wave := ability.duplicate() as Ability
@@ -1563,6 +2048,9 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 		zone_created.emit(id, residue, context.player_cell)
 	if ability.rain_count > 0:
 		_summon_rain(ability, context)
+		if ability.great_sword_damage > 0:
+			_great_swords.append({"cell": context.player_cell, "warned": false, "ability": ability,
+				"time_left": ability.rain_delay + ability.rain_duration + ability.rain_fall + GREAT_SWORD_PAUSE})
 	# LES GEYSERS, tous en même temps et au hasard du labyrinthe.
 	if ability.geyser_count > 0:
 		var floor_cells := grid.all_floor_cells()
@@ -1597,19 +2085,24 @@ func _cast_blast(ability: Ability, context: CombatContext) -> bool:
 	if ability.wrath_damage > 0:
 		_summon_wrath(ability, context)
 	if ability.heal_self > 0 and (not ability.heal_needs_hit or _blast_hits > 0):
-		var gained := health.heal(ability.heal_self)
+		var owed := mini(ability.heal_self, _blast_hits) if ability.heal_per_hit else ability.heal_self
+		var gained := health.heal(owed)
 		if gained > 0:
 			player_healed.emit(gained)
 	if ability.molten_seconds > 0.0:
 		_molten_left = ability.molten_seconds
-		health.plates = PLATE_MAX
-		plates_changed.emit(PLATE_MAX)
+		_molten_steps = ability.molten_steps_seconds
+		health.plates = plate_cap()
+		plates_changed.emit(health.plates)
 		molten_started.emit(ability.molten_seconds)
 	if ability.last_pact_seconds > 0.0:
 		_pact_owed = ceili(health.sacrifice(health.current - 1) * ability.last_pact_return)
 		health.immune = true
 		_immune_left = ability.last_pact_seconds
 		player_made_immune.emit(ability.last_pact_seconds)
+		if ability.pact_claw_damage > 0:
+			_claw_ability = ability
+			_claw_timer = ability.pact_claw_gap * 0.5
 	return true
 
 
@@ -1655,8 +2148,21 @@ func _summon_rain(ability: Ability, context: CombatContext) -> void:
 		var when := float(i) * ability.rain_duration / float(maxi(1, ability.rain_count)) \
 			if ability.rain_hunts else _rng.randf_range(0.0, ability.rain_duration)
 		var fall := ability.rain_delay + when + ability.rain_fall
-		_meteors.append({"cell": cell, "time_left": fall, "ability": ability})
+		var meteor := {"cell": cell, "time_left": fall, "ability": ability}
+		# LA GENÈSE : chaque météore prend l'élément suivant de la roue.
+		if ability.rain_elements:
+			meteor["rank"] = i % SEAL_ORDER.size()
+		# LA PLUIE QUI VISE CHOISIT SA PROIE AU DÉPART, pas au lancement : la dernière météore part plusieurs
+		# secondes après le geste, et les ennemis ont bougé. Elle est annoncée quand elle commence à tomber.
+		if ability.rain_hunts:
+			meteor["turn"] = i
+			_meteors.append(meteor)
+			continue
+		_meteors.append(meteor)
 		meteor_incoming.emit(cell, fall, ability)
+	if ability.nova_damage > 0:
+		_novas.append({"ability": ability, "time_left": ability.rain_delay
+			+ ability.rain_duration + ability.rain_fall + NOVA_PAUSE})
 
 
 ## Ouvre le séisme d'un sort. Sorti de `_cast_blast` parce qu'il n'y part plus
@@ -1688,6 +2194,12 @@ func _start_quake(ability: Ability) -> void:
 func _update_meteors(delta: float, context: CombatContext) -> void:
 	for i in range(_meteors.size() - 1, -1, -1):
 		_meteors[i]["time_left"] = float(_meteors[i]["time_left"]) - delta
+		if _meteors[i].has("turn") and float(_meteors[i]["time_left"]) <= (_meteors[i]["ability"] as Ability).rain_fall:
+			_aim_meteor(_meteors[i], context)
+		# Elle suit sa proie jusqu'au sol ; morte en route, elle tombe là où celle-ci est tombée.
+		var prey := int(_meteors[i].get("target", -1))
+		if context.enemy_alive(prey) and prey < context.enemy_cells.size():
+			_meteors[i]["cell"] = context.enemy_cells[prey]
 		if float(_meteors[i]["time_left"]) > 0.0:
 			continue
 		var meteor: Dictionary = _meteors[i]
@@ -1706,8 +2218,55 @@ func _update_meteors(delta: float, context: CombatContext) -> void:
 			"damage": source.rain_damage, "radius": source.rain_radius,
 			"is_ultimate": true,
 		})
+		if meteor.has("rank"):
+			strike.element = rank_element(int(meteor["rank"]))
+			element_meteor_struck.emit(cell, int(meteor["rank"]), source.rain_radius)
 		meteor_landed.emit(cell, source)
 		_apply_area(strike, cell, context)
+
+
+## Une météore de la pluie qui vise part : elle prend pour proie, à tour de rôle, les ennemis VIVANTS à cet
+## instant, du plus proche du mage au plus loin. Le nombre de météores étant fixe, moins il en reste, plus chacun
+## en reçoit. Personne : elle tombe près du mage, pour que l'ultime se voie.
+## Le champ visible autour du mage, en cases de chaque côté (la vue fait environ 40 x 22).
+const HUNT_VIEW := Vector2i(12, 7)
+
+
+func _aim_meteor(meteor: Dictionary, context: CombatContext) -> void:
+	var turn := int(meteor["turn"])
+	meteor.erase("turn")
+	var source: Ability = meteor["ability"]
+	var last := context.structures_from if context.structures_from >= 0 else context.enemy_cells.size()
+	# Ceux qu'on VOIT d'abord : une météore sur un ennemi hors de l'écran est une météore perdue pour le joueur.
+	var alive: Array = []
+	var far: Array = []
+	for i in mini(last, context.enemy_cells.size()):
+		if context.enemy_alive(i):
+			var offset := context.enemy_cells[i] - context.player_cell
+			var entry := [offset.length_squared(), i]
+			if absi(offset.x) <= HUNT_VIEW.x and absi(offset.y) <= HUNT_VIEW.y:
+				alive.append(entry)
+			else:
+				far.append(entry)
+	if alive.is_empty():
+		alive = far
+	alive.sort_custom(func(a: Array, b: Array) -> bool:
+		return int(a[0]) < int(b[0]) or (int(a[0]) == int(b[0]) and int(a[1]) < int(b[1])))
+	var index := -1
+	if not alive.is_empty():
+		index = int(alive[turn % alive.size()][1])
+		meteor["target"] = index
+		meteor["cell"] = context.enemy_cells[index]
+	else:
+		var near: Array[Vector2i] = []
+		for cell in grid.all_floor_cells():
+			if absi(cell.x - context.player_cell.x) <= 8 and absi(cell.y - context.player_cell.y) <= 5:
+				near.append(cell)
+		if not near.is_empty():
+			meteor["cell"] = near[_rng.randi_range(0, near.size() - 1)]
+	meteor_incoming.emit(meteor["cell"], maxf(0.0, float(meteor["time_left"])), source)
+	if index >= 0:
+		meteor_aimed.emit(index)
 
 
 ## LES QUATRE SCEAUX du Sorcier Suprême, dans l'ordre où ils se posent.
@@ -1831,19 +2390,26 @@ func _cast_seals(ability: Ability, context: CombatContext) -> bool:
 	for entry in SEAL_ORDER:
 		if grid.is_floor_v(context.player_cell + entry["step"]):
 			sides += 1
-	var cells: Array = _seal_ring_cells(ability, context) if sides >= SEAL_OPEN_SIDES \
-		else _seal_sweep_cells(ability, context)
+	var cells: Array = _seal_ring_cells(ability, context) \
+		if sides >= SEAL_OPEN_SIDES or ability.seals_follow else _seal_sweep_cells(ability, context)
 
 	var planted := 0
 	for rank in SEAL_ORDER.size():
 		var cell: Variant = cells[rank] if rank < cells.size() else null
+		# LA COURONNE garde ses quatre sceaux : bouché, un sceau se serre contre lui au lieu de disparaître.
+		if cell == null and ability.seals_follow:
+			cell = context.player_cell
 		if cell == null:
 			continue
 		var id := _next_zone_id
 		_next_zone_id += 1
 		var seal := _seal_of(ability, SEAL_ORDER[rank]["element"])
-		_zones.append({"id": id, "ability": seal, "cell": cell,
-			"time_left": seal.duration, "tick": 0.0})
+		var placed := {"id": id, "ability": seal, "cell": cell,
+			"time_left": seal.duration, "tick": 0.0}
+		if ability.seals_follow:
+			placed["orbit"] = SEAL_ORDER[rank]["step"]
+			placed["ring"] = ability.seal_ring
+		_zones.append(placed)
 		zone_created.emit(id, seal, cell)
 		planted += 1
 	return planted > 0
@@ -2548,6 +3114,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		return false
 	if ability.hop_count > 0 and _hop(ability, context):
 		return true
+	if ability.swap_with_summon and _swap_with_summon(context):
+		return true
 	var destination := context.player_cell
 	var facing := -context.player_facing if ability.backward else context.player_facing
 	if ability.rewind_seconds > 0.0:
@@ -2555,6 +3123,8 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		if destination == context.player_cell:
 			use_refused.emit("immobile")
 			return false
+		if ability.clock_bomb_delay > 0.0:
+			_set_clock_bomb(context.player_cell, ability)
 		blink_performed.emit(context.player_cell, destination)
 		return true
 	if ability.follows_corridor:
@@ -2570,6 +3140,17 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 			if grid.is_floor_v(far) and not grid.is_occupied(far):
 				destination = far
 				break
+		# LE PAS DE L'OMBRE marque tout ce qui se tient sur la ligne du passage, haies comprises.
+		if ability.blink_mark_seconds > 0.0 and destination != context.player_cell:
+			var crossed := []
+			var at: Vector2i = context.player_cell
+			while at != destination:
+				at += facing
+				crossed.append(at)
+			for i in context.enemy_cells.size():
+				if context.enemy_alive(i) and not context.is_structure(i) and crossed.has(context.enemy_cells[i]):
+					_marked[i] = ability.blink_mark_seconds
+					enemy_marked.emit(i, ability.blink_mark_seconds)
 	else:
 		for step in ability.range:
 			var next: Vector2i = destination + facing
@@ -2580,8 +3161,10 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 		use_refused.emit("mur")
 		return false
 	if ability.cloud_duration > 0.0:
-		_cloud_zone(context.player_cell, ability)
+		_cloud_zone(destination if ability.cloud_at_arrival else context.player_cell, ability)
 	blink_performed.emit(context.player_cell, destination)
+	if ability.flock_damage > 0:
+		_flock_strike(context.player_cell, destination, ability, context)
 	# La Plongée du phénix explose là où il part, puis là où il arrive.
 	if ability.end_blast_damage > 0:
 		var blast := Ability.make({"id": ability.id + "_eclat", "kind": Ability.Kind.BLAST,
@@ -2593,12 +3176,22 @@ func _cast_blink(ability: Ability, context: CombatContext) -> bool:
 			_erupt_at(blast, destination, ability, context)
 		else:
 			_apply_area(blast, destination, context)
+		# Le Pas de l'Abîme : l'onde de givre fige ce qui l'attendait.
+		if ability.end_blast_stun > 0.0:
+			frost_wave.emit(destination, ability.end_blast_radius)
+			_freeze_around(Ability.make({"id": ability.id + "_onde", "kind": Ability.Kind.BLAST,
+				"element": ability.element, "radius": ability.end_blast_radius,
+				"stun_seconds": ability.end_blast_stun}), context, destination)
 	if ability.blind_radius > 0:
 		_blind_around(destination, ability, context)
 	if ability.trail_damage > 0:
 		_burn_trail(context.player_cell, destination, ability, context)
+	if ability.blink_star and _constellation_ability() != null and not _star_at(destination):
+		_plant_star(destination, _constellation_ability())
 	if ability.decoy_seconds > 0.0:
 		_pose_decoy(context.player_cell, ability)
+	if ability.element_ray_damage > 0:
+		_cast_element_rays(destination, ability, context)
 	return true
 
 
@@ -2646,7 +3239,25 @@ func _cast_echo(ability: Ability) -> bool:
 	_walkers.append({"ability": ability, "cells": cells, "times": times,
 		"elapsed": 0.0, "at": 0, "hit": {}})
 	echo_walked.emit(ability, cells, times)
+	# LE PARADOXE : un second double rejoue une marche plus longue, en même temps que le premier.
+	if ability.echo_second_seconds > 0.0:
+		_walk_double(ability, ability.echo_second_seconds)
 	return true
+
+
+func _walk_double(ability: Ability, seconds: float) -> void:
+	var recent := _trail_since(seconds)
+	if recent.size() < 2:
+		return
+	var cells: Array = []
+	var times: Array = []
+	var start := float(recent[1]["time"]) - 0.2
+	for i in recent.size():
+		cells.append(recent[i]["cell"])
+		times.append(maxf(0.0, float(recent[i]["time"]) - start) if i > 0 else 0.0)
+	_walkers.append({"ability": ability, "cells": cells, "times": times,
+		"elapsed": 0.0, "at": 0, "hit": {}})
+	echo_walked.emit(ability, cells, times)
 
 
 ## Le double frappe ce qui se tient sur sa case ou la touche, une seule fois par créature.
@@ -2669,6 +3280,13 @@ func _update_walkers(delta: float, context: CombatContext) -> void:
 				_apply_damage(i, walker["ability"], context)
 		if float(walker["elapsed"]) >= float(times[-1]):
 			_walkers.remove_at(w)
+			var source: Ability = walker["ability"]
+			if source.echo_end_damage > 0:
+				var last: Vector2i = walker["cells"][-1]
+				echo_burst.emit(last, source.echo_end_radius)
+				_apply_area(Ability.make({"id": source.id + "_onde", "kind": Ability.Kind.BLAST,
+					"element": source.element, "damage": source.echo_end_damage,
+					"radius": source.echo_end_radius}), last, context, null, false, false)
 
 
 func _update_hourglass(delta: float) -> void:
@@ -2689,6 +3307,10 @@ func _update_hourglass(delta: float) -> void:
 ## eux, lisent `time_factor_at` et `time_stop_left`.
 func _stop_time(ability: Ability, context: CombatContext) -> void:
 	_time_stop_left = ability.duration
+	if ability.judgement_ratio > 0.0:
+		_judgement_left = ability.duration
+		_judgement_ability = ability
+		_judgement_bank.clear()
 	for i in context.enemy_cells.size():
 		if context.enemy_alive(i) and not context.is_structure(i):
 			enemy_staggered.emit(i, ability.duration)
@@ -2712,6 +3334,1017 @@ func time_factor_at(cell: Vector2i) -> float:
 	return factor
 
 
+# --- Le Seigneur des Heures (l'Éveil du Chronomancien) -----------------------------
+
+## TEMPS ACCÉLÉRÉ : pendant `seconds`, ses recharges courent à `factor` fois l'allure du monde.
+func start_haste(seconds: float, factor: float) -> void:
+	_haste_left = seconds
+	_haste_factor = factor
+	haste_changed.emit(true)
+
+
+func stop_haste() -> void:
+	if _haste_left <= 0.0:
+		return
+	_haste_left = 0.0
+	haste_changed.emit(false)
+
+
+func haste_active() -> bool:
+	return _haste_left > 0.0
+
+
+func _update_hours(delta: float, context: CombatContext) -> void:
+	if _haste_left > 0.0:
+		_haste_left = maxf(0.0, _haste_left - delta)
+		if _haste_left <= 0.0:
+			haste_changed.emit(false)
+	for i in range(_clock_bombs.size() - 1, -1, -1):
+		var bomb: Dictionary = _clock_bombs[i]
+		bomb["left"] = float(bomb["left"]) - delta
+		if float(bomb["left"]) > 0.0:
+			continue
+		_clock_bombs.remove_at(i)
+		var source: Ability = bomb["ability"]
+		var cell: Vector2i = bomb["cell"]
+		clock_bomb_rang.emit(int(bomb["id"]), cell, source.clock_bomb_radius)
+		var ring := Ability.make({"id": source.id + "_bombe", "kind": Ability.Kind.BLAST,
+			"element": source.element, "damage": source.clock_bomb_damage,
+			"radius": source.clock_bomb_radius, "stun_seconds": source.clock_bomb_stun})
+		# Figées AVANT les dégâts : une créature que la sonnerie tue n'est pas comptée parmi les figées.
+		if source.clock_bomb_stun > 0.0:
+			_freeze_around(ring, context, cell)
+		_apply_area(ring, cell, context, null, false, false)
+	if _judgement_left > 0.0:
+		_judgement_left = maxf(0.0, _judgement_left - delta)
+		if _judgement_left <= 0.0:
+			_release_judgement(context)
+
+
+## Midi sonne : chaque créature reçoit d'un coup tout ce qui s'est accumulé sur elle, multiplié.
+func _release_judgement(context: CombatContext) -> void:
+	var ability := _judgement_ability
+	var bank := _judgement_bank.duplicate()
+	_judgement_bank.clear()
+	_judgement_ability = null
+	if ability == null:
+		return
+	var hits := {}
+	for index: int in bank:
+		if context.enemy_alive(index):
+			hits[index] = maxi(1, int(round(float(bank[index]) * ability.judgement_ratio)))
+	judgement_fell.emit(hits)
+	for index: int in hits:
+		_apply_damage(index, Ability.make({"id": ability.id + "_midi", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": int(hits[index])}), context, false, false)
+
+
+func judgement_left() -> float:
+	return _judgement_left
+
+
+func _set_clock_bomb(cell: Vector2i, ability: Ability) -> void:
+	_next_bomb += 1
+	_clock_bombs.append({"id": _next_bomb, "cell": cell, "left": ability.clock_bomb_delay,
+		"ability": ability})
+	clock_bomb_set.emit(_next_bomb, cell, ability.clock_bomb_delay)
+
+
+## Les PV, notés à chaque changement : le Rembobinage lit ce qu'il avait il y a quelques secondes.
+func _record_health() -> void:
+	if health == null:
+		return
+	if _health_log.is_empty() or int(_health_log[-1][1]) != health.current:
+		_health_log.append([_clock, health.current])
+	while _health_log.size() > 1 and float(_health_log[1][0]) < _clock - TRAIL_KEEP:
+		_health_log.pop_front()
+
+
+## Les PV qu'il avait il y a `seconds`. Plus tôt que le premier relevé : le premier relevé.
+func health_at_past(seconds: float) -> int:
+	if _health_log.is_empty():
+		return health.current
+	var cutoff := _clock - seconds
+	var value := int(_health_log[0][1])
+	for entry: Array in _health_log:
+		if float(entry[0]) <= cutoff:
+			value = int(entry[1])
+	return value
+
+
+func _rewind_wounds(ability: Ability) -> void:
+	_record_health()
+	var lost := maxi(0, health_at_past(ability.rewind_heal_seconds) - health.current)
+	var healed := health.heal(lost) if lost > 0 else 0
+	if healed > 0:
+		player_healed.emit(healed)
+	# Le relevé repart d'ici : un second Rembobinage ne rend pas deux fois les mêmes blessures.
+	_health_log = [[_clock, health.current]]
+	wounds_rewound.emit(healed)
+
+
+## LE DÔME DE STASE fige net, une fois, chaque créature qui entre ; les boss ne se figent pas.
+func _freeze_entrants(zone: Dictionary, context: CombatContext) -> void:
+	var ability: Ability = zone["ability"]
+	if not zone.has("frozen"):
+		zone["frozen"] = {}
+	var frozen: Dictionary = zone["frozen"]
+	var field := _field_from(zone["cell"])
+	for i in context.enemy_cells.size():
+		if frozen.has(i) or not context.enemy_alive(i) or context.is_structure(i) \
+				or context.bosses.has(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.radius:
+			continue
+		frozen[i] = true
+		enemy_staggered.emit(i, ability.entry_freeze)
+		stasis_caught.emit(i, ability.entry_freeze)
+
+
+# --- Le Seigneur du Fléau (l'Éveil du Mage de la Peste) ------------------------------
+
+## LE MIASME : pendant `seconds`, chaque créature collée à lui prend une dose toutes les `every` secondes, et
+## le poison monte à `cap` doses.
+func start_miasma(seconds: float, every: float, cap: int) -> void:
+	_miasma_left = seconds
+	_miasma_every = every
+	_miasma_tick = every
+	_miasma_cap = cap
+	miasma_changed.emit(true)
+
+
+func stop_miasma() -> void:
+	if _miasma_left <= 0.0:
+		return
+	_miasma_left = 0.0
+	_miasma_cap = VENOM_MAX
+	miasma_changed.emit(false)
+
+
+func miasma_active() -> bool:
+	return _miasma_left > 0.0
+
+
+## Le plafond des doses : 3, ou celui du Miasme tant qu'il dure.
+func venom_cap() -> int:
+	return _miasma_cap if _miasma_left > 0.0 else VENOM_MAX
+
+
+func _update_miasma(delta: float, context: CombatContext) -> void:
+	if _miasma_left <= 0.0:
+		return
+	_miasma_left -= delta
+	if _miasma_left <= 0.0:
+		_miasma_left = 0.0
+		_miasma_cap = VENOM_MAX
+		miasma_changed.emit(false)
+		return
+	_miasma_tick -= delta
+	if _miasma_tick > 0.0:
+		return
+	_miasma_tick = _miasma_every
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var gap: Vector2i = context.enemy_cells[i] - context.player_cell
+		if absi(gap.x) + absi(gap.y) <= 1:
+			_add_venom(i, context)
+			miasma_bit.emit(i)
+
+
+# --- L'Archimage Primordial (l'Éveil du Sorcier Suprême) ------------------------------
+
+## La lumière de l'origine attend ce temps après la dernière météore.
+const NOVA_PAUSE := 0.4
+## Les éclats de la Grande Convergence vont chercher leurs cibles jusqu'à cette distance de l'impact.
+const SHARD_RANGE := 6
+
+
+## LA ROUE DES ÉLÉMENTS : pendant `seconds`, chaque coup porte le trait de l'orbe en tête, et l'attaque fait
+## tourner la roue. Elle part du feu.
+func start_wheel(seconds: float) -> void:
+	_wheel_left = seconds
+	_wheel_rank = 0
+	wheel_changed.emit(true)
+	wheel_turned.emit(_wheel_rank)
+
+
+func stop_wheel() -> void:
+	if _wheel_left <= 0.0:
+		return
+	_wheel_left = 0.0
+	wheel_changed.emit(false)
+
+
+func wheel_active() -> bool:
+	return _wheel_left > 0.0
+
+
+## L'orbe en tête : 0 feu, 1 eau, 2 terre, 3 air, l'ordre des Quatre Sceaux.
+func wheel_rank() -> int:
+	return _wheel_rank
+
+
+static func rank_element(rank: int) -> Element.Kind:
+	return SEAL_ORDER[posmod(rank, SEAL_ORDER.size())]["element"]
+
+
+func _turn_wheel() -> void:
+	_wheel_rank = (_wheel_rank + 1) % SEAL_ORDER.size()
+	wheel_turned.emit(_wheel_rank)
+
+
+func _update_wheel(delta: float) -> void:
+	if _double_echo_left > 0.0:
+		_double_echo_left = maxf(0.0, _double_echo_left - delta)
+	if _wheel_left <= 0.0:
+		return
+	_wheel_left -= delta
+	if _wheel_left <= 0.0:
+		_wheel_left = 0.0
+		wheel_changed.emit(false)
+
+
+## LA GRANDE CONVERGENCE se brise : un éclat par élément, chacun sur une créature proche de l'impact, par les
+## couloirs. Moins de cibles que d'éclats : les mêmes en prennent plusieurs.
+func _break_into_shards(cell: Vector2i, ability: Ability, context: CombatContext) -> void:
+	var field := _field_from(cell)
+	var scored: Array = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or distance > SHARD_RANGE:
+			continue
+		scored.append([distance, i])
+	scored.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	var targets: Array = []
+	var ranks: Array = []
+	var struck: Array[int] = []
+	for k in ability.element_shards:
+		if scored.is_empty():
+			break
+		var index := int(scored[k % scored.size()][1])
+		targets.append(context.enemy_cells[index])
+		ranks.append(k % SEAL_ORDER.size())
+		struck.append(index)
+	element_shards_flew.emit(cell, targets, ranks)
+	for k in struck.size():
+		_apply_damage(struck[k], Ability.make({"id": ability.id + "_eclat", "display_name": "Éclat",
+			"kind": Ability.Kind.PROJECTILE, "element": rank_element(int(ranks[k])),
+			"damage": ability.element_shard_damage}), context, true, false)
+
+
+## LE PAS DES ÉLÉMENTS : de la case d'arrivée, un rayon de chaque élément part dans chaque couloir ouvert, et
+## frappe une fois chaque créature qu'il traverse, avec le trait de son élément.
+func _cast_element_rays(from: Vector2i, ability: Ability, context: CombatContext) -> void:
+	var paths: Array = []
+	var ranks: Array = []
+	var hit := {}
+	for rank in SEAL_ORDER.size():
+		var step: Vector2i = SEAL_ORDER[rank]["step"]
+		if not grid.is_floor_v(from + step):
+			continue
+		var path := _corridor_ahead(from, step, ability.element_ray_range)
+		if path.is_empty():
+			continue
+		paths.append(path)
+		ranks.append(rank)
+		var ray := Ability.make({"id": ability.id + "_rayon", "display_name": "Rayon",
+			"kind": Ability.Kind.LINE, "element": rank_element(rank),
+			"damage": ability.element_ray_damage})
+		for i in context.enemy_cells.size():
+			if hit.has(i) or not context.enemy_alive(i) or not path.has(context.enemy_cells[i]):
+				continue
+			hit[i] = true
+			_apply_damage(i, ray, context, true, false)
+	element_rays_cast.emit(from, paths, ranks)
+
+
+## LA LUMIÈRE DE L'ORIGINE : quand la dernière météore de la Genèse est tombée, tout ce qui est autour de lui,
+## à vol d'oiseau, la prend.
+func _update_novas(delta: float, context: CombatContext) -> void:
+	for i in range(_novas.size() - 1, -1, -1):
+		_novas[i]["time_left"] = float(_novas[i]["time_left"]) - delta
+		if float(_novas[i]["time_left"]) > 0.0:
+			continue
+		var source: Ability = _novas[i]["ability"]
+		_novas.remove_at(i)
+		primal_nova.emit(context.player_cell, source.nova_radius)
+		_apply_area(Ability.make({"id": source.id + "_nova", "display_name": "Lumière de l'origine",
+			"kind": Ability.Kind.BLAST, "element": source.element, "damage": source.nova_damage,
+			"radius": source.nova_radius, "pierces_walls": true, "is_ultimate": true}),
+			context.player_cell, context)
+
+
+# --- L'Étoile du Matin (l'Éveil du Porte-Lumière) ----------------------------------
+
+## L'Éblouissement : un coup sur une créature aveuglée fait autant en plus.
+const DAZZLE_BONUS := 0.3
+## Collée à lui plus longtemps que ça, une créature est aveuglée (sans passer outre `_blind_locks`).
+const DAZZLE_CONTACT := 1.0
+const DAZZLE_BLIND := 2.0
+## Le Soleil de midi frappe à ce rythme, tout ce qui est dans ce champ autour du mage (la vue fait environ 40 x 22).
+const SUN_EVERY := 1.0
+const SUN_VIEW := Vector2i(12, 7)
+const SUN_BLIND := 1.4
+
+
+func start_dazzle(seconds: float) -> void:
+	_dazzle_left = seconds
+	_contact.clear()
+	dazzle_changed.emit(true)
+
+
+func stop_dazzle() -> void:
+	if _dazzle_left <= 0.0:
+		return
+	_dazzle_left = 0.0
+	_contact.clear()
+	dazzle_changed.emit(false)
+
+
+func dazzle_active() -> bool:
+	return _dazzle_left > 0.0
+
+
+## Cette créature est-elle aveuglée en ce moment ? Le verrou porte la durée de l'aveuglement PLUS `BLIND_LOCK`.
+func is_blinded(index: int) -> bool:
+	return float(_blind_locks.get(index, 0.0)) > BLIND_LOCK
+
+
+func _cast_sun(ability: Ability) -> void:
+	_sun = {"left": ability.sun_seconds, "tick": 0.0, "ability": ability}
+	sun_risen.emit(ability.sun_seconds)
+
+
+## L'Égide a encaissé un coup : un rayon part vers la créature la plus proche, la blesse et l'aveugle.
+func _answer_aegis(context: CombatContext) -> void:
+	var attacker := _nearest_in_reach(context.player_cell, REFLECT_REACH, context)
+	if attacker < 0 or _aegis == null:
+		return
+	aegis_ray.emit(context.player_cell, context.enemy_cells[attacker])
+	_apply_damage(attacker, Ability.make({"id": _aegis.id + "_rayon", "kind": Ability.Kind.PROJECTILE,
+		"element": _aegis.element, "damage": _aegis.aegis_ray_damage}), context, false, false)
+	if _aegis.blind_seconds > 0.0:
+		_blind(attacker, _aegis.blind_seconds, context)
+
+
+func _update_morning_star(delta: float, context: CombatContext) -> void:
+	if _dazzle_left > 0.0:
+		_dazzle_left -= delta
+		if _dazzle_left <= 0.0:
+			stop_dazzle()
+		else:
+			for i in context.enemy_cells.size():
+				if not context.enemy_alive(i) or context.is_structure(i):
+					_contact.erase(i)
+					continue
+				var gap := context.enemy_cells[i] - context.player_cell
+				if absi(gap.x) + absi(gap.y) > 1:
+					_contact.erase(i)
+					continue
+				_contact[i] = float(_contact.get(i, 0.0)) + delta
+				if float(_contact[i]) >= DAZZLE_CONTACT:
+					_contact[i] = 0.0
+					_blind(i, DAZZLE_BLIND, context)
+	for w in range(_light_walls.size() - 1, -1, -1):
+		var wall: Dictionary = _light_walls[w]
+		wall["time_left"] = float(wall["time_left"]) - delta
+		wall["tick"] = float(wall["tick"]) - delta
+		if float(wall["time_left"]) <= 0.0:
+			_light_walls.remove_at(w)
+			continue
+		if float(wall["tick"]) > 0.0:
+			continue
+		wall["tick"] = ZONE_TICK
+		var lance: Ability = wall["ability"]
+		var burn := Ability.make({"id": lance.id + "_mur", "kind": Ability.Kind.ZONE, "element": lance.element,
+			"damage": int(round(lance.linger_damage * ZONE_TICK))})
+		var cells: Array = wall["cells"]
+		for i in context.enemy_cells.size():
+			if context.enemy_alive(i) and not context.is_structure(i) and cells.has(context.enemy_cells[i]):
+				_apply_damage(i, burn, context, false, false)
+				_blind(i, lance.blind_seconds, context)
+	if _sun.is_empty():
+		return
+	_sun["left"] = float(_sun["left"]) - delta
+	_sun["tick"] = float(_sun["tick"]) - delta
+	var sun: Ability = _sun["ability"]
+	if float(_sun["tick"]) <= 0.0 and float(_sun["left"]) > 0.0:
+		_sun["tick"] = SUN_EVERY
+		var ray := Ability.make({"id": sun.id + "_rayon", "kind": Ability.Kind.PROJECTILE, "element": sun.element,
+			"damage": sun.sun_damage, "is_ultimate": true})
+		var struck: Array = []
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			var offset := context.enemy_cells[i] - context.player_cell
+			if absi(offset.x) > SUN_VIEW.x or absi(offset.y) > SUN_VIEW.y:
+				continue
+			struck.append(context.enemy_cells[i])
+			_apply_damage(i, ray, context, false, false)
+			_blind(i, SUN_BLIND, context, true)
+		sun_rays.emit(struck)
+	if float(_sun["left"]) <= 0.0:
+		_sun = {}
+		sun_set.emit(context.player_cell, sun.sun_end_radius)
+		_apply_area(Ability.make({"id": sun.id + "_vague", "display_name": "Vague de midi",
+			"kind": Ability.Kind.BLAST, "element": sun.element, "damage": sun.sun_end_damage,
+			"radius": sun.sun_end_radius, "pierces_walls": true, "is_ultimate": true}),
+			context.player_cell, context)
+
+
+# --- Le Faucheur des Âmes (l'Éveil de l'Ange de la Mort) --------------------------------
+
+## La Récolte : la Sentence achève sous ce seuil, et il garde jusqu'à `HARVEST_SOULS` âmes.
+const HARVEST_BELOW := 0.25
+const HARVEST_SOULS := 6
+## Une âme en orbite frappe pour autant, et ne revient sur la même créature qu'après ce temps.
+const HARVEST_SOUL_DAMAGE := 30
+const HARVEST_GUARD_LOCK := 1.0
+## Minuit : le temps entre l'aller et le retour de la faux.
+const HOUR_RETURN_GAP := 0.6
+
+
+func start_harvest() -> void:
+	_harvest = true
+	_guard_locks.clear()
+	harvest_changed.emit(true)
+
+
+func stop_harvest() -> void:
+	if not _harvest:
+		return
+	_harvest = false
+	_guard_locks.clear()
+	if _souls > SOUL_MAX:
+		_souls = SOUL_MAX
+		souls_changed.emit(_souls)
+	harvest_changed.emit(false)
+
+
+func harvest_active() -> bool:
+	return _harvest
+
+
+# --- Le Séraphin (l'Éveil de l'Archange du Ciel) -----------------------------------------
+
+func start_skies() -> void:
+	_skies = true
+	skies_changed.emit(true)
+
+
+func stop_skies() -> void:
+	if not _skies:
+		return
+	_skies = false
+	_sky_marks.clear()
+	skies_changed.emit(false)
+
+
+func skies_active() -> bool:
+	return _skies
+
+
+## CE QUI TOMBE DU CIEL ne remonte pas le couloir : il part de lui et tombe sur la cible, après le même temps de
+## chute à toute distance. Le chemin n'a donc que ses deux bouts.
+func _sky_drop(ability: Ability, target: int, context: CombatContext) -> void:
+	var drop: Array[Vector2i] = [context.player_cell, context.enemy_cells[target]]
+	_in_flight.append({"ability": ability, "target": target, "time_left": ability.sky_fall, "lane": drop})
+	projectile_launched.emit(ability, target, drop, ability.sky_fall)
+
+
+## L'ennemi le plus proche de lui, à vol d'oiseau et à portée, autre que `skip`.
+func _sky_neighbour(skip: int, reach: float, context: CombatContext) -> int:
+	var best := -1
+	var nearest := reach + 0.5
+	for i in context.enemy_cells.size():
+		if i == skip or not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := float(_sky_distance(context.player_cell, context.enemy_cells[i]))
+		if distance < nearest:
+			nearest = distance
+			best = i
+	return best
+
+
+## LA PLUIE DE PLUMES : une plume tombe du ciel sur chacun des plus proches, à vol d'oiseau.
+func _rain_feathers(ability: Ability, context: CombatContext) -> bool:
+	var prey: Array = []
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := _sky_distance(context.player_cell, context.enemy_cells[i])
+		if distance <= ability.range:
+			prey.append([distance, i])
+	if prey.is_empty():
+		use_refused.emit("cible")
+		return false
+	prey.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	var feather := Ability.make({"id": ability.id, "kind": Ability.Kind.PROJECTILE, "element": ability.element,
+		"damage": ability.damage, "from_sky": true, "sky_fall": 0.4, "projectile_visual": "plume_seraphin"})
+	for n in mini(ability.feather_rain, prey.size()):
+		_sky_drop(feather, int(prey[n][1]), context)
+	return true
+
+
+func _update_skies(delta: float, context: CombatContext) -> void:
+	for index in _sky_marks.keys():
+		_sky_marks[index] = float(_sky_marks[index]) - delta
+		if float(_sky_marks[index]) <= 0.0:
+			_sky_marks.erase(index)
+	# La colonne restée allumée brûle ce qui est sur sa case et autour, une fois par tick.
+	for c in range(_columns.size() - 1, -1, -1):
+		var column: Dictionary = _columns[c]
+		column["left"] = float(column["left"]) - delta
+		column["tick"] = float(column["tick"]) - delta
+		var ability: Ability = column["ability"]
+		if float(column["tick"]) <= 0.0:
+			column["tick"] = ZONE_TICK
+			var burn := Ability.make({"id": ability.id + "_reste", "kind": Ability.Kind.ZONE,
+				"element": ability.element, "damage": maxi(1, int(round(float(ability.column_burn) * ZONE_TICK)))})
+			for i in _creatures_within(column["cell"], 1.0, context):
+				_apply_damage(i, burn, context, false, false)
+		if float(column["left"]) <= 0.0:
+			_columns.remove_at(c)
+	# Les lances de l'Ascension, tant qu'il vole.
+	if _flight != null and _flight.flight_lance_gap > 0.0:
+		_flight_lance_timer -= delta
+		if _flight_lance_timer <= 0.0:
+			_flight_lance_timer = _flight.flight_lance_gap
+			var prey := _sky_neighbour(-1, FLIGHT_LANCE_REACH, context)
+			if prey >= 0:
+				_sky_drop(Ability.make({"id": _flight.id + "_lance", "kind": Ability.Kind.PROJECTILE,
+					"element": _flight.element, "damage": _flight.flight_lance_damage, "from_sky": true,
+					"sky_fall": 0.35, "projectile_visual": "lance_celeste"}), prey, context)
+	else:
+		_flight_lance_timer = 0.0
+	# L'épée géante : elle s'annonce, puis frappe tout autour de lui à vol d'oiseau.
+	for g in range(_great_swords.size() - 1, -1, -1):
+		var sword: Dictionary = _great_swords[g]
+		sword["time_left"] = float(sword["time_left"]) - delta
+		var ability: Ability = sword["ability"]
+		if not bool(sword["warned"]) and float(sword["time_left"]) <= GREAT_SWORD_LEAD:
+			sword["warned"] = true
+			sword["cell"] = context.player_cell
+			great_sword_falling.emit(sword["cell"], GREAT_SWORD_LEAD, ability.great_sword_radius)
+		if float(sword["time_left"]) > 0.0:
+			continue
+		_great_swords.remove_at(g)
+		great_sword_struck.emit(sword["cell"], ability.great_sword_radius)
+		var cut := Ability.make({"id": ability.id + "_epee", "kind": Ability.Kind.BLAST, "element": ability.element,
+			"damage": ability.great_sword_damage})
+		for i in _creatures_in_sky(sword["cell"], ability.great_sword_radius, context):
+			_apply_damage(i, cut, context, false, false)
+
+
+# --- Le Gardien du Trône (l'Éveil du Chérubin) -------------------------------------------
+
+func start_throne() -> void:
+	_throne = true
+	throne_changed.emit(true)
+
+
+func stop_throne() -> void:
+	if not _throne:
+		return
+	_throne = false
+	throne_changed.emit(false)
+
+
+func throne_active() -> bool:
+	return _throne
+
+
+## LES AILES DU TRÔNE S'OUVRENT : un œil sur tout ce qui est à portée, comme si chacun avait été frappé.
+func _open_throne_eyes(ability: Ability, context: CombatContext) -> void:
+	throne_eyes_opened.emit(context.player_cell, ability.veil_eyes_radius)
+	for i in _creatures_within(context.player_cell, ability.veil_eyes_radius, context):
+		_add_eye(i, context)
+
+
+## L'ÉPÉE QUI TOURNOIE sur le bord de l'Éden (Genèse 3:24) : sa pointe fait le tour en `GARDEN_SWORD_PERIOD`, et
+## frappe ce qui est près d'elle, une fois par `GARDEN_SWORD_LOCK`. Le `Level` la dessine au même angle.
+func _swing_garden_sword(ability: Ability, centre: Vector2i, context: CombatContext) -> void:
+	var angle := (ability.duration - float(_garden["left"])) * TAU / GARDEN_SWORD_PERIOD
+	var tip := Vector2(centre) + Vector2.from_angle(angle) * ability.radius
+	var cut := Ability.make({"id": ability.id + "_epee", "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.garden_sword_damage})
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i) or _sword_locks.has(i):
+			continue
+		if Vector2(context.enemy_cells[i]).distance_to(tip) > GARDEN_SWORD_REACH:
+			continue
+		_sword_locks[i] = GARDEN_SWORD_LOCK
+		garden_sword_struck.emit(context.enemy_cells[i])
+		_apply_damage(i, cut, context, false, false)
+
+
+# --- Le Forgeron Céleste (l'Éveil de l'Archange d'Acier) ---------------------------------
+
+func start_forge() -> void:
+	_forge = true
+	_forge_kills = 0
+	health.plates = FORGE_PLATES
+	forge_changed.emit(true)
+	plates_changed.emit(health.plates)
+
+
+## À la fin, il garde au plus ses trois plaques ordinaires.
+func stop_forge() -> void:
+	if not _forge:
+		return
+	_forge = false
+	_shards_pending = 0
+	if health.plates > PLATE_MAX:
+		health.plates = PLATE_MAX
+	forge_changed.emit(false)
+	plates_changed.emit(health.plates)
+
+
+func forge_active() -> bool:
+	return _forge
+
+
+func plate_cap() -> int:
+	return FORGE_PLATES if _forge else PLATE_MAX
+
+
+func _on_plate_torn() -> void:
+	plates_changed.emit(health.plates)
+	if _forge:
+		_shards_pending += 1
+
+
+## Les éclats des plaques cassées, l'enclume qui tombe, et les pas en fusion du Cœur de la forge.
+func _update_forge(delta: float, context: CombatContext) -> void:
+	while _shards_pending > 0:
+		_shards_pending -= 1
+		plate_shattered.emit(context.player_cell)
+		var shard := Ability.make({"id": "forge_eclats", "kind": Ability.Kind.BLAST, "element": Element.Kind.STEEL,
+			"damage": FORGE_SHARD_DAMAGE})
+		for i in _creatures_within(context.player_cell, FORGE_SHARD_REACH, context):
+			_apply_damage(i, shard, context, false, false)
+	for d in range(_anvil_drops.size() - 1, -1, -1):
+		var drop: Dictionary = _anvil_drops[d]
+		drop["time_left"] = float(drop["time_left"]) - delta
+		if float(drop["time_left"]) > 0.0:
+			continue
+		_anvil_drops.remove_at(d)
+		var ability: Ability = drop["ability"]
+		var cell: Vector2i = drop["cell"]
+		anvil_dropped.emit(cell, ability.anvil_drop_radius)
+		var hit := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+			"damage": ability.anvil_drop_damage, "radius": ability.anvil_drop_radius})
+		_apply_area(hit, cell, context, null, false, false)
+		_stun_within(cell, ability.anvil_drop_radius, ability.anvil_drop_stun, context)
+		_anvil_wave(ability, cell)
+	if _molten_left > 0.0 and _molten_steps > 0.0 and context.player_cell != _step_cell:
+		_step_cell = context.player_cell
+		_ignite_cells([context.player_cell], _molten_steps)
+
+
+func _stun_within(cell: Vector2i, radius: float, seconds: float, context: CombatContext) -> void:
+	if seconds <= 0.0:
+		return
+	for i in _creatures_within(cell, radius, context):
+		if context.enemy_alive(i) and not context.bosses.has(i):
+			enemy_staggered.emit(i, seconds)
+
+
+## LE BASTION S'OUVRE : une gerbe de lames en fusion autour de lui, et une plaque reforgée.
+func _open_bastion(ability: Ability, context: CombatContext) -> void:
+	bastion_opened.emit(context.player_cell, ability.bastion_burst_radius)
+	var burst := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.bastion_burst_damage, "radius": ability.bastion_burst_radius})
+	_apply_area(burst, context.player_cell, context, null, false, false)
+	if health.plates < plate_cap():
+		health.plates = mini(plate_cap(), health.plates + ability.bastion_plates)
+		plates_changed.emit(health.plates)
+
+
+# --- La Reine du Firmament (l'Éveil de l'Ange des Étoiles) --------------------------------
+
+func start_firmament() -> void:
+	_firmament = true
+	firmament_changed.emit(true)
+	_report_stars()
+
+
+## À la fin, seules ses trois dernières étoiles restent, et les éphémères s'éteignent.
+func stop_firmament() -> void:
+	if not _firmament:
+		return
+	_firmament = false
+	while _stars.size() > STAR_MAX:
+		_stars.pop_front()
+	_sparks.clear()
+	_report_stars()
+	firmament_changed.emit(false)
+
+
+func firmament_active() -> bool:
+	return _firmament
+
+
+## Le sort qui pose ses étoiles, dans sa forme du moment : il donne leurs dégâts aux étoiles éphémères et à la figure.
+func _constellation_ability() -> Ability:
+	for ability in stats.abilities:
+		if ability.kind == Ability.Kind.CONSTELLATION:
+			return ability
+	return null
+
+
+func _star_at(cell: Vector2i) -> bool:
+	for list: Array[Dictionary] in [_stars, _sparks]:
+		for star in list:
+			if star["cell"] == cell:
+				return true
+	return false
+
+
+func _light_spark(cell: Vector2i, seconds: float) -> void:
+	if _star_at(cell):
+		return
+	if _sparks.size() >= SPARK_MAX:
+		_sparks.pop_front()
+	_sparks.append({"cell": cell, "time_left": seconds})
+	_report_stars()
+
+
+## LA FIGURE FERMÉE : quand ses cinq étoiles sont posées, leur contour (l'enveloppe, pour qu'une figure croisée ne
+## laisse pas de trou). Vide hors du Firmament, avec moins de cinq étoiles, ou si elles sont presque alignées.
+func _figure_hull() -> PackedVector2Array:
+	if not _firmament or _stars.size() < FIRMAMENT_STARS:
+		return PackedVector2Array()
+	var points := PackedVector2Array()
+	for star in _stars:
+		points.append(Vector2(star["cell"]))
+	var hull := Geometry2D.convex_hull(points)
+	if hull.size() >= 2 and hull[0] == hull[-1]:
+		hull.remove_at(hull.size() - 1)
+	if hull.size() < 3:
+		return PackedVector2Array()
+	return hull
+
+
+## L'ANNEAU DE LUNE à la fin de l'Éclipse : il blesse et ralentit ce qu'il touche, par les couloirs.
+func _end_eclipse(ability: Ability, context: CombatContext) -> void:
+	eclipse_ended.emit(context.player_cell, ability.moon_ring_radius)
+	var field := _field_from(context.player_cell)
+	var ring := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.moon_ring_damage})
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if distance < 0 or float(distance) > ability.moon_ring_radius:
+			continue
+		_apply_damage(i, ring, context, false, false)
+		if context.enemy_alive(i) and ability.moon_ring_slow < 1.0:
+			enemy_soaked.emit(i, ability.moon_ring_slow_seconds, ability.moon_ring_slow)
+
+
+## NAISSANCE D'UNE GALAXIE : chaque impact de comète devient une étoile, reliée à ses deux voisines les plus proches.
+func _light_galaxy_star(cell: Vector2i, ability: Ability) -> void:
+	_galaxy_ability = ability
+	_galaxy.append({"cell": cell, "time_left": ability.galaxy_seconds})
+	_report_galaxy()
+
+
+func _report_galaxy() -> void:
+	_galaxy_links.clear()
+	var seen := {}
+	for a in _galaxy.size():
+		var from := Vector2(_galaxy[a]["cell"])
+		var near: Array = []
+		for b in _galaxy.size():
+			var reach := from.distance_to(Vector2(_galaxy[b]["cell"]))
+			if b != a and reach <= GALAXY_LINK:
+				near.append([reach, b])
+		near.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+		for n in mini(GALAXY_NEIGHBOURS, near.size()):
+			var b := int(near[n][1])
+			var key := Vector2i(mini(a, b), maxi(a, b))
+			if not seen.has(key):
+				seen[key] = true
+				_galaxy_links.append([key.x, key.y])
+	var cells: Array = []
+	for star in _galaxy:
+		cells.append(star["cell"])
+	galaxy_changed.emit(cells, _galaxy_links.duplicate())
+
+
+func _update_galaxy(delta: float, context: CombatContext) -> void:
+	if _galaxy.is_empty():
+		return
+	var faded := false
+	for i in range(_galaxy.size() - 1, -1, -1):
+		_galaxy[i]["time_left"] = float(_galaxy[i]["time_left"]) - delta
+		if float(_galaxy[i]["time_left"]) <= 0.0:
+			_galaxy.remove_at(i)
+			faded = true
+	if faded:
+		_report_galaxy()
+	_galaxy_tick -= delta
+	if _galaxy_tick > 0.0 or _galaxy.is_empty() or _galaxy_ability == null:
+		return
+	_galaxy_tick = STAR_TICK
+	var slice := Ability.make({"id": _galaxy_ability.id, "kind": Ability.Kind.ZONE,
+		"element": _galaxy_ability.element,
+		"damage": int(round(float(_galaxy_ability.galaxy_damage) * STAR_TICK))})
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i) \
+				and _on_galaxy(Vector2(context.enemy_cells[i])):
+			_apply_damage(i, slice, context, false, false)
+
+
+func _on_galaxy(at: Vector2) -> bool:
+	for star in _galaxy:
+		if at.distance_to(Vector2(star["cell"])) <= STAR_REACH:
+			return true
+	for link: Array in _galaxy_links:
+		var closest := Geometry2D.get_closest_point_to_segment(at, Vector2(_galaxy[link[0]]["cell"]),
+			Vector2(_galaxy[link[1]]["cell"]))
+		if at.distance_to(closest) <= STAR_REACH:
+			return true
+	return false
+
+
+## Combien d'âmes il peut garder : trois, six pendant la Récolte.
+func soul_cap() -> int:
+	return HARVEST_SOULS if _harvest else SOUL_MAX
+
+
+func souls() -> int:
+	return _souls
+
+
+func _update_harvest(delta: float, context: CombatContext) -> void:
+	for index in _guard_locks.keys():
+		_guard_locks[index] = float(_guard_locks[index]) - delta
+		if float(_guard_locks[index]) <= 0.0:
+			_guard_locks.erase(index)
+	# LES ÂMES EN ORBITE gardent le Faucheur : ce qui arrive à son contact en prend une.
+	if _harvest and _souls > 0:
+		for i in context.enemy_cells.size():
+			if _souls <= 0:
+				break
+			if not context.enemy_alive(i) or context.is_structure(i) or _guard_locks.has(i):
+				continue
+			var gap := context.enemy_cells[i] - context.player_cell
+			if absi(gap.x) + absi(gap.y) > 1:
+				continue
+			_guard_locks[i] = HARVEST_GUARD_LOCK
+			_souls -= 1
+			souls_changed.emit(_souls)
+			soul_guarded.emit(context.player_cell, context.enemy_cells[i])
+			_apply_damage(i, Ability.make({"id": "mort_eveil_ame", "display_name": "Âme gardienne",
+				"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.DEATH,
+				"damage": HARVEST_SOUL_DAMAGE}), context, true, false)
+	for r in range(_returns.size() - 1, -1, -1):
+		var back: Dictionary = _returns[r]
+		back["time_left"] = float(back["time_left"]) - delta
+		if float(back["time_left"]) > 0.0:
+			continue
+		_returns.remove_at(r)
+		var cells: Array = back["cells"]
+		for i in context.enemy_cells.size():
+			if context.enemy_alive(i) and cells.has(context.enemy_cells[i]):
+				_apply_damage(i, back["ability"], context)
+	for t in range(_tolls.size() - 1, -1, -1):
+		var toll: Dictionary = _tolls[t]
+		toll["timer"] = float(toll["timer"]) - delta
+		if float(toll["timer"]) > 0.0:
+			continue
+		var bell: Ability = toll["ability"]
+		toll["left"] = int(toll["left"]) - 1
+		toll["timer"] = bell.toll_gap
+		if int(toll["left"]) <= 0:
+			_tolls.remove_at(t)
+		toll_rang.emit(context.player_cell, bell.radius)
+		var field := _field_from(context.player_cell)
+		var ring := Ability.make({"id": bell.id, "kind": Ability.Kind.ZONE, "element": bell.element,
+			"damage": bell.damage})
+		for i in context.enemy_cells.size():
+			if not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			# Le Carillon céleste passe les haies, comme la Cloche de l'Archange du Ciel.
+			var distance := _sky_distance(context.player_cell, context.enemy_cells[i]) if bell.pierces_walls \
+				else Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance < 0 or float(distance) > bell.radius:
+				continue
+			_apply_damage(i, ring, context, false, true)
+			if context.enemy_alive(i) and bell.stun_seconds > 0.0 and not context.bosses.has(i):
+				enemy_staggered.emit(i, bell.stun_seconds)
+			if context.enemy_alive(i) and bell.mark_seconds > 0.0:
+				_marked[i] = bell.mark_seconds
+				enemy_marked.emit(i, bell.mark_seconds)
+				if bell.toll_slow < 1.0:
+					enemy_soaked.emit(i, bell.slow_duration, bell.toll_slow)
+
+
+## L'ÉPIDÉMIE part du malade le plus proche (ou, faute de malade, de la créature la plus proche), puis saute de
+## proche en proche par les couloirs, sans repasser deux fois par la même.
+func _cast_epidemic(ability: Ability, context: CombatContext) -> bool:
+	var start := -1
+	var best := ability.range + 1
+	for index: int in _venom.keys():
+		if not context.enemy_alive(index):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[index])
+		if distance >= 0 and distance < best:
+			best = distance
+			start = index
+	if start < 0:
+		start = find_target(ability, context)
+	if start < 0 or context.is_structure(start):
+		use_refused.emit("cible")
+		return false
+	var visited := {start: true}
+	_epidemic_hit(start, context.player_cell, ability, context)
+	var current := start
+	var at: Vector2i = context.enemy_cells[start]
+	for _jump in ability.epidemic_jumps:
+		var field := _field_from(at)
+		var next := -1
+		var nearest := ability.chain_range + 1
+		for i in context.enemy_cells.size():
+			if visited.has(i) or not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance >= 0 and distance < nearest:
+				nearest = distance
+				next = i
+		if next < 0:
+			break
+		visited[next] = true
+		_epidemic_hit(next, at, ability, context)
+		current = next
+		at = context.enemy_cells[current]
+	return true
+
+
+func _epidemic_hit(index: int, from: Vector2i, ability: Ability, context: CombatContext) -> void:
+	epidemic_jumped.emit(from, context.enemy_cells[index])
+	_apply_damage(index, ability, context, false, true)
+	_add_venom(index, context, ability.epidemic_doses)
+
+
+## LA SAIGNÉE : chaque dose portée dans le rayon éclate pour `bleed_per_dose`, et le poison s'en va avec.
+func _cast_bleed(ability: Ability, context: CombatContext) -> bool:
+	var targets: Array[int] = []
+	var cells: Array = []
+	var doses: Array = []
+	var total := 0
+	for index: int in _venom.keys():
+		if not context.enemy_alive(index) or context.is_structure(index):
+			continue
+		if Vector2(context.enemy_cells[index] - context.player_cell).length() > ability.radius:
+			continue
+		var count := int(_venom[index]["doses"])
+		targets.append(index)
+		cells.append(context.enemy_cells[index])
+		doses.append(count)
+		total += count
+	if targets.is_empty():
+		use_refused.emit("sain")
+		return false
+	for index in targets:
+		_venom.erase(index)
+		enemy_venomed.emit(index, 0, 0.0)
+	var healed := health.heal(total / maxi(1, ability.transfuse_per))
+	if healed > 0:
+		player_healed.emit(healed)
+	bled.emit(cells, doses, healed)
+	for k in targets.size():
+		_apply_damage(targets[k], Ability.make({"id": ability.id + "_eclat", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": int(doses[k]) * ability.bleed_per_dose}),
+			context, false, true)
+	return true
+
+
+## LA NUÉE DE CORBEAUX pique ce qui se trouve sous sa route, haies comprises : à moins d'une case du trait.
+func _flock_strike(from: Vector2i, to: Vector2i, ability: Ability, context: CombatContext) -> void:
+	flock_flew.emit(from, to)
+	var a := Vector2(from)
+	var b := Vector2(to)
+	var line := b - a
+	var length_sq := maxf(0.001, line.length_squared())
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i):
+			continue
+		var p := Vector2(context.enemy_cells[i])
+		var k := clampf((p - a).dot(line) / length_sq, 0.0, 1.0)
+		if p.distance_to(a + line * k) > 0.8:
+			continue
+		_apply_damage(i, Ability.make({"id": ability.id + "_bec", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.flock_damage}), context, false, true)
+		_add_venom(i, context, ability.flock_doses)
+
+
 # --- Le venin ---------------------------------------------------------------------
 
 func _add_venom(index: int, context: CombatContext, doses: int = 1,
@@ -2720,7 +4353,7 @@ func _add_venom(index: int, context: CombatContext, doses: int = 1,
 		return
 	var venom: Dictionary = _venom.get(index,
 		{"doses": 0, "time_left": 0.0, "timer": VENOM_TICK, "plague": false})
-	venom["doses"] = mini(VENOM_MAX, int(venom["doses"]) + doses)
+	venom["doses"] = mini(venom_cap(), int(venom["doses"]) + doses)
 	venom["time_left"] = maxf(float(venom["time_left"]), duration)
 	_venom[index] = venom
 	enemy_venomed.emit(index, int(venom["doses"]), float(venom["time_left"]))
@@ -2769,7 +4402,10 @@ func _update_puddles(delta: float, context: CombatContext) -> void:
 			continue
 		if _puddles.has(context.enemy_cells[i]):
 			_venom_locks[i] = VENOM_TICK
-			_add_venom(i, context)
+			_add_venom(i, context, _puddle_doses)
+			# Le Sillage pestilent colle : ce qui y marche s'y traîne.
+			if _puddle_slow > 0.0:
+				enemy_soaked.emit(i, VENOM_TICK + 0.3, _puddle_slow)
 			puddle_stepped.emit(context.enemy_cells[i])
 
 
@@ -2791,7 +4427,8 @@ func _cloud_zone(cell: Vector2i, source: Ability) -> void:
 	_next_zone_id += 1
 	var cloud := Ability.make({"id": "nuage_toxique", "kind": Ability.Kind.ZONE,
 		"element": Element.Kind.POISON, "radius": source.cloud_radius,
-		"duration": source.cloud_duration, "venom_doses": 1, "zone_style": "gaz_peint"})
+		"duration": source.cloud_duration, "venom_doses": maxi(1, source.cloud_venom_doses),
+		"zone_style": "gaz_peint"})
 	_zones.append({"id": id, "ability": cloud, "cell": cell,
 		"time_left": source.cloud_duration, "tick": 0.0})
 	zone_created.emit(id, cloud, cell)
@@ -2799,6 +4436,8 @@ func _cloud_zone(cell: Vector2i, source: Ability) -> void:
 
 ## Le foyer est l'ennemi empoisonné le plus proche du mage, dans la portée du sort.
 func _cast_contagion(ability: Ability, context: CombatContext) -> bool:
+	if ability.epidemic_jumps > 0:
+		return _cast_epidemic(ability, context)
 	var source := -1
 	var best := ability.range + 1
 	for index: int in _venom.keys():
@@ -2828,6 +4467,8 @@ func _cast_contagion(ability: Ability, context: CombatContext) -> bool:
 
 
 func _cast_transfusion(ability: Ability, context: CombatContext) -> bool:
+	if ability.bleed_per_dose > 0:
+		return _cast_bleed(ability, context)
 	if health.current >= health.maximum:
 		use_refused.emit("pleine")
 		return false
@@ -2848,9 +4489,14 @@ func _cast_pandemic(ability: Ability, context: CombatContext) -> void:
 	_plague = ability
 	for i in context.enemy_cells.size():
 		if context.enemy_alive(i) and not context.is_structure(i):
-			_add_venom(i, context, VENOM_MAX, ability.duration)
+			_add_venom(i, context, venom_cap(), ability.duration)
 			_venom[i]["plague"] = true
+			# LA GRANDE PESTE ralentit tout ce qu'elle charge.
+			if ability.plague_slow < 1.0:
+				enemy_soaked.emit(i, ability.duration, ability.plague_slow)
 	pandemic_cast.emit(context.player_cell)
+	if ability.plague_slow < 1.0:
+		great_plague.emit(ability.duration)
 
 
 ## Combien de doses porte cette créature ? L'interface et les tests s'en servent.
@@ -2886,6 +4532,8 @@ func _update_light(delta: float, context: CombatContext) -> void:
 		if not context.enemy_alive(index):
 			continue
 		dawn_struck.emit(context.enemy_cells[index])
+		if ability.galaxy_seconds > 0.0:
+			_light_galaxy_star(context.enemy_cells[index], ability)
 		_apply_damage(index, ability, context, false)
 		if ability.blind_seconds > 0.0:
 			_blind(index, ability.blind_seconds, context, true)
@@ -2930,6 +4578,10 @@ func _cast_beam(ability: Ability, context: CombatContext) -> bool:
 	for i in context.enemy_cells.size():
 		if context.enemy_alive(i) and cells.has(context.enemy_cells[i]):
 			_apply_damage(i, ability, context)
+	# LA LANCE DE L'AURORE reste allumée : un mur de lumière qui brûle et aveugle ce qui le traverse.
+	if ability.beam_linger > 0.0:
+		_light_walls.append({"cells": cells, "time_left": ability.beam_linger, "tick": 0.0, "ability": ability})
+		light_wall_raised.emit(cells, ability.beam_linger)
 	return true
 
 
@@ -3019,6 +4671,8 @@ func _add_star_mark(index: int, ability: Ability, context: CombatContext) -> voi
 	_star_marks.erase(index)
 	enemy_star_marks.emit(index, 0)
 	astre_burst.emit(context.enemy_cells[index])
+	if ability.spark_seconds > 0.0:
+		_light_spark(context.enemy_cells[index], ability.spark_seconds)
 	var burst := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
 		"damage": ASTRE_DAMAGE})
 	# Sans trait : l'explosion ne doit pas reposer une étoile sur la cible qu'elle vient de vider.
@@ -3030,62 +4684,109 @@ func _cast_constellation(ability: Ability, context: CombatContext) -> bool:
 		if star["cell"] == context.player_cell:
 			use_refused.emit("occupé")
 			return false
-	if _stars.size() >= STAR_MAX:
-		_stars.pop_front()
-	_stars.append({"cell": context.player_cell, "time_left": ability.duration, "ability": ability})
-	_report_stars()
+	_plant_star(context.player_cell, ability)
 	return true
+
+
+## Une étoile posée, la plus ancienne cédant sa place au-delà du plafond (trois, cinq sous le Firmament).
+func _plant_star(cell: Vector2i, ability: Ability) -> void:
+	while _stars.size() >= star_cap():
+		_stars.pop_front()
+	_stars.append({"cell": cell, "time_left": ability.duration, "ability": ability})
+	_report_stars()
+
+
+func star_cap() -> int:
+	return FIRMAMENT_STARS if _firmament else STAR_MAX
 
 
 func _report_stars() -> void:
 	var cells: Array = []
 	for star in _stars:
 		cells.append(star["cell"])
+	for spark in _sparks:
+		cells.append(spark["cell"])
 	stars_changed.emit(cells)
+	var hull := _figure_hull()
+	if not hull.is_empty() or _figure_closed:
+		_figure_closed = not hull.is_empty()
+		var points: Array = []
+		for at in hull:
+			points.append(at)
+		figure_changed.emit(points)
 
 
 func _update_stars(delta: float, context: CombatContext) -> void:
 	for i in range(_falling.size() - 1, -1, -1):
 		var fall: Dictionary = _falling[i]
 		fall["time_left"] = float(fall["time_left"]) - delta
-		if not fall["warned"] and float(fall["time_left"]) <= STAR_FALL_LEAD:
+		if fall.get("big", false):
+			if not fall["warned"] and float(fall["time_left"]) <= BIG_METEOR_LEAD:
+				fall["warned"] = true
+				var prey := int(fall["prey"])
+				if prey >= 0 and context.enemy_alive(prey):
+					fall["cell"] = context.enemy_cells[prey]
+				big_meteor_falling.emit(fall["cell"], BIG_METEOR_LEAD, float(fall["ability"].radius))
+		elif not fall["warned"] and float(fall["time_left"]) <= STAR_FALL_LEAD:
 			fall["warned"] = true
 			star_falling.emit(fall["cell"], STAR_FALL_LEAD)
 		if float(fall["time_left"]) <= 0.0:
 			_falling.remove_at(i)
+			if fall.get("big", false):
+				big_meteor_struck.emit(fall["cell"], float(fall["ability"].radius))
 			_apply_area(fall["ability"], fall["cell"], context, null, false, false)
-	if _stars.is_empty():
+	_update_galaxy(delta, context)
+	if _stars.is_empty() and _sparks.is_empty():
 		return
 	var faded := false
-	for i in range(_stars.size() - 1, -1, -1):
-		_stars[i]["time_left"] = float(_stars[i]["time_left"]) - delta
-		if float(_stars[i]["time_left"]) <= 0.0:
-			_stars.remove_at(i)
-			faded = true
+	for list: Array[Dictionary] in [_stars, _sparks]:
+		for i in range(list.size() - 1, -1, -1):
+			list[i]["time_left"] = float(list[i]["time_left"]) - delta
+			if float(list[i]["time_left"]) <= 0.0:
+				list.remove_at(i)
+				faded = true
 	if faded:
 		_report_stars()
 	_star_tick -= delta
-	if _star_tick > 0.0 or _stars.is_empty():
+	if _star_tick > 0.0 or (_stars.is_empty() and _sparks.is_empty()):
 		return
 	_star_tick = STAR_TICK
-	var ability: Ability = _stars[0]["ability"]
+	var ability: Ability = _stars[0]["ability"] if not _stars.is_empty() else _constellation_ability()
+	if ability == null:
+		return
 	# Comme une zone : l'usure est exprimée par seconde, et n'a ni trait ni exaltation.
+	var power := FIRMAMENT_RAY if _firmament else 1.0
 	var slice := Ability.make({"id": ability.id, "kind": Ability.Kind.ZONE, "element": ability.element,
-		"damage": int(round(float(ability.damage) * STAR_TICK))})
+		"damage": int(round(float(ability.damage) * power * STAR_TICK))})
+	var hull := _figure_hull()
+	var figure := _constellation_ability()
+	var fill: Ability = null
+	if not hull.is_empty() and figure != null and figure.figure_damage > 0:
+		fill = Ability.make({"id": figure.id, "kind": Ability.Kind.ZONE, "element": figure.element,
+			"damage": int(round(float(figure.figure_damage) * STAR_TICK))})
 	for i in context.enemy_cells.size():
-		if context.enemy_alive(i) and not context.is_structure(i) \
-				and _on_star_ray(Vector2(context.enemy_cells[i])):
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var at := Vector2(context.enemy_cells[i])
+		if _on_star_ray(at):
 			_apply_damage(i, slice, context, false, false)
+		elif fill != null and Geometry2D.is_point_in_polygon(at, hull):
+			_apply_damage(i, fill, context, false, false)
 
 
 ## À vol d'oiseau : les rayons passent par-dessus les haies, et le joueur juge à ce qu'il voit.
 func _on_star_ray(at: Vector2) -> bool:
-	for a in _stars.size():
-		var from := Vector2(_stars[a]["cell"])
+	var points: Array[Vector2] = []
+	for star in _stars:
+		points.append(Vector2(star["cell"]))
+	for spark in _sparks:
+		points.append(Vector2(spark["cell"]))
+	for a in points.size():
+		var from := points[a]
 		if at.distance_to(from) <= STAR_REACH:
 			return true
-		for b in range(a + 1, _stars.size()):
-			var closest := Geometry2D.get_closest_point_to_segment(at, from, Vector2(_stars[b]["cell"]))
+		for b in range(a + 1, points.size()):
+			var closest := Geometry2D.get_closest_point_to_segment(at, from, points[b])
 			if at.distance_to(closest) <= STAR_REACH:
 				return true
 	return false
@@ -3120,7 +4821,29 @@ func _cast_starfall(ability: Ability, context: CombatContext) -> bool:
 			else floor_cells[noise.randi() % floor_cells.size()]
 		_falling.append({"cell": cell, "ability": hit, "warned": false,
 			"time_left": STAR_FALL_LEAD + float(n) * STAR_FALL_GAP})
+	if ability.big_meteor_damage > 0:
+		_drop_big_meteor(ability, context, field, floor_cells[noise.randi() % floor_cells.size()])
 	return true
+
+
+## LE GROS MÉTÉORE de la Pluie de météores tombe en dernier sur l'ennemi le plus solide à portée. Il vise au moment
+## de s'annoncer, pas au lancer : la proie a eu trois secondes pour bouger.
+func _drop_big_meteor(ability: Ability, context: CombatContext, field: PackedInt32Array, fallback: Vector2i) -> void:
+	var prey := -1
+	var best := -1
+	for i in context.enemy_cells.size():
+		var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+		if not context.enemy_alive(i) or context.is_structure(i) or distance < 0 \
+				or float(distance) > ability.radius:
+			continue
+		if context.enemy_health[i].current > best:
+			best = context.enemy_health[i].current
+			prey = i
+	var hit := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+		"damage": ability.big_meteor_damage, "radius": ability.big_meteor_radius})
+	_falling.append({"cell": context.enemy_cells[prey] if prey >= 0 else fallback, "ability": hit,
+		"warned": false, "big": true, "prey": prey,
+		"time_left": BIG_METEOR_LEAD + float(ability.star_falls) * STAR_FALL_GAP + BIG_METEOR_PAUSE})
 
 
 func _burn_trail(from: Vector2i, to: Vector2i, ability: Ability, context: CombatContext) -> void:
@@ -3136,6 +4859,10 @@ func _burn_trail(from: Vector2i, to: Vector2i, ability: Ability, context: Combat
 			_apply_damage(i, burn, context, false, false)
 			if ability.blow_cells > 0 and context.enemy_alive(i):
 				_push_away(i, context, ability.blow_cells)
+			if ability.trail_stun > 0.0 and context.enemy_alive(i):
+				enemy_staggered.emit(i, ability.trail_stun)
+	if ability.molten_trail_seconds > 0.0:
+		_ignite_cells(trajectory(from, to), ability.molten_trail_seconds)
 
 
 # --- Le pacte ---------------------------------------------------------------------
@@ -3144,7 +4871,70 @@ func _burn_trail(from: Vector2i, to: Vector2i, ability: Ability, context: Combat
 func rage_bonus() -> float:
 	if stats.element != Element.Kind.BLOOD or health.maximum <= 1:
 		return 0.0
-	return RAGE_MAX * float(health.maximum - health.current) / float(health.maximum - 1)
+	var rage := RAGE_MAX * (_blood_rage if _blood_left > 0.0 else 1.0)
+	return rage * float(health.maximum - health.current) / float(health.maximum - 1)
+
+
+# --- L'Archidémon du Pacte (l'Éveil du Démon du Pacte) -------------------------------
+
+## LE PRIX DU SANG : pendant `seconds`, sa vie coule d'1 PV toutes les `every` secondes (jamais le dernier,
+## `Health.sacrifice`), chaque ennemi tué lui en rend 1, et sa Rage est multipliée par `rage_factor`.
+func start_blood_price(seconds: float, every: float, rage_factor: float) -> void:
+	_blood_left = seconds
+	_blood_every = maxf(0.5, every)
+	_blood_timer = _blood_every
+	_blood_rage = rage_factor
+	blood_price_changed.emit(true)
+
+
+func stop_blood_price() -> void:
+	if _blood_left <= 0.0:
+		return
+	_blood_left = 0.0
+	blood_price_changed.emit(false)
+
+
+func blood_pricing() -> bool:
+	return _blood_left > 0.0
+
+
+## Un kill pendant le Prix du Sang : 1 PV rendu, et la traînée part de la proie.
+func _feed_blood(cell: Vector2i) -> void:
+	blood_fed.emit(cell)
+	var gained := health.heal(1)
+	if gained > 0:
+		player_healed.emit(gained)
+
+
+func _update_archdemon(delta: float, context: CombatContext) -> void:
+	if _blood_left > 0.0:
+		_blood_left = maxf(0.0, _blood_left - delta)
+		_blood_timer -= delta
+		if _blood_timer <= 0.0:
+			_blood_timer += _blood_every
+			# Intouchable (le Dernier Pacte), il ne paie rien : il est déjà à 1 PV.
+			if not health.immune and health.sacrifice(1) > 0:
+				blood_price_paid.emit(health.current)
+		if _blood_left <= 0.0:
+			blood_price_changed.emit(false)
+	if _claw_ability == null:
+		return
+	if _immune_left <= 0.0:
+		_claw_ability = null
+		return
+	_claw_timer -= delta
+	if _claw_timer > 0.0:
+		return
+	_claw_timer += maxf(0.2, _claw_ability.pact_claw_gap)
+	var claw := Ability.make({"id": _claw_ability.id + "_serre", "kind": Ability.Kind.BLAST,
+		"element": _claw_ability.element, "damage": _claw_ability.pact_claw_damage, "radius": 1.0,
+		"range": int(ceil(_claw_ability.radius)) + 3})
+	var target := find_target(claw, context)
+	if target < 0:
+		return
+	var cell := context.enemy_cells[target]
+	pact_claw_struck.emit(cell)
+	_apply_area(claw, cell, context, _claw_ability)
 
 
 # --- La Démone de la Discorde ---------------------------------------------------------
@@ -3154,6 +4944,8 @@ func _cast_possess(ability: Ability, context: CombatContext) -> bool:
 		for i in context.enemy_cells.size():
 			if _possessable(i, context):
 				_possess(i, ability, context)
+		if ability.ball_burst_damage > 0:
+			_ball = {"left": ability.possess_seconds, "ability": ability}
 		great_discord_cast.emit(context.player_cell)
 		return true
 	var target := _nearest_possessable(ability.range, context)
@@ -3161,7 +4953,28 @@ func _cast_possess(ability: Ability, context: CombatContext) -> bool:
 		use_refused.emit("cible")
 		return false
 	_possess(target, ability, context)
+	if ability.possess_neighbors > 0:
+		_possess_neighbors(target, ability, context)
 	return true
+
+
+## L'ŒIL DE LA REINE : ses deux plus proches voisins, par les couloirs depuis la cible, sont pris avec elle.
+func _possess_neighbors(target: int, ability: Ability, context: CombatContext) -> void:
+	var cell: Vector2i = context.enemy_cells[target]
+	var field := _field_from(cell)
+	var near := []
+	for i in _creatures_within(cell, ability.radius, context):
+		if i != target and _possessable(i, context) and not _possessed.has(i):
+			near.append(i)
+	near.sort_custom(func(a: int, b: int) -> bool:
+		return Pathfinder.value_at(grid, field, context.enemy_cells[a]) \
+			< Pathfinder.value_at(grid, field, context.enemy_cells[b]))
+	near.resize(mini(near.size(), ability.possess_neighbors))
+	var cells := [cell]
+	for i: int in near:
+		_possess(i, ability, context)
+		cells.append(context.enemy_cells[i])
+	queen_eye_opened.emit(cell, cells)
 
 
 func _possessable(index: int, context: CombatContext) -> bool:
@@ -3187,9 +5000,77 @@ func _possess(index: int, ability: Ability, context: CombatContext) -> void:
 	var seconds := ability.possess_seconds + (TROUBLE_BONUS if _troubled.has(index) else 0.0)
 	var strike := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
 		"damage": ability.possess_strike})
+	_possess_for(index, seconds, strike)
+
+
+func _possess_for(index: int, seconds: float, strike: Ability) -> void:
 	_possessed[index] = {"left": seconds, "timer": 0.0, "strike": strike}
 	_foyer_timer = 0.0
 	enemy_possessed.emit(index, seconds)
+
+
+## LA DISCORDE CONTAGIEUSE : pendant `seconds`, chaque coup trouble, et la possession d'un pantin mort saute sur
+## son plus proche voisin. `Awakening` la lance et l'arrête ; rien n'en dépend hors de l'Éveil.
+func start_contagion() -> void:
+	_contagious = true
+	contagion_changed.emit(true)
+
+
+func stop_contagion() -> void:
+	if not _contagious:
+		return
+	_contagious = false
+	_jumps_pending.clear()
+	contagion_changed.emit(false)
+
+
+func contagious() -> bool:
+	return _contagious
+
+
+## Les fils des pantins morts passent au plus proche qu'on peut retourner, à `CONTAGION_REACH` au plus.
+func _spread_possessions(context: CombatContext) -> void:
+	while not _jumps_pending.is_empty():
+		var jump: Dictionary = _jumps_pending.pop_front()
+		var from: Vector2i = jump["cell"]
+		var field := _field_from(from)
+		var best := -1
+		var best_distance := CONTAGION_REACH + 1
+		for i in context.enemy_cells.size():
+			if not _possessable(i, context) or _possessed.has(i):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance >= 0 and distance < best_distance:
+				best_distance = distance
+				best = i
+		if best < 0:
+			continue
+		_possess_for(best, maxf(CONTAGION_MIN, float(jump["left"])), jump["strike"])
+		possession_jumped.emit(from, context.enemy_cells[best])
+
+
+## LE GRAND BAL : chaque mort fait éclater ses fils sur ses voisins. L'éclat attend l'image suivante : une mort
+## qu'il provoque éclate à son tour, en cascade, sans jamais rappeler `_apply_area` depuis lui-même.
+func _update_ball(delta: float, context: CombatContext) -> void:
+	if _ball.is_empty():
+		_bursts_pending.clear()
+		return
+	var ability: Ability = _ball["ability"]
+	var cells := _bursts_pending.duplicate()
+	_bursts_pending.clear()
+	for cell: Vector2i in cells:
+		var burst := Ability.make({"id": ability.id + "_eclat", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.ball_burst_damage,
+			"radius": ability.ball_burst_radius})
+		ball_burst.emit(cell, ability.ball_burst_radius)
+		_apply_area(burst, cell, context, null, false, false)
+	_ball["left"] = float(_ball["left"]) - delta
+	if float(_ball["left"]) <= 0.0:
+		_ball = {}
+
+
+func ball_dancing() -> bool:
+	return not _ball.is_empty()
 
 
 ## Les possédés marchent tous vers un même foyer : un seul champ à calculer, même quand toute la
@@ -3223,6 +5104,12 @@ func _brawl_prey(index: int, context: CombatContext) -> int:
 
 
 func _update_discord(delta: float, context: CombatContext) -> void:
+	if stats.element == Element.Kind.CHARM:
+		_spread_possessions(context)
+		_update_ball(delta, context)
+		# Le pantin du Ballet est un leurre comme celui du Roi de Braise, qui le tient avec ses pièces.
+		if _pieces.is_empty():
+			_update_decoy(delta, context)
 	for index in _troubled.keys():
 		_troubled[index] = float(_troubled[index]) - delta
 		if float(_troubled[index]) <= 0.0:
@@ -3267,7 +5154,8 @@ func _add_whisper(index: int, context: CombatContext) -> void:
 	if not context.enemy_alive(index):
 		return
 	var count := int(_whispers.get(index, 0)) + 1
-	if count < WHISPER_MARKS:
+	# La Discorde contagieuse : chaque coup trouble, au lieu d'un sur trois.
+	if count < WHISPER_MARKS and not _contagious:
 		_whispers[index] = count
 		return
 	_whispers.erase(index)
@@ -3323,6 +5211,7 @@ func _cast_bond(ability: Ability, context: CombatContext) -> bool:
 		return false
 	_bond = {"members": near, "left": ability.duration, "share": ability.bond_share,
 		"ability": ability}
+	web_spun.emit(near)
 	return true
 
 
@@ -3364,6 +5253,9 @@ func _cast_swap(ability: Ability, context: CombatContext) -> bool:
 	enemy_swapped.emit(target, from)
 	enemy_staggered.emit(target, SWAP_STUN)
 	blink_performed.emit(from, to)
+	# Le Ballet des pantins : sa marionnette reste là où elle était, et les ennemis s'y acharnent.
+	if ability.decoy_seconds > 0.0:
+		_pose_decoy(from, ability)
 	return true
 
 
@@ -3416,8 +5308,45 @@ func _update_king(delta: float, context: CombatContext) -> void:
 				_fly_home(piece, RETURN_SPEED, delta, home, false, context)
 			Piece.RECALL:
 				_fly_home(piece, RECALL_SPEED, delta, home, true, context)
+		_leave_ashes(piece)
 	_update_decoy(delta, context)
 	_update_cages(delta, context)
+
+
+## LE SILLAGE DE CENDRES : une pièce qui vole met le feu à chaque case qu'elle franchit. Le Retour de l'Empire
+## en laisse autant, éveillé ou non, sur sa ligne : c'est son mur de flammes.
+func _leave_ashes(piece: Dictionary) -> void:
+	var state: int = piece["state"]
+	if state == Piece.ORBIT or state == Piece.POSED or state == Piece.BITE:
+		piece.erase("ash")
+		return
+	var seconds := ASH_SECONDS if _ashes else 0.0
+	var ability: Ability = piece["ability"]
+	if state == Piece.RECALL and ability != null:
+		seconds = maxf(seconds, ability.recall_fire_seconds)
+	if seconds <= 0.0:
+		return
+	var cell := Vector2i((piece["pos"] as Vector2).round())
+	if piece.get("ash", Vector2i(-1, -1)) == cell:
+		return
+	piece["ash"] = cell
+	_ignite_cells([cell], seconds)
+
+
+func start_ashes() -> void:
+	_ashes = true
+	ashes_changed.emit(true)
+
+
+func stop_ashes() -> void:
+	if not _ashes:
+		return
+	_ashes = false
+	ashes_changed.emit(false)
+
+
+func ashes_burning() -> bool:
+	return _ashes
 
 
 func _count_down(piece: Dictionary, delta: float) -> void:
@@ -3435,7 +5364,7 @@ func _eject_piece(context: CombatContext) -> void:
 		piece["state"] = Piece.LOOSE
 		piece["pos"] = Vector2(context.player_cell)
 		piece["throw"] = piece["pos"] + Vector2.from_angle(angle) * LOOSE_THROW
-		piece["left"] = PIECE_AUTO_RETURN
+		piece["left"] = ASH_RETURN if _ashes else PIECE_AUTO_RETURN
 		_sync_orbit()
 		piece_ejected.emit(context.player_cell)
 		var blow := Ability.make({"id": "braise_eclat", "kind": Ability.Kind.BLAST,
@@ -3494,7 +5423,13 @@ func _step_hunter(piece: Dictionary, delta: float, context: CombatContext) -> vo
 	if float(piece["timer"]) <= 0.0 and (piece["pos"] as Vector2).distance_to(at) <= HUNT_REACH:
 		piece["timer"] = HUNT_GAP
 		piece_struck.emit(context.enemy_cells[prey])
-		_apply_damage(prey, piece["ability"], context, false, true)
+		var ability: Ability = piece["ability"]
+		# Les Gantelets de l'Empereur crachent une gerbe de lave autour de la proie.
+		if ability.radius > 0.0:
+			gauntlet_splashed.emit(context.enemy_cells[prey], ability.radius)
+			_apply_area(ability, context.enemy_cells[prey], context, null, false, true)
+		else:
+			_apply_damage(prey, ability, context, false, true)
 
 
 func _cast_chest(ability: Ability, context: CombatContext) -> bool:
@@ -3517,6 +5452,7 @@ func _step_chest(piece: Dictionary, delta: float, context: CombatContext) -> voi
 	if piece["state"] != Piece.POSED:
 		return
 	var at := Vector2i(piece["pos"])
+	_forge_pull(piece, delta, at, context)
 	for i in context.enemy_cells.size():
 		if not context.enemy_alive(i) or context.is_structure(i):
 			continue
@@ -3546,9 +5482,11 @@ func _step_bite(piece: Dictionary, delta: float, context: CombatContext) -> void
 	var prey: int = piece["prey"]
 	if not context.enemy_alive(prey):
 		chest_spat.emit(Vector2i(piece["pos"]))
+		_forge_blast(piece, context)
 		piece["state"] = Piece.RETURN
 		return
 	piece["pos"] = Vector2(context.enemy_cells[prey])
+	_forge_pull(piece, delta, context.enemy_cells[prey], context)
 	piece["timer"] = float(piece["timer"]) - delta
 	if float(piece["timer"]) <= 0.0:
 		piece["timer"] = ZONE_TICK
@@ -3559,7 +5497,33 @@ func _step_bite(piece: Dictionary, delta: float, context: CombatContext) -> void
 	piece["left"] = float(piece["left"]) - delta
 	if float(piece["left"]) <= 0.0:
 		chest_spat.emit(context.enemy_cells[prey])
+		_forge_blast(piece, context)
 		piece["state"] = Piece.RETURN
+
+
+## LA FORGE IMPÉRIALE aspire vers elle ce qui est à `forge_pull` cases, une case à la fois.
+func _forge_pull(piece: Dictionary, delta: float, at: Vector2i, context: CombatContext) -> void:
+	var ability: Ability = piece["ability"]
+	if ability == null or ability.forge_pull <= 0.0:
+		return
+	piece["pull"] = float(piece.get("pull", 0.0)) - delta
+	if float(piece["pull"]) > 0.0:
+		return
+	piece["pull"] = FORGE_PULL_GAP
+	forge_pulled.emit(at)
+	_pull_toward(at, 1.0, ability.forge_pull, context)
+
+
+## Elle recrache sa proie en explosant : un champignon de feu.
+func _forge_blast(piece: Dictionary, context: CombatContext) -> void:
+	var ability: Ability = piece["ability"]
+	if ability == null or ability.forge_blast_damage <= 0:
+		return
+	var cell := Vector2i((piece["pos"] as Vector2).round())
+	var blast := Ability.make({"id": ability.id + "_explosion", "kind": Ability.Kind.BLAST,
+		"element": ability.element, "damage": ability.forge_blast_damage, "radius": ability.forge_blast_radius})
+	forge_blew.emit(cell, ability.forge_blast_radius)
+	_apply_area(blast, cell, context, null, false, true)
 
 
 func _cast_recall(ability: Ability, context: CombatContext) -> bool:
@@ -3575,6 +5539,8 @@ func _cast_recall(ability: Ability, context: CombatContext) -> bool:
 	if called == 0:
 		use_refused.emit("armure")
 		return false
+	# Le Retour de l'Empire : l'onde ne part que si les trois pièces reviennent ensemble.
+	_empire_wave = ability if ability.recall_wave_damage > 0 and called == PIECES_MAX else null
 	recall_cast.emit(context.player_cell)
 	return true
 
@@ -3594,6 +5560,14 @@ func _fly_home(piece: Dictionary, speed: float, delta: float, home: Vector2, str
 		piece["state"] = Piece.ORBIT
 		_sync_orbit()
 		piece_returned.emit(strikes)
+		if strikes and _empire_wave != null and health.plates == PIECES_MAX:
+			var ability := _empire_wave
+			_empire_wave = null
+			var wave := Ability.make({"id": ability.id + "_onde", "kind": Ability.Kind.BLAST,
+				"element": ability.element, "damage": ability.recall_wave_damage,
+				"radius": ability.recall_wave_radius})
+			empire_wave.emit(context.player_cell, ability.recall_wave_radius)
+			_apply_area(wave, context.player_cell, context, null, false, true)
 
 
 ## Les pièces en orbite sont les plaques de `Health` : c'est elles qui encaissent.
@@ -3622,7 +5596,7 @@ func _update_decoy(delta: float, context: CombatContext) -> void:
 	_decoy = {}
 	decoy_field.emit(PackedInt32Array())
 	var blast := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
-		"damage": ability.damage, "radius": ability.decoy_radius})
+		"damage": ability.damage, "radius": ability.decoy_radius, "cuts": ability.cuts})
 	_apply_area(blast, cell, context, null, false, false)
 	decoy_blew.emit(cell, ability.decoy_radius)
 
@@ -3659,6 +5633,14 @@ func _update_cages(delta: float, context: CombatContext) -> void:
 			_apply_damage(index, ability, context, false, false)
 	_caged.clear()
 	cages_crushed.emit(cells)
+	# L'Empire des Cendres : chaque cage éclate en colonne de lave, et blesse ses voisins.
+	if ability.cage_burst_damage > 0:
+		var burst := Ability.make({"id": ability.id + "_colonne", "kind": Ability.Kind.BLAST,
+			"element": ability.element, "damage": ability.cage_burst_damage,
+			"radius": ability.cage_burst_radius})
+		for cell: Vector2i in cells:
+			cage_burst.emit(cell, ability.cage_burst_radius)
+			_apply_area(burst, cell, context, null, false, false)
 
 
 ## Ce que le jeu dessine : où est chaque pièce, en cases, et ce qu'elle fait.
@@ -3668,7 +5650,8 @@ func pieces() -> Array[Dictionary]:
 
 ## Ce que les pièces lancées ajoutent à son allure.
 func armor_speed() -> float:
-	if _fire_cells.has(_dragon_cell):
+	# Le Dragon seul va plus vite dans le feu : les cendres de l'Empereur sont aussi des cases en feu.
+	if stats.element == Element.Kind.INFERNO and _fire_cells.has(_dragon_cell):
 		return stats.move_speed * INFERNO_SPEED
 	if _pieces.is_empty():
 		return 0.0
@@ -3677,10 +5660,54 @@ func armor_speed() -> float:
 
 # --- Le Chevalier Écarlate ------------------------------------------------------------
 
-func _add_cuts(index: int, count: int) -> void:
-	var total := mini(CUTS_MAX, int(_cuts.get(index, {}).get("count", 0)) + count)
+func _add_cuts(index: int, count: int, may_open: bool = true) -> void:
+	# La Lame affûtée : une de plus par coup, jusqu'à huit, et à huit elles s'ouvrent seules.
+	var cap := KEEN_CUTS_MAX if _keen else CUTS_MAX
+	if _keen and may_open:
+		count += 1
+	var total := mini(cap, int(_cuts.get(index, {}).get("count", 0)) + count)
 	_cuts[index] = {"count": total, "left": CUT_SECONDS}
 	enemy_cuts.emit(index, total)
+	if _keen and may_open and total >= KEEN_CUTS_MAX and index not in _keen_pending:
+		_keen_pending.append(index)
+
+
+func start_keen() -> void:
+	_keen = true
+	keen_changed.emit(true)
+
+
+func stop_keen() -> void:
+	if not _keen:
+		return
+	_keen = false
+	_keen_pending.clear()
+	for index: int in _cuts.keys():
+		if int(_cuts[index]["count"]) > CUTS_MAX:
+			_cuts[index]["count"] = CUTS_MAX
+			enemy_cuts.emit(index, CUTS_MAX)
+	keen_changed.emit(false)
+
+
+func keen() -> bool:
+	return _keen
+
+
+## Un ennemi arrivé au bout ouvre ses entailles de lui-même, à l'image suivante : jamais depuis `_apply_damage`.
+func _open_keen_cuts(context: CombatContext) -> void:
+	var opened := _keen_pending.duplicate()
+	_keen_pending.clear()
+	for index: int in opened:
+		var count := cuts_on(index)
+		if count <= 0 or not context.enemy_alive(index):
+			continue
+		_cuts.erase(index)
+		enemy_cuts.emit(index, 0)
+		keen_burst.emit(context.enemy_cells[index], count)
+		cut_burst.emit(context.enemy_cells[index], count)
+		var blow := Ability.make({"id": "ecarlate_affutee", "kind": Ability.Kind.SHEATHE,
+			"element": stats.element, "damage": KEEN_CUT_DAMAGE * count})
+		_apply_damage(index, blow, context, false, false)
 
 
 func cuts_on(index: int) -> int:
@@ -3708,6 +5735,15 @@ func _cast_dash(ability: Ability, context: CombatContext) -> bool:
 	for i in context.enemy_cells.size():
 		if context.enemy_alive(i) and not context.is_structure(i) and context.enemy_cells[i] in crossed:
 			_apply_damage(i, ability, context, false, true)
+			# Le Trait de l'étoile aveugle ce qu'il traverse.
+			if ability.blind_seconds > 0.0:
+				_blind(i, ability.blind_seconds, context)
+	# Le Pas des Mille Lames : la lame fantôme repasse sur le même couloir.
+	if ability.dash_echo_damage > 0:
+		_dash_echo = {"left": ability.dash_echo_delay, "from": from, "to": to, "cells": crossed,
+			"ability": Ability.make({"id": ability.id + "_echo", "kind": ability.kind,
+				"element": ability.element, "damage": ability.dash_echo_damage,
+				"cuts": ability.dash_echo_cuts})}
 	return true
 
 
@@ -3727,7 +5763,7 @@ func _cast_sheathe(ability: Ability, context: CombatContext) -> bool:
 		if not context.enemy_alive(i) or context.is_structure(i):
 			continue
 		if ability.is_ultimate:
-			_add_cuts(i, ability.cuts)
+			_add_cuts(i, ability.cuts, false)
 		elif not _cuts.has(i) or not _in_reach(i, ability.range, context):
 			continue
 		targets.append(i)
@@ -3748,6 +5784,14 @@ func _in_reach(index: int, reach: int, context: CombatContext) -> bool:
 
 
 func _update_blade(delta: float, context: CombatContext) -> void:
+	_parry_lock = maxf(0.0, _parry_lock - delta)
+	if _parry_pending and _guard != null and _guard.guard_all:
+		# La Garde du Seigneur pare tout et riposte à chaque coup, une fois par `PARRY_LOCK`.
+		_parry_pending = false
+		if _parry_lock <= 0.0:
+			_parry_lock = PARRY_LOCK
+			guard_parried.emit(context.player_cell)
+			_apply_area(_guard, context.player_cell, context)
 	if _parry_pending:
 		_parry_pending = false
 		var answer := _guard
@@ -3758,6 +5802,20 @@ func _update_blade(delta: float, context: CombatContext) -> void:
 		guard_parried.emit(context.player_cell)
 		if answer != null:
 			_apply_area(answer, context.player_cell, context)
+	if not _keen_pending.is_empty():
+		_open_keen_cuts(context)
+	if not _dash_echo.is_empty():
+		_dash_echo["left"] = float(_dash_echo["left"]) - delta
+		if float(_dash_echo["left"]) <= 0.0:
+			var echo: Dictionary = _dash_echo
+			_dash_echo = {}
+			dash_echoed.emit(echo["from"], echo["to"])
+			for i in context.enemy_cells.size():
+				if context.enemy_alive(i) and not context.is_structure(i) and context.enemy_cells[i] in echo["cells"]:
+					_apply_damage(i, echo["ability"], context, false, true)
+	# La Danse des pétales est un leurre comme celui du Roi de Braise, qui le tient avec ses pièces.
+	if stats.element == Element.Kind.BLADE and _pieces.is_empty():
+		_update_decoy(delta, context)
 	for index: int in _cuts.keys():
 		_cuts[index]["left"] = float(_cuts[index]["left"]) - delta
 		if float(_cuts[index]["left"]) <= 0.0:
@@ -3780,7 +5838,14 @@ func _update_blade(delta: float, context: CombatContext) -> void:
 		cut_burst.emit(context.enemy_cells[index], count)
 		var blow := Ability.make({"id": ability.id, "kind": ability.kind, "element": ability.element,
 			"damage": ability.cut_damage * count})
+		var from: Vector2i = context.enemy_cells[index]
 		_apply_damage(index, blow, context, false, false)
+		# La Rengaine écarlate : les pétales-lames de l'éclat entaillent ses voisins.
+		if ability.petal_cuts > 0:
+			for other in _creatures_within(from, ability.petal_radius, context):
+				if other != index and other not in targets:
+					petals_flung.emit(from, context.enemy_cells[other])
+					_add_cuts(other, ability.petal_cuts, false)
 	sheathe_ended.emit(ability.is_ultimate)
 
 
@@ -3790,7 +5855,7 @@ func _add_shackle_hit(index: int, context: CombatContext) -> void:
 	if not context.enemy_alive(index) or context.bosses.has(index):
 		return
 	var count := int(_shackle_hits.get(index, 0)) + 1
-	if count < SHACKLE_HITS:
+	if count < (ABYSS_SHACKLE_HITS if _abyss else SHACKLE_HITS):
 		_shackle_hits[index] = count
 		return
 	_shackle_hits.erase(index)
@@ -3819,27 +5884,37 @@ func _freeze_around(ability: Ability, context: CombatContext, centre: Vector2i =
 ## Le plus éloigné qu'on puisse ramener, par les couloirs. Il atterrit à une case du lanceur, sur
 ## son propre chemin : jamais sur la case du mage, et jamais de l'autre côté d'une haie.
 func _cast_hook(ability: Ability, context: CombatContext) -> bool:
-	var target := -1
-	var best := 1
+	# Les plus éloignés d'abord ; les Crochets de l'Abîme en prennent `hook_count` à la fois.
+	var candidates := []
 	for i in context.enemy_cells.size():
 		if not _possessable(i, context):
 			continue
 		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
-		if distance > best and distance <= ability.range:
-			best = distance
-			target = i
-	if target < 0:
+		if distance > 1 and distance <= ability.range:
+			candidates.append(i)
+	if candidates.is_empty():
 		use_refused.emit("cible")
 		return false
+	candidates.sort_custom(func(a: int, b: int) -> bool:
+		return Pathfinder.value_at(grid, context.player_field, context.enemy_cells[a]) \
+			> Pathfinder.value_at(grid, context.player_field, context.enemy_cells[b]))
+	candidates.resize(mini(candidates.size(), maxi(1, ability.hook_count)))
 	var field := _field_from(context.player_cell)
-	var from: Vector2i = context.enemy_cells[target]
-	var to := from
-	while Pathfinder.value_at(grid, field, to) > 1:
-		to = Pathfinder.step_toward(grid, field, to) + to
-	context.enemy_cells[target] = to
-	enemy_hooked.emit(target, from, to)
-	enemy_staggered.emit(target, ability.stun_seconds)
-	_apply_damage(target, ability, context, false, true)
+	var landed := []
+	for target: int in candidates:
+		var from: Vector2i = context.enemy_cells[target]
+		var to := from
+		# Chacun s'arrête à une case du lanceur, ou juste avant celui qui y est déjà.
+		while Pathfinder.value_at(grid, field, to) > 1:
+			var next: Vector2i = Pathfinder.step_toward(grid, field, to) + to
+			if next in landed:
+				break
+			to = next
+		landed.append(to)
+		context.enemy_cells[target] = to
+		enemy_hooked.emit(target, from, to)
+		enemy_staggered.emit(target, ability.stun_seconds)
+		_apply_damage(target, ability, context, false, true)
 	return true
 
 
@@ -3894,19 +5969,101 @@ func _burn_members(state: Dictionary, delta: float, context: CombatContext) -> v
 
 
 func _update_gaoler(delta: float, context: CombatContext) -> void:
+	for index in _held.keys():
+		_held[index] = float(_held[index]) - delta
+		if float(_held[index]) <= 0.0:
+			_held.erase(index)
 	if not _soul_chains.is_empty():
 		_burn_members(_soul_chains, delta, context)
 		if float(_soul_chains["left"]) <= 0.0:
+			var chained: Ability = _soul_chains["ability"]
+			var members: Array = _soul_chains["members"]
 			_soul_chains = {}
+			if chained.snap_damage > 0:
+				_snap_chains(members, chained, context)
 	if not _gaol.is_empty():
 		_burn_members(_gaol, delta, context)
+		var holding: Ability = _gaol["ability"]
+		if holding.gaol_pull_gap > 0.0 and float(_gaol["left"]) > 0.0:
+			_gaol["pull"] = float(_gaol.get("pull", holding.gaol_pull_gap)) - delta
+			if float(_gaol["pull"]) <= 0.0:
+				_gaol["pull"] = holding.gaol_pull_gap
+				_drag_prisoners(_gaol["members"], context)
 		if float(_gaol["left"]) <= 0.0:
 			var cells := []
 			for i: int in _gaol["members"]:
 				if context.enemy_alive(i):
 					cells.append(context.enemy_cells[i])
+			var members: Array = _gaol["members"]
 			_gaol = {}
 			gaol_ended.emit(cells)
+			# L'Abîme se referme : chaque prisonnier encore vivant prend le coup de mâchoire.
+			if holding.gaol_end_damage > 0:
+				abyss_closed.emit(cells)
+				var jaw := Ability.make({"id": holding.id + "_machoire", "kind": Ability.Kind.BLAST,
+					"element": holding.element, "damage": holding.gaol_end_damage})
+				for i: int in members:
+					if context.enemy_alive(i):
+						_apply_damage(i, jaw, context, false, false)
+
+
+## LE POIDS DES CHAÎNES : ce qui est sonné le reste ce temps-là dans le registre, pendant l'Éveil seulement.
+func _note_held(index: int, seconds: float) -> void:
+	if _abyss and seconds > 0.0:
+		_held[index] = maxf(float(_held.get(index, 0.0)), seconds)
+
+
+func start_abyss() -> void:
+	_abyss = true
+	abyss_changed.emit(true)
+
+
+func stop_abyss() -> void:
+	if not _abyss:
+		return
+	_abyss = false
+	_held.clear()
+	abyss_changed.emit(false)
+
+
+func abyss_open() -> bool:
+	return _abyss
+
+
+func held(index: int) -> bool:
+	return _held.has(index)
+
+
+## Les Chaînes de l'Abîme se resserrent d'un coup en cédant : chaque proie est blessée et prise dans la glace.
+func _snap_chains(members: Array, ability: Ability, context: CombatContext) -> void:
+	var caught := []
+	var snap := Ability.make({"id": ability.id + "_serre", "kind": ability.kind,
+		"element": ability.element, "damage": ability.snap_damage})
+	for i: int in members:
+		if not context.enemy_alive(i):
+			continue
+		_apply_damage(i, snap, context, false, false)
+		if context.enemy_alive(i) and not context.bosses.has(i):
+			caught.append(i)
+			enemy_staggered.emit(i, ability.snap_stun)
+	if not caught.is_empty():
+		chains_snapped.emit(caught, ability.snap_stun)
+
+
+## L'Abîme tire chacun de ses prisonniers d'une case vers le Gardien, par les couloirs, jamais sur lui.
+func _drag_prisoners(members: Array, context: CombatContext) -> void:
+	var field := _field_from(context.player_cell)
+	for i: int in members:
+		if not context.enemy_alive(i) or context.bosses.has(i) or context.is_structure(i):
+			continue
+		var here: Vector2i = context.enemy_cells[i]
+		if Pathfinder.value_at(grid, field, here) <= 1:
+			continue
+		var next: Vector2i = here + Pathfinder.step_toward(grid, field, here)
+		if next == here:
+			continue
+		context.enemy_cells[i] = next
+		enemy_pushed.emit(i, next)
 
 
 ## Ce que le jeu dessine : les ennemis enchaînés au Geôlier, et ceux que la Geôle cloue.
@@ -4180,6 +6337,263 @@ func _erupt_at(blast: Ability, cell: Vector2i, escape: Ability, context: CombatC
 		_apply_damage(i, blast, context)
 
 
+# --- Le Seigneur du Néant (l'Éveil du Sorcier des Ténèbres) --------------------------
+
+## Un trou noir aspire tant de fois par seconde.
+const HOLE_PULL_GAP := 0.25
+
+
+## LE DOUBLE : son ombre répète, `delay` secondes après, chaque coup qui vise un ennemi, à `ratio` de sa
+## force. Ni la fuite, ni l'Extra.
+func start_double(seconds: float, delay: float, ratio: float) -> void:
+	_double_left = seconds
+	_double_delay = delay
+	_double_ratio = ratio
+
+
+func stop_double() -> void:
+	_double_left = 0.0
+	_doubles.clear()
+
+
+func doubling() -> bool:
+	return _double_left > 0.0
+
+
+func _shadow_repeats(ability: Ability, context: CombatContext) -> void:
+	if ability == stats.escape or ability.is_ultimate or ability.damage <= 0:
+		return
+	var target := find_target(ability, context)
+	if target < 0:
+		return
+	_doubles.append({"index": target, "time_left": _double_delay, "ability": ability})
+
+
+func _update_void(delta: float, context: CombatContext) -> void:
+	if _double_left > 0.0:
+		_double_left = maxf(0.0, _double_left - delta)
+	for k in range(_doubles.size() - 1, -1, -1):
+		var echo: Dictionary = _doubles[k]
+		echo["time_left"] = float(echo["time_left"]) - delta
+		if float(echo["time_left"]) > 0.0:
+			continue
+		_doubles.remove_at(k)
+		var index := int(echo["index"])
+		if not context.enemy_alive(index):
+			continue
+		var ability: Ability = echo["ability"]
+		double_struck.emit(index, ability)
+		_apply_damage(index, Ability.make({"id": ability.id + "_double", "kind": Ability.Kind.BLAST,
+			"element": ability.element,
+			"damage": maxi(1, int(round(float(ability.damage) * _double_ratio)))}), context, false, false)
+	for k in range(_holes.size() - 1, -1, -1):
+		var hole: Dictionary = _holes[k]
+		var ability: Ability = hole["ability"]
+		hole["time_left"] = float(hole["time_left"]) - delta
+		hole["tick"] = float(hole["tick"]) - delta
+		if float(hole["tick"]) <= 0.0:
+			hole["tick"] = HOLE_PULL_GAP
+			_pull_toward(hole["cell"], 0.0, ability.hole_pull, context)
+		if float(hole["time_left"]) > 0.0:
+			continue
+		_holes.remove_at(k)
+		var cell: Vector2i = hole["cell"]
+		hole_collapsed.emit(cell, ability)
+		_apply_area(Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST, "element": ability.element,
+			"damage": ability.damage, "radius": ability.radius}), cell, context, ability)
+		# La flaque empoisonnée de l'Implosion de base, là où le trou s'est effondré.
+		if ability.residue_duration > 0.0:
+			var residue := _residue_of(ability)
+			var id := _next_zone_id
+			_next_zone_id += 1
+			_zones.append({"id": id, "ability": residue, "cell": cell,
+				"time_left": residue.duration, "tick": 0.0})
+			zone_created.emit(id, residue, cell)
+
+
+## LE TROU NOIR s'ouvre sur la cible.
+func _open_hole(ability: Ability, context: CombatContext) -> bool:
+	var target := find_target(ability, context)
+	if target < 0:
+		use_refused.emit("cible")
+		return false
+	var cell: Vector2i = context.enemy_cells[target]
+	_holes.append({"cell": cell, "time_left": ability.hole_seconds, "tick": 0.0, "ability": ability})
+	hole_opened.emit(cell, ability.hole_seconds, ability)
+	return true
+
+
+## L'ÉCLIPSE : la nuit tombe, et tous les ennemis sont ralentis le temps qu'elle dure.
+func _fall_eclipse(ability: Ability, context: CombatContext) -> void:
+	eclipse_fell.emit(ability.eclipse_seconds)
+	for i in context.enemy_cells.size():
+		if context.enemy_alive(i) and not context.is_structure(i):
+			enemy_soaked.emit(i, ability.eclipse_seconds, ability.eclipse_slow)
+
+
+# --- Le Maître des Légions (l'Éveil de l'Invocateur) --------------------------------
+
+## LA LÉGION : tant qu'elle dure, toute créature invoquée naît éveillée (`legion` dans son
+## dictionnaire), frappe à `ratio` de ses dégâts, et le plafond monte à `cap`. À la fin, les
+## créatures encore là redeviennent ordinaires.
+func start_legion(seconds: float, ratio: float, cap: int) -> void:
+	_legion_left = seconds
+	_legion_ratio = ratio
+	_legion_cap = cap
+	for summon in _summons:
+		summon["legion"] = true
+	legion_changed.emit(true)
+
+
+func stop_legion() -> void:
+	if _legion_left <= 0.0 and _legion_cap == 0:
+		return
+	_legion_left = 0.0
+	_legion_cap = 0
+	_legion_mark.clear()
+	for summon in _summons:
+		summon["legion"] = false
+	legion_changed.emit(false)
+
+
+func legion_active() -> bool:
+	return _legion_left > 0.0
+
+
+## Ce que le `Level` doit savoir d'une créature pour la dessiner : son apparence, sa taille, et si
+## elle est de la Légion. Vide si elle n'existe plus.
+func summon_info(id: int) -> Dictionary:
+	for summon in _summons:
+		if int(summon["id"]) == id:
+			return {"legion": bool(summon.get("legion", false)),
+				"scale": float(summon.get("scale", 1.0)), "look": str(summon.get("look", "")),
+				"kind": str(summon["kind"])}
+	return {}
+
+
+## La proie marquée, si elle vit encore. -1 sinon.
+func marked_prey() -> int:
+	return int(_legion_mark.get("index", -1))
+
+
+func _mark_prey(index: int, seconds: float) -> void:
+	_legion_mark = {"index": index, "left": seconds}
+	prey_marked.emit(index, seconds)
+
+
+func _update_legion(delta: float, context: CombatContext) -> void:
+	if _legion_left > 0.0:
+		_legion_left = maxf(0.0, _legion_left - delta)
+	if _legion_mark.is_empty():
+		return
+	_legion_mark["left"] = float(_legion_mark["left"]) - delta
+	if float(_legion_mark["left"]) <= 0.0 or not context.enemy_alive(int(_legion_mark["index"])):
+		_legion_mark.clear()
+
+
+func _summon_cap() -> int:
+	return maxi(MAX_SUMMONS, _legion_cap)
+
+
+## Une créature naît : son dictionnaire, la Légion et ce que le sort lui donne.
+func _spawn_summon(kind: String, cell: Vector2i, life: float, ability: Ability) -> Dictionary:
+	var summon := {
+		"id": _next_summon_id, "kind": kind,
+		"position": Vector2(cell), "cell": cell,
+		"time_left": life, "strike_in": 0.6,
+		"facing": Vector2i.DOWN, "target": -1,
+		"legion": _legion_left > 0.0,
+		"scale": ability.summon_scale if ability != null else 1.0,
+		"look": ability.summon_look if ability != null else "",
+	}
+	if ability != null and ability.summon_burst_damage > 0:
+		summon["burst"] = {"damage": ability.summon_burst_damage, "radius": ability.summon_burst_radius,
+			"element": ability.element}
+	_next_summon_id += 1
+	_summons.append(summon)
+	summon_spawned.emit(int(summon["id"]), kind, summon["position"])
+	return summon
+
+
+## La créature s'en va (fin de vie ou place cédée) : un diablotin de la Nuée explose en partant.
+func _summon_leaves(summon: Dictionary, context: CombatContext) -> void:
+	summon_expired.emit(int(summon["id"]))
+	if not summon.has("burst") or context == null:
+		return
+	var burst: Dictionary = summon["burst"]
+	var cell := Vector2i((summon["position"] as Vector2).round())
+	summon_burst.emit(int(summon["id"]), cell, float(burst["radius"]))
+	_apply_area(Ability.make({"id": "legion_burst", "kind": Ability.Kind.BLAST,
+		"element": int(burst["element"]), "damage": int(burst["damage"]),
+		"radius": float(burst["radius"])}), cell, context, null, false, false)
+
+
+func _trim_summons(context: CombatContext) -> void:
+	while _summons.size() > _summon_cap():
+		_summon_leaves(_summons.pop_front(), context)
+
+
+## LA GARGOUILLE COLOSSALE tombe à côté de la proie la plus proche, sinon à côté du mage : le choc
+## blesse et étourdit autour d'elle.
+func _drop_cell(context: CombatContext) -> Vector2i:
+	var prey := _closest_prey(1, context)
+	if prey.is_empty():
+		return _summon_spawn_cell(context, 0)
+	return _rift_cell(context.enemy_cells[prey[0]])
+
+
+func _summon_drop(summon: Dictionary, ability: Ability, context: CombatContext) -> void:
+	var cell: Vector2i = summon["cell"]
+	summon_dropped.emit(int(summon["id"]), cell, ability.summon_drop_radius)
+	var shock := Ability.make({"id": ability.id + "_chute", "kind": Ability.Kind.BLAST,
+		"element": ability.element, "damage": ability.summon_drop_damage,
+		"radius": ability.summon_drop_radius, "stun_seconds": ability.summon_drop_stun})
+	if ability.summon_drop_stun > 0.0:
+		_freeze_around(shock, context, cell)
+	_apply_area(shock, cell, context, ability)
+
+
+## L'ÉCHANGE : le mage prend la place de sa créature au sol la plus éloignée (à deux cases au moins),
+## et elle la sienne. Faux s'il n'y en a aucune : la fuite redevient alors un pas ordinaire.
+func _swap_with_summon(context: CombatContext) -> bool:
+	var best: Dictionary = {}
+	var best_distance := 2.0
+	for summon in _summons:
+		if bool(SUMMON_KINDS[summon["kind"]]["flies"]):
+			continue
+		var cell := Vector2i((summon["position"] as Vector2).round())
+		if not grid.is_floor_v(cell):
+			continue
+		var distance := Vector2(cell).distance_to(Vector2(context.player_cell))
+		if distance >= best_distance:
+			best_distance = distance
+			best = summon
+	if best.is_empty():
+		return false
+	var there := Vector2i((best["position"] as Vector2).round())
+	best["position"] = Vector2(context.player_cell)
+	best["cell"] = context.player_cell
+	best.erase("next")
+	summon_swapped.emit(int(best["id"]), context.player_cell, there)
+	summon_moved.emit(int(best["id"]), best["position"], best["facing"])
+	blink_performed.emit(context.player_cell, there)
+	return true
+
+
+## LE PASSAGE DU ROI-DRAGON : il survole la rangée du mage d'un bord à l'autre, par-dessus les
+## haies (un ultime peut passer les murs, et ça se voit : son ombre traverse l'écran).
+func _dragon_flyover(ability: Ability, context: CombatContext) -> void:
+	dragon_flyover.emit(context.player_cell, ability.flyover_reach, ability.flyover_width)
+	var blow := Ability.make({"id": ability.id + "_passage", "kind": Ability.Kind.BLAST,
+		"element": Element.Kind.FIRE, "damage": ability.flyover_damage})
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i):
+			continue
+		var offset: Vector2i = context.enemy_cells[i] - context.player_cell
+		if absf(float(offset.y)) <= ability.flyover_width and absf(float(offset.x)) <= ability.flyover_reach:
+			_apply_damage(i, blow, context, false)
+
+
 # --- Le Souverain des Vents (l'Éveil du Mage de l'Air) -------------------------------
 
 ## Repousse d'autant de cases, sauf un repaire ou un boss. Zéro ne fait rien.
@@ -4395,7 +6809,7 @@ func eyes() -> Dictionary:
 
 
 func _update_cherubin(delta: float, context: CombatContext) -> void:
-	for table: Dictionary in [_eye_locks, _veil_locks, _garden_locks]:
+	for table: Dictionary in [_eye_locks, _veil_locks, _garden_locks, _sword_locks]:
 		for index in table.keys():
 			var left: float = table[index] - delta
 			if left <= 0.0:
@@ -4408,14 +6822,15 @@ func _update_cherubin(delta: float, context: CombatContext) -> void:
 			enemy_eyed.emit(index, false)
 			continue
 		var cell: Vector2i = context.enemy_cells[index]
-		if Vector2(cell - context.player_cell).length() > EYE_REACH:
+		if Vector2(cell - context.player_cell).length() > (THRONE_REACH if _throne else EYE_REACH):
 			continue
 		_eyes.erase(index)
-		_eye_locks[index] = EYE_LOCK
+		_eye_locks[index] = THRONE_EYE_LOCK if _throne else EYE_LOCK
 		enemy_eyed.emit(index, false)
 		eye_burst.emit(cell)
 		_apply_damage(index, Ability.make({"id": stats.id + "_oeil", "kind": Ability.Kind.BLAST,
-			"element": stats.element, "damage": EYE_DAMAGE}), context, false, false)
+			"element": stats.element, "damage": THRONE_EYE_DAMAGE if _throne else EYE_DAMAGE}),
+			context, false, false)
 	if not _whirl.is_empty():
 		_spin_whirl(delta, context)
 	if _veil != null and _immune_left > 0.0:
@@ -4460,6 +6875,8 @@ func whirling() -> bool:
 ## Les ROUES D'ÉZÉCHIEL : deux vagues, l'une vers l'ennemi le plus proche, l'autre dans l'autre
 ## sens. Elles suivent le couloir et tournent avec lui, sans jamais revenir sur leurs pas.
 func _cast_wheels(ability: Ability, context: CombatContext) -> bool:
+	if ability.wheel_count >= 4:
+		return _cast_four_wheels(ability, context)
 	var first: Array[Vector2i] = []
 	var target := find_target(ability, context)
 	if target >= 0:
@@ -4488,6 +6905,23 @@ func _cast_wheels(ability: Ability, context: CombatContext) -> bool:
 			"step": duration / float(path.size()), "timer": 0.0, "hit": {}})
 		wave_launched.emit(ability, path, duration)
 	return true
+
+
+## LES ROUES DANS LES ROUES : une roue part dans chacune des quatre directions qui ne sont pas un mur.
+func _cast_four_wheels(ability: Ability, context: CombatContext) -> bool:
+	var launched := false
+	for side: Vector2i in MazeGrid.NEIGHBORS:
+		var path := _rolling_path(context.player_cell, side, ability.range)
+		if path.is_empty():
+			continue
+		launched = true
+		var duration := float(path.size()) / maxf(1.0, ability.wave_speed)
+		_waves.append({"ability": ability, "path": path, "index": 0,
+			"step": duration / float(path.size()), "timer": 0.0, "hit": {}})
+		wave_launched.emit(ability, path, duration)
+	if not launched:
+		use_refused.emit("mur")
+	return launched
 
 
 ## Un chemin qui suit le couloir : tout droit tant qu'il peut, et il tourne quand le couloir tourne.
@@ -4562,6 +6996,8 @@ func _tend_garden(delta: float, context: CombatContext) -> void:
 			_garden_locks[i] = GARDEN_LOCK
 			garden_repelled.emit(out)
 			_apply_damage(i, ability, context, false)
+	if ability.garden_sword_damage > 0:
+		_swing_garden_sword(ability, centre, context)
 	if float(_garden["left"]) <= 0.0:
 		garden_ended.emit(centre)
 		_garden = {}
@@ -4624,6 +7060,9 @@ func _land(context: CombatContext) -> void:
 	flight_landed.emit(context.player_cell, ability)
 	if ability.damage > 0 and ability.radius > 0.0:
 		_apply_area(ability, context.player_cell, context)
+	# L'Envol du dragon : le sol s'embrase là où il retombe.
+	if ability.ground_fire > 0.0 and ability.radius > 0.0:
+		_ignite_cells(_floor_within(context.player_cell, ability.radius), ability.ground_fire)
 	# Le Vol du zéphyr rabat tout en retombant.
 	if ability.end_blast_push > 0:
 		var field := _field_from(context.player_cell)
@@ -4647,10 +7086,10 @@ func plates_left() -> int:
 
 func _forge_plate() -> void:
 	_forge_kills += 1
-	if _forge_kills < PLATE_KILLS:
+	if _forge_kills < PLATE_KILLS and not _forge:
 		return
 	_forge_kills = 0
-	if health.plates < PLATE_MAX:
+	if health.plates < plate_cap():
 		health.plates += 1
 		plates_changed.emit(health.plates)
 
@@ -4663,6 +7102,9 @@ func _cast_blades(ability: Ability, context: CombatContext) -> bool:
 		facing = Vector2.DOWN
 	var directions := []
 	for i in ability.blade_count:
+		if ability.blades_circle:
+			directions.append(facing.rotated(TAU * float(i) / float(ability.blade_count)))
+			continue
 		var turn := (float(i) - float(ability.blade_count - 1) * 0.5) * BLADE_FAN
 		directions.append(facing.rotated(deg_to_rad(turn)))
 	_volleys.append({"from": Vector2(context.player_cell), "directions": directions, "time": 0.0,
@@ -4672,10 +7114,33 @@ func _cast_blades(ability: Ability, context: CombatContext) -> bool:
 
 
 func _cast_anvil(ability: Ability, context: CombatContext) -> bool:
-	var field := _field_from(context.player_cell)
+	if ability.anvil_drop_damage > 0:
+		return _drop_anvil(ability, context)
+	_anvil_wave(ability, context.player_cell)
+	return true
+
+
+## L'ENCLUME CÉLESTE tombe sur l'ennemi le plus proche par les couloirs, à portée ; sans proie, à ses pieds.
+func _drop_anvil(ability: Ability, context: CombatContext) -> bool:
+	var cell := context.player_cell
+	var best := ability.range + 1
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i) or context.is_structure(i):
+			continue
+		var distance := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i])
+		if distance >= 0 and distance < best:
+			best = distance
+			cell = context.enemy_cells[i]
+	_anvil_drops.append({"cell": cell, "time_left": ANVIL_DROP_LEAD, "ability": ability})
+	anvil_falling.emit(cell, ANVIL_DROP_LEAD, ability.anvil_drop_radius)
+	return true
+
+
+func _anvil_wave(ability: Ability, origin: Vector2i) -> void:
+	var field := _field_from(origin)
 	var links := []
-	var seen := {context.player_cell: true}
-	var front: Array[Vector2i] = [context.player_cell]
+	var seen := {origin: true}
+	var front: Array[Vector2i] = [origin]
 	for steps in range(1, ability.range + 1):
 		var next_front: Array[Vector2i] = []
 		for cell in front:
@@ -4688,8 +7153,7 @@ func _cast_anvil(ability: Ability, context: CombatContext) -> bool:
 				links.append({"from": cell, "to": next, "steps": steps})
 		front = next_front
 	_anvils.append({"field": field, "time": 0.0, "hit": {}, "ability": ability})
-	anvil_struck.emit(context.player_cell, links)
-	return true
+	anvil_struck.emit(origin, links)
 
 
 func _update_steel(delta: float, context: CombatContext) -> void:
@@ -4705,6 +7169,8 @@ func _update_steel(delta: float, context: CombatContext) -> void:
 	_reflect_waiting = false
 	_update_volleys(delta, context)
 	_update_anvils(delta, context)
+	_update_forge(delta, context)
+	_update_skies(delta, context)
 	if _molten_left > 0.0:
 		_molten_left = maxf(0.0, _molten_left - delta)
 		if _molten_left <= 0.0:
@@ -4770,7 +7236,8 @@ func _sentence(index: int, ability: Ability, context: CombatContext) -> void:
 	if not context.enemy_alive(index) or context.is_structure(index):
 		return
 	var life: Health = context.enemy_health[index]
-	var below := ability.execute_below if ability.execute_below > 0.0 else SENTENCE_BELOW
+	var below := ability.execute_below if ability.execute_below > 0.0 \
+		else (HARVEST_BELOW if _harvest else SENTENCE_BELOW)
 	if float(life.current) > float(life.maximum) * below:
 		return
 	enemy_sentenced.emit(index)
@@ -4778,7 +7245,7 @@ func _sentence(index: int, ability: Ability, context: CombatContext) -> void:
 
 
 func _gain_soul() -> void:
-	if _souls < SOUL_MAX:
+	if _souls < soul_cap():
 		_souls += 1
 		souls_changed.emit(_souls)
 
@@ -4833,7 +7300,7 @@ func _cast_souls(ability: Ability, context: CombatContext) -> bool:
 		use_refused.emit("cible")
 		return false
 	preys.sort_custom(func(a: int, b: int) -> bool: return int(distances[a]) < int(distances[b]))
-	for n in 1 + _souls:
+	for n in maxi(1, ability.souls_base) + _souls:
 		var prey: int = preys[n % preys.size()]
 		var path := trajectory(context.player_cell, context.enemy_cells[prey])
 		var duration := float(path.size()) / SOUL_SPEED + float(n) * SOUL_GAP
@@ -4851,6 +7318,10 @@ func _cast_last_hour(ability: Ability, context: CombatContext) -> void:
 			var across := float(context.enemy_cells[i].x) / float(maxi(1, grid.cols))
 			_hour.append({"index": i, "ability": ability,
 				"time_left": HOUR_DELAY + HOUR_SWEEP * across})
+			# MINUIT : la faux revient de droite à gauche.
+			if ability.hour_passes >= 2:
+				_hour.append({"index": i, "ability": ability,
+					"time_left": HOUR_DELAY + HOUR_SWEEP + HOUR_RETURN_GAP + HOUR_SWEEP * (1.0 - across)})
 
 
 func _strike_last_hour(index: int, ability: Ability, context: CombatContext) -> void:
@@ -4874,6 +7345,8 @@ func _strike_last_hour(index: int, ability: Ability, context: CombatContext) -> 
 # les mêmes règles que le jeu.
 
 func _ignite_cells(cells: Array, seconds: float) -> void:
+	if _primal:
+		seconds *= PRIMAL_FIRE_LONGER
 	var lit := []
 	for cell: Vector2i in cells:
 		if not grid.is_floor_v(cell):
@@ -4907,6 +7380,8 @@ func scales_up() -> bool:
 
 func _update_dragon(delta: float, context: CombatContext) -> void:
 	_dragon_cell = context.player_cell
+	if not _primal_pending.is_empty():
+		_burst_primal(context)
 	if not _fire_cells.is_empty():
 		var faded := []
 		for cell: Vector2i in _fire_cells.keys():
@@ -4923,7 +7398,7 @@ func _update_dragon(delta: float, context: CombatContext) -> void:
 			_fire_tick = ZONE_TICK
 			var slice := Ability.make({"id": "terre_brulee", "display_name": "Terre brûlée",
 				"kind": Ability.Kind.ZONE, "element": Element.Kind.INFERNO,
-				"damage": maxi(1, int(round(FIRE_CELL_DAMAGE * ZONE_TICK)))})
+				"damage": maxi(1, int(round((PRIMAL_FIRE_DAMAGE if _primal else FIRE_CELL_DAMAGE) * ZONE_TICK)))})
 			for i in context.enemy_cells.size():
 				if context.enemy_alive(i) and not context.is_structure(i) \
 						and _fire_cells.has(context.enemy_cells[i]):
@@ -4951,10 +7426,65 @@ func _update_dragon(delta: float, context: CombatContext) -> void:
 			var ability: Ability = strike["ability"]
 			shadow_column.emit(context.enemy_cells[index], bool(strike["first"]))
 			var column := Ability.make({"id": ability.id, "kind": Ability.Kind.BLAST,
-				"element": ability.element, "damage": ability.damage})
-			_apply_damage(index, column, context, false, true)
+				"element": ability.element, "damage": ability.damage, "radius": ability.meteor_radius})
+			# Le Ciel en feu : un météore à rayon, dont le point d'impact reste en feu.
+			if ability.meteor_radius > 0.0:
+				var at: Vector2i = context.enemy_cells[index]
+				_apply_area(column, at, context, null, false, true)
+				_ignite_cells(_floor_within(at, ability.meteor_radius), ability.ground_fire)
+			else:
+				_apply_damage(index, column, context, false, true)
 		if _shadow.is_empty():
 			shadow_ended.emit()
+
+
+## LE FEU PRIMORDIAL : chaque ennemi mort dans le feu éclate à l'image suivante, blesse ses voisins et
+## enflamme les cases autour de lui. Une mort qu'il provoque dans le feu éclate à son tour.
+func _burst_primal(context: CombatContext) -> void:
+	var cells := _primal_pending.duplicate()
+	_primal_pending.clear()
+	var burst := Ability.make({"id": "feu_primordial", "kind": Ability.Kind.BLAST,
+		"element": Element.Kind.INFERNO, "damage": PRIMAL_BURST_DAMAGE, "radius": PRIMAL_BURST_RADIUS})
+	for cell: Vector2i in cells:
+		primal_burst.emit(cell)
+		_apply_area(burst, cell, context, null, false, false)
+		var around := [cell]
+		for side: Vector2i in MazeGrid.NEIGHBORS:
+			around.append(cell + side)
+		_ignite_cells(around, FIRE_CELL_SECONDS)
+
+
+func start_primal() -> void:
+	_primal = true
+	primal_changed.emit(true)
+
+
+func stop_primal() -> void:
+	if not _primal:
+		return
+	_primal = false
+	_primal_pending.clear()
+	primal_changed.emit(false)
+
+
+func primal() -> bool:
+	return _primal
+
+
+## Les cases de sol à `radius` d'une case, par les couloirs.
+func _floor_within(centre: Vector2i, radius: float) -> Array:
+	var field := _field_from(centre)
+	var out := []
+	var reach := int(ceil(radius))
+	for dy in range(-reach, reach + 1):
+		for dx in range(-reach, reach + 1):
+			var cell := centre + Vector2i(dx, dy)
+			if not grid.is_floor_v(cell):
+				continue
+			var distance := Pathfinder.value_at(grid, field, cell)
+			if distance >= 0 and float(distance) <= radius:
+				out.append(cell)
+	return out
 
 
 ## Le Souffle infernal : un jet qui SUIT le couloir devant lui, comme la vague.
@@ -4971,6 +7501,14 @@ func _cast_breath(ability: Ability, context: CombatContext) -> bool:
 	for cell in path:
 		cells.append(cell)
 		on_path[cell] = true
+	# Le Souffle primordial déborde sur les cases qui bordent le couloir.
+	if ability.breath_spill:
+		for cell in path:
+			for side: Vector2i in MazeGrid.NEIGHBORS:
+				var edge: Vector2i = cell + side
+				if grid.is_floor_v(edge) and not on_path.has(edge) and edge != context.player_cell:
+					on_path[edge] = true
+					cells.append(edge)
 	breath_cast.emit(context.player_cell, cells, ability.ground_fire)
 	for i in context.enemy_cells.size():
 		if context.enemy_alive(i) and on_path.has(context.enemy_cells[i]):
@@ -5007,6 +7545,13 @@ func _cast_bite(ability: Ability, context: CombatContext) -> bool:
 	var devoured := _is_aflame(target, context)
 	dragon_bit.emit(target, prey, devoured)
 	_apply_damage(target, ability, context)
+	# Le Dévoreur avale entière une proie en feu assez blessée ; jamais un boss.
+	if devoured and ability.execute_below > 0.0 and context.enemy_alive(target) \
+			and not context.bosses.has(target):
+		var left: Health = context.enemy_health[target]
+		if float(left.current) <= float(left.maximum) * ability.execute_below:
+			_apply_damage(target, Ability.make({"id": ability.id + "_avale", "kind": ability.kind,
+				"element": ability.element, "damage": left.current}), context, false, false)
 	if devoured:
 		var gained := health.heal(ability.bite_heal)
 		if gained > 0:
@@ -5098,9 +7643,11 @@ func _gamble(index: int, power: int, ability: Ability, with_trait: bool, context
 		power *= 2
 		if _doubled_left == 0:
 			doubled_spent.emit()
-	if with_trait and _rng.randf() < LUCK_CHANCE:
+	if with_trait and _rng.randf() < LUCK_CHANCE * (HOUSE_LUCK if _house else 1.0):
 		power *= LUCK_MULT
 		lucky_hit.emit(index, context.enemy_cells[index])
+		if _house:
+			_payouts.append(context.enemy_cells[index])
 	return power
 
 
@@ -5123,26 +7670,48 @@ func _cast_dice(ability: Ability, context: CombatContext) -> bool:
 		return false
 	var first := _rng.randi_range(1, 6)
 	var second := _rng.randi_range(1, 6)
+	# Les Dés du Diable roulent un troisième dé : un double sonne toujours, un brelan fige et brûle.
+	var third := _rng.randi_range(1, 6) if ability.dice_count > 2 else 0
+	var double := first == second or (third > 0 and (third == first or third == second))
+	var triple := third > 0 and first == second and second == third
 	var cells := []
 	var on_path := {}
 	for cell in path:
 		cells.append(cell)
 		on_path[cell] = true
 	dice_rolled.emit(context.player_cell, cells, first, second)
+	if third > 0:
+		devil_die.emit(context.player_cell, cells, third, triple)
 	var roll := Ability.make({"id": ability.id, "display_name": ability.display_name, "kind": ability.kind,
-		"element": ability.element, "damage": ability.damage * (first + second)})
+		"element": ability.element, "damage": ability.damage * (first + second + third)})
 	for i in context.enemy_cells.size():
 		if not context.enemy_alive(i) or not on_path.has(context.enemy_cells[i]):
 			continue
 		_apply_damage(i, roll, context)
-		if first == second and context.enemy_alive(i) and not context.bosses.has(i) \
+		if double and context.enemy_alive(i) and not context.bosses.has(i) \
 				and not context.is_structure(i):
-			enemy_staggered.emit(i, ability.stun_seconds)
+			enemy_staggered.emit(i, ability.stun_seconds * (2.0 if triple else 1.0))
+		if triple and context.enemy_alive(i):
+			_ignite(i, maxi(10, ability.damage * 2), TRAP_BURN_SECONDS)
 	return true
 
 
 ## La carte se pose sous lui. Au-delà de `trap_count`, la plus ancienne s'efface.
 func _cast_trap(ability: Ability, context: CombatContext) -> bool:
+	# La Table piégée : quatre cartes en croix autour de lui, d'un coup.
+	if ability.trap_cross:
+		for trap in _traps:
+			trap_faded.emit(trap["cell"])
+		_traps.clear()
+		for side: Vector2i in MazeGrid.NEIGHBORS:
+			var spot: Vector2i = context.player_cell + side
+			if not grid.is_floor_v(spot):
+				spot = context.player_cell + side * 2 if grid.is_floor_v(context.player_cell + side * 2) else context.player_cell
+			if _traps.any(func(t: Dictionary) -> bool: return t["cell"] == spot):
+				continue
+			_traps.append({"cell": spot, "left": ability.duration, "ability": ability})
+			trap_posed.emit(spot, ability.duration)
+		return true
 	for trap in _traps:
 		if trap["cell"] == context.player_cell:
 			trap["left"] = ability.duration
@@ -5160,8 +7729,11 @@ func _flip_trap(trap: Dictionary, index: int, context: CombatContext) -> void:
 	var ability: Ability = trap["ability"]
 	var cell: Vector2i = trap["cell"]
 	var suit := _rng.randi_range(0, 2)
+	# Le Joker fait les trois figures à la fois.
+	if ability.joker_chance > 0.0 and _rng.randf() < ability.joker_chance:
+		suit = Suit.JOKER
 	var targets: Array[int] = [index]
-	if suit == Suit.THUNDER:
+	if suit == Suit.THUNDER or suit == Suit.JOKER:
 		var field := _field_from(cell)
 		var near := _creatures_within(cell, float(TRAP_REACH), context)
 		near.erase(index)
@@ -5178,9 +7750,9 @@ func _flip_trap(trap: Dictionary, index: int, context: CombatContext) -> void:
 		_apply_damage(t, ability, context)
 		if not context.enemy_alive(t):
 			continue
-		if suit == Suit.FIRE:
+		if suit == Suit.FIRE or suit == Suit.JOKER:
 			_ignite(t, ability.burn_dps, TRAP_BURN_SECONDS)
-		elif suit == Suit.ICE and not context.bosses.has(t):
+		if (suit == Suit.ICE or suit == Suit.JOKER) and not context.bosses.has(t):
 			enemy_staggered.emit(t, ability.stun_seconds)
 
 
@@ -5188,6 +7760,10 @@ func _flip_trap(trap: Dictionary, index: int, context: CombatContext) -> void:
 func _cast_coin(ability: Ability) -> bool:
 	var face := _rng.randf() < 0.5
 	coin_flipped.emit(face)
+	# La Pièce truquée retombe sur la tranche : les deux faces à la fois.
+	if ability.coin_both:
+		_doubled_left = ability.doubled_hits
+		face = true
 	if face:
 		health.immune = true
 		_immune_left = maxf(_immune_left, ability.duration)
@@ -5203,12 +7779,25 @@ func _cast_coin(ability: Ability) -> bool:
 func _cast_roulette(ability: Ability, context: CombatContext) -> bool:
 	var result := Slot.ZERO if _rng.randf() < ROULETTE_ZERO \
 		else (Slot.RED if _rng.randf() < 0.5 else Slot.BLACK)
-	_roulette = {"left": ROULETTE_SPIN, "result": result, "ability": ability}
+	_roulette = {"left": ROULETTE_SPIN, "result": result, "ability": ability,
+		"spins": maxi(1, ability.roulette_spins)}
 	roulette_spun.emit(context.player_cell, result, ROULETTE_SPIN)
 	return true
 
 
 func _update_croupier(delta: float, context: CombatContext) -> void:
+	# ⚠️ Le Tour de passe-passe est un leurre comme celui du Roi de Braise, qui le tient avec ses pièces : sans
+	# cette ligne, il ne s'éteignait jamais et les ennemis le cherchaient pour toujours.
+	if stats.element == Element.Kind.LUCK and _pieces.is_empty():
+		_update_decoy(delta, context)
+	if not _payouts.is_empty():
+		var paid := _payouts.duplicate()
+		_payouts.clear()
+		var chips := Ability.make({"id": "jetons", "kind": Ability.Kind.BLAST, "element": Element.Kind.LUCK,
+			"damage": PAYOUT_DAMAGE, "radius": PAYOUT_RADIUS})
+		for cell: Vector2i in paid:
+			house_payout.emit(cell, PAYOUT_RADIUS)
+			_apply_area(chips, cell, context, null, false, false)
 	for trap in _traps.duplicate():
 		trap["left"] = float(trap["left"]) - delta
 		if float(trap["left"]) <= 0.0:
@@ -5228,7 +7817,14 @@ func _update_croupier(delta: float, context: CombatContext) -> void:
 		return
 	var ability: Ability = _roulette["ability"]
 	var result: int = _roulette["result"]
+	var spins_left: int = int(_roulette.get("spins", 1)) - 1
 	_roulette = {}
+	# Le Grand Jeu : la roue repart aussitôt, avec un nouveau tirage.
+	if spins_left > 0:
+		var next := Slot.ZERO if _rng.randf() < ROULETTE_ZERO \
+			else (Slot.RED if _rng.randf() < 0.5 else Slot.BLACK)
+		_roulette = {"left": ROULETTE_SPIN, "result": next, "ability": ability, "spins": spins_left,
+			"pending": true}
 	var targets := _creatures_in_sky(context.player_cell, ability.radius, context)
 	var cells := []
 	for t in targets:
@@ -5244,6 +7840,27 @@ func _update_croupier(delta: float, context: CombatContext) -> void:
 		_apply_damage(t, hit, context, false, true)
 		if result == Slot.BLACK and context.enemy_alive(t) and not context.bosses.has(t):
 			enemy_staggered.emit(t, ability.stun_seconds)
+	if bool(_roulette.get("pending", false)):
+		_roulette.erase("pending")
+		roulette_spun.emit(context.player_cell, int(_roulette["result"]), ROULETTE_SPIN)
+
+
+## LA MAISON GAGNE TOUJOURS : tant qu'elle dure, le Coup de chance tombe plus souvent et paie des jetons.
+func start_house() -> void:
+	_house = true
+	house_changed.emit(true)
+
+
+func stop_house() -> void:
+	if not _house:
+		return
+	_house = false
+	_payouts.clear()
+	house_changed.emit(false)
+
+
+func house() -> bool:
+	return _house
 
 
 # --- L'Avide, Démon de la Faim ---------------------------------------------------------
@@ -5261,10 +7878,32 @@ func feasting() -> bool:
 
 func _gain_bite() -> void:
 	_bite_decay = BITE_DECAY
-	if _bites >= BITES_MAX:
+	var cap := ENDLESS_BITES if _endless else BITES_MAX
+	if _bites >= cap:
 		return
-	_bites += 1
+	_bites = mini(cap, _bites + (ENDLESS_GAIN if _endless else 1))
 	bites_changed.emit(_bites, true)
+
+
+## LA FAIM SANS FOND : tant qu'elle dure, plus de bouchées, qui ne fondent plus. À la fin, il garde ce que sa
+## forme de base peut tenir.
+func start_endless() -> void:
+	_endless = true
+	endless_changed.emit(true)
+
+
+func stop_endless() -> void:
+	if not _endless:
+		return
+	_endless = false
+	if _bites > BITES_MAX:
+		_bites = BITES_MAX
+		bites_changed.emit(_bites, false)
+	endless_changed.emit(false)
+
+
+func endless() -> bool:
+	return _endless
 
 
 ## La faim : un coup plus fort par bouchée, sur le coup d'origine seulement.
@@ -5322,6 +7961,26 @@ func _cast_devour(ability: Ability, context: CombatContext) -> bool:
 	if target < 0 or context.is_structure(target):
 		use_refused.emit("cible")
 		return false
+	# Tout dévorer : les proies suivantes, les plus proches après la première.
+	if ability.devour_count > 1:
+		var field := _field_from(context.player_cell)
+		var others := []
+		for i in context.enemy_cells.size():
+			if i == target or not context.enemy_alive(i) or context.is_structure(i):
+				continue
+			var distance := Pathfinder.value_at(grid, field, context.enemy_cells[i])
+			if distance >= 0 and distance <= ability.range:
+				others.append(i)
+		others.sort_custom(func(a: int, b: int) -> bool:
+			return Pathfinder.value_at(grid, field, context.enemy_cells[a]) \
+				< Pathfinder.value_at(grid, field, context.enemy_cells[b]))
+		for k in mini(others.size(), ability.devour_count - 1):
+			_devour_one(others[k], ability, context)
+	_devour_one(target, ability, context)
+	return true
+
+
+func _devour_one(target: int, ability: Ability, context: CombatContext) -> void:
 	var life: Health = context.enemy_health[target]
 	var swallowed := not context.bosses.has(target) \
 		and float(life.current) <= float(life.maximum) * ability.execute_below
@@ -5336,7 +7995,6 @@ func _cast_devour(ability: Ability, context: CombatContext) -> bool:
 		var gained := health.heal(ability.bite_heal)
 		if gained > 0:
 			player_healed.emit(gained)
-	return true
 
 
 ## Une boule par bouchée, sur les ennemis les plus proches ; sans proie, droit devant lui.
@@ -5373,6 +8031,20 @@ func _cast_regurgitate(ability: Ability, context: CombatContext) -> bool:
 		"damage": ability.damage, "radius": ability.radius})
 	for cell: Vector2i in cells:
 		_apply_area(ball, cell, context)
+	# Le Déluge de bile : chaque boule laisse une flaque d'acide, une seule par case.
+	if ability.bile_seconds > 0.0:
+		var bile := Ability.make({"id": ability.id + "_bile", "display_name": ability.display_name,
+			"kind": Ability.Kind.ZONE, "element": ability.element, "damage": ability.bile_damage,
+			"radius": ability.radius * 0.8, "duration": ability.bile_seconds, "zone_style": "bile_peinte"})
+		var laid := {}
+		for cell: Vector2i in cells:
+			if laid.has(cell):
+				continue
+			laid[cell] = true
+			var id := _next_zone_id
+			_next_zone_id += 1
+			_zones.append({"id": id, "ability": bile, "cell": cell, "time_left": bile.duration, "tick": 0.0})
+			zone_created.emit(id, bile, cell)
 	return true
 
 
@@ -5394,7 +8066,10 @@ func _cast_leap(ability: Ability, context: CombatContext) -> bool:
 	blink_performed.emit(context.player_cell, to)
 	leap_landed.emit(to, ability.radius)
 	for i in _creatures_within(to, ability.radius, context):
-		if not context.bosses.has(i):
+		# Le Bond du prédateur : la gueule du ventre mord en retombant.
+		if ability.damage > 0:
+			_apply_damage(i, ability, context)
+		if context.enemy_alive(i) and not context.bosses.has(i):
 			enemy_staggered.emit(i, ability.stun_seconds)
 	return true
 
@@ -5406,7 +8081,7 @@ func _cast_feast(ability: Ability) -> bool:
 
 
 func _update_avide(delta: float, context: CombatContext) -> void:
-	if _bites > 0 and _feast.is_empty():
+	if _bites > 0 and _feast.is_empty() and not _endless:
 		_bite_decay -= delta
 		if _bite_decay <= 0.0:
 			_bite_decay = BITE_DECAY
@@ -5420,7 +8095,7 @@ func _update_avide(delta: float, context: CombatContext) -> void:
 	_feast["left"] = float(_feast["left"]) - delta
 	_feast["gap"] = float(_feast["gap"]) - delta
 	if float(_feast["gap"]) <= 0.0:
-		_feast["gap"] = FEAST_GAP
+		_feast["gap"] = ability.feast_gap if ability.feast_gap > 0.0 else FEAST_GAP
 		var eaten: Dictionary = _feast["eaten"]
 		var best := -1
 		var best_distance := INF
@@ -5437,7 +8112,7 @@ func _update_avide(delta: float, context: CombatContext) -> void:
 			_apply_damage(best, ability, context, false, true)
 			var killed := not context.enemy_alive(best)
 			feast_bite.emit(best, cell, killed)
-			if killed and int(_feast["heals"]) < FEAST_HEALS:
+			if killed and int(_feast["heals"]) < (ability.feast_heal_cap if ability.feast_heal_cap > 0 else FEAST_HEALS):
 				var gained := health.heal(ability.bite_heal)
 				if gained > 0:
 					_feast["heals"] = int(_feast["heals"]) + 1
@@ -5458,21 +8133,17 @@ func _cast_summon(ability: Ability, context: CombatContext) -> bool:
 	for i in maxi(1, ability.summon_count):
 		# Les créatures naissent autour du mage, chacune sur sa case praticable :
 		# empilées sur la sienne, on ne verrait qu'une seule invocation.
-		var cell := _summon_spawn_cell(context, i)
-		var summon := {
-			"id": _next_summon_id, "kind": ability.summon_id,
-			"position": Vector2(cell) , "cell": cell,
-			"time_left": ability.duration, "strike_in": 0.6,
-			"facing": Vector2i.DOWN, "target": -1,
-		}
-		_next_summon_id += 1
-		_summons.append(summon)
-		summon_spawned.emit(int(summon["id"]), ability.summon_id, summon["position"])
+		# La Gargouille colossale, elle, tombe du ciel à côté de la proie.
+		var cell := _drop_cell(context) if ability.summon_drop_damage > 0 \
+			else _summon_spawn_cell(context, i)
+		var summon := _spawn_summon(ability.summon_id, cell, ability.duration, ability)
+		if ability.summon_drop_damage > 0:
+			_summon_drop(summon, ability, context)
+	if ability.flyover_damage > 0:
+		_dragon_flyover(ability, context)
 	# La plus ancienne cède la place au-delà du plafond — jamais la nouvelle :
 	# un sort qui échoue parce qu'on l'a déjà lancé se lit comme une panne.
-	while _summons.size() > MAX_SUMMONS:
-		var oldest: Dictionary = _summons.pop_front()
-		summon_expired.emit(int(oldest["id"]))
+	_trim_summons(context)
 	# Le champ des proies est immédiatement rafraîchi : une créature qui reste
 	# plantée une tierce de seconde à sa naissance a l'air cassée.
 	_summon_field_timer = 0.0
@@ -5590,7 +8261,7 @@ func _update_summons(delta: float, context: CombatContext) -> void:
 		summon["time_left"] = float(summon["time_left"]) - delta
 		if float(summon["time_left"]) <= 0.0:
 			_summons.remove_at(i)
-			summon_expired.emit(int(summon["id"]))
+			_summon_leaves(summon, context)
 			continue
 		summon["strike_in"] = maxf(0.0, float(summon["strike_in"]) - delta)
 		var stats: Dictionary = SUMMON_KINDS[summon["kind"]]
@@ -5614,12 +8285,18 @@ func _update_summon_projectiles(delta: float, context: CombatContext) -> void:
 		var ability: Ability = shot["ability"]
 		summon_projectile_hit.emit(int(shot["id"]), target,
 			context.enemy_cells[target], ability)
-		_apply_damage(target, ability, context, false)
+		if ability.radius > 0.0:
+			_apply_area(ability, context.enemy_cells[target], context, null, false)
+		else:
+			_apply_damage(target, ability, context, false)
 
 
 ## La proie : l'ennemi vivant le plus proche. À VOL D'OISEAU pour le dragon qui
 ## vole, en distance de couloir pour les marcheurs — chacun sa géométrie.
 func _nearest_prey(summon: Dictionary, context: CombatContext) -> int:
+	# La proie MARQUÉE par le Maître des Légions passe avant toutes les autres.
+	if not _legion_mark.is_empty() and context.enemy_alive(int(_legion_mark["index"])):
+		return int(_legion_mark["index"])
 	var best := -1
 	var best_score := 1e9
 	var position: Vector2 = summon["position"]
@@ -5656,10 +8333,13 @@ func _try_strike(summon: Dictionary, stats: Dictionary, target: int,
 		var ability := Ability.make({
 			"id": "dragon_fire_breath", "display_name": "Souffle du dragon",
 			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.FIRE,
-			"damage": int(stats["damage"]), "projectile_speed": float(stats["projectile_speed"]),
+			"damage": _summon_damage(summon, stats), "projectile_speed": float(stats["projectile_speed"]),
 			"projectile_scale": 1.65, "trail_density": 0.9, "flames": 1.15,
 			"pierces_walls": true,
 		})
+		# La boule du Roi-Dragon embrasé explose : elle brûle aussi les voisins de sa cible.
+		if str(summon.get("look", "")) == "dragon_eveil":
+			ability.radius = ROYAL_FIREBALL_RADIUS
 		var speed := PROJECTILE_SPEED * float(stats["projectile_speed"])
 		var duration := maxf(0.12, distance / speed)
 		_summon_projectiles.append({"id": int(summon["id"]), "target": target,
@@ -5672,7 +8352,7 @@ func _try_strike(summon: Dictionary, stats: Dictionary, target: int,
 	# répandrait la brûlure du Feu brouillerait la lecture des personnages.
 	var blow := Ability.make({
 		"id": "summon_" + str(summon["kind"]), "kind": Ability.Kind.ZONE,
-		"element": Element.Kind.SHADOW, "damage": int(stats["damage"]),
+		"element": Element.Kind.SHADOW, "damage": _summon_damage(summon, stats),
 	})
 	_apply_damage(target, blow, context, false)
 	# LE GAZ EMPOISONNE. C'est ce qui fait d'un souffle autre chose qu'une
@@ -5684,6 +8364,14 @@ func _try_strike(summon: Dictionary, stats: Dictionary, target: int,
 			"timer": POISON_TICK, "damage": int(stats["poison"])}
 		enemy_poisoned.emit(target, POISON_TICK * 6.0)
 	return true
+
+
+## Les créatures de la Légion frappent plus fort.
+func _summon_damage(summon: Dictionary, stats: Dictionary) -> int:
+	var damage := float(stats["damage"])
+	if bool(summon.get("legion", false)):
+		damage *= _legion_ratio
+	return int(round(damage))
 
 
 func _advance_summon(summon: Dictionary, stats: Dictionary, target: int,
@@ -5756,6 +8444,75 @@ func _refresh_summon_field(context: CombatContext) -> void:
 	_summon_field = Pathfinder.distance_field(grid, sources) 		if not sources.is_empty() else PackedInt32Array()
 
 
+## La créature au contact d'un ennemi, celle qu'il peut frapper. Vide s'il n'y en a pas.
+func summon_in_reach(at: Vector2, contact: float) -> Dictionary:
+	var best: Dictionary = {}
+	var best_gap := contact
+	for summon in _summons:
+		if not SUMMON_HITS.has(str(summon["kind"])):
+			continue
+		var gap := at.distance_to(summon["position"] as Vector2)
+		if gap < best_gap:
+			best_gap = gap
+			best = summon
+	return best
+
+
+## LES ENNEMIS FRAPPENT LES CRÉATURES, avec le même coup que contre le mage : armé au contact,
+## porté à l'impact (`MeleeSwing`). Appelé par le `Level` et par `test_balance`, qui jouent donc
+## la même règle.
+##
+## `foes[i]` : `position` (en cases), `free` (vivant, libre d'agir, et pas au contact du mage, qui
+## passe toujours avant), `windup`, `cycle`, `boss`. Rend les gestes à montrer :
+## `{"index", "event" ("started" ou "landed"), "toward"}`.
+func defend_against_summons(delta: float, foes: Array, contact: float) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	for index in foes.size():
+		var foe: Dictionary = foes[index]
+		if not _foe_swings.has(index):
+			_foe_swings[index] = MeleeSwing.new()
+		var swing: MeleeSwing = _foe_swings[index]
+		var at: Vector2 = foe["position"]
+		var prey := summon_in_reach(at, contact + MeleeSwing.REACH_MARGIN) \
+			if bool(foe["free"]) else {}
+		if prey.is_empty():
+			swing.cancel()
+			continue
+		var gap := at.distance_to(prey["position"] as Vector2)
+		var toward := _cardinal(prey["position"] as Vector2 - at)
+		match swing.tick(delta, gap, contact, float(foe["windup"]), float(foe["cycle"])):
+			MeleeSwing.Event.STARTED:
+				events.append({"index": index, "event": "started", "toward": toward})
+			MeleeSwing.Event.LANDED:
+				events.append({"index": index, "event": "landed", "toward": toward})
+				_wound_summon(prey, BOSS_BLOW if bool(foe.get("boss", false)) else 1)
+	return events
+
+
+func _wound_summon(summon: Dictionary, blow: int) -> void:
+	if not summon.has("hits"):
+		var hits := float(SUMMON_HITS[str(summon["kind"])]) * float(summon.get("scale", 1.0))
+		if bool(summon.get("legion", false)):
+			hits *= LEGION_HITS
+		summon["hits"] = maxi(1, int(round(hits)))
+		summon["hits_max"] = summon["hits"]
+	summon["hits"] = int(summon["hits"]) - blow
+	summon_hurt.emit(int(summon["id"]), maxi(0, int(summon["hits"])), int(summon["hits_max"]))
+	if int(summon["hits"]) > 0:
+		return
+	_summons.erase(summon)
+	summon_slain.emit(int(summon["id"]))
+	_summon_leaves(summon, null)
+
+
+static func _cardinal(gap: Vector2) -> Vector2i:
+	if gap == Vector2.ZERO:
+		return Vector2i.DOWN
+	if absf(gap.x) >= absf(gap.y):
+		return Vector2i(int(signf(gap.x)), 0)
+	return Vector2i(0, int(signf(gap.y)))
+
+
 ## Le nombre de créatures encore en chasse — l'interface l'affiche.
 func summon_count() -> int:
 	return _summons.size()
@@ -5787,6 +8544,10 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 	var power := ability.damage + (_empower_bonus if empowered else 0)
 	if _marked.has(index):
 		power = int(round(float(power) * (1.0 + MARK_BONUS)))
+	if _sky_marks.has(index):
+		power = int(round(float(power) * (1.0 + SKY_MARK_BONUS)))
+	if _skies and ability.element == Element.Kind.SKY and not context.is_structure(index):
+		_sky_marks[index] = SKY_MARK_SECONDS
 	if _molten_left > 0.0:
 		power = int(round(float(power) * MOLTEN_DAMAGE))
 	var structure := context.is_structure(index)
@@ -5796,15 +8557,33 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 		surge_changed.emit(_surge_charges)
 	if empowered and not structure:
 		power = int(round(float(power) * (1.0 + rage_bonus())))
+	# LE POIDS DES CHAÎNES : ce qui ne peut plus fuir prend plus cher.
+	if _abyss and not structure and _held.has(index):
+		power = int(round(float(power) * (1.0 + ABYSS_HELD_BONUS)))
+	# L'ÉBLOUISSEMENT : ce qu'il a aveuglé, il le frappe plus fort.
+	if _dazzle_left > 0.0 and not structure and is_blinded(index):
+		power = int(round(float(power) * (1.0 + DAZZLE_BONUS)))
+		dazzle_struck.emit(context.enemy_cells[index])
 	if stats.element == Element.Kind.LUCK and empowered and not structure:
 		power = _gamble(index, power, ability, with_trait, context)
 	if stats.element == Element.Kind.HUNGER and empowered and not structure:
 		power = _hunger_bonus(power)
+	# LE JUGEMENT DES HEURES : le coup ne porte pas, il s'accumule sur la créature jusqu'à midi.
+	if _judgement_left > 0.0 and not structure:
+		var total := int(_judgement_bank.get(index, 0)) + power
+		_judgement_bank[index] = total
+		judgement_stacked.emit(index, total)
+		return
 	if not structure:
 		_blast_hits += 1
 	var dealt := context.enemy_health[index].take(
 		Damage.new(power, ability.element, "player"))
 	enemy_damaged.emit(index, dealt, ability)
+	# LE TRAIT SOLAIRE : un coup sur `blind_every` aveugle.
+	if with_trait and ability.blind_every > 0 and not structure:
+		_glare_count += 1
+		if _glare_count % ability.blind_every == 0:
+			_blind(index, ability.blind_seconds, context)
 	if with_trait and dealt > 0 and ability.kind != Ability.Kind.ZONE \
 			and not context.is_structure(index):
 		_apply_trait(index, dealt, ability, context)
@@ -5819,8 +8598,16 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 		_caged.erase(index)
 		_cuts.erase(index)
 		_shackle_hits.erase(index)
+		if _primal and not structure and _is_aflame(index, context):
+			_primal_pending.append(context.enemy_cells[index])
+		var strings: Dictionary = _possessed.get(index, {})
 		if _possessed.erase(index):
 			enemy_possessed.emit(index, 0.0)
+			if _contagious:
+				_jumps_pending.append({"cell": context.enemy_cells[index],
+					"left": float(strings["left"]), "strike": strings["strike"]})
+		if not _ball.is_empty() and not structure:
+			_bursts_pending.append(context.enemy_cells[index])
 		if _star_marks.erase(index):
 			enemy_star_marks.emit(index, 0)
 		if ability.element == Element.Kind.DEATH:
@@ -5829,6 +8616,8 @@ func _apply_damage(index: int, ability: Ability, context: CombatContext,
 			_forge_plate()
 		if stats.element == Element.Kind.HUNGER and not structure:
 			_gain_bite()
+		if _blood_left > 0.0 and not structure:
+			_feed_blood(context.enemy_cells[index])
 		enemy_killed.emit(index)
 
 
@@ -5866,7 +8655,7 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 		Element.Kind.STARS:
 			_add_star_mark(index, ability, context)
 		Element.Kind.CHARM:
-			if ability == stats.attack:
+			if ability == stats.attack or _contagious:
 				_add_whisper(index, context)
 		Element.Kind.COLDFIRE:
 			if ability == stats.attack:
@@ -5886,6 +8675,15 @@ func _apply_trait(index: int, dealt: int, ability: Ability, context: CombatConte
 			if context.enemy_alive(index):
 				_echoes.append({"index": index, "time_left": ECHO_DELAY,
 					"damage": maxi(1, int(round(dealt * ECHO_RATIO))), "ability": ability})
+				# L'APOTHÉOSE : un second écho, un temps plus tard.
+				if _double_echo_left > 0.0:
+					_echoes.append({"index": index, "time_left": ECHO_DELAY * 2.0,
+						"damage": maxi(1, int(round(dealt * ECHO_RATIO))), "ability": ability})
+			# LA ROUE DES ÉLÉMENTS : le coup porte aussi le trait de l'orbe en tête (ou de celle qu'emportait le tir).
+			var turned := _wheel_hit if _wheel_hit >= 0 else (_wheel_rank if _wheel_left > 0.0 else -1)
+			if turned >= 0 and context.enemy_alive(index):
+				_apply_trait(index, dealt, Ability.make({"id": ability.id + "_roue", "kind": ability.kind,
+					"element": rank_element(turned)}), context)
 
 
 ## L'arc de foudre : le coup saute à l'ennemi vivant le plus proche DE LA

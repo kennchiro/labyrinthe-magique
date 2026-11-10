@@ -18,6 +18,7 @@ const PAINTED_STYLES := {
 	"bulle_peinte": preload("res://assets/shaders/chrono_bubble.gdshader"),
 	"gaz_peint": preload("res://assets/shaders/peste_fog.gdshader"),
 	"sanctuaire_peint": preload("res://assets/shaders/lumiere_sanctuary.gdshader"),
+	"cathedrale_peinte": preload("res://assets/shaders/aurore_cathedrale.gdshader"),
 	"glas_peint": preload("res://assets/shaders/mort_bell.gdshader"),
 	"sillon_peint": preload("res://assets/shaders/demon_sillon.gdshader"),
 	"toile_peinte": preload("res://assets/shaders/discorde_cercle.gdshader"),
@@ -27,6 +28,16 @@ const PAINTED_STYLES := {
 	"faille_peinte": preload("res://assets/shaders/colosse_faille.gdshader"),
 	"cage_peinte": preload("res://assets/shaders/tempete_cage.gdshader"),
 	"ouragan_peint": preload("res://assets/shaders/souverain_ouragan.gdshader"),
+	"sceau_gouffre": preload("res://assets/shaders/neant_sceau.gdshader"),
+	"porte_abysses": preload("res://assets/shaders/legion_porte.gdshader"),
+	# L'Éveil du Chronomancien : le Dôme de stase, cerclé d'un cadran d'or.
+	"dome_stase": preload("res://assets/shaders/heures_dome.gdshader"),
+	# L'Éveil de la Démone de la Discorde : l'Arène, des fils tendus qui attirent vers son centre.
+	"arene_peinte": preload("res://assets/shaders/reine_arene.gdshader"),
+	# L'Éveil du Geôlier : la plaque de givre de l'Hiver de l'Abîme.
+	"givre_abime": preload("res://assets/shaders/abime_givre.gdshader"),
+	# L'Éveil de l'Avide : la flaque d'acide du Déluge de bile.
+	"bile_peinte": preload("res://assets/shaders/faim_bile.gdshader"),
 }
 ## La glace lit des plaques et des fissures, pas un bruit lissé (`tools/build_noise.py`).
 const ICE_NOISE := preload("res://assets/shaders/ice_noise.png")

@@ -21,6 +21,9 @@ var tile_size: int = 32
 
 var _points: PackedVector2Array = PackedVector2Array()
 var _duration := 0.4
+## Une orbe arrivée qui n'a pas éclaté au bout de ça s'efface en `FADE` secondes.
+const LINGER := 0.8
+const FADE := 0.25
 var _elapsed := 0.0
 var _trail: Array[Vector2] = []
 
@@ -79,6 +82,18 @@ const PAINTED := {
 	# L'Éveil du Mage de l'Air : le Croissant d'ouragan.
 	"croissant_ouragan": {"shader": preload("res://assets/shaders/souverain_croissant.gdshader"),
 		"length": 1.5, "height": 1.0, "lead": 0.25, "sparks": 0.0},
+	# L'Éveil du Sorcier des Ténèbres : l'Orbe du néant, une éclipse qui file.
+	"orbe_neant": {"shader": preload("res://assets/shaders/neant_orbe.gdshader"),
+		"length": 1.6, "height": 0.8, "lead": 0.25, "sparks": 0.0},
+	# L'Éveil de l'Invocateur : la boule de feu du Roi-Dragon embrasé.
+	"brasier_roi": {"shader": preload("res://assets/shaders/legion_boule.gdshader"),
+		"length": 1.9, "height": 1.05, "lead": 0.3, "sparks": 0.7},
+	# L'Éveil du Mage de la Peste : le Crachat du fléau, une grosse goutte de venin.
+	"crachat_fleau": {"shader": preload("res://assets/shaders/fleau_crachat.gdshader"),
+		"length": 1.4, "height": 0.6, "lead": 0.3, "sparks": 0.0},
+	# L'Éveil du Chronomancien : les Trois Aiguilles, une aiguille d'or suivie de deux échos.
+	"aiguille_heures": {"shader": preload("res://assets/shaders/heures_aiguille.gdshader"),
+		"length": 1.8, "height": 0.42, "lead": 0.3, "sparks": 0.0},
 	"orbe_ombre": {"shader": preload("res://assets/shaders/shadow_orb.gdshader"),
 		"length": 1.7, "height": 1.3, "lead": 0.16, "sparks": 0.0},
 	"aiguille_occulte": {"shader": preload("res://assets/shaders/arcane_needle.gdshader"),
@@ -117,6 +132,16 @@ const PAINTED := {
 		"length": 2.2, "height": 0.66, "lead": 0.3, "sparks": 0.3},
 	"convergence_peinte": {"shader": preload("res://assets/shaders/convergence.gdshader"), "noise": SUPREME_NOISE,
 		"length": 1.45, "height": 1.45, "lead": 0.0, "sparks": 0.5},
+	"croissant_faucheur": {"shader": preload("res://assets/shaders/faucheur_croissant.gdshader"),
+		"length": 1.1, "height": 1.1, "lead": 0.0, "sparks": 0.2},
+	"trait_comete": {"shader": preload("res://assets/shaders/firmament_comete.gdshader"),
+		"length": 1.8, "height": 0.6, "lead": 0.3, "sparks": 0.25},
+	"trait_solaire": {"shader": preload("res://assets/shaders/aurore_trait.gdshader"),
+		"length": 2.0, "height": 0.6, "lead": 0.3, "sparks": 0.3},
+	"trait_primordial": {"shader": preload("res://assets/shaders/primordial_trait.gdshader"), "noise": SUPREME_NOISE,
+		"length": 2.3, "height": 0.7, "lead": 0.3, "sparks": 0.3},
+	"noyau_primordial": {"shader": preload("res://assets/shaders/primordial_noyau.gdshader"), "noise": SUPREME_NOISE,
+		"length": 1.6, "height": 1.6, "lead": 0.0, "sparks": 0.5},
 	"goutte": {"shader": preload("res://assets/shaders/water_drop_fx.gdshader"),
 		"length": 1.0, "height": 0.56, "lead": 0.18, "sparks": 0.0},
 	"meteore_jugement": {"shader": preload("res://assets/shaders/judgement_meteor.gdshader"), "noise": SUPREME_NOISE,
@@ -305,6 +330,15 @@ func _process(delta: float) -> void:
 	if _points.size() < 2:
 		queue_free()
 		return
+	# FILET DE SÉCURITÉ : arrivée sans impact (tir esquivé en arène, cible tombée en vol), l'orbe
+	# attendait un `burst()` qui ne viendrait jamais et restait figée au bout de sa course (vu sur
+	# iPhone le 2026-11-10). Passé `LINGER`, elle s'efface d'elle-même.
+	var late := _elapsed - _duration - LINGER
+	if late > 0.0:
+		modulate.a = 1.0 - late / FADE
+		if late >= FADE:
+			queue_free()
+			return
 	if _painted_size != Vector2.ZERO:
 		var born := minf(1.0, _elapsed / PAINTED_BIRTH)
 		sprite.scale = _painted_size * lerpf(PAINTED_BIRTH_SCALE, 1.0, born)

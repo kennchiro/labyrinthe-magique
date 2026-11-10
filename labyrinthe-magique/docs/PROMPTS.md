@@ -18,6 +18,11 @@ jointe aux modèles : [mages/heros_ael](prompts/mages/heros_ael.md), puis
 Toutes les images qui restent, en une seule commande : [mages/ael_commande_complete](prompts/mages/ael_commande_complete.md).
 Sa forme du niveau 80, le Dragon d'or : [mages/ael_dragon](prompts/mages/ael_dragon.md).
 
+## L'Arène — le Colisée
+
+Le sol, les murs, les décors, la Gemme-Cœur et le fond de la préparation, en cinq planches :
+[arene/README](prompts/arene/README.md). Toutes livrées et découpées (`tools/build_arena.py`).
+
 ## Le Héros d'essai — le gabarit d'animation
 
 Pour régler un mouvement très dynamique sans toucher aux personnages existants. Cinq images,
@@ -141,6 +146,142 @@ Fiche, règles et quatre prompts : [mages/eveil_foudre](prompts/mages/eveil_foud
 Le Mage de l'Air tient tout à distance : un rempart de vent repousse ce qui l'approche, il aspire, projette
 et s'envole. Fiche, règles et quatre prompts : [mages/eveil_air](prompts/mages/eveil_air.md). Jouable depuis le
 2026-11-07.
+
+## L'Éveil des Ténèbres — le Seigneur du Néant
+
+Son ombre se détache de lui et répète chacun de ses coups. ⚠️ Ses images se commandent sur fond VERT, pas
+magenta. Fiche, règles et quatre prompts : [mages/eveil_tenebres](prompts/mages/eveil_tenebres.md). Jouable
+depuis le 2026-11-07.
+
+
+## L'Éveil de l'Invocateur — le Maître des Légions
+
+Ses créatures naissent éveillées, plus grandes et plus fortes, et il marque la proie que toute la meute
+attaque. Son dragon est redessiné couvert de feu. ⚠️ Fond VERT, comme le Seigneur du Néant. Fiche, règles et
+cinq prompts : [mages/eveil_invocateur](prompts/mages/eveil_invocateur.md). Jouable depuis le 2026-11-08.
+
+
+## L'Éveil du Chronomancien — le Seigneur des Heures
+
+Son temps file plus vite que celui du monde, il fige, rembobine ses blessures, et arrête le temps pour
+accumuler ses coups. Fond magenta ; ses cheveux blancs s'ombrent de bleu-gris. Fiche, règles et quatre
+prompts : [mages/eveil_chrono](prompts/mages/eveil_chrono.md). Jouable depuis le 2026-11-08.
+
+
+## L'Éveil du Mage de la Peste — le Seigneur du Fléau
+
+Le poursuivre, c'est s'empoisonner : son miasme charge de doses ce qui le touche, et sa Saignée fait tout
+éclater d'un coup. Trois corbeaux de peste tournent autour de lui. Fond magenta ; son manteau reste noir
+bleuté, jamais violet. Fiche, règles et cinq prompts : [mages/eveil_peste](prompts/mages/eveil_peste.md).
+Jouable depuis le 2026-11-08.
+
+## L'Éveil du Sorcier Suprême — l'Archimage Primordial
+
+Les quatre éléments tournent autour de lui en orbes, et chacun de ses coups prend le suivant, avec son trait.
+Ses sceaux le suivent, et sa Genèse fait tomber le ciel en roue. ⚠️ Fond VERT pour ses trois planches (yeux et
+gemmes violets), MAGENTA pour ses icônes. Les orbes ne sont jamais dessinées sur lui. Fiche, règles et quatre
+prompts : [mages/eveil_supreme](prompts/mages/eveil_supreme.md). Jouable depuis le 2026-11-08.
+
+## L'Éveil du Démon du Pacte — l'Archidémon du Pacte
+
+Le premier Éveil des démons. Le démon avec qui il a signé sort de lui : cornes cerclées d'or, ailes de
+chauve-souris veinées de rouge, bras droit de démon, cœur de pacte qui brûle au jabot. Sa vie coule, chaque
+kill la lui rend, et sa Rage double. Fond magenta ; son rouge reste un rouge sang, jamais rose. Fiche, règles
+et quatre prompts : [mages/eveil_demon](prompts/mages/eveil_demon.md). Jouable depuis le 2026-11-08.
+
+## L'Éveil de la Démone de la Discorde — la Reine de la Discorde
+
+Son troisième œil s'ouvre, une croix de marionnettiste d'argent se dresse dans son dos, et la discorde se
+propage : quand un pantin meurt, ses fils sautent sur un voisin. ⚠️ Aucun rose, aucun violet sur elle : vert
+sapin, noir, argent et émeraude. Fiche, règles et quatre prompts :
+[mages/eveil_discorde](prompts/mages/eveil_discorde.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil du Roi de Braise — l'Empereur des Cendres
+
+Sa couronne brisée se reforge dans la lave, un anneau de braise flotte au-dessus, ses cheveux s'embrasent, et
+chaque pièce qu'il lance laisse un sillage de cendres ardentes. Ses gantelets et son plastron restent dessinés à
+part par le jeu : aucun sur le sprite. Fond magenta, flammes orange jamais roses. Fiche, règles et quatre prompts :
+[mages/eveil_braise](prompts/mages/eveil_braise.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil du Chevalier Écarlate — le Seigneur Écarlate
+
+Un masque de démon sur le bas du visage, des yeux rouges, un cimier en croissant, et une lame fantôme qui flotte dans
+son dos. Ses entailles n'attendent plus : à 8, elles s'ouvrent seules. Fond magenta, rouge franc sans aucun bleu.
+Fiche, règles et quatre prompts : [mages/eveil_ecarlate](prompts/mages/eveil_ecarlate.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil du Geôlier — le Gardien de l'Abîme
+
+Un anneau de clés spectrales tourne dans son dos, une serrure s'ouvre au cœur de son plastron, et ses chaînes pèsent si
+lourd que tout ce qu'il frappe finit enchaîné. Il reste grand et massif, PAS chibi, et flotte sans jambes. Fond magenta,
+flammes cyan sans rose ni violet. Fiche, règles et quatre prompts :
+[mages/eveil_geolier](prompts/mages/eveil_geolier.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil du Dragon des Abysses — le Dragon Primordial
+
+Quatre cornes d'obsidienne coulant de lave, un cœur de magma blanc qui bat entre ses côtes, des ailes bordées de
+flammes : le premier feu du monde. Son feu dure deux fois plus, et ce qui y meurt explose et le répand. PAS chibi,
+dessiné 30 % plus grand, jamais doré (ce serait le Dragon d'or d'Aël). Fiche, règles et quatre prompts :
+[mages/eveil_dragon](prompts/mages/eveil_dragon.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil du Croupier des Enfers — le Maître du Casino
+
+Haut-de-forme à bande d'or, cornes dorées, monocle-roulette, queue-de-pie aux basques en cartes et queue de démon en
+pique : le banquier des Enfers. La maison gagne toujours : son Coup de chance tombe deux fois plus souvent et éclate
+en jetons d'or. Il reste chibi ; son bordeaux reste sans bleu. Fiche, règles et quatre prompts :
+[mages/eveil_croupier](prompts/mages/eveil_croupier.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil de l'Avide — Faim Sans Fond
+
+La gueule de son ventre s'ouvre jusqu'au cou, des bouches s'ouvrent sur ses avant-bras, ses cornes se fendent en quatre
+et sa faim ne retombe plus : 8 bouchées, qui ne fondent plus. PAS chibi, toujours sans yeux, dessiné 30 % plus grand.
+Fiche, règles et quatre prompts : [mages/eveil_avide](prompts/mages/eveil_avide.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil du Porte-Lumière — l'Étoile du Matin
+
+Le premier Éveil des anges. Il devient un petit soleil : disque solaire d'or derrière la tête, deux ailes de rayons,
+armure d'or blanc à l'étoile à huit branches. Ce qu'il aveugle prend 30 % de plus, et ce qui reste collé à lui finit
+ébloui. ⚠️ Fond VERT pour ses trois planches (le magenta laissait des ombres roses sur ses plumes), MAGENTA pour ses
+icônes. Deux ailes seulement, à demi repliées. Fiche, règles et cinq prompts :
+[mages/eveil_lumiere](prompts/mages/eveil_lumiere.md). Jouable depuis le 2026-11-09.
+
+## L'Éveil de l'Ange de la Mort — le Faucheur des Âmes
+
+La Mort elle-même : son auréole brisée se ressoude, une capuche noire tombe sur ses cornes, ses ailes finissent en
+braise et sa faux devient double. Il achève sous 25 %, et ses âmes tournent autour de lui et frappent ce qui approche.
+⚠️ Fond VERT pour ses trois planches (son rouge et ses ombres partiraient sur le magenta), MAGENTA pour ses icônes,
+où son rouge tire sur l'orange, jamais sur le rose. Un ange d'abord : le visage reste visible. Fiche, règles et cinq
+prompts : [mages/eveil_mort](prompts/mages/eveil_mort.md). Jouable depuis le 2026-11-10.
+
+## L'Éveil de l'Ange des Étoiles — la Reine du Firmament
+
+La reine de la nuit : une couronne d'étoiles posée sur ses cheveux, une longue cape de nuit constellée, un sceptre à
+grande étoile. Elle pose 5 étoiles au lieu de 3, ses rayons brûlent 50 % plus fort, et quand ses cinq étoiles sont
+posées la figure se ferme et brûle tout ce qu'elle enferme. ⚠️ Fond MAGENTA pour toutes ses images, comme ses
+planches d'origine, et jamais de rose ni de violet sur elle : sa nuit est bleue. Fiche, règles et cinq prompts :
+[mages/eveil_etoiles](prompts/mages/eveil_etoiles.md). Jouable depuis le 2026-11-10.
+
+## L'Éveil de l'Archange d'Acier — le Forgeron Céleste
+
+La forge du ciel : les fentes de son armure flamboient, une couronne d'enclume d'or est posée sur son heaume, les
+lames de ses ailes rougeoient et son marteau devient un marteau-forge. Cinq plaques au lieu de trois, chaque kill en
+reforge une, et une plaque qui casse explose en éclats. ⚠️ Fond MAGENTA pour toutes ses images, comme ses planches
+d'origine, sans rose ni violet : son métal chauffé est orange franc. Fiche, règles et cinq prompts :
+[mages/eveil_acier](prompts/mages/eveil_acier.md). Jouable depuis le 2026-11-10.
+
+## L'Éveil de l'Archange du Ciel — le Séraphin
+
+L'ange aux six ailes : trois paires empilées et à demi repliées, une auréole d'or à flammes émeraude, une lance à
+pointe de flamme. Chaque Lance céleste en appelle une seconde, et ce que le ciel frappe prend +20 %. ⚠️ Fond MAGENTA
+pour toutes ses images (le vert prendrait son émeraude), avec des ombres GRIS-VERT sur son blanc, jamais roses. Fiche,
+règles et cinq prompts : [mages/eveil_ciel](prompts/mages/eveil_ciel.md). Jouable depuis le 2026-11-10.
+
+## L'Éveil du Chérubin — le Gardien du Trône
+
+Le chérubin d'Ézéchiel : quatre ailes couvertes d'yeux d'or, une roue dans une roue derrière la tête, une grande épée
+flamboyante. Son regard porte à deux cases au lieu du contact, et son Éden gardé est plus grand, avec une épée qui
+tournoie sur le bord. ⚠️ Fond MAGENTA pour toutes ses images, et son saphir jamais violet. Proposition préparée sans
+validation séparée. Fiche, règles et cinq prompts :
+[mages/eveil_cherubin](prompts/mages/eveil_cherubin.md). Jouable depuis le 2026-11-10.
 
 ## Les anges — refaire le sprite comme les mages
 

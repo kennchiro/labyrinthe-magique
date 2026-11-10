@@ -33,6 +33,9 @@ const MOTES := 44
 const GLOW_SIDE := 128.0
 ## L'air de chaque stage : tailles en pixels d'écran, vitesses en pixels par seconde.
 const AIR := {
+	# Le Colisée : la poussière dorée que soulève le combat, qui dérive en travers.
+	0: {"amount": 30, "life": 8.0, "way": Vector2(1, -0.25), "spread": 30.0, "speed": Vector2(6, 18),
+		"size": Vector2(4, 10), "colour": Color(1.0, 0.86, 0.58, 0.60)},
 	1: {"amount": 26, "life": 8.0, "way": Vector2(1, 0), "spread": 180.0, "speed": Vector2(5, 20),
 		"size": Vector2(7, 16), "colour": Color(0.82, 1.0, 0.42, 0.85), "blink": true},
 	2: {"amount": 24, "life": 3.5, "way": Vector2(1, 0), "spread": 180.0, "speed": Vector2(8, 36),

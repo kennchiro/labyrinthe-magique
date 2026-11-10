@@ -38,7 +38,11 @@ OUT_PORTRAITS = OUT_UI / "portraits"
 
 ## Ordre du catalogue — c'est celui de la rangée à l'écran.
 MAGES = ["ael_eveille", "ael_ascendant", "ael_prisme", "ael_dragon", "ael", "fire", "water", "earth", "shadow", "thunder", "air",
-         "invocateur", "supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "croupier", "avide"]
+         "invocateur", "supreme", "chrono", "peste", "lumiere", "mort", "etoiles", "acier", "demon", "discorde", "braise", "ecarlate", "geolier", "ciel", "cherubin", "dragon", "croupier", "avide",
+         # Les Éveils, pour le bouton ÉVEIL de la fiche (`docs/prompts/menu/portrait_*_eveil.md`).
+         "fire_eveil", "water_eveil", "earth_eveil", "thunder_eveil", "air_eveil", "shadow_eveil", "invocateur_eveil",
+         "chrono_eveil", "peste_eveil", "supreme_eveil", "demon_eveil", "discorde_eveil", "braise_eveil",
+         "ecarlate_eveil", "geolier_eveil", "dragon_eveil", "lumiere_eveil", "mort_eveil", "etoiles_eveil", "acier_eveil", "cherubin_eveil", "ciel_eveil"]
 
 ## Taille des portraits sur le disque. La vignette de la rangée fait ~116 points
 ## de large, doublée sur un écran Retina : 384 laisse de la marge sans peser.
@@ -71,6 +75,44 @@ def magenta_mask(pixels: np.ndarray) -> np.ndarray:
     return np.sqrt(((pixels[..., :3] - key) ** 2).sum(axis=2)) < KEY_DISTANCE
 
 
+## LA NAPPE REPEINTE, quand ChatGPT a laissé le portrait sur le magenta de la planche au lieu de la nappe demandée :
+## (couleur du halo derrière le personnage, couleur des bords, étoiles semées ou non). La Reine du Firmament est
+## revenue ainsi le 2026-11-10 ; sa nappe est celle de sa fiche (`portrait_etoiles_eveil.md`).
+NAPPES = {
+    "etoiles_eveil": ((58, 92, 176), (10, 16, 48), True),
+    # Revenu sur magenta lui aussi le 2026-11-10 : la nappe saphir et or de sa fiche.
+    "cherubin_eveil": ((70, 110, 230), (12, 20, 60), False),
+}
+## Écarts au magenta : en dessous, du fond pur ; au-dessus, le personnage ; entre les deux, un bord mêlé de fond.
+NAPPE_KEY = (45.0, 140.0)
+
+
+def with_painted_backdrop(portrait: Image.Image, glow: tuple, edge: tuple, stars: bool) -> Image.Image:
+    """Le personnage détouré du magenta, posé sur une nappe en halo (plus claire derrière lui, sombre aux bords).
+
+    Le bord est DÉMÊLÉ et non seulement rendu transparent : un pixel mi-fond, mi-cape garde sinon une frange rose."""
+    rgb = np.asarray(portrait, np.float32)
+    key = np.array([255.0, 0.0, 255.0], np.float32)
+    distance = np.sqrt(((rgb - key) ** 2).sum(axis=2))
+    low, high = NAPPE_KEY
+    alpha = np.clip((distance - low) / (high - low), 0.0, 1.0)[..., None]
+    safe = np.maximum(alpha, 1e-3)
+    unmixed = np.clip((rgb - (1.0 - alpha) * key) / safe, 0.0, 255.0)
+    height, width = alpha.shape[:2]
+    ys, xs = np.mgrid[0:height, 0:width].astype(np.float32)
+    reach = np.sqrt(((xs - width * 0.5) / (width * 0.6)) ** 2 + ((ys - height * 0.45) / (height * 0.6)) ** 2)
+    mix = np.clip(reach, 0.0, 1.0)[..., None] ** 1.3
+    nappe = np.array(glow, np.float32) * (1.0 - mix) + np.array(edge, np.float32) * mix
+    if stars:
+        noise = np.random.default_rng(7)
+        for _ in range(140):
+            x, y = int(noise.integers(0, width)), int(noise.integers(0, height))
+            size = int(noise.integers(1, 4))
+            nappe[max(0, y - size):y + size, max(0, x - size):x + size] = (235.0, 240.0, 255.0)
+    out = unmixed * alpha + nappe * (1.0 - alpha)
+    return Image.fromarray(out.astype(np.uint8), "RGB")
+
+
 def build_portraits() -> str:
     OUT_PORTRAITS.mkdir(parents=True, exist_ok=True)
     written = 0
@@ -81,6 +123,8 @@ def build_portraits() -> str:
             continue
         with Image.open(path) as image:
             portrait = image.convert("RGB")
+        if name in NAPPES and magenta_mask(np.asarray(portrait, np.float32)[:8, :8]).all():
+            portrait = with_painted_backdrop(portrait, *NAPPES[name])
         height = int(round(PORTRAIT_WIDTH * portrait.height / portrait.width))
         portrait.resize((PORTRAIT_WIDTH, height), Image.LANCZOS).save(
             OUT_PORTRAITS / f"portrait_{name}.jpg", quality=JPEG_QUALITY)

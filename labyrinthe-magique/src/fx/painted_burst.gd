@@ -53,6 +53,11 @@ func set_shader_seconds(seconds: float) -> void:
 	_material.set_shader_parameter("seconds", seconds)
 
 
+## Une valeur propre au shader (la Rage de l'aura de l'Archidémon).
+func set_shader_value(parameter: String, value: Variant) -> void:
+	_material.set_shader_parameter(parameter, value)
+
+
 ## Rallume un effet qui dure (le sol en feu du Dragon) : il reprend à `from_progress`, sans
 ## repasser par sa naissance, et s'éteint `seconds` plus tard.
 func relight(seconds: float, from_progress: float) -> void:

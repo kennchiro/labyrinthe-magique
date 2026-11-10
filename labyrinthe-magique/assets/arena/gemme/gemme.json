@@ -1,0 +1,13 @@
+{
+  "states": [
+    "libre",
+    "bleus",
+    "rouges",
+    "disputee"
+  ],
+  "size": [
+    152,
+    192
+  ],
+  "socle_top": 0.529
+}

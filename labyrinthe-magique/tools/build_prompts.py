@@ -342,6 +342,13 @@ STAGES = {
 
 ## Les 16 cases du mur : c'est de la GÉOMÉTRIE, elle ne change pas d'un stage à
 ## l'autre. Une seule écriture, donc une seule chose à corriger si elle est fausse.
+ARENA = {
+    "mur": "un muret massif de pierre taillée beige et grise de colisée magique, "
+           "usé, aux joints irréguliers et aux rares runes gravées, sans végétation",
+    "teinte_mur": "gris chaud et bronze sourds, nettement plus sombres que "
+                  "les grandes dalles beige clair du sol de l'arène",
+}
+
 CASES = """Rangée 1
 1. bloc ISOLÉ : une masse ronde au centre, qui ne touche AUCUN bord
 2. cul-de-sac ouvert vers le HAUT (arrondi en bas)
@@ -441,12 +448,18 @@ pour faire semblant. Voir [../PROMPT_TERRAIN.md](../PROMPT_TERRAIN.md).
 """
 
 
-def mur_page(index: int, data: dict) -> str:
-    return f"""# terrain_{index}_mur — les MURS du stage {index} ({NAMES[index - 1]})
+def mur_page(index: int, data: dict, *, arena: bool = False) -> str:
+    name = "arene_mur" if arena else f"terrain_{index}_mur"
+    title = "de l'arène" if arena else f"du stage {index} ({NAMES[index - 1]})"
+    reference = ("../../assets/peso&cover/terrain/terrain_8_mur.png" if arena
+                 else f"ref/ref_{index}_mur.png")
+    source = ("assets/peso&cover/terrain/terrain_8_mur.png" if arena
+              else f"assets/stages/stage_{index}.png")
+    return f"""# {name} — les MURS {title}
 
 {ENTETE}
-**Joins `ref/ref_{index}_mur.png` à ChatGPT** — c'est le panneau de labyrinthe de
-`assets/stages/stage_{index}.png` — et dis : « refais-moi ce jeu de pièces au
+**Joins `{reference}` à ChatGPT** — référence issue de
+`{source}` — et dis : « refais-moi ce jeu de pièces au
 complet, même style, même palette ».
 
 Ce n'est **pas une matière**, c'est un **jeu de 16 pièces** — un autotile. La
@@ -455,7 +468,7 @@ culs-de-sac. C'est ce qui donne au mur une SILHOUETTE, et c'est de loin ce qui
 manque le plus au jeu aujourd'hui (le moteur pose un carré plein par case, sans
 bord ni coin).
 
-Résultat attendu : `terrain_{index}_mur.png` dans `assets/peso&cover/terrain/`.
+Résultat attendu : `{name}.png` dans `assets/peso&cover/terrain/`.
 
 ```
 Planche de tuiles pour un jeu 2D vu de DESSUS, style cartoon coloré, contour
@@ -623,6 +636,11 @@ référence en pièce jointe. Dépose les résultats dans
 |---|---|---|---|
 {table}
 
+## Arène
+
+Le [mur de l'arène](prompts/arene_mur.md) reprend les mêmes seize raccords,
+en pierre de colisée. Résultat : `assets/peso&cover/terrain/arene_mur.png`.
+
 ## Pourquoi les prompts n'imposent PAS lequel est le plus clair
 
 Le jeu impose 52 de luminance d'écart entre sol et mur (`MIN_CONTRAST`) : c'est
@@ -693,6 +711,7 @@ coup, et les stages sans planche gardent leur terrain teinté actuel.
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     REF.mkdir(parents=True, exist_ok=True)
+    (OUT / "arene_mur.md").write_text(mur_page(8, ARENA, arena=True), encoding="utf-8")
 
     faits = []
     for index, data in sorted(STAGES.items()):

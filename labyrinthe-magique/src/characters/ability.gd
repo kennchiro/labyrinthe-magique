@@ -514,6 +514,67 @@ enum Kind {
 ## Allure des projectiles ennemis qui visent l'intérieur de la zone. 1 = aucun effet.
 @export var time_factor: float = 1.0
 
+## L'ÉVEIL DU CHRONOMANCIEN (le Seigneur des Heures).
+## Le Dôme de stase FIGE net, une seule fois, chaque créature qui y entre (forme ZONE). Zéro = rien.
+@export var entry_freeze: float = 0.0
+## Le Paradoxe : un second double rejoue autant de secondes de marche, en plus du premier. Zéro = un seul.
+@export var echo_second_seconds: float = 0.0
+## Chaque double explose en onde d'horloge au bout de son trajet. Zéro = rien.
+@export var echo_end_damage: int = 0
+@export var echo_end_radius: float = 1.5
+## Le Rembobinage : il récupère d'un coup les PV perdus dans ces dernières secondes (forme HOURGLASS,
+## instantanée). Zéro = le Sablier ordinaire.
+@export var rewind_heal_seconds: float = 0.0
+## Le Saut temporel laisse là d'où il part une bombe-horloge qui sonne après ce délai. Zéro = rien.
+@export var clock_bomb_delay: float = 0.0
+@export var clock_bomb_damage: int = 0
+@export var clock_bomb_radius: float = 1.8
+@export var clock_bomb_stun: float = 0.0
+## Le Jugement des Heures : pendant l'arrêt du temps, ses coups s'accumulent sur les ennemis au lieu de
+## porter, puis tombent tous ensemble à ce multiple (forme TIME_STOP). Zéro = l'Arrêt ordinaire.
+@export var judgement_ratio: float = 0.0
+
+## L'ÉVEIL DU MAGE DE LA PESTE (le Seigneur du Fléau).
+## Le Sillage pestilent : ses flaques mettent ces doses et ralentissent à ce facteur (forme TRAIL). Zéro = la
+## flaque ordinaire, une dose sans ralentir.
+@export var trail_doses: int = 0
+@export var trail_slow: float = 0.0
+## L'Épidémie : le poison saute d'ennemi en ennemi, `chain_range` cases au plus, ce nombre de fois ; chaque saut
+## blesse de `damage` et ajoute `epidemic_doses` (forme CONTAGION). Zéro = la Contagion ordinaire.
+@export var epidemic_jumps: int = 0
+@export var epidemic_doses: int = 2
+## La Saignée : chaque dose portée dans `radius` éclate pour ces dégâts ; il reprend 1 PV par `transfuse_per`
+## doses éclatées (forme TRANSFUSION). Zéro = la Transfusion ordinaire.
+@export var bleed_per_dose: int = 0
+## La Nuée de corbeaux : ce qu'elle survole prend ces dégâts et ces doses (forme BLINK). Zéro = rien.
+@export var flock_damage: int = 0
+@export var flock_doses: int = 0
+## Le nuage de la fuite se pose là où il arrive, et non là d'où il part.
+@export var cloud_at_arrival: bool = false
+## La Grande Peste ralentit tout ce qu'elle charge à ce facteur (forme PANDEMIC). 1 = rien.
+@export var plague_slow: float = 1.0
+## Doses que met le nuage des morts de la peste, une fois par seconde. Zéro = une.
+@export var cloud_venom_doses: int = 0
+
+## L'ÉVEIL DU SORCIER SUPRÊME (l'Archimage Primordial).
+## La Grande Convergence : à l'impact, le noyau se brise en ce nombre d'éclats, un par élément de la roue,
+## chacun sur une créature proche, pour ces dégâts et le trait de son élément. Zéro = rien.
+@export var element_shards: int = 0
+@export var element_shard_damage: int = 0
+## La Couronne des sceaux : les quatre sceaux s'accrochent au mage et le suivent (forme ZONE à `seal_ring`).
+@export var seals_follow: bool = false
+## L'Apothéose : tant que dure l'exaltation, son Écho frappe deux fois.
+@export var double_echo: bool = false
+## Le Pas des éléments : à l'arrivée, un rayon de chaque élément part dans chaque couloir, sur cette longueur,
+## pour ces dégâts et le trait de son élément (forme BLINK). Zéro = rien.
+@export var element_ray_damage: int = 0
+@export var element_ray_range: int = 5
+## La Genèse : chaque météore prend l'élément suivant de la roue et porte son trait.
+@export var rain_elements: bool = false
+## La Genèse : la lumière de l'origine, quand la dernière météore est tombée. À vol d'oiseau. Zéro = rien.
+@export var nova_damage: int = 0
+@export var nova_radius: float = 0.0
+
 
 ## --- Le Mage de la Peste : ses dégâts sont des DOSES, qui travaillent quand il a fui ---
 
@@ -534,6 +595,112 @@ enum Kind {
 @export var blind_seconds: float = 0.0
 ## Rayon, en cases, de l'éclair qui aveugle quand la coque cède ou quand il atterrit.
 @export var blind_radius: int = 0
+
+## L'ÉVEIL DE L'ANGE DE LA MORT (le Faucheur des Âmes).
+## Le projectile revient vers le mage après sa cible, et frappe ce qu'il croise au retour.
+@export var returns: bool = false
+## Le Glas funèbre (forme BLAST) : ce nombre de coups, à `toll_gap` s d'écart, autour du mage ; chacun marque
+## (`mark_seconds`) et ralentit (`toll_slow` pendant `slow_duration`). Zéro = une explosion ordinaire.
+@export var toll_count: int = 0
+@export var toll_gap: float = 1.5
+@export var toll_slow: float = 1.0
+## La Légion des âmes : âmes lâchées en plus de celles récoltées. Zéro = une.
+@export var souls_base: int = 0
+## Le Pas de l'ombre marque ce temps tout ce qui est sur la ligne du passage. Zéro = rien.
+@export var blink_mark_seconds: float = 0.0
+## Minuit : la faux de l'Heure dernière passe ce nombre de fois (aller, puis retour).
+@export var hour_passes: int = 1
+
+## L'ÉVEIL DE L'ARCHANGE DU CIEL (le Séraphin).
+## La Lance du Séraphin : un tir `from_sky` en appelle un second sur un autre ennemi à portée.
+@export var sky_twin: bool = false
+## La Pluie de plumes (forme BLADES) : une plume tombe du ciel sur chaque ennemi à portée, ce nombre au plus.
+## Zéro = la volée ordinaire.
+@export var feather_rain: int = 0
+## La Colonne du jugement : la colonne reste allumée ce temps sur sa case, et brûle (`column_burn` par seconde) ce
+## qui y entre. Zéro = elle s'éteint aussitôt.
+@export var column_linger: float = 0.0
+@export var column_burn: int = 0
+## L'Ascension (forme FLIGHT) : pendant le vol, une lance tombe toutes les `flight_lance_gap` s sur l'ennemi le plus
+## proche (`flight_lance_damage`). Zéro = rien.
+@export var flight_lance_gap: float = 0.0
+@export var flight_lance_damage: int = 0
+## Le Jugement dernier : après la pluie d'épées, une épée géante tombe sur lui et frappe à vol d'oiseau. Zéro = rien.
+@export var great_sword_damage: int = 0
+@export var great_sword_radius: float = 0.0
+
+## L'ÉVEIL DU CHÉRUBIN (le Gardien du Trône).
+## L'Épée flamboyante : le couloir que la flamme traverse reste en feu ce temps (une case en feu ordinaire). Zéro = rien.
+@export var line_fire: float = 0.0
+## Les Roues dans les roues : à quatre ou plus, une roue part dans chacune des quatre directions. Deux = l'ordinaire.
+@export var wheel_count: int = 2
+## Les Ailes du Trône : quand l'intouchabilité finit, un œil s'ouvre sur tout ce qui est à ce rayon. Zéro = rien.
+@export var veil_eyes_radius: float = 0.0
+## L'Éden gardé : une épée de flamme tourne sur le bord du cercle et frappe ce qui s'en approche. Zéro = aucune.
+@export var garden_sword_damage: int = 0
+
+## L'ÉVEIL DE L'ARCHANGE D'ACIER (le Forgeron Céleste).
+## Le Marteau du ciel : un coup sur ce nombre étourdit `stun_seconds` ce que l'onde touche. Zéro = jamais (et alors
+## `stun_seconds` étourdit à chaque coup, comme avant).
+@export var stun_every: int = 0
+## La Tempête de lames : les lames partent sur tout le tour au lieu d'un éventail.
+@export var blades_circle: bool = false
+## L'Enclume céleste (forme ANVIL) : une enclume tombe d'abord sur l'ennemi le plus proche (dégâts, rayon,
+## étourdissement), et l'onde part de son point d'impact. Zéro = l'onde part du lanceur.
+@export var anvil_drop_damage: int = 0
+@export var anvil_drop_radius: float = 0.0
+@export var anvil_drop_stun: float = 0.0
+## Le Bastion de la forge (forme SHIELD) : à la fin, une gerbe de lames (dégâts, rayon) et ce nombre de plaques.
+@export var bastion_burst_damage: int = 0
+@export var bastion_burst_radius: float = 0.0
+@export var bastion_plates: int = 0
+## La Charge du bélier : ce qu'elle renverse est étourdi ce temps, et sa traînée laisse du métal en fusion au sol
+## (`molten_trail_seconds`, brûlant comme une case en feu). Zéro = rien.
+@export var trail_stun: float = 0.0
+@export var molten_trail_seconds: float = 0.0
+## Le Cœur de la forge : pendant la fusion, chaque case où il marche reste en fusion ce temps. Zéro = rien.
+@export var molten_steps_seconds: float = 0.0
+
+## L'ÉVEIL DE L'ANGE DES ÉTOILES (la Reine du Firmament).
+## Le Trait de comète : quand les étoiles de la cible explosent, une étoile éphémère s'allume sur sa case ce temps,
+## reliée à la constellation. Zéro = aucune.
+@export var spark_seconds: float = 0.0
+## La Grande Constellation : quand toutes les étoiles sont posées, la figure se ferme et brûle ce qu'elle enferme
+## (dégâts par seconde). Zéro = elle ne se ferme pas.
+@export var figure_damage: int = 0
+## La Pluie de météores : un dernier gros météore sur l'ennemi le plus solide à portée. Zéro = aucun.
+@export var big_meteor_damage: int = 0
+@export var big_meteor_radius: float = 0.0
+## L'Éclipse (forme SHIELD intouchable) : à la fin, un anneau de lune de ce rayon blesse (`moon_ring_damage`) et
+## ralentit (`moon_ring_slow` pendant `moon_ring_slow_seconds`). Zéro = rien.
+@export var moon_ring_radius: float = 0.0
+@export var moon_ring_damage: int = 0
+@export var moon_ring_slow: float = 1.0
+@export var moon_ring_slow_seconds: float = 0.0
+## La Comète : la fuite pose gratuitement une étoile là où elle arrive.
+@export var blink_star: bool = false
+## Naissance d'une galaxie (forme DAWN) : chaque point d'impact devient une étoile ce temps, reliée à ses voisines,
+## et leurs rayons brûlent (`galaxy_damage` par seconde). Zéro = l'impact s'éteint.
+@export var galaxy_seconds: float = 0.0
+@export var galaxy_damage: int = 0
+
+## L'ÉVEIL DU PORTE-LUMIÈRE (l'Étoile du Matin).
+## Le Trait solaire : un coup sur ce nombre aveugle `blind_seconds`. Zéro = jamais.
+@export var blind_every: int = 0
+## La Lance de l'Aurore reste allumée ce temps sur son trajet, et brûle (`linger_damage` par seconde) et aveugle
+## (`blind_seconds`) ce qui le traverse. Zéro = elle s'éteint aussitôt.
+@export var beam_linger: float = 0.0
+@export var linger_damage: int = 0
+## La Cathédrale de lumière lui rend un PV toutes ces secondes passées dedans. Zéro = aucun soin.
+@export var zone_heal_every: float = 0.0
+## L'Égide solaire renvoie chaque coup encaissé en un rayon de ces dégâts. Zéro = aucun renvoi.
+@export var aegis_ray_damage: int = 0
+## Le Soleil de midi (forme DAWN) : il brille ce temps, lance un rayon de `sun_damage` par seconde sur chaque
+## ennemi à l'écran, puis tombe en une vague de `sun_end_damage` sur `sun_end_radius`. Zéro = l'Aube de base.
+@export var sun_seconds: float = 0.0
+@export var sun_damage: int = 0
+@export var sun_end_damage: int = 0
+@export var sun_end_radius: float = 0.0
 
 
 ## --- L'Ange de la Mort : ce qu'il a blessé, il vient le prendre ------------------------
@@ -573,11 +740,29 @@ enum Kind {
 ## Combien d'ennemis le lien enchaîne, et la part des dégâts qui passe aux autres.
 @export var bond_count: int = 0
 @export var bond_share: float = 0.0
+## L'Œil de la Reine (l'Éveil de la Discorde) : la cible ET ses N plus proches voisins sont possédés.
+@export var possess_neighbors: int = 0
+## Le Grand Bal : tant qu'il dure, chaque ennemi qui meurt éclate en fils, ces dégâts dans ce rayon.
+@export var ball_burst_damage: int = 0
+@export var ball_burst_radius: float = 0.0
 
 ## LE ROI DE BRAISE. Combien de temps le plastron retient sa proie, et le leurre attire les ennemis.
 @export var hold_seconds: float = 0.0
 @export var decoy_seconds: float = 0.0
 @export var decoy_radius: float = 0.0
+## L'EMPEREUR DES CENDRES (l'Éveil du Roi de Braise). La Forge impériale aspire jusqu'à cette distance tant
+## qu'elle est posée ou qu'elle mord, puis explose quand elle recrache sa proie.
+@export var forge_pull: float = 0.0
+@export var forge_blast_damage: int = 0
+@export var forge_blast_radius: float = 0.0
+## Le Retour de l'Empire : les pièces rappelées laissent un mur de flammes, et si les trois reviennent
+## ensemble, une onde de cendres part de lui.
+@export var recall_fire_seconds: float = 0.0
+@export var recall_wave_damage: int = 0
+@export var recall_wave_radius: float = 0.0
+## L'Empire des Cendres : chaque cage éclate en colonne de lave quand elle se resserre.
+@export var cage_burst_damage: int = 0
+@export var cage_burst_radius: float = 0.0
 
 ## LE CHEVALIER ÉCARLATE. Les entailles que laisse chaque coup du sort.
 @export var cuts: int = 0
@@ -585,10 +770,59 @@ enum Kind {
 @export var cut_damage: int = 0
 ## La translation part dans son dos.
 @export var backward: bool = false
+## LE SEIGNEUR ÉCARLATE (l'Éveil du Chevalier). Le Pas des Mille Lames : sa lame fantôme repasse sur le même couloir
+## `dash_echo_delay` secondes après, pour ces dégâts et ces entailles.
+@export var dash_echo_damage: int = 0
+@export var dash_echo_delay: float = 0.5
+@export var dash_echo_cuts: int = 0
+## La Garde du Seigneur pare TOUS les coups tant qu'elle dure, et riposte à chacun.
+@export var guard_all: bool = false
+## La Rengaine écarlate : chaque éclat projette des pétales-lames qui posent ces entailles aux voisins.
+@export var petal_cuts: int = 0
+@export var petal_radius: float = 0.0
+## LE GARDIEN DE L'ABÎME (l'Éveil du Geôlier). Les Crochets lancent autant de chaînes à la fois.
+@export var hook_count: int = 1
+## Les Chaînes de l'Abîme se resserrent en cédant : ces dégâts, et chaque proie figée ce temps-là.
+@export var snap_damage: int = 0
+@export var snap_stun: float = 0.0
+## L'Hiver de l'Abîme laisse une plaque de givre qui ralentit ce temps-là, au facteur `slow_factor`.
+@export var frost_seconds: float = 0.0
+## Le Pas de l'Abîme fige à l'arrivée ce que son onde (`end_blast_*`) touche.
+@export var end_blast_stun: float = 0.0
+## L'Abîme tire ses prisonniers d'une case vers lui toutes les `gaol_pull_gap` s, puis se referme sur eux.
+@export var gaol_pull_gap: float = 0.0
+@export var gaol_end_damage: int = 0
+## LE DRAGON PRIMORDIAL (l'Éveil du Dragon des Abysses). Le Souffle embrase aussi les cases qui bordent le couloir.
+@export var breath_spill: bool = false
+## LE MAÎTRE DU CASINO (l'Éveil du Croupier). Les Dés du Diable roulent autant de dés ; un brelan fige et brûle.
+@export var dice_count: int = 2
+## La Table piégée pose ses cartes en croix autour de lui, et un Joker sort à cette chance.
+@export var trap_cross: bool = false
+@export var joker_chance: float = 0.0
+## La Pièce truquée retombe sur la tranche : les deux faces à la fois.
+@export var coin_both: bool = false
+## Le Grand Jeu : la roulette tourne autant de fois de suite.
+@export var roulette_spins: int = 1
+## FAIM SANS FOND (l'Éveil de l'Avide). Tout dévorer saisit autant de proies à la fois.
+@export var devour_count: int = 1
+## Le Déluge de bile : chaque boule laisse une flaque d'acide, ce temps-là, à ces dégâts par seconde.
+@export var bile_seconds: float = 0.0
+@export var bile_damage: int = 0
+## Le Grand Festin avale à cet intervalle (0 : `CombatSystem.FEAST_GAP`), et se soigne au plus tant de fois.
+@export var feast_gap: float = 0.0
+@export var feast_heal_cap: int = 0
+## L'Ombre lâche un météore à rayon sur chaque proie, au lieu d'une colonne qui ne frappe qu'elle.
+@export var meteor_radius: float = 0.0
 ## Le Dernier Pacte : le lanceur tombe à 1 PV et reste intouchable ce temps-là.
 @export var last_pact_seconds: float = 0.0
 ## La part des PV sacrifiés qu'il retrouve à la fin.
 @export var last_pact_return: float = 0.0
+## L'Apocalypse de Sang (l'Archidémon) : tant que dure le Dernier Pacte, une serre géante s'abat toutes les
+## `pact_claw_gap` secondes sur l'ennemi le plus proche, pour ces dégâts.
+@export var pact_claw_damage: int = 0
+@export var pact_claw_gap: float = 1.0
+## Le soin du souffle se compte PAR ENNEMI touché, plafonné à `heal_self` (la Gueule de l'Abîme).
+@export var heal_per_hit: bool = false
 ## Le dessin de ce qu'une gerbe laisse planté. Vide = les pics de pierre.
 @export var plant_style: String = ""
 
@@ -688,6 +922,43 @@ enum Kind {
 @export var eye_damage: int = 0
 @export var eye_radius: float = 3.0
 @export var eye_pull: float = 6.0
+
+## L'ÉVEIL DU SEIGNEUR DU NÉANT (Sorcier des Ténèbres éveillé).
+## À l'impact, le tir rapproche d'une case de son point de chute ce qui est à cette distance. Zéro = rien.
+@export var impact_pull: float = 0.0
+## Le Trou noir : il s'ouvre sur la cible, aspire `hole_seconds` secondes ce qui est à `hole_pull` cases,
+## puis s'effondre (les dégâts et le rayon du sort). Zéro = un souffle ordinaire.
+@export var hole_seconds: float = 0.0
+@export var hole_pull: float = 4.0
+## L'Éclipse : tous les ennemis sont ralentis à cette part de leur allure, ce temps-là. Zéro = rien.
+@export var eclipse_seconds: float = 0.0
+@export var eclipse_slow: float = 0.6
+
+## L'ÉVEIL DE L'INVOCATEUR (le Maître des Légions).
+## La Marque : la cible touchée devient la proie de TOUTES ses créatures ce temps-là. Zéro = rien.
+## (Distincte de `mark_seconds`, la marque de l'Ange de la Mort, qui fait prendre plus de dégâts.)
+@export var prey_mark_seconds: float = 0.0
+## Les créatures de ce sort explosent quand elles s'en vont (fin de vie ou place cédée). Zéro = rien.
+@export var summon_burst_damage: int = 0
+@export var summon_burst_radius: float = 1.0
+## La créature TOMBE du ciel près de la proie la plus proche : dégâts, rayon et étourdissement du choc.
+@export var summon_drop_damage: int = 0
+@export var summon_drop_radius: float = 1.5
+@export var summon_drop_stun: float = 0.0
+## Taille de la créature à l'écran, et l'apparence à lire dans allies.json à la place de la sienne.
+@export var summon_scale: float = 1.0
+@export var summon_look: String = ""
+## La Porte des abysses : la zone fait sortir une créature `summon_id` toutes les `zone_spawn_every`
+## secondes, qui vit `zone_spawn_life` secondes. Zéro = rien.
+@export var zone_spawn_every: float = 0.0
+@export var zone_spawn_life: float = 10.0
+## L'Échange : la fuite le met à la place de sa créature la plus éloignée, et elle à la sienne.
+@export var swap_with_summon: bool = false
+## Le Roi-Dragon passe au-dessus de la rangée du mage, par-dessus les haies : dégâts, portée de chaque
+## côté et demi-largeur, en cases. Zéro = rien.
+@export var flyover_damage: int = 0
+@export var flyover_reach: float = 12.0
+@export var flyover_width: float = 1.5
 
 ## LE DRAGON DES ABYSSES. Secondes de feu laissées sur les cases touchées. Zéro = aucune.
 @export var ground_fire: float = 0.0
@@ -808,6 +1079,93 @@ func summary() -> String:
 		parts.append("étourdit %s s au choc" % _number(slam_stun))
 	if eye_seconds > 0.0:
 		parts.append("œil de l'ouragan %s s à %d/s" % [_number(eye_seconds), eye_damage])
+	if impact_pull > 0.0:
+		parts.append("aspire à %s cases à l'impact" % _number(impact_pull))
+	if hole_seconds > 0.0:
+		parts.append("aspire %s s puis s'effondre" % _number(hole_seconds))
+	if eclipse_seconds > 0.0:
+		parts.append("éclipse %s s, ennemis ralentis" % _number(eclipse_seconds))
+	if prey_mark_seconds > 0.0:
+		parts.append("marque la proie %s s" % _number(prey_mark_seconds))
+	if entry_freeze > 0.0:
+		parts.append("fige %s s à l'entrée" % _number(entry_freeze))
+	if echo_end_damage > 0:
+		parts.append("onde de %d dégâts au bout" % echo_end_damage)
+	if flock_damage > 0:
+		parts.append("la volée blesse de %d et met %d doses" % [flock_damage, flock_doses])
+	if element_shards > 0:
+		parts.append("%d éclats d'élément à %d" % [element_shards, element_shard_damage])
+	if seals_follow:
+		parts.append("les sceaux le suivent")
+	if double_echo:
+		parts.append("écho double")
+	if element_ray_damage > 0:
+		parts.append("4 rayons à %d à l'arrivée" % element_ray_damage)
+	if nova_damage > 0:
+		parts.append("nova de %d au bout" % nova_damage)
+	if returns:
+		parts.append("revient et frappe au retour")
+	if toll_count > 0:
+		parts.append(("%d coups de cloche · marque %s s" % [toll_count, _number(mark_seconds)]) if mark_seconds > 0.0
+			else "%d coups de cloche" % toll_count)
+	if souls_base > 1:
+		parts.append("%d âmes en plus des siennes" % souls_base)
+	if blink_mark_seconds > 0.0:
+		parts.append("marque la ligne %s s" % _number(blink_mark_seconds))
+	if hour_passes >= 2:
+		parts.append("la faux passe %d fois" % hour_passes)
+	if sky_twin:
+		parts.append("×2")
+	if flight_lance_gap > 0.0:
+		parts.append("lances")
+	if great_sword_damage > 0:
+		parts.append("épée géante %d" % great_sword_damage)
+	if line_fire > 0.0:
+		parts.append("en feu")
+	if veil_eyes_radius > 0.0:
+		parts.append("yeux à %s" % _number(veil_eyes_radius))
+	if garden_sword_damage > 0:
+		parts.append("épée du bord %d" % garden_sword_damage)
+	if anvil_drop_damage > 0:
+		parts.append("enclume de %d" % anvil_drop_damage)
+	if bastion_burst_damage > 0:
+		parts.append("gerbe %d" % bastion_burst_damage)
+	if molten_trail_seconds > 0.0:
+		parts.append("en fusion")
+	if molten_steps_seconds > 0.0:
+		parts.append("pas en fusion")
+	if spark_seconds > 0.0:
+		parts.append("allume une étoile %s s" % _number(spark_seconds))
+	if big_meteor_damage > 0:
+		parts.append("+ météore de %d" % big_meteor_damage)
+	if moon_ring_radius > 0.0:
+		parts.append("anneau de lune %d" % moon_ring_damage)
+	if blink_star:
+		parts.append("pose une étoile")
+	if galaxy_seconds > 0.0:
+		parts.append("impacts en étoiles %s s" % _number(galaxy_seconds))
+	if blind_every > 0:
+		parts.append("un coup sur %d aveugle %s s" % [blind_every, _number(blind_seconds)])
+	if beam_linger > 0.0:
+		parts.append("reste %s s à %d dégâts/s" % [_number(beam_linger), linger_damage])
+	if zone_heal_every > 0.0:
+		parts.append("+1 PV toutes les %s s dedans" % _number(zone_heal_every))
+	if aegis_ray_damage > 0:
+		parts.append("renvoie chaque coup en rayon de %d" % aegis_ray_damage)
+	if clock_bomb_damage > 0:
+		parts.append("bombe-horloge %d dégâts, fige %s s" % [clock_bomb_damage, _number(clock_bomb_stun)])
+	if summon_burst_damage > 0:
+		parts.append("explosent à %d dégâts" % summon_burst_damage)
+	if summon_drop_damage > 0:
+		parts.append("chute à %d dégâts" % summon_drop_damage)
+	if summon_drop_stun > 0.0:
+		parts.append("étourdit %s s" % _number(summon_drop_stun))
+	if zone_spawn_every > 0.0:
+		parts.append("un diablotin toutes les %s s" % _number(zone_spawn_every))
+	if swap_with_summon:
+		parts.append("échange avec une créature")
+	if flyover_damage > 0:
+		parts.append("passage de feu à %d dégâts" % flyover_damage)
 	if geyser_count > 0:
 		parts.append("%d geysers à %d dégâts" % [geyser_count, geyser_damage])
 	if rain_count > 0:
@@ -862,37 +1220,66 @@ func _base_summary() -> String:
 			return "%d par passage · %s par seconde · rayon %s · %s s" % [damage,
 				_number(1.0 / maxf(0.05, whirl_interval)), _number(radius), _number(duration)]
 		Kind.WHEELS:
-			return "2 roues · %d dégâts · %d cases de couloir chacune" % [damage, range]
+			return "%d roues · %d dégâts · %d cases de couloir chacune" % [wheel_count, damage, range]
 		Kind.GARDEN:
 			return "rayon %s · %s s · aucun ennemi n'entre · %d dégâts au rejet" % [
 				_number(radius), _number(duration), damage]
 		Kind.GULF:
 			return "portée %d · aspire %s s · rayon %s · puis %d dégâts" % [range, _number(duration), _number(radius), damage]
+		Kind.DEVOUR when devour_count > 1:
+			return "%d proies · %d dégâts · portée %d · avale sous %d %% de leurs PV : +%d PV chacune" % [
+				devour_count, damage, range, int(execute_below * 100.0), bite_heal]
 		Kind.DEVOUR:
 			return "%d dégâts · portée %d · avale sous %d %% de ses PV : +%d PV" % [damage, range,
 				int(execute_below * 100.0), bite_heal]
+		Kind.REGURGITATE when bile_seconds > 0.0:
+			return "une boule par bouchée · %d dégâts · rayon %s · flaque %s s à %d/s" % [damage, _number(radius),
+				_number(bile_seconds), bile_damage]
 		Kind.REGURGITATE:
 			return "une boule par bouchée · %d dégâts chacune · rayon %s · portée %d" % [damage, _number(radius), range]
+		Kind.LEAP when damage > 0:
+			return "bond de %d cases · morsure %d · sonnés %s s · rayon %s" % [range, damage,
+				_number(stun_seconds), _number(radius)]
 		Kind.LEAP:
 			return "bond de %d cases · sonnés %s s · rayon %s" % [range, _number(stun_seconds), _number(radius)]
+		Kind.FEAST when feast_gap > 0.0:
+			return "colossal %s s · avale un ennemi toutes les %s s · rayon %s · %d dégâts · +%d PV par proie" % [
+				_number(duration), _number(feast_gap), _number(radius), damage, bite_heal]
 		Kind.FEAST:
 			return "géant %s s · avale un ennemi toutes les %s s · rayon %s · %d dégâts · +%d PV par proie" % [
 				_number(duration), _number(CombatSystem.FEAST_GAP), _number(radius), damage, bite_heal]
+		Kind.DICE when dice_count > 2:
+			return "%d dés · %d par point · %d cases · double : sonnés · brelan : figés et brûlent" % [
+				dice_count, damage, range]
 		Kind.DICE:
 			return "2 dés · %d par point (2 à 12) · %d cases · double : sonnés %s s" % [damage, range,
 				_number(stun_seconds)]
+		Kind.TRAP_CARD when trap_cross:
+			return "%d dégâts · %d cartes en croix · %s s · Joker %d %% : les trois à la fois" % [
+				damage, trap_count, _number(duration), int(joker_chance * 100.0)]
 		Kind.TRAP_CARD:
 			return "%d dégâts · %d cartes au sol · %s s · feu, glace ou foudre" % [damage, trap_count, _number(duration)]
+		Kind.COIN when coin_both:
+			return "sur la tranche : INTOUCHABLE %s s, +%d PV et %d coups doublés" % [_number(duration),
+				coin_heal, doubled_hits]
 		Kind.COIN:
 			return "face : INTOUCHABLE %s s, +%d PV · pile : %d coups doublés" % [_number(duration), coin_heal,
 				doubled_hits]
+		Kind.ROULETTE when roulette_spins > 1:
+			return "%d tours de roue · rouge : brûle %d/s · noir : figés %s s, %d · zéro : %d" % [roulette_spins,
+				burn_dps, _number(stun_seconds), black_damage, damage]
 		Kind.ROULETTE:
 			return "tout l'écran · rouge : brûle %d/s %s s · noir : figés %s s, %d · zéro : %d" % [burn_dps,
 				_number(duration), _number(stun_seconds), black_damage, damage]
 		Kind.BLINK when decoy_seconds > 0.0 and damage <= 0:
 			return "%d cases · leurre %s s" % [range, _number(decoy_seconds)]
+		Kind.BREATH when breath_spill:
+			return "%d dégâts · %d cases de couloir et leurs bords · en feu %s s" % [damage, range, _number(ground_fire)]
 		Kind.BREATH:
 			return "%d dégâts · %d cases de couloir · en feu %s s" % [damage, range, _number(ground_fire)]
+		Kind.BITE when execute_below > 0.0:
+			return "%d dégâts · bond de portée %d · avale une proie en feu sous %d %% · +%d PV" % [
+				damage, range, int(execute_below * 100.0), bite_heal]
 		Kind.BITE:
 			return "%d dégâts · bond de portée %d · +%d PV sur une proie en feu" % [damage, range, bite_heal]
 		Kind.MAGMA_SCALES:
@@ -901,6 +1288,9 @@ func _base_summary() -> String:
 		Kind.WINGBEAT:
 			return "%d dégâts · rayon %s · brûle %d/s · recule de %d cases" % [damage,
 				_number(radius), burn_dps, range]
+		Kind.DRAGON_SHADOW when meteor_radius > 0.0:
+			return "tout l'écran · brûle %d/s %s s · puis météore de %d (rayon %s)" % [burn_dps, _number(duration),
+				damage, _number(meteor_radius)]
 		Kind.DRAGON_SHADOW:
 			return "tout l'écran · brûle %d/s %s s · puis colonne de %d" % [burn_dps, _number(duration), damage]
 		Kind.SHIELD when repel_cells > 0:
@@ -911,9 +1301,15 @@ func _base_summary() -> String:
 		Kind.BLAST when molten_seconds > 0.0:
 			return "%d dégâts · rayon %s · armure en fusion %s s" % [damage, _number(radius),
 				_number(molten_seconds)]
+		Kind.BLAST when last_pact_seconds > 0.0 and pact_claw_damage > 0:
+			return "%d dégâts · rayon %s · 1 PV · INTOUCHABLE %s s · une serre de %d toutes les %s s" % [
+				damage, _number(radius), _number(last_pact_seconds), pact_claw_damage, _number(pact_claw_gap)]
 		Kind.BLAST when last_pact_seconds > 0.0:
 			return "%d dégâts · rayon %s · 1 PV · INTOUCHABLE %s s" % [
 				damage, _number(radius), _number(last_pact_seconds)]
+		Kind.BLAST when heal_per_hit:
+			return "%d dégâts · rayon %s · +1 PV par ennemi touché, %d au plus" % [
+				damage, _number(radius), heal_self]
 		# ⚠️ Avant le cas général : placé après lui, il n'était jamais atteint.
 		Kind.BLAST when stun_seconds > 0.0:
 			return "%d dégâts · rayon %s · figés %s s" % [damage, _number(radius), _number(stun_seconds)]
@@ -923,39 +1319,79 @@ func _base_summary() -> String:
 			return "%d dégâts · rayon %s" % [damage, _number(radius)]
 		Kind.PACT:
 			return "coûte %d PV · jamais le dernier" % self_cost
+		Kind.POSSESS when is_ultimate and ball_burst_damage > 0:
+			return "tous les ennemis · %s s · %d par coup · chaque mort éclate (%d, rayon %s)" % [
+				_number(possess_seconds), possess_strike, ball_burst_damage, _number(ball_burst_radius)]
 		Kind.POSSESS when is_ultimate:
 			return "tous les ennemis · %s s · %d par coup" % [_number(possess_seconds), possess_strike]
+		Kind.POSSESS when possess_neighbors > 0:
+			return "possède %d ennemis · portée %d · %s s · %d par coup" % [
+				1 + possess_neighbors, range, _number(possess_seconds), possess_strike]
 		Kind.POSSESS:
 			return "possède 1 ennemi · portée %d · %s s · %d par coup" % [
 				range, _number(possess_seconds), possess_strike]
 		Kind.BOND:
 			return "enchaîne %d ennemis · portée %d · %d %% des dégâts · %s s" % [
 				bond_count, range, int(bond_share * 100.0), _number(duration)]
+		Kind.SWAP when decoy_seconds > 0.0:
+			return "échange avec un ennemi · portée %d · pantin %s s · %d dégâts · rayon %s" % [
+				range, _number(decoy_seconds), damage, _number(decoy_radius)]
 		Kind.SWAP:
 			return "échange avec un ennemi · portée %d" % range
+		Kind.HUNTERS when radius > 0.0:
+			return "%d par coup · gerbe rayon %s · %s s · portée %d" % [damage, _number(radius), _number(duration), range]
 		Kind.HUNTERS:
 			return "%d par coup · %s s · portée %d" % [damage, _number(duration), range]
+		Kind.CHEST when forge_blast_damage > 0:
+			return "aspire à %s · retient %s s · %d dégâts/s · explose %d (rayon %s)" % [
+				_number(forge_pull), _number(hold_seconds), damage, forge_blast_damage, _number(forge_blast_radius)]
 		Kind.CHEST:
 			return "retient %s s · %d dégâts/s" % [_number(hold_seconds), damage]
+		Kind.RECALL when recall_wave_damage > 0:
+			return "%d par pièce · mur de flammes %s s · onde %d (rayon %s)" % [
+				damage, _number(recall_fire_seconds), recall_wave_damage, _number(recall_wave_radius)]
 		Kind.RECALL:
 			return "%d par pièce · traverse les haies" % damage
+		Kind.CAGES when cage_burst_damage > 0:
+			return "tous les ennemis · bloqués %s s · puis %d dégâts · éclat %d (rayon %s)" % [
+				_number(duration), damage, cage_burst_damage, _number(cage_burst_radius)]
 		Kind.CAGES:
 			return "tous les ennemis · bloqués %s s · puis %d dégâts" % [_number(duration), damage]
+		Kind.HOOK when hook_count > 1:
+			return "%d chaînes · portée %d · %d dégâts · sonnés %s s" % [
+				hook_count, range, damage, _number(stun_seconds)]
 		Kind.HOOK:
 			return "ramène le plus éloigné · portée %d · %d dégâts · sonné %s s" % [
 				range, damage, _number(stun_seconds)]
+		Kind.SOUL_CHAINS when snap_damage > 0:
+			return "%d ennemis · %s s · %d dégâts/s · puis %d et figés %s s" % [
+				bond_count, _number(duration), damage, snap_damage, _number(snap_stun)]
 		Kind.SOUL_CHAINS:
 			return "%d ennemis · portée %d · %d dégâts/s · ralentis à %d %% · %s s" % [
 				bond_count, range, damage, int(slow_factor * 100.0), _number(duration)]
+		Kind.GAOL when gaol_end_damage > 0:
+			return "rayon %s · cloués %s s · %d dégâts/s · tirés vers lui · puis %d" % [
+				_number(radius), _number(duration), damage, gaol_end_damage]
 		Kind.GAOL:
 			return "rayon %s · cloués %s s · %d dégâts/s" % [_number(radius), _number(duration), damage]
+		Kind.DASH when dash_echo_damage > 0:
+			return "%d cases · %d dégâts · %d entailles · écho %d" % [range, damage, cuts, dash_echo_damage]
 		Kind.DASH:
+			# Le Trait de l'étoile n'entaille pas : il aveugle.
+			if cuts <= 0:
+				return "%d cases · %d dégâts · aveugle %s s" % [range, damage, _number(blind_seconds)]
 			return "%d cases · %d dégâts · %d entaille" % [range, damage, cuts]
+		Kind.GUARD when guard_all:
+			return "pare tout %s s · riposte %d · rayon %s · %d entailles" % [
+				_number(duration), damage, _number(radius), cuts]
 		Kind.GUARD:
 			return "pare %s s · riposte %d · rayon %s · %d entailles" % [
 				_number(duration), damage, _number(radius), cuts]
 		Kind.SHEATHE when is_ultimate:
 			return "tout l'écran · %d entailles · %d par entaille · %s s" % [cuts, cut_damage, _number(duration)]
+		Kind.SHEATHE when petal_cuts > 0:
+			return "%d par entaille · portée %d · pétales %d entaille (rayon %s)" % [
+				cut_damage, range, petal_cuts, _number(petal_radius)]
 		Kind.SHEATHE:
 			return "%d par entaille · portée %d" % [cut_damage, range]
 		Kind.BLINK when decoy_seconds > 0.0:
@@ -984,19 +1420,35 @@ func _base_summary() -> String:
 			return "saut de %d cases · traînée de %d dégâts" % [range, trail_damage]
 		Kind.BLINK:
 			return "saut de %d cases" % range
+		Kind.ECHO when echo_second_seconds > 0.0:
+			return "%d dégâts · deux doubles, %s s et %s s" % [damage, _number(echo_seconds),
+				_number(echo_second_seconds)]
 		Kind.ECHO:
 			return "%d dégâts · rejoue %s s de marche" % [damage, _number(echo_seconds)]
+		Kind.HOURGLASS when rewind_heal_seconds > 0.0:
+			return "rend les PV perdus en %s s" % _number(rewind_heal_seconds)
 		Kind.HOURGLASS:
 			return "rend %d %% des PV perdus en %s s" % [
 				int(hourglass_ratio * 100.0), _number(duration)]
+		Kind.TIME_STOP when judgement_ratio > 0.0:
+			return "tout se fige %s s · coups rendus à %d %%" % [_number(duration),
+				int(round(judgement_ratio * 100.0))]
 		Kind.TIME_STOP:
 			return "tout se fige %s s" % _number(duration)
+		Kind.TRAIL when trail_doses > 1:
+			return "flaques %s s · %d doses · ralentit" % [_number(trail_life), trail_doses]
 		Kind.TRAIL:
 			return "flaques %s s · pendant %s s" % [_number(trail_life), _number(duration)]
+		Kind.CONTAGION when epidemic_jumps > 0:
+			return "%d sauts · %d dégâts et %d doses chacun" % [epidemic_jumps, damage, epidemic_doses]
 		Kind.CONTAGION:
 			return "passe le poison à %d cases · portée %d" % [chain_range, range]
+		Kind.TRANSFUSION when bleed_per_dose > 0:
+			return "%d dégâts par dose · 1 PV pour %d doses" % [bleed_per_dose, transfuse_per]
 		Kind.TRANSFUSION:
 			return "1 PV par %d ennemis empoisonnés" % transfuse_per
+		Kind.PANDEMIC when plague_slow < 1.0:
+			return "toute la carte empoisonnée au maximum %s s · ralentie · ils éclatent" % _number(duration)
 		Kind.PANDEMIC:
 			return "toute la carte empoisonnée %s s · ils éclatent" % _number(duration)
 		Kind.BEAM:
@@ -1006,8 +1458,14 @@ func _base_summary() -> String:
 		Kind.LAST_HOUR:
 			return "la moitié des PV de chaque ennemi · achève sous %d %%" \
 				% int(CombatSystem.SENTENCE_BELOW * 100.0)
+		Kind.CONSTELLATION when figure_damage > 0:
+			return "%d dégâts/s · %d étoiles · la figure fermée brûle %d/s · %s s" % [
+				int(round(float(damage) * CombatSystem.FIRMAMENT_RAY)), CombatSystem.FIRMAMENT_STARS, figure_damage,
+				_number(duration)]
 		Kind.CONSTELLATION:
 			return "%d dégâts/s · %d étoiles · %s s" % [damage, CombatSystem.STAR_MAX, _number(duration)]
+		Kind.BLADES when feather_rain > 0:
+			return "%d plumes du ciel · %d dégâts · portée %d" % [feather_rain, damage, range]
 		Kind.BLADES when not blades_return:
 			return "%d plumes · %d dégâts · portée %d" % [blade_count, damage, range]
 		Kind.BLADES:
@@ -1017,6 +1475,9 @@ func _base_summary() -> String:
 		Kind.STARFALL:
 			return "%d étoiles de %d dégâts · rayon %s" % [star_falls, damage, _number(radius)]
 		Kind.DAWN:
+			if sun_seconds > 0.0:
+				return "%s s · un rayon de %d par seconde sur chaque ennemi à l'écran · puis %d dégâts rayon %s" % [
+					_number(sun_seconds), sun_damage, sun_end_damage, _number(sun_end_radius)]
 			if blind_seconds <= 0.0:
 				return "%d dégâts sur toute la carte" % damage
 			return "%d dégâts sur toute la carte · aveugle %s s" % [damage, _number(blind_seconds)]

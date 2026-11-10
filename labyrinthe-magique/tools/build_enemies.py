@@ -226,6 +226,118 @@ MAGES = {
     "air_eveil": {"id": "air_eveil", "name": "Mage de l'Air éveillé", "source": MAGES_SOURCE,
             "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
             "demagenta": True, "whole_shapes": True},
+    # Le Seigneur du Néant est VIOLET : ses planches sont sur fond VERT, et c'est `degreen` qui nettoie
+    # le bord. Le détourage mesure le fond dans les coins, il ne suppose pas le magenta. Ses vrilles
+    # débordent : formes entières.
+    "tenebres_eveil": {"id": "shadow_eveil", "name": "Sorcier des Ténèbres éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "degreen": True, "keep_cast": True, "whole_shapes": True},
+    # Le Maître des Légions, l'Éveil de l'Invocateur : violet lui aussi, donc sur fond VERT, comme le
+    # Seigneur du Néant. Son bâton dépasse au-dessus de sa tête et son sceau d'attaque sort de la case.
+    "invocateur_eveil": {"id": "invocateur_eveil", "name": "Invocateur éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "degreen": True, "keep_cast": True, "whole_shapes": True},
+    # Le Seigneur des Heures, l'Éveil du Chronomancien : sarcelle, cuivre et or sur fond MAGENTA. Ses cheveux
+    # blancs sont ombrés de bleu-gris, `demagenta` en nettoie la frange. L'auréole, le sceptre-horloge et les
+    # étincelles d'aiguilles de l'attaque débordent : formes entières.
+    "chrono_eveil": {"id": "chrono_eveil", "name": "Chronomancien éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
+    # Le Seigneur du Fléau, l'Éveil du Mage de la Peste : noir bleuté, vert acide et bronze sur fond MAGENTA.
+    # L'encensoir et les lambeaux débordent, et l'éclaboussure de l'attaque sort de l'encensoir : formes entières.
+    "peste_eveil": {"id": "peste_eveil", "name": "Mage de la Peste éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
+    # L'Archimage Primordial, l'Éveil du Sorcier Suprême : ses yeux et ses gemmes sont violets, donc fond VERT,
+    # comme le Seigneur du Néant. Son auréole dépasse au-dessus de la capuche : formes entières.
+    # L'Étoile du Matin, l'Éveil du Porte-Lumière : blanc et or sur fond VERT (le magenta laissait des ombres roses
+    # sur ses plumes). Sa lance et son disque solaire dépassent : formes entières, et l'échelle d'attaque du
+    # Porte-Lumière, que la lance fausse de la même façon.
+    # Le Faucheur des Âmes, l'Éveil de l'Ange de la Mort : noir, anthracite et rouge braise sur fond VERT (le magenta
+    # trouait son rouge). Sa faux double et son auréole dépassent : formes entières.
+    "mort_eveil": {"id": "mort_eveil", "name": "Ange de la Mort éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "degreen": True, "keep_cast": True, "whole_shapes": True},
+    # La Reine du Firmament, l'Éveil de l'Ange des Étoiles : bleu nuit, argent et or pâle sur fond MAGENTA, comme
+    # ses planches d'origine. ⚠️ Jamais de `despill` : son bleu virerait au beige. `keep_cast`, comme la Reine de la
+    # Discorde : sans lui, le reflet magenta du bord de ses ailes et de sa couronne tournait au rouge brun. Sa couronne
+    # d'étoiles et son sceptre dépassent : formes entières.
+    "etoiles_eveil": {"id": "etoiles_eveil", "name": "Ange des Étoiles éveillée", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Le Forgeron Céleste, l'Éveil de l'Archange d'Acier : gris-bleu, or et orange de forge sur fond MAGENTA, comme ses
+    # planches d'origine. Son marteau et ses ailes de lames débordent : formes entières, et l'échelle d'attaque imposée
+    # de l'Archange d'Acier. `keep_cast`, comme la Reine du Firmament : sans lui, le reflet du bord tourne au rouge brun.
+    "acier_eveil": {"id": "acier_eveil", "name": "Archange d'Acier éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Le Gardien du Trône, l'Éveil du Chérubin : saphir, or, bronze et lin sur fond MAGENTA, comme ses planches
+    # d'origine. Sa double roue et son épée flamboyante débordent : formes entières. `keep_cast`, comme la Reine du
+    # Firmament et le Forgeron.
+    "cherubin_eveil": {"id": "cherubin_eveil", "name": "Chérubin éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Le Séraphin, l'Éveil de l'Archange du Ciel : blanc, or et émeraude sur fond MAGENTA (le vert prendrait son
+    # émeraude). Ses planches arrivent en cases carrées : pas de `tall_cells`, contrairement à sa forme de base. Sa
+    # lance et ses six ailes débordent : formes entières, `keep_cast`.
+    "ciel_eveil": {"id": "ciel_eveil", "name": "Archange du Ciel éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    "lumiere_eveil": {"id": "lumiere_eveil", "name": "Porte-Lumière éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.08,
+            "degreen": True, "keep_cast": True, "whole_shapes": True},
+    "supreme_eveil": {"id": "supreme_eveil", "name": "Sorcier Suprême éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "degreen": True, "keep_cast": True, "whole_shapes": True},
+    # L'Archidémon du Pacte, l'Éveil du Démon du Pacte : noir, rouge sang et or sur fond MAGENTA. Ses cornes,
+    # ses ailes et les griffures de l'attaque débordent : formes entières. `demagenta` nettoie la frange du rouge.
+    "demon_eveil": {"id": "demon_eveil", "name": "Démon du Pacte éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "strike_scale": 1.0,
+            "demagenta": True, "whole_shapes": True},
+    # La Reine de la Discorde, l'Éveil de la Démone de la Discorde : vert sapin, noir, argent et émeraude sur fond
+    # MAGENTA, sans rose ni violet. Sa croix de marionnettiste, ses cornes et ses fils débordent : formes entières.
+    # ⚠️ `keep_cast` : `without_magenta_cast` ramène le bleu du reflet au vert et y laisse le ROUGE, ce qui bordait
+    # ses cheveux et sa croix d'argent d'une frange rouge sang. Elle ne porte ni rouge ni rose : `demagenta`
+    # retire alors le rouge et le bleu ensemble, et le reflet redevient gris.
+    "discorde_eveil": {"id": "discorde_eveil", "name": "Démone de la Discorde éveillée", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # L'Empereur des Cendres, l'Éveil du Roi de Braise : or noirci, lave et cendre sur fond MAGENTA. Son anneau de
+    # braise et ses cheveux en flammes débordent : formes entières. `keep_cast` comme la Reine : sans frange rouge.
+    # ⚠️ `speck_share` abaissé : ses pointes de braise flottent, détachées, et le seuil par défaut les jetait.
+    # `despill` et non `demagenta` : rien sur lui n'a plus de bleu que de vert, et l'éclat rose de l'attaque
+    # (sur son ventre) redevient un éclat chaud au lieu de rester rose.
+    "braise_eveil": {"id": "braise_eveil", "name": "Roi de Braise éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True,
+            "despill": True, "keep_cast": True, "whole_shapes": True, "speck_share": 0.0001},
+    # Le Seigneur Écarlate, l'Éveil du Chevalier Écarlate : laque rouge sans bleu, noir et blancs chauds sur fond
+    # MAGENTA. Sa lame fantôme et son sabre débordent : formes entières. `demagenta` et non `despill`, qui aurait
+    # repeint en blanc la frange de son rouge ; `keep_cast` pour ne pas y laisser de rouge en trop.
+    "ecarlate_eveil": {"id": "ecarlate_eveil", "name": "Chevalier Écarlate éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Le Gardien de l'Abîme, l'Éveil du Geôlier : obsidienne et flamme froide cyan sur fond MAGENTA, grand et massif
+    # comme sa forme de base (`body_scale` 1,4). Ses planches sont arrivées en cases CARRÉES : pas de `tall_cells`.
+    # Ses gantelets, ses chaînes et ses clés débordent : formes entières.
+    "geolier_eveil": {"id": "geolier_eveil", "name": "Geôlier éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "body_scale": 1.4,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Le Dragon Primordial, l'Éveil du Dragon des Abysses : obsidienne, rouge sang et magma sur fond MAGENTA, massif
+    # et dessiné 30 % plus grand, comme sa forme de base (`body_scale` 1,3). Sa boule de magma se détache : formes
+    # entières. Son rouge n'a jamais plus de bleu que de vert : `demagenta` + `keep_cast`, sans frange rouge.
+    "dragon_eveil": {"id": "dragon_eveil", "name": "Dragon des Abysses éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "body_scale": 1.3,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Le Maître du Casino, l'Éveil du Croupier des Enfers : bordeaux sans bleu, or, noir et blanc sur fond MAGENTA.
+    # Sa canne, sa queue en pique et les cartes de l'attaque débordent : formes entières. `demagenta` + `keep_cast`.
+    "croupier_eveil": {"id": "croupier_eveil", "name": "Croupier des Enfers éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
+    # Faim Sans Fond, l'Éveil de l'Avide : encre, os ivoire et bile sur fond MAGENTA, massif et dessiné 30 % plus grand
+    # (`body_scale` 1,3). Ses cornes fendues et ses crocs débordent : formes entières. `demagenta` + `keep_cast`.
+    "avide_eveil": {"id": "avide_eveil", "name": "L'Avide éveillé", "source": MAGES_SOURCE,
+            "out": MAGES_OUT, "walks": True, "align_rows": True, "body_scale": 1.3,
+            "demagenta": True, "keep_cast": True, "whole_shapes": True},
     # Le gabarit d'animation : `every_step` garde ses huit images de course. Son épée déborde sur
     # les cases voisines, d'où `whole_shapes`.
     "test": {"id": "test", "name": "Héros d'essai", "source": MAGES_SOURCE,
@@ -356,6 +468,17 @@ def despilled(image: Image.Image) -> Image.Image:
     return Image.fromarray(data, "RGBA")
 
 
+def degreen(image: Image.Image) -> Image.Image:
+    """Retire la seule part de vert d'un pixel : ce qu'il a de vert en trop sur son rouge et son bleu.
+
+    Pour une planche sur fond VERT (le Seigneur du Néant, violet : le magenta l'aurait troué). Le bord
+    d'une forme mêle sa couleur au fond ; sans ce nettoyage, il gardait un liseré vert."""
+    data = np.array(image.convert("RGBA")).astype(float)
+    excess = np.clip(data[..., 1] - np.maximum(data[..., 0], data[..., 2]), 0.0, None)
+    data[..., 1] -= excess
+    return Image.fromarray(data.astype(np.uint8), "RGBA")
+
+
 def demagenta(image: Image.Image) -> Image.Image:
     """Retire la seule part de magenta d'un pixel : ce qu'il a de rouge ET de bleu en trop.
 
@@ -452,7 +575,7 @@ def keyed(cell: Image.Image, keep_enclosed: bool = False) -> Image.Image:
 SPECK_SHARE = 0.0005
 
 
-def deblorded(cell: Image.Image) -> Image.Image:
+def deblorded(cell: Image.Image, speck_share: float = SPECK_SHARE) -> Image.Image:
     """La case débarrassée de ce qui a débordé de sa voisine du dessus."""
     alpha = np.asarray(cell)[..., 3] > 24
     if not alpha.any():
@@ -468,7 +591,7 @@ def deblorded(cell: Image.Image) -> Image.Image:
             continue
         mask = labels == piece
         touches_top = mask[0].any()
-        speck = sizes[piece - 1] < alpha.size * SPECK_SHARE
+        speck = sizes[piece - 1] < alpha.size * speck_share
         if touches_top or speck:
             doomed |= mask
     if not doomed.any():
@@ -646,7 +769,13 @@ def without_grid(sheet: Image.Image) -> Image.Image:
     # Un trait est CLAIR et peu coloré ; le fond magenta, lui, a du rouge et du
     # bleu forts avec un vert effondré. On repère donc les pixels dont le vert
     # est haut — ce que le fond n'a jamais.
-    pale = pixels[..., 1] > 150
+    #
+    # ⚠️ SUR UN FOND VERT, LE FOND LUI-MÊME A LE VERT HAUT. Sur l'Étoile du Matin, toute blanche et or, une
+    # rangée de fond et de dessin passait pour un trait de grille et partait : le sprite d'attaque était rayé
+    # de lignes vides. On ne compte donc que les pixels clairs ÉLOIGNÉS du fond.
+    ground = np.median(pixels[:8, :8].reshape(-1, 3), axis=0)
+    far = np.sqrt(((pixels - ground) ** 2).sum(axis=2)) > KEY_DISTANCE
+    pale = (pixels[..., 1] > 150) & far
     doomed = np.zeros(pixels.shape[:2], bool)
     doomed[pale.mean(axis=1) > GRID_SHARE, :] = True
     doomed[:, pale.mean(axis=0) > GRID_SHARE] = True
@@ -683,7 +812,8 @@ def without_magenta_cast(data: np.ndarray) -> np.ndarray:
 
 
 def cells_by_shape(sheet: Image.Image, rows: int, keep_enclosed: bool,
-                   erase: list = (), give: list = (), keep_cast: bool = False) -> dict:
+                   erase: list = (), give: list = (), keep_cast: bool = False,
+                   speck_share: float = SPECK_SHARE) -> dict:
     """Les cases d'une planche dont les poses sortent de la grille, formes entières.
 
     La découpe à la frontière coupait le corps de la Gelée et l'éclat de la Raie, puis
@@ -723,21 +853,21 @@ def cells_by_shape(sheet: Image.Image, rows: int, keep_enclosed: bool,
             window[..., 3] = np.where(home[y0:y1, x0:x1] == row * COLUMNS + column,
                                       window[..., 3], 0)
             canvas[y0 - top:y1 - top, x0 - left:x1 - left] = window
-            line.append(deblorded(Image.fromarray(canvas, "RGBA")))
+            line.append(deblorded(Image.fromarray(canvas, "RGBA"), speck_share))
         out[ROWS[row]] = line
     return out
 
 
 def cells_of(path: Path, rows: int, keep_enclosed: bool = False,
              whole_shapes: bool = False, erase: list = (), give: list = (),
-             keep_cast: bool = False) -> dict:
+             keep_cast: bool = False, speck_share: float = SPECK_SHARE) -> dict:
     """Découpe une planche en cases détourées, rangée par rangée."""
     with Image.open(path) as image:
         sheet = without_grid(image.convert("RGB"))
     if whole_shapes:
         return {row: mend(line, f"{path.stem} rangée {ROWS.index(row) + 1}")
                 for row, line in cells_by_shape(sheet, rows, keep_enclosed, erase, give,
-                                                keep_cast).items()}
+                                                keep_cast, speck_share).items()}
     width, height = sheet.size
     cell_w, cell_h = width / COLUMNS, height / rows
     out = {}
@@ -1352,12 +1482,17 @@ def build(source_name: str, entry: dict) -> str:
         if complaint:
             return f"{entry['id']} REFUSÉ : {complaint}"
 
-    keep_cast = entry.get("strike_shapes", False)
-    whole = entry.get("whole_shapes", False) or keep_cast
+    # `keep_cast` : une planche qui porte elle-même du violet (le Seigneur du Néant, sur fond vert) ne
+    # doit pas passer par `without_magenta_cast`, qui ramènerait son violet au rouge.
+    keep_cast = entry.get("strike_shapes", False) or entry.get("keep_cast", False)
+    whole = entry.get("whole_shapes", False) or entry.get("strike_shapes", False)
+    # `speck_share` : sous cette part de la case, un morceau détaché est de la poussière. Le défaut jetait les
+    # petites pointes flottantes de l'anneau de braise de l'Empereur des Cendres (74 px sur une case de 384).
+    speck = entry.get("speck_share", SPECK_SHARE)
     walk = cells_of(walk_path, len(ROWS), entry.get("keep_enclosed", False), whole,
-                    keep_cast=keep_cast)
+                    keep_cast=keep_cast, speck_share=speck)
     strike = cells_of(strike_path, len(ROWS), entry.get("keep_enclosed", False), whole,
-                      entry.get("strike_erase", ()), entry.get("strike_give", ()), keep_cast)
+                      entry.get("strike_erase", ()), entry.get("strike_give", ()), keep_cast, speck)
     is_mage = source_folder == MAGES_SOURCE
     for row, frames in entry.get("held_strike", {}).items():
         for frame, held in frames.items():
@@ -1488,7 +1623,8 @@ def build(source_name: str, entry: dict) -> str:
             if flip:
                 piece = piece.transpose(Image.FLIP_LEFT_RIGHT)
             strip.alpha_composite(piece, (number * cell_w, 0))
-        (demagenta(strip) if entry.get("demagenta") else despilled(strip) if entry.get("despill") else strip).save(folder / f"{direction}.png")
+        (degreen(strip) if entry.get("degreen") else demagenta(strip) if entry.get("demagenta")
+         else despilled(strip) if entry.get("despill") else strip).save(folder / f"{direction}.png")
 
     # LES PIEDS SONT LE BAS DE LA MARCHE, et non le bas de la matière. Même
     # raison que le centrage : une traînée de coup qui plonge sous la robe

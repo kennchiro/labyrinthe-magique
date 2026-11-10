@@ -55,7 +55,11 @@ func setup(p_stats: CharacterStats) -> void:
 	stats = p_stats
 	_portrait = null
 	var portrait_path := PORTRAITS_PATH + "portrait_" + stats.visual_id() + ".jpg"
-	if not ResourceLoader.exists(portrait_path):
+	# L'ÉVEIL a son propre portrait. Tant qu'il n'est pas dessiné, c'est son SPRITE qui le montre : le portrait du
+	# mage ne doit jamais passer pour celui de sa forme éveillée.
+	if stats.awakened:
+		portrait_path = PORTRAITS_PATH + "portrait_" + stats.id + "_eveil.jpg"
+	elif not ResourceLoader.exists(portrait_path):
 		portrait_path = PORTRAITS_PATH + "portrait_" + stats.id + ".jpg"
 	if ResourceLoader.exists(portrait_path):
 		_portrait = load(portrait_path)
@@ -84,8 +88,11 @@ func _read_frame_meta() -> void:
 
 
 func _load_sprite() -> void:
-	_sprite = load(CHARACTERS_PATH + stats.id + "/down.png")
-	var text := FileAccess.get_file_as_string(CHARACTERS_PATH + stats.id + "/frames.json")
+	var folder := stats.id + "_eveil" if stats.awakened else stats.id
+	if not ResourceLoader.exists(CHARACTERS_PATH + folder + "/down.png"):
+		folder = stats.id
+	_sprite = load(CHARACTERS_PATH + folder + "/down.png")
+	var text := FileAccess.get_file_as_string(CHARACTERS_PATH + folder + "/frames.json")
 	var parsed: Variant = JSON.parse_string(text)
 	if parsed != null:
 		var cell: Array = (parsed as Dictionary)["cell"]

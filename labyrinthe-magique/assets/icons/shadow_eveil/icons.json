@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "shadow_eveil_orbe",
+    "shadow_eveil_sceau",
+    "shadow_eveil_marche",
+    "shadow_eveil_trou",
+    "shadow_eveil_fusion",
+    "shadow_eveil_eclipse"
+  ],
+  "size": 256
+}

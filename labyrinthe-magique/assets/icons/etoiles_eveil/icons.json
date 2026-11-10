@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "etoiles_eveil_comete",
+    "etoiles_eveil_constellation",
+    "etoiles_eveil_meteores",
+    "etoiles_eveil_eclipse",
+    "etoiles_eveil_filante",
+    "etoiles_eveil_galaxie"
+  ],
+  "size": 256
+}

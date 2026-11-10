@@ -66,6 +66,25 @@ func _init() -> void:
 	_test_colossus()
 	_test_tempest()
 	_test_sovereign()
+	_test_void_lord()
+	_test_legion()
+	_test_hours()
+	_test_scourge()
+	_test_primordial()
+	_test_morning_star()
+	_test_reaper()
+	_test_firmament()
+	_test_forge()
+	_test_throne()
+	_test_seraph()
+	_test_archdemon()
+	_test_queen()
+	_test_emperor()
+	_test_lord()
+	_test_warden()
+	_test_primal()
+	_test_casino()
+	_test_endless()
 	_test_dragon()
 	_test_croupier()
 	_test_avide()
@@ -4928,6 +4947,174 @@ func _test_sovereign() -> void:
 		_fail("souverain : l'ouragan n'ouvre pas son œil")
 
 
+## LE SEIGNEUR DU NÉANT : son ombre répète ses coups, et chacun de ses sorts fait ce qu'il dit.
+func _test_void_lord() -> void:
+	var base := CharacterCatalog.shadow()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Seigneur du Néant":
+		_fail("néant : pas d'éveil pour le Sorcier des Ténèbres")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	# Le Double : l'attaque frappe, puis l'ombre la répète à moitié de sa force.
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.doubling():
+		_fail("néant : pas de double à l'éveil")
+	combat.stats = form
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 5000)
+	var echoes := {"count": 0}
+	combat.double_struck.connect(func(_i: int, _a: Ability) -> void: echoes["count"] += 1)
+	combat.use(form.attack, context)
+	for frame in 60:
+		combat.update(0.016, context)
+	var expected := form.attack.damage + int(round(float(form.attack.damage) * Awakening.DOUBLE_RATIO))
+	if int(echoes["count"]) != 1 or 5000 - context.enemy_health[0].current < expected:
+		_fail("néant : l'ombre ne répète pas l'attaque (%d coups, %d dégâts)" % [int(echoes["count"]),
+			5000 - context.enemy_health[0].current])
+	# Ni la fuite, ni l'Extra.
+	combat.use(form.escape, context)
+	for frame in 10:
+		combat.update(0.016, context)
+	if int(echoes["count"]) != 1:
+		_fail("néant : l'ombre répète la fuite")
+	awakening.finish()
+	if combat.doubling():
+		_fail("néant : le double survit à l'éveil")
+	awakening.dispose()
+	# Le Trou noir aspire, puis s'effondre et laisse sa flaque.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 7))
+	_add_enemy(context, path[mini(4, path.size() - 1)], 5000)
+	_add_enemy(context, path[mini(7, path.size() - 1)], 5000)
+	var collapsed := {"count": 0}
+	combat.hole_collapsed.connect(func(_c: Vector2i, _a: Ability) -> void: collapsed["count"] += 1)
+	var pulled := {"count": 0}
+	combat.enemy_pushed.connect(func(_i: int, _c: Vector2i) -> void: pulled["count"] += 1)
+	if not combat.use(form.abilities[2], context):
+		_fail("néant : le trou noir refuse de s'ouvrir")
+	for frame in int(form.abilities[2].hole_seconds / 0.016) + 5:
+		combat.update(0.016, context)
+	if int(collapsed["count"]) != 1 or int(pulled["count"]) == 0 or context.enemy_health[0].current > 5000 - form.abilities[2].damage:
+		_fail("néant : le trou noir n'aspire pas puis ne s'effondre pas")
+	# L'Éclipse ralentit tous les ennemis.
+	var slowed := {"count": 0}
+	combat.enemy_soaked.connect(func(_i: int, _d: float, _f: float) -> void: slowed["count"] += 1)
+	combat.use(form.ultimate, context)
+	if int(slowed["count"]) < 2:
+		_fail("néant : l'éclipse ne ralentit pas les ennemis")
+
+
+## LE MAÎTRE DES LÉGIONS : la Légion grandit le plafond et la force des créatures, et chacun de ses sorts
+## fait ce qu'il dit.
+func _test_legion() -> void:
+	var base := CharacterCatalog.invocateur()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Maître des Légions":
+		_fail("légion : pas d'éveil pour l'Invocateur")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.legion_active():
+		_fail("légion : pas de légion à l'éveil")
+	combat.stats = form
+	combat.free_use = true
+	_add_enemy(context, _cell_at(grid, context.player_field, 9), 5000)
+	# La Nuée : quatre diablotins de la Légion, six au plus, et ceux qui cèdent la place explosent.
+	var bursts := {"count": 0}
+	combat.summon_burst.connect(func(_i: int, _c: Vector2i, _r: float) -> void: bursts["count"] += 1)
+	var born := {"ids": []}
+	combat.summon_spawned.connect(func(id: int, _k: String, _p: Vector2) -> void: born["ids"].append(id))
+	combat.use(form.abilities[0], context)
+	if combat.summon_count() != 4 or not bool(combat.summon_info(int(born["ids"][0])).get("legion", false)):
+		_fail("légion : la Nuée n'appelle pas quatre diablotins de la Légion (%d)" % combat.summon_count())
+	combat.use(form.abilities[0], context)
+	if combat.summon_count() != Awakening.LEGION_CAP or int(bursts["count"]) != 2:
+		_fail("légion : plafond %d au lieu de %d, %d explosions" % [combat.summon_count(),
+			Awakening.LEGION_CAP, int(bursts["count"])])
+	# La Marque désigne la proie.
+	combat.use(form.attack, context)
+	for frame in 90:
+		combat.update(0.016, context)
+	if combat.marked_prey() != 0:
+		_fail("légion : la marque ne se pose pas sur la cible")
+	awakening.finish()
+	if combat.legion_active() or bool(combat.summon_info(int(born["ids"][-1])).get("legion", true)):
+		_fail("légion : la légion survit à l'éveil")
+	awakening.dispose()
+	# La force de la Légion : un diablotin collé à sa proie frappe à LEGION_RATIO.
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	combat.start_legion(60.0, Awakening.LEGION_RATIO, Awakening.LEGION_CAP)
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 8))
+	_add_enemy(context, path[mini(4, path.size() - 1)], 5000)
+	# La Gargouille colossale tombe près de la proie, blesse et étourdit.
+	var dropped := {"count": 0}
+	combat.summon_dropped.connect(func(_i: int, _c: Vector2i, _r: float) -> void: dropped["count"] += 1)
+	var frozen := {"count": 0}
+	combat.enemies_frozen.connect(func(list: Array, _s: float) -> void: frozen["count"] += list.size())
+	combat.use(form.abilities[1], context)
+	if int(dropped["count"]) != 1 or int(frozen["count"]) != 1 \
+			or context.enemy_health[0].current > 5000 - form.abilities[1].summon_drop_damage:
+		_fail("légion : la gargouille ne tombe pas sur la proie (%d PV)" % context.enemy_health[0].current)
+	var struck := {"count": 0}
+	combat.summon_struck.connect(func(_i: int, _t: int) -> void: struck["count"] += 1)
+	var before := context.enemy_health[0].current
+	for frame in 120:
+		combat.update(0.016, context)
+		if int(struck["count"]) > 0:
+			break
+	var expected := int(round(float(CombatSystem.SUMMON_KINDS["gargouille"]["damage"]) * Awakening.LEGION_RATIO))
+	if int(struck["count"]) == 0 or before - context.enemy_health[0].current < expected:
+		_fail("légion : la gargouille ne frappe pas à la force de la légion (%d)"
+			% (before - context.enemy_health[0].current))
+	# L'Échange : il prend la place de sa créature.
+	var swapped := {"to": Vector2i(-1, -1)}
+	combat.summon_swapped.connect(func(_i: int, _f: Vector2i, to: Vector2i) -> void: swapped["to"] = to)
+	if not combat.use(form.escape, context) or swapped["to"] == Vector2i(-1, -1):
+		_fail("légion : l'échange ne se fait pas")
+	# La Porte des abysses fait sortir des diablotins.
+	var count := combat.summon_count()
+	combat.use(form.abilities[2], context)
+	for frame in int((form.abilities[2].zone_spawn_every + 0.2) / 0.016):
+		combat.update(0.016, context)
+	if combat.summon_count() < count + 1:
+		_fail("légion : la porte n'appelle aucun diablotin")
+	# Le Roi-Dragon passe sur la rangée du mage et brûle ce qui s'y trouve.
+	var row := Vector2i(-1, -1)
+	for x in range(1, grid.cols - 1):
+		var cell := Vector2i(x, context.player_cell.y)
+		if grid.is_floor_v(cell) and absi(x - context.player_cell.x) >= 3 and absi(x - context.player_cell.x) <= 8:
+			row = cell
+			break
+	if row == Vector2i(-1, -1):
+		_fail("légion : aucune case libre sur la rangée du mage pour éprouver le roi-dragon")
+	else:
+		_add_enemy(context, row, 5000)
+		var flown := {"count": 0}
+		combat.dragon_flyover.connect(func(_c: Vector2i, _r: float, _w: float) -> void: flown["count"] += 1)
+		var last := context.enemy_cells.size() - 1
+		combat.use(form.ultimate, context)
+		if int(flown["count"]) != 1 or context.enemy_health[last].current > 5000 - form.ultimate.flyover_damage:
+			_fail("légion : le roi-dragon ne brûle pas la rangée")
+
+
 ## LE SEIGNEUR DES MARÉES : sa coque se reforme après avoir cédé, et chacun de ses sorts fait ce qu'il dit.
 func _test_tide_lord() -> void:
 	var base := CharacterCatalog.water()
@@ -5021,3 +5208,1858 @@ func _test_tide_lord() -> void:
 			break
 	if not combat.use(tide.escape, context) or landed["to"] == context.player_cell or int(wakes["count"]) < 2:
 		_fail("marées : le torrent ne file pas (%d courants)" % int(wakes["count"]))
+
+
+## LE SEIGNEUR DES HEURES (l'Éveil du Chronomancien) : Temps accéléré, les Trois Aiguilles, le Dôme qui fige
+## une fois, les deux doubles du Paradoxe et leur onde, le Rembobinage, la bombe-horloge et le Jugement.
+func _test_hours() -> void:
+	var base := CharacterCatalog.chrono()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Seigneur des Heures":
+		_fail("heures : pas d'éveil pour le Chronomancien")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.haste_active():
+		_fail("heures : pas de temps accéléré à l'éveil")
+	combat.stats = form
+	# Temps accéléré : 10 s du monde font 15 s de recharge.
+	combat.use(form.abilities[2], context)
+	for frame in 100:
+		combat.update(0.1, context)
+	var expected := form.abilities[2].cooldown - 10.0 * Awakening.HASTE_FACTOR
+	if absf(combat.cooldown_left(form.abilities[2]) - expected) > 0.15:
+		_fail("heures : la recharge ne file pas plus vite (%.2f au lieu de %.2f)"
+			% [combat.cooldown_left(form.abilities[2]), expected])
+	awakening.finish()
+	if combat.haste_active():
+		_fail("heures : le temps accéléré survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	# Les Trois Aiguilles : un tir par cible, sur trois cibles.
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 10))
+	for step in [3, 5, 7]:
+		_add_enemy(context, path[mini(step, path.size() - 1)], 5000)
+	var shots := {"count": 0}
+	combat.projectile_launched.connect(func(_a: Ability, _t: int, _p: Array, _d: float) -> void:
+		shots["count"] += 1)
+	combat.use(form.attack, context)
+	if int(shots["count"]) != 3:
+		_fail("heures : les Trois Aiguilles partent sur %d cibles au lieu de 3" % int(shots["count"]))
+	# Le Dôme fige une fois chaque créature qui entre, pas à chaque instant.
+	var caught := {"count": 0}
+	combat.stasis_caught.connect(func(_i: int, _s: float) -> void: caught["count"] += 1)
+	combat.use(form.abilities[0], context)
+	for frame in 60:
+		combat.update(0.05, context)
+	var inside := 0
+	var field := Pathfinder.distance_field(grid, [context.player_cell] as Array[Vector2i])
+	for cell in context.enemy_cells:
+		if Pathfinder.value_at(grid, field, cell) <= int(form.abilities[0].radius):
+			inside += 1
+	if int(caught["count"]) != inside or inside == 0:
+		_fail("heures : le dôme fige %d fois pour %d créatures dedans" % [int(caught["count"]), inside])
+	# Le Paradoxe : après dix secondes de marche, deux doubles partent et explosent au bout.
+	var walk := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 12))
+	for cell: Vector2i in walk:
+		context.player_cell = cell
+		for frame in 8:
+			combat.update(0.1, context)
+	var doubles := {"count": 0}
+	combat.echo_walked.connect(func(_a: Ability, _c: Array, _t: Array) -> void: doubles["count"] += 1)
+	var waves := {"count": 0}
+	combat.echo_burst.connect(func(_c: Vector2i, _r: float) -> void: waves["count"] += 1)
+	combat.use(form.abilities[1], context)
+	for frame in 130:
+		combat.update(0.1, context)
+	if int(doubles["count"]) != 2 or int(waves["count"]) != 2:
+		_fail("heures : le paradoxe fait %d doubles et %d ondes au lieu de 2 et 2"
+			% [int(doubles["count"]), int(waves["count"])])
+	# Le Rembobinage rend ce qui a été perdu dans les 5 dernières secondes, pas plus.
+	health.take(Damage.new(2, Element.Kind.FIRE, "enemy"))
+	for frame in 10:
+		combat.update(0.1, context)
+	combat.use(form.abilities[2], context)
+	if health.current != health.maximum:
+		_fail("heures : le rembobinage ne rend pas les PV perdus (%d/%d)" % [health.current, health.maximum])
+	health.take(Damage.new(1, Element.Kind.FIRE, "enemy"))
+	for frame in 70:
+		combat.update(0.1, context)
+	combat.use(form.abilities[2], context)
+	if health.current == health.maximum:
+		_fail("heures : le rembobinage rend une blessure vieille de plus de 5 s")
+	# Le Saut temporel laisse une bombe-horloge qui sonne et fige ce qui l'entoure.
+	var walk_back := combat.trajectory(context.player_cell, grid.player_spawn)
+	for cell: Vector2i in walk_back.slice(0, 6):
+		context.player_cell = cell
+		for frame in 8:
+			combat.update(0.1, context)
+	var departure := context.player_cell
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	_add_enemy(context, departure, 5000)
+	var rang := {"count": 0}
+	combat.clock_bomb_rang.connect(func(_i: int, _c: Vector2i, _r: float) -> void: rang["count"] += 1)
+	var frozen := {"count": 0}
+	combat.enemies_frozen.connect(func(list: Array, _s: float) -> void: frozen["count"] += list.size())
+	if not combat.use(form.escape, context):
+		_fail("heures : le saut temporel refuse de partir")
+	for frame in int((form.escape.clock_bomb_delay + 0.2) / 0.05):
+		combat.update(0.05, context)
+	if int(rang["count"]) != 1 or int(frozen["count"]) != 1 \
+			or context.enemy_health[0].current != 5000 - form.escape.clock_bomb_damage:
+		_fail("heures : la bombe-horloge ne sonne pas sur place (%d PV)" % context.enemy_health[0].current)
+	# Le Jugement : pendant l'arrêt les coups s'accumulent, puis tombent à 150 %.
+	context.enemy_cells[0] = path[mini(4, path.size() - 1)]
+	context.player_cell = grid.player_spawn
+	context.player_field = Pathfinder.distance_field(grid, [context.player_cell] as Array[Vector2i])
+	var before := context.enemy_health[0].current
+	combat.use(form.ultimate, context)
+	combat.use(form.attack, context)
+	for frame in 40:
+		combat.update(0.05, context)
+	if context.enemy_health[0].current != before:
+		_fail("heures : un coup porte pendant le jugement")
+	for frame in int(form.ultimate.duration / 0.05) + 5:
+		combat.update(0.05, context)
+	var lost := before - context.enemy_health[0].current
+	var hit := int(round(float(form.attack.damage) * form.ultimate.judgement_ratio))
+	if lost != hit:
+		_fail("heures : midi rend %d au lieu de %d" % [lost, hit])
+	print("seigneur des heures : temps accéléré, aiguilles, dôme, paradoxe, rembobinage, bombe et jugement : OK")
+
+
+## L'ARCHIDÉMON DU PACTE (l'Éveil du Démon du Pacte) : le Prix du Sang (la vie coule, jamais le dernier PV, un
+## kill la rend, la Rage double), le Pacte écarlate, la Gueule de l'Abîme qui soigne par ennemi happé, les
+## Fleuves de soufre, les Ailes du Pacte et l'Apocalypse de Sang avec ses serres.
+## Les cases les plus proches de `start` par les couloirs, sans `start` ni la case du mage.
+func _cluster(grid: MazeGrid, context: CombatContext, start: Vector2i, count: int) -> Array[Vector2i]:
+	var field := Pathfinder.distance_field(grid, [start] as Array[Vector2i])
+	var cells: Array[Vector2i] = []
+	for cell in grid.all_floor_cells():
+		if cell != context.player_cell and Pathfinder.value_at(grid, field, cell) >= 0:
+			cells.append(cell)
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return Pathfinder.value_at(grid, field, a) < Pathfinder.value_at(grid, field, b))
+	cells.resize(mini(cells.size(), count))
+	return cells
+
+
+## LA REINE DE LA DISCORDE : la contagion, l'Œil, la Toile, le Ballet et le Grand Bal.
+func _test_queen() -> void:
+	var base := CharacterCatalog.discorde()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Reine de la Discorde":
+		_fail("reine : pas d'éveil pour la Démone de la Discorde")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.contagious():
+		_fail("reine : la Discorde contagieuse ne commence pas avec l'Éveil")
+	# Chaque coup trouble.
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 500)
+	combat._apply_damage(0, form.attack, context)
+	if combat.whispers_on(0) != CombatSystem.WHISPER_MARKS:
+		_fail("reine : un seul coup ne trouble pas pendant l'Éveil")
+	awakening.update(Awakening.DURATION)
+	if combat.contagious():
+		_fail("reine : la contagion survit à l'Éveil")
+	# Hors de l'Éveil, la Démone garde son murmure en trois coups.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 500)
+	combat._apply_damage(0, base.attack, context)
+	if combat.whispers_on(0) != 1:
+		_fail("reine : la Démone de base trouble dès le premier coup")
+
+	# La contagion : un pantin meurt, ses fils sautent sur son voisin.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.start_contagion()
+	var first := _cell_at(grid, context.player_field, 3)
+	var near := _cluster(grid, context, first, 2)
+	_add_enemy(context, near[0], 1)
+	_add_enemy(context, near[1], 500)
+	combat._possess(0, form.abilities[0], context)
+	combat._apply_damage(0, form.attack, context)
+	combat.update(0.01, context)
+	if not combat.possessed_indices().has(1):
+		_fail("reine : la possession ne saute pas du pantin mort à son voisin")
+
+	# L'Œil de la Reine : la cible et ses deux voisins.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	for cell in _cluster(grid, context, _cell_at(grid, context.player_field, 3), 4):
+		_add_enemy(context, cell, 500)
+	if not combat.use(form.abilities[0], context):
+		_fail("reine : l'Œil de la Reine ne part pas")
+	if combat.possessed_indices().size() != 3:
+		_fail("reine : l'Œil possède %d ennemis au lieu de 3" % combat.possessed_indices().size())
+
+	# L'Arène s'ouvre sur une proie, la Toile enchaîne cinq ennemis.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	for cell in _cluster(grid, context, _cell_at(grid, context.player_field, 3), 6):
+		_add_enemy(context, cell, 500)
+	if not combat.use(form.abilities[1], context):
+		_fail("reine : l'Arène de Discorde ne part pas")
+	if not combat.use(form.abilities[2], context):
+		_fail("reine : la Toile de Souffrance ne part pas")
+	if combat.bond_members().size() != 5:
+		_fail("reine : la Toile enchaîne %d ennemis au lieu de 5" % combat.bond_members().size())
+
+	# Le Ballet : l'échange, puis la marionnette éclate sur l'ennemi resté à sa place.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.stats = form
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 500)
+	if not combat.use(form.escape, context):
+		_fail("reine : le Ballet des pantins ne part pas")
+	for i in 40:
+		combat.update(0.1, context)
+	if context.enemy_health[0].current >= 500:
+		_fail("reine : la marionnette du Ballet n'éclate pas")
+
+	# Le Grand Bal : tous possédés, et chaque mort éclate sur ses voisins.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.stats = form
+	near = _cluster(grid, context, _cell_at(grid, context.player_field, 3), 2)
+	_add_enemy(context, near[0], 1)
+	_add_enemy(context, near[1], 500)
+	if not combat.use(form.ultimate, context):
+		_fail("reine : le Grand Bal ne part pas")
+	if not combat.ball_dancing() or combat.possessed_indices().size() != 2:
+		_fail("reine : le Grand Bal ne possède pas tout le monde")
+	combat._apply_damage(0, form.attack, context)
+	var before := context.enemy_health[1].current
+	combat.update(0.01, context)
+	if before - context.enemy_health[1].current < form.ultimate.ball_burst_damage:
+		_fail("reine : la mort d'un pantin n'éclate pas sur son voisin (%d dégâts)" % [
+			before - context.enemy_health[1].current])
+	for i in 100:
+		combat.update(0.1, context)
+	if combat.ball_dancing():
+		_fail("reine : le Grand Bal ne s'arrête pas")
+	print("reine de la discorde : contagion, œil, toile, ballet, grand bal : OK")
+
+
+## L'EMPEREUR DES CENDRES : le Sillage de cendres, la gerbe des gantelets, la Forge, le Retour et l'Empire.
+func _test_emperor() -> void:
+	var base := CharacterCatalog.braise()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Empereur des Cendres":
+		_fail("empereur : pas d'éveil pour le Roi de Braise")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.ashes_burning():
+		_fail("empereur : le Sillage de cendres ne commence pas avec l'Éveil")
+	# Une pièce arrachée revient en ASH_RETURN.
+	health.take(Damage.new(1))
+	combat.update(0.01, context)
+	var loose := 0
+	for piece in combat.pieces():
+		if piece["state"] == CombatSystem.Piece.LOOSE:
+			loose += 1
+			if absf(float(piece["left"]) - CombatSystem.ASH_RETURN) > 0.05:
+				_fail("empereur : la pièce arrachée revient en %.1f s" % float(piece["left"]))
+	if loose != 1:
+		_fail("empereur : un coup reçu n'arrache pas une pièce")
+	# Elle vole, et laisse des cendres.
+	for i in 10:
+		combat.update(0.05, context)
+	if combat.fire_cells().is_empty():
+		_fail("empereur : la pièce qui vole ne laisse aucune cendre")
+	# Dans ses cendres, il ne gagne pas l'allure du Dragon.
+	combat.fire_cells()[context.player_cell] = 2.0
+	combat.update(0.01, context)
+	if combat.armor_speed() > CombatSystem.PIECE_SPEED_BONUS * float(CombatSystem.PIECES_MAX) + 0.001:
+		_fail("empereur : ses cendres lui donnent l'allure du Dragon (%.2f)" % combat.armor_speed())
+	awakening.update(Awakening.DURATION)
+	if combat.ashes_burning():
+		_fail("empereur : le Sillage survit à l'Éveil")
+
+	# Les Gantelets de l'Empereur : la gerbe blesse aussi le voisin de la proie.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var near := _cluster(grid, context, _cell_at(grid, context.player_field, 3), 2)
+	_add_enemy(context, near[0], 500)
+	_add_enemy(context, near[1], 500)
+	if not combat.use(form.abilities[0], context):
+		_fail("empereur : les Gantelets ne partent pas")
+	for i in 40:
+		combat.update(0.05, context)
+	if context.enemy_health[0].current >= 500 or context.enemy_health[1].current >= 500:
+		_fail("empereur : la gerbe des gantelets ne touche pas les deux voisins")
+
+	# La Forge impériale : elle aspire, mord, puis explose.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var far := _cell_at(grid, context.player_field, 3)
+	_add_enemy(context, far, 500)
+	if not combat.use(form.abilities[1], context):
+		_fail("empereur : la Forge ne part pas")
+	var start := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0])
+	combat.update(0.05, context)
+	if Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0]) >= start:
+		_fail("empereur : la Forge n'aspire pas l'ennemi à 3 cases")
+	var blew := {"n": 0}
+	combat.forge_blew.connect(func(_c: Vector2i, _r: float) -> void: blew["n"] += 1)
+	for i in 120:
+		combat.update(0.05, context)
+	if blew["n"] != 1:
+		_fail("empereur : la Forge n'explose pas en recrachant (%d)" % blew["n"])
+
+	# Le Retour de l'Empire : les trois pièces ensemble font partir l'onde.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 5), 5000)
+	combat.use(form.abilities[0], context)
+	combat.use(form.abilities[1], context)
+	for i in 4:
+		combat.update(0.05, context)
+	var waves := {"n": 0}
+	combat.empire_wave.connect(func(_c: Vector2i, _r: float) -> void: waves["n"] += 1)
+	if not combat.use(form.abilities[2], context):
+		_fail("empereur : le Retour de l'Empire ne part pas")
+	for i in 60:
+		combat.update(0.05, context)
+	if waves["n"] != 1:
+		_fail("empereur : le retour des trois pièces ne lance pas l'onde (%d)" % waves["n"])
+
+	# L'Empire des Cendres : chaque cage éclate sur ses voisins.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	near = _cluster(grid, context, _cell_at(grid, context.player_field, 4), 2)
+	_add_enemy(context, near[0], 1000)
+	_add_enemy(context, near[1], 1000)
+	if not combat.use(form.ultimate, context):
+		_fail("empereur : l'Empire des Cendres ne part pas")
+	combat.update(form.ultimate.duration + 0.05, context)
+	var expected := form.ultimate.damage + form.ultimate.cage_burst_damage * 2
+	if 1000 - context.enemy_health[0].current < expected:
+		_fail("empereur : la cage n'éclate pas sur le voisin (%d dégâts, attendu %d)" % [
+			1000 - context.enemy_health[0].current, expected])
+	print("empereur des cendres : sillage, gantelets, forge, retour, empire : OK")
+
+
+## Une direction où les deux cases devant le mage sont du sol, ou zéro.
+func _open_way(grid: MazeGrid, from: Vector2i) -> Vector2i:
+	for way: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(from + way) and grid.is_floor_v(from + way * 2) and grid.is_floor_v(from + way * 3):
+			return way
+	return Vector2i.ZERO
+
+
+## LE SEIGNEUR ÉCARLATE : la Lame affûtée, l'écho du Pas, la Garde, les pétales, la Danse et la Nuit.
+func _test_lord() -> void:
+	var base := CharacterCatalog.ecarlate()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Seigneur Écarlate":
+		_fail("seigneur : pas d'éveil pour le Chevalier Écarlate")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.keen():
+		_fail("seigneur : la Lame affûtée ne commence pas avec l'Éveil")
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1000)
+	combat._apply_damage(0, form.attack, context)
+	if combat.cuts_on(0) != 2:
+		_fail("seigneur : un coup éveillé laisse %d entailles au lieu de 2" % combat.cuts_on(0))
+	for i in 3:
+		combat._apply_damage(0, form.attack, context)
+	var before := context.enemy_health[0].current
+	combat.update(0.01, context)
+	if combat.cuts_on(0) != 0 or before - context.enemy_health[0].current < CombatSystem.KEEN_CUT_DAMAGE * 8:
+		_fail("seigneur : huit entailles ne s'ouvrent pas seules (%d restent)" % combat.cuts_on(0))
+	awakening.update(Awakening.DURATION)
+	if combat.keen():
+		_fail("seigneur : la Lame affûtée survit à l'Éveil")
+	# Sans l'Éveil, le Chevalier garde ses cinq entailles et sa Rengaine.
+	for i in 8:
+		combat._apply_damage(0, base.attack, context)
+	combat.update(0.01, context)
+	if combat.cuts_on(0) != CombatSystem.CUTS_MAX:
+		_fail("seigneur : hors Éveil, les entailles ne plafonnent pas à %d" % CombatSystem.CUTS_MAX)
+
+	# Le Pas des Mille Lames : la lame fantôme repasse et entaille encore.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var way := _open_way(grid, context.player_cell)
+	if way == Vector2i.ZERO:
+		_fail("seigneur : pas de couloir pour le Pas")
+		return
+	context.player_facing = way
+	_add_enemy(context, context.player_cell + way * 2, 1000)
+	if not combat.use(form.abilities[0], context):
+		_fail("seigneur : le Pas des Mille Lames ne part pas")
+	var after_dash := context.enemy_health[0].current
+	combat.update(form.abilities[0].dash_echo_delay + 0.05, context)
+	if context.enemy_health[0].current >= after_dash:
+		_fail("seigneur : la lame fantôme ne repasse pas")
+
+	# La Garde du Seigneur pare deux coups, et riposte aux deux.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 1000)
+	combat.use(form.abilities[1], context)
+	var full := health.current
+	health.take(Damage.new(1))
+	combat.update(0.05, context)
+	combat.update(CombatSystem.PARRY_LOCK + 0.05, context)
+	health.take(Damage.new(1))
+	combat.update(0.05, context)
+	if health.current != full:
+		_fail("seigneur : la Garde du Seigneur ne pare pas le second coup")
+	if 1000 - context.enemy_health[0].current < form.abilities[1].damage * 2:
+		_fail("seigneur : la Garde ne riposte pas à chaque parade")
+
+	# La Rengaine écarlate : l'éclat entaille le voisin.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var near := _cluster(grid, context, _cell_at(grid, context.player_field, 3), 2)
+	_add_enemy(context, near[0], 1000)
+	_add_enemy(context, near[1], 1000)
+	combat._add_cuts(0, 3)
+	if not combat.use(form.abilities[2], context):
+		_fail("seigneur : la Rengaine écarlate ne part pas")
+	combat.update(CombatSystem.SHEATHE_SILENCE + 0.05, context)
+	if combat.cuts_on(1) != form.abilities[2].petal_cuts:
+		_fail("seigneur : les pétales-lames n'entaillent pas le voisin (%d)" % combat.cuts_on(1))
+
+	# La Danse des pétales : le tourbillon entaille ce qui l'entoure.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	way = _open_way(grid, context.player_cell)
+	context.player_facing = -way
+	_add_enemy(context, context.player_cell - way, 1000)
+	if not combat.use(form.escape, context):
+		_fail("seigneur : la Danse des pétales ne part pas")
+	for i in 10:
+		combat.update(0.1, context)
+	if context.enemy_health[0].current >= 1000 or combat.cuts_on(0) < form.escape.cuts:
+		_fail("seigneur : le tourbillon de pétales n'entaille pas")
+
+	# La Nuit Écarlate : huit entailles par ennemi, qui n'éclatent qu'à la fin.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.start_keen()
+	_add_enemy(context, _cell_at(grid, context.player_field, 4), 1000)
+	combat.use(form.ultimate, context)
+	combat.update(0.05, context)
+	if combat.cuts_on(0) != 8:
+		_fail("seigneur : la Nuit Écarlate pose %d entailles au lieu de 8" % combat.cuts_on(0))
+	combat.update(form.ultimate.duration, context)
+	if 1000 - context.enemy_health[0].current < form.ultimate.cut_damage * 8:
+		_fail("seigneur : la Nuit Écarlate n'ouvre pas les huit entailles")
+	print("seigneur écarlate : lame affûtée, pas, garde, rengaine, danse, nuit : OK")
+
+
+## LE GARDIEN DE L'ABÎME : le Poids des chaînes, les trois crochets, les chaînes qui cèdent, le givre, le Pas et l'Abîme.
+func _test_warden() -> void:
+	var base := CharacterCatalog.geolier()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Gardien de l'Abîme":
+		_fail("gardien : pas d'éveil pour le Geôlier")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.abyss_open():
+		_fail("gardien : le Poids des chaînes ne commence pas avec l'Éveil")
+	var shackles := {"n": 0}
+	combat.enemy_shackled.connect(func(_i: int, _s: float) -> void: shackles["n"] += 1)
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1000)
+	combat._apply_damage(0, base.attack, context)
+	combat._apply_damage(0, base.attack, context)
+	if shackles["n"] != 1:
+		_fail("gardien : l'ennemi n'est pas entravé au deuxième coup")
+	if not combat.held(0):
+		_fail("gardien : l'entravé n'est pas tenu pour pris")
+	var before := context.enemy_health[0].current
+	combat._apply_damage(0, base.attack, context)
+	var expected := int(round(float(base.attack.damage) * (1.0 + CombatSystem.ABYSS_HELD_BONUS)))
+	if before - context.enemy_health[0].current != expected:
+		_fail("gardien : un entravé prend %d au lieu de %d" % [before - context.enemy_health[0].current, expected])
+	awakening.update(Awakening.DURATION)
+	if combat.abyss_open():
+		_fail("gardien : le Poids des chaînes survit à l'Éveil")
+
+	# Les Crochets de l'Abîme : trois ennemis ramenés à la fois, chacun sur sa case.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	for steps in [4, 5, 6]:
+		_add_enemy(context, _cell_at(grid, context.player_field, steps), 1000)
+	if not combat.use(form.abilities[0], context):
+		_fail("gardien : les Crochets ne partent pas")
+	var spots := {}
+	for i in 3:
+		spots[context.enemy_cells[i]] = true
+		if Pathfinder.value_at(grid, context.player_field, context.enemy_cells[i]) > 3:
+			_fail("gardien : le crochet %d n'a pas ramené sa proie" % i)
+	if spots.size() != 3:
+		_fail("gardien : deux proies des crochets tombent sur la même case")
+
+	# Les Chaînes de l'Abîme cèdent en se resserrant.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1000)
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 1000)
+	var snapped := {"n": 0}
+	combat.chains_snapped.connect(func(indices: Array, _s: float) -> void: snapped["n"] = indices.size())
+	combat.use(form.abilities[1], context)
+	for i in 80:
+		combat.update(0.1, context)
+	if snapped["n"] != 2:
+		_fail("gardien : les chaînes ne se resserrent pas sur leurs deux proies (%d)" % snapped["n"])
+
+	# L'Hiver de l'Abîme laisse sa plaque de givre.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var plates := {"n": 0}
+	combat.zone_created.connect(func(_id: int, ability: Ability, _c: Vector2i) -> void:
+		if ability.zone_style == "givre_abime":
+			plates["n"] += 1)
+	combat.use(form.abilities[2], context)
+	if plates["n"] != 1:
+		_fail("gardien : l'Hiver ne laisse pas de plaque de givre")
+
+	# Le Pas de l'Abîme se reforme dans une onde de givre.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var waves := {"n": 0}
+	combat.frost_wave.connect(func(_c: Vector2i, _r: float) -> void: waves["n"] += 1)
+	for way: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		context.player_facing = way
+		if combat.use(form.escape, context):
+			break
+	if waves["n"] != 1:
+		_fail("gardien : le Pas de l'Abîme ne lance pas son onde de givre")
+
+	# L'Abîme : il tire ses prisonniers vers lui, puis se referme sur eux.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var far := Vector2i(-1, -1)
+	for cell in grid.all_floor_cells():
+		var steps := Pathfinder.value_at(grid, context.player_field, cell)
+		if steps >= 4 and Vector2(cell - context.player_cell).length() <= form.ultimate.radius:
+			far = cell
+			break
+	if far == Vector2i(-1, -1):
+		_fail("gardien : pas de case pour l'Abîme")
+		return
+	_add_enemy(context, far, 1000)
+	var closed := {"n": 0}
+	combat.abyss_closed.connect(func(_c: Array) -> void: closed["n"] += 1)
+	combat.use(form.ultimate, context)
+	var start := Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0])
+	for i in 25:
+		combat.update(0.1, context)
+	if Pathfinder.value_at(grid, context.player_field, context.enemy_cells[0]) >= start:
+		_fail("gardien : l'Abîme ne tire pas son prisonnier")
+	for i in 50:
+		combat.update(0.1, context)
+	if closed["n"] != 1 or 1000 - context.enemy_health[0].current < form.ultimate.gaol_end_damage:
+		_fail("gardien : l'Abîme ne se referme pas sur son prisonnier")
+	print("gardien de l'abîme : poids des chaînes, crochets, chaînes, hiver, pas, abîme : OK")
+
+
+## LE DRAGON PRIMORDIAL : le Feu primordial, la Bombe, le Souffle qui déborde, le Dévoreur, la Carapace, l'Envol
+## et le Ciel en feu.
+func _test_primal() -> void:
+	var base := CharacterCatalog.dragon()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Dragon Primordial":
+		_fail("primordial : pas d'éveil pour le Dragon des Abysses")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.primal():
+		_fail("primordial : le Feu primordial ne commence pas avec l'Éveil")
+	var spot := _cell_at(grid, context.player_field, 3)
+	combat._ignite_cells([spot], 4.0)
+	if absf(float(combat.fire_cells()[spot]) - 4.0 * CombatSystem.PRIMAL_FIRE_LONGER) > 0.01:
+		_fail("primordial : ses cases ne brûlent pas deux fois plus longtemps")
+	# Ce qui meurt dans le feu explose sur son voisin.
+	var near := _cluster(grid, context, spot, 2)
+	_add_enemy(context, spot, 1)
+	_add_enemy(context, near[1] if near[0] == spot else near[0], 500)
+	combat._apply_damage(0, base.attack, context)
+	combat.update(0.01, context)
+	if context.enemy_health[1].current > 500 - CombatSystem.PRIMAL_BURST_DAMAGE:
+		_fail("primordial : la mort dans le feu n'explose pas sur le voisin")
+	awakening.update(Awakening.DURATION)
+	if combat.primal():
+		_fail("primordial : le Feu primordial survit à l'Éveil")
+
+	# Le Souffle primordial déborde sur les bords du couloir.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var spread := {"cells": 0}
+	combat.breath_cast.connect(func(_f: Vector2i, cells: Array, _s: float) -> void: spread["cells"] = cells.size())
+	var lit := false
+	for way: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		context.player_facing = way
+		if combat.use(form.abilities[0], context):
+			lit = true
+			break
+	if not lit or spread["cells"] <= 0:
+		_fail("primordial : le Souffle primordial ne part pas")
+
+	# Le Dévoreur avale une proie en feu assez blessée.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var prey := _cell_at(grid, context.player_field, 2)
+	_add_enemy(context, prey, 100)
+	combat.fire_cells()[prey] = 5.0
+	combat.use(form.abilities[1], context)
+	if context.enemy_alive(0):
+		_fail("primordial : le Dévoreur n'avale pas la proie en feu blessée")
+
+	# La Carapace encaisse deux coups.
+	parts = _context(base)
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.use(form.abilities[2], context)
+	if health.shield != 2:
+		_fail("primordial : la Carapace n'encaisse pas deux coups (%d)" % health.shield)
+
+	# L'Envol retombe dans un anneau de feu.
+	parts = _context(base)
+	combat = parts[1]
+	context = parts[2]
+	combat.use(form.escape, context)
+	if not combat.flying():
+		_fail("primordial : l'Envol ne décolle pas")
+	for i in 25:
+		combat.update(0.1, context)
+	if combat.flying() or not combat.fire_cells().has(context.player_cell):
+		_fail("primordial : l'Envol ne retombe pas dans le feu")
+
+	# Le Ciel en feu : un météore par proie, qui laisse le sol en feu.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var far := _cell_at(grid, context.player_field, 4)
+	_add_enemy(context, far, 1000)
+	combat.use(form.ultimate, context)
+	for i in 40:
+		combat.update(0.1, context)
+	if 1000 - context.enemy_health[0].current < form.ultimate.damage:
+		_fail("primordial : le météore ne frappe pas sa proie")
+	if not combat.fire_cells().has(far):
+		_fail("primordial : le point d'impact du météore ne reste pas en feu")
+	print("dragon primordial : feu, souffle, dévoreur, carapace, envol, ciel en feu : OK")
+
+
+## LE MAÎTRE DU CASINO : la Maison gagne toujours, les Dés du Diable, la Table piégée, la Pièce truquée, le leurre
+## qui s'éteint et le Grand Jeu.
+func _test_casino() -> void:
+	var base := CharacterCatalog.croupier()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Maître du Casino":
+		_fail("casino : pas d'éveil pour le Croupier des Enfers")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.house():
+		_fail("casino : la Maison gagne toujours ne commence pas avec l'Éveil")
+	var near := _cluster(grid, context, _cell_at(grid, context.player_field, 3), 2)
+	_add_enemy(context, near[0], 100000)
+	_add_enemy(context, near[1], 100000)
+	var payouts := {"n": 0}
+	combat.house_payout.connect(func(_c: Vector2i, _r: float) -> void: payouts["n"] += 1)
+	for i in 40:
+		combat._apply_damage(0, form.attack, context)
+		combat.update(0.01, context)
+	if payouts["n"] == 0 or context.enemy_health[1].current >= 100000:
+		_fail("casino : aucun Coup de chance ne paie ses jetons sur le voisin")
+	awakening.update(Awakening.DURATION)
+	if combat.house():
+		_fail("casino : la Maison survit à l'Éveil")
+
+	# Les Dés du Diable roulent un troisième dé.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var dice := {"n": 0}
+	combat.devil_die.connect(func(_f: Vector2i, _c: Array, _v: int, _t: bool) -> void: dice["n"] += 1)
+	for way: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		context.player_facing = way
+		if combat.use(form.abilities[0], context):
+			break
+	if dice["n"] != 1:
+		_fail("casino : les Dés du Diable ne roulent pas de troisième dé")
+
+	# La Table piégée pose ses cartes en croix.
+	parts = _context(base)
+	combat = parts[1]
+	context = parts[2]
+	combat.use(form.abilities[1], context)
+	if combat.traps().size() < 2:
+		_fail("casino : la Table piégée ne pose pas ses cartes en croix (%d)" % combat.traps().size())
+
+	# La Pièce truquée donne les deux faces.
+	parts = _context(base)
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.use(form.abilities[2], context)
+	if not health.immune or combat.doubled_left() != form.abilities[2].doubled_hits:
+		_fail("casino : la Pièce truquée ne donne pas les deux faces")
+
+	# Le leurre du Grand tour de magie s'éteint, et explose sur ce qui l'entoure.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var start := context.player_cell
+	for way: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		context.player_facing = way
+		if combat.use(form.escape, context):
+			break
+	var lure_gone := {"n": 0}
+	combat.decoy_blew.connect(func(_c: Vector2i, _r: float) -> void: lure_gone["n"] += 1)
+	_add_enemy(context, _cluster(grid, context, start, 2)[1], 1000)
+	for i in 30:
+		combat.update(0.1, context)
+	if lure_gone["n"] != 1:
+		_fail("casino : la carte du Grand tour ne s'éteint jamais")
+
+	# Le Grand Jeu fait tourner la roue trois fois.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 100000)
+	var landed := {"n": 0}
+	combat.roulette_landed.connect(func(_r: int, _c: Array) -> void: landed["n"] += 1)
+	combat.use(form.ultimate, context)
+	for i in 70:
+		combat.update(0.1, context)
+	if landed["n"] != form.ultimate.roulette_spins:
+		_fail("casino : la roue du Grand Jeu tourne %d fois au lieu de %d" % [landed["n"], form.ultimate.roulette_spins])
+	print("maître du casino : maison, dés, table, pièce, tour, grand jeu : OK")
+
+
+## FAIM SANS FOND : la Faim sans fond, les Langues voraces, Tout dévorer, le Déluge de bile, le Bond et le Grand Festin.
+func _test_endless() -> void:
+	var base := CharacterCatalog.avide()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Faim Sans Fond":
+		_fail("faim : pas d'éveil pour l'Avide")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.endless():
+		_fail("faim : la Faim sans fond ne commence pas avec l'Éveil")
+	for k in 6:
+		_add_enemy(context, _cell_at(grid, context.player_field, 2), 1)
+		combat._apply_damage(context.enemy_cells.size() - 1, base.attack, context)
+	if combat.bites() != CombatSystem.ENDLESS_BITES:
+		_fail("faim : il ne garde pas %d bouchées (%d)" % [CombatSystem.ENDLESS_BITES, combat.bites()])
+	combat.update(CombatSystem.BITE_DECAY + 1.0, context)
+	if combat.bites() != CombatSystem.ENDLESS_BITES:
+		_fail("faim : ses bouchées fondent encore pendant l'Éveil")
+	awakening.update(Awakening.DURATION)
+	if combat.endless() or combat.bites() > CombatSystem.BITES_MAX:
+		_fail("faim : la Faim sans fond survit à l'Éveil")
+
+	# Les Langues voraces : trois langues, trois cibles.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var near := _cluster(grid, context, _cell_at(grid, context.player_field, 3), 3)
+	for cell in near:
+		_add_enemy(context, cell, 1000)
+	combat.use(form.attack, context)
+	for i in 30:
+		combat.update(0.05, context)
+	var hit := 0
+	for i in 3:
+		if context.enemy_health[i].current < 1000:
+			hit += 1
+	if hit < 3:
+		_fail("faim : les Langues voraces ne touchent que %d cibles" % hit)
+
+	# Tout dévorer : deux proies blessées avalées d'un coup.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	near = _cluster(grid, context, context.player_cell, 3)
+	_add_enemy(context, near[1], 100)
+	_add_enemy(context, near[2], 100)
+	context.enemy_health[0].take(Damage.new(60))
+	context.enemy_health[1].take(Damage.new(60))
+	combat.use(form.abilities[1], context)
+	if context.enemy_alive(0) or context.enemy_alive(1):
+		_fail("faim : Tout dévorer n'avale pas les deux proies blessées")
+
+	# Le Déluge de bile laisse ses flaques.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	_add_enemy(context, _cell_at(grid, context.player_field, 3), 1000)
+	combat._bites = 3
+	var puddles := {"n": 0}
+	combat.zone_created.connect(func(_id: int, ability: Ability, _c: Vector2i) -> void:
+		if ability.zone_style == "bile_peinte":
+			puddles["n"] += 1)
+	combat.use(form.abilities[2], context)
+	if puddles["n"] < 1:
+		_fail("faim : le Déluge de bile ne laisse pas de flaque")
+
+	# Le Bond du prédateur mord à l'atterrissage.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	var way := _open_way(grid, context.player_cell)
+	context.player_facing = way
+	var landing := context.player_cell
+	for _s in form.escape.range:
+		if grid.is_floor_v(landing + way):
+			landing += way
+	var beside := _cluster(grid, context, landing, 2)[1]
+	_add_enemy(context, beside, 1000)
+	combat.use(form.escape, context)
+	if context.enemy_health[0].current >= 1000:
+		_fail("faim : le Bond du prédateur ne mord pas à l'atterrissage")
+
+	# Le Grand Festin avale plus vite.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	for cell in _cluster(grid, context, _cell_at(grid, context.player_field, 2), 4):
+		_add_enemy(context, cell, 1)
+	combat.use(form.ultimate, context)
+	for i in int((CombatSystem.FEAST_FIRST + form.ultimate.feast_gap * 2.0 + 0.2) / 0.05):
+		combat.update(0.05, context)
+	var eaten := 0
+	for i in context.enemy_cells.size():
+		if not context.enemy_alive(i):
+			eaten += 1
+	if eaten < 3:
+		_fail("faim : le Grand Festin n'avale que %d proies" % eaten)
+	print("faim sans fond : faim, langues, dévorer, bile, bond, grand festin : OK")
+
+
+func _test_archdemon() -> void:
+	var base := CharacterCatalog.demon()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Archidémon du Pacte":
+		_fail("archidémon : pas d'éveil pour le Démon du Pacte")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.blood_pricing():
+		_fail("archidémon : le Prix du Sang ne commence pas avec l'Éveil")
+	var full := health.current
+	combat.update(Awakening.BLOOD_EVERY + 0.01, context)
+	if health.current != full - 1:
+		_fail("archidémon : sa vie ne coule pas (%d PV au lieu de %d)" % [health.current, full - 1])
+	health.sacrifice(health.current - 1)
+	combat.update(Awakening.BLOOD_EVERY + 0.01, context)
+	if health.current != 1:
+		_fail("archidémon : le Prix du Sang a pris le dernier PV")
+	if absf(combat.rage_bonus() - CombatSystem.RAGE_MAX * Awakening.BLOOD_RAGE) > 0.001:
+		_fail("archidémon : la Rage ne double pas à 1 PV (%.2f)" % combat.rage_bonus())
+	_add_enemy(context, _cell_at(grid, context.player_field, 2), 1)
+	combat._apply_damage(0, form.attack, context)
+	if health.current != 2:
+		_fail("archidémon : un kill ne lui rend pas 1 PV (%d PV)" % health.current)
+	awakening.update(Awakening.DURATION)
+	if combat.blood_pricing():
+		_fail("archidémon : le Prix du Sang survit à l'Éveil")
+
+	# Le Pacte écarlate : 1 PV, l'onde, et le renfort.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 1), 500)
+	var pact: Ability = form.abilities[0]
+	if not combat.use(pact, context):
+		_fail("archidémon : le Pacte écarlate ne part pas")
+	if health.current != health.maximum - 1:
+		_fail("archidémon : le Pacte écarlate ne coûte pas 1 PV")
+	if context.enemy_health[0].current >= 500:
+		_fail("archidémon : l'onde du Pacte écarlate ne blesse pas")
+	if combat.empower_bonus() != pact.empower_bonus:
+		_fail("archidémon : le Pacte écarlate ne renforce pas ses coups")
+
+	# La Gueule de l'Abîme : 1 PV par ennemi happé, 2 au plus.
+	var maw: Ability = form.abilities[2]
+	for crowd: int in [1, 3]:
+		parts = _context(base)
+		grid = parts[0]
+		combat = parts[1]
+		context = parts[2]
+		health = parts[3]
+		health.sacrifice(health.current - 1)
+		var near: Array[Vector2i] = []
+		for cell in grid.all_floor_cells():
+			var steps := Pathfinder.value_at(grid, context.player_field, cell)
+			if steps >= 1 and steps <= 2 and near.size() < crowd:
+				near.append(cell)
+		for cell in near:
+			_add_enemy(context, cell, 500)
+		combat.use(maw, context)
+		var expected := 1 + mini(maw.heal_self, near.size())
+		if health.current != expected:
+			_fail("archidémon : la Gueule rend %d PV pour %d ennemis (attendu %d)" % [
+				health.current - 1, near.size(), expected - 1])
+
+	# Les Fleuves de soufre partent dans tous les couloirs ; les Ailes s'envolent.
+	parts = _context(base)
+	combat = parts[1]
+	context = parts[2]
+	if not form.abilities[1].line_cross or not combat.use(form.abilities[1], context):
+		_fail("archidémon : les Fleuves de soufre ne partent pas")
+	if form.escape.kind != Ability.Kind.FLIGHT or not combat.use(form.escape, context) or not combat.flying():
+		_fail("archidémon : les Ailes du Pacte ne s'envolent pas")
+
+	# L'Apocalypse : 1 PV, intouchable, des serres qui tombent, et tout revient à la fin.
+	parts = _context(base)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	_add_enemy(context, _cell_at(grid, context.player_field, 7), 5000)
+	var struck := [0]
+	combat.pact_claw_struck.connect(func(_cell: Vector2i) -> void: struck[0] += 1)
+	combat.use(form.ultimate, context)
+	if health.current != 1 or not health.immune:
+		_fail("archidémon : l'Apocalypse ne le met pas à 1 PV, intouchable")
+	for i in 30:
+		combat.update(0.1, context)
+	if struck[0] < 2 or context.enemy_health[0].current >= 5000:
+		_fail("archidémon : les serres de l'Apocalypse ne tombent pas (%d)" % struck[0])
+	for i in 60:
+		combat.update(0.1, context)
+	if health.current != health.maximum:
+		_fail("archidémon : l'Apocalypse ne rend pas tout ce qu'il a donné (%d PV)" % health.current)
+	print("archidémon du pacte : prix du sang, serres, pacte écarlate, gueule, fleuves, ailes et apocalypse : OK")
+
+
+## LE SEIGNEUR DU FLÉAU (l'Éveil du Mage de la Peste) : le Miasme et son plafond de 5 doses, la gerbe du Crachat,
+## les flaques du Sillage, l'Épidémie, la Saignée, la Nuée de corbeaux et la Grande Peste.
+## L'ARCHIMAGE PRIMORDIAL (l'Éveil du Sorcier Suprême) : la roue tourne et porte le trait de l'orbe en tête, la
+## Convergence se brise en quatre éclats, les sceaux le suivent, l'Apothéose double l'Écho, le Pas des éléments
+## lance ses rayons, et la Genèse fait tomber ses météores dans l'ordre de la roue avant la nova.
+## L'ÉTOILE DU MATIN : l'Éblouissement frappe plus fort l'aveuglé et aveugle ce qui reste collé, un coup sur trois
+## du Trait aveugle, la Lance reste allumée, la Cathédrale soigne, l'Égide renvoie, le Trait de l'étoile aveugle, et le
+## Soleil de midi lance ses rayons puis tombe.
+## LE FAUCHEUR DES ÂMES : la Récolte achève sous 25 % et garde six âmes, qui frappent ce qui l'approche ; le croissant
+## revient et frappe au retour, le Glas sonne trois fois, la Légion lâche trois âmes de plus, et Minuit passe deux fois.
+func _test_reaper() -> void:
+	var base := CharacterCatalog.mort()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Faucheur des Âmes":
+		_fail("faucheur : pas d'éveil pour l'Ange de la Mort")
+		return
+	var parts := _context(base)
+	var awakening := Awakening.new(base, form, parts[1], parts[2])
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not (parts[1] as CombatSystem).harvest_active():
+		_fail("faucheur : pas de récolte à l'éveil")
+	awakening.finish()
+	if (parts[1] as CombatSystem).harvest_active():
+		_fail("faucheur : la récolte survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	combat.start_harvest()
+	# Six âmes au plus pendant la Récolte.
+	for n in 8:
+		combat._gain_soul()
+	if combat.souls() != CombatSystem.HARVEST_SOULS:
+		_fail("faucheur : %d âmes gardées au lieu de 6" % combat.souls())
+	# La Sentence achève sous 25 % : un ennemi à 20 % tombe au premier croissant.
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 5))
+	_add_enemy(context, path[-1], 1000)
+	context.enemy_health[0].current = 200
+	combat.use(form.attack, context)
+	for frame in 80:
+		combat.update(0.02, context)
+	if context.enemy_alive(0):
+		_fail("faucheur : un ennemi à 20 %% n'est pas achevé (%d PV)" % context.enemy_health[0].current)
+	# Le croissant revient : ce qui se tient sur le chemin du retour est touché.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	_add_enemy(context, path[-1], 5000)
+	_add_enemy(context, path[2], 5000)
+	var target_first := {"hit": false}
+	combat.crescent_returned.connect(func(_p: Array, _d: float) -> void: target_first["hit"] = true)
+	combat._souls = 0
+	combat.use(form.attack, context)
+	for frame in 150:
+		combat.update(0.02, context)
+	if not bool(target_first["hit"]) or context.enemy_health[1].current >= 5000:
+		_fail("faucheur : le croissant ne frappe pas au retour")
+	# Une âme en orbite frappe ce qui arrive à son contact.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	var beside := Vector2i(-1, -1)
+	for step: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + step):
+			beside = context.player_cell + step
+	_add_enemy(context, beside, 5000)
+	combat._gain_soul()
+	combat.update(0.02, context)
+	if combat.souls() != 0 or context.enemy_health[0].current >= 5000:
+		_fail("faucheur : l'âme en orbite ne frappe pas (%d âmes)" % combat.souls())
+	# Le Glas sonne trois fois, et marque ce qui est proche.
+	var tolls := {"count": 0}
+	combat.toll_rang.connect(func(_c: Vector2i, _r: float) -> void: tolls["count"] += 1)
+	combat.use(form.abilities[1], context)
+	for frame in 250:
+		combat.update(0.02, context)
+	if int(tolls["count"]) != form.abilities[1].toll_count:
+		_fail("faucheur : le glas sonne %d fois" % int(tolls["count"]))
+	# La Légion lâche trois âmes de plus que les siennes.
+	var sent := {"count": 0}
+	combat.soul_sent.connect(func(_p: Array, _d: float) -> void: sent["count"] += 1)
+	combat._souls = 0
+	combat.use(form.abilities[2], context)
+	if int(sent["count"]) != form.abilities[2].souls_base:
+		_fail("faucheur : la légion lâche %d âmes" % int(sent["count"]))
+	# Minuit : deux passages de faux. Un ennemi indemne survit à 25 % ; un ennemi déjà blessé est achevé.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	_add_enemy(context, path[-1], 1000)
+	_add_enemy(context, path[-2], 1000)
+	context.enemy_health[1].current = 700
+	var passes := {"count": 0}
+	combat.last_hour_struck.connect(func(_c: Vector2i) -> void: passes["count"] += 1)
+	combat.use(form.ultimate, context)
+	for frame in 200:
+		combat.update(0.02, context)
+	if int(passes["count"]) != 4 or not context.enemy_alive(0) or context.enemy_alive(1):
+		_fail("faucheur : minuit frappe %d fois, PV %d et %d" % [int(passes["count"]),
+			context.enemy_health[0].current, context.enemy_health[1].current])
+	print("faucheur des âmes : récolte, croissant, âmes gardiennes, glas, légion et minuit : OK")
+
+
+func _test_morning_star() -> void:
+	var base := CharacterCatalog.lumiere()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Étoile du Matin":
+		_fail("étoile du matin : pas d'éveil pour le Porte-Lumière")
+		return
+	var parts := _context(base)
+	var awakening := Awakening.new(base, form, parts[1], parts[2])
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not (parts[1] as CombatSystem).dazzle_active():
+		_fail("étoile du matin : pas d'éblouissement à l'éveil")
+	awakening.finish()
+	if (parts[1] as CombatSystem).dazzle_active():
+		_fail("étoile du matin : l'éblouissement survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	combat.free_use = true
+	combat.start_dazzle(60.0)
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 5))
+	_add_enemy(context, path[-1], 5000)
+	var hits := {"last": 0}
+	combat.enemy_damaged.connect(func(_i: int, dealt: int, ability: Ability) -> void:
+		if ability.id == form.attack.id:
+			hits["last"] = dealt)
+	# L'Éblouissement : le même trait fait 30 % de plus sur un aveuglé.
+	combat._blind_locks.clear()
+	combat.use(form.attack, context)
+	for frame in 80:
+		combat.update(0.02, context)
+	var plain := int(hits["last"])
+	combat._blind_locks.clear()
+	combat._blind(0, 3.0, context, true)
+	combat.use(form.attack, context)
+	for frame in 80:
+		combat.update(0.02, context)
+	if int(hits["last"]) != int(round(float(plain) * (1.0 + CombatSystem.DAZZLE_BONUS))):
+		_fail("étoile du matin : %d sur un aveuglé contre %d" % [int(hits["last"]), plain])
+	# Ce qui reste collé à lui plus d'une seconde finit aveuglé.
+	var beside := Vector2i(-1, -1)
+	for step: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + step):
+			beside = context.player_cell + step
+	_add_enemy(context, beside, 5000)
+	combat._blind_locks.clear()
+	for frame in 60:
+		combat.update(0.02, context)
+	if not combat.is_blinded(1):
+		_fail("étoile du matin : collé à lui, l'ennemi n'est pas aveuglé")
+	# La Lance de l'Aurore reste allumée : ce qui marche dessus ensuite brûle et ne voit plus.
+	var walls := {"cells": []}
+	combat.light_wall_raised.connect(func(cells: Array, _s: float) -> void: walls["cells"] = cells)
+	combat.use(form.abilities[0], context)
+	var lit: Array = walls["cells"]
+	if lit.size() < 3:
+		_fail("étoile du matin : la lance ne reste pas allumée")
+	else:
+		context.enemy_cells[1] = lit[1]
+		combat._blind_locks.clear()
+		var before := context.enemy_health[1].current
+		for frame in 50:
+			combat.update(0.02, context)
+		if context.enemy_health[1].current >= before or not combat.is_blinded(1):
+			_fail("étoile du matin : le mur de lumière ne brûle ni n'aveugle")
+	# La Cathédrale de lumière lui rend un PV toutes les quatre secondes passées dedans.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	health.take(Damage.new(2, Element.Kind.FIRE, "test"))
+	var hurt := health.current
+	combat.use(form.abilities[1], context)
+	for frame in 215:
+		combat.update(0.02, context)
+	if health.current != hurt + 1:
+		_fail("étoile du matin : la cathédrale rend %d PV en 4,3 s" % (health.current - hurt))
+	# L'Égide solaire renvoie chaque coup encaissé en rayon.
+	_add_enemy(context, beside, 5000)
+	var rays := {"count": 0}
+	combat.aegis_ray.connect(func(_f: Vector2i, _t: Vector2i) -> void: rays["count"] += 1)
+	combat.use(form.abilities[2], context)
+	health.take(Damage.new(1, Element.Kind.FIRE, "test"))
+	combat.update(0.02, context)
+	if int(rays["count"]) != 1 or context.enemy_health[0].current >= 5000:
+		_fail("étoile du matin : l'égide renvoie %d rayons" % int(rays["count"]))
+	# Le Soleil de midi : un rayon par seconde sur ce qui est à l'écran, puis il tombe.
+	var sun := {"rays": 0, "set": 0}
+	combat.sun_rays.connect(func(cells: Array) -> void: sun["rays"] += cells.size())
+	combat.sun_set.connect(func(_c: Vector2i, _r: float) -> void: sun["set"] += 1)
+	combat.use(form.ultimate, context)
+	for frame in 450:
+		combat.update(0.02, context)
+	if int(sun["rays"]) < 7 or int(sun["set"]) != 1:
+		_fail("étoile du matin : le soleil lance %d rayons et tombe %d fois" % [int(sun["rays"]), int(sun["set"])])
+	print("étoile du matin : éblouissement, lance, cathédrale, égide et soleil de midi : OK")
+
+
+func _test_primordial() -> void:
+	var base := CharacterCatalog.supreme()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Archimage Primordial":
+		_fail("archimage : pas d'éveil pour le Sorcier Suprême")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.wheel_active() or combat.wheel_rank() != 0:
+		_fail("archimage : pas de roue à l'éveil")
+	awakening.finish()
+	if combat.wheel_active():
+		_fail("archimage : la roue survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	combat.free_use = true
+	combat.start_wheel(60.0)
+	# La roue : la première attaque brûle (le feu), la deuxième trempe (l'eau), et elle a tourné deux fois.
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 5))
+	_add_enemy(context, path[-1], 5000)
+	var traits := {"burn": 0, "soak": 0}
+	combat.enemy_burning.connect(func(_i: int, _s: float) -> void: traits["burn"] += 1)
+	combat.enemy_soaked.connect(func(_i: int, _s: float, _f: float) -> void: traits["soak"] += 1)
+	combat.use(form.attack, context)
+	if combat.wheel_rank() != 1:
+		_fail("archimage : la roue ne tourne pas après l'attaque")
+	for frame in 80:
+		combat.update(0.02, context)
+	if int(traits["burn"]) < 1 or int(traits["soak"]) != 0:
+		_fail("archimage : la première attaque ne porte pas le feu (%d brûlures, %d trempes)"
+			% [int(traits["burn"]), int(traits["soak"])])
+	combat.use(form.attack, context)
+	for frame in 80:
+		combat.update(0.02, context)
+	if int(traits["soak"]) < 1 or combat.wheel_rank() != 2:
+		_fail("archimage : la deuxième attaque ne porte pas l'eau")
+	# La Grande Convergence se brise en quatre éclats, même sur deux cibles.
+	_add_enemy(context, path[-2], 5000)
+	var shards := {"count": 0}
+	combat.element_shards_flew.connect(func(_f: Vector2i, t: Array, _r: Array) -> void: shards["count"] = t.size())
+	combat.use(form.abilities[0], context)
+	for frame in 150:
+		combat.update(0.02, context)
+	if int(shards["count"]) != form.abilities[0].element_shards:
+		_fail("archimage : la convergence lâche %d éclats" % int(shards["count"]))
+	# L'Apothéose : son Écho frappe deux fois.
+	var echoes := {"count": 0}
+	combat.enemy_damaged.connect(func(_i: int, _d: int, ability: Ability) -> void:
+		if ability.id.ends_with("_echo"):
+			echoes["count"] += 1)
+	combat.use(form.abilities[2], context)
+	echoes["count"] = 0
+	combat.use(form.attack, context)
+	for frame in 100:
+		combat.update(0.02, context)
+	if int(echoes["count"]) != 2:
+		_fail("archimage : l'apothéose donne %d échos au lieu de 2" % int(echoes["count"]))
+	# La Couronne des sceaux : quatre sceaux, qui le suivent quand il marche.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	var zones := {"made": 0, "moved": 0}
+	combat.zone_created.connect(func(_id: int, _a: Ability, _c: Vector2i) -> void: zones["made"] += 1)
+	combat.zone_moved.connect(func(_id: int, _c: Vector2i) -> void: zones["moved"] += 1)
+	combat.use(form.abilities[1], context)
+	var walk := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 4))
+	for cell: Vector2i in walk:
+		context.player_cell = cell
+		combat.update(0.1, context)
+	if int(zones["made"]) != 4 or int(zones["moved"]) < 1:
+		_fail("archimage : la couronne pose %d sceaux et les déplace %d fois" % [int(zones["made"]), int(zones["moved"])])
+	# Le Pas des éléments : un rayon part de l'arrivée et frappe ce qui est dans son couloir.
+	context.player_cell = grid.player_spawn
+	context.player_field = Pathfinder.distance_field(grid, [context.player_cell] as Array[Vector2i])
+	var facing := Vector2i.ZERO
+	for direction: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]:
+		if grid.is_floor_v(context.player_cell + direction):
+			facing = direction
+			break
+	context.player_facing = facing
+	var rays := {"paths": []}
+	combat.element_rays_cast.connect(func(_f: Vector2i, p: Array, _r: Array) -> void: rays["paths"] = p)
+	combat.use(form.escape, context)
+	var found: Array = rays["paths"]
+	if found.is_empty():
+		_fail("archimage : le pas des éléments ne lance aucun rayon")
+	else:
+		var landing := context.player_cell
+		context.player_cell = grid.player_spawn
+		_add_enemy(context, (found[0] as Array)[0], 5000)
+		combat.use(form.escape, context)
+		if 5000 - context.enemy_health[0].current < form.escape.element_ray_damage:
+			_fail("archimage : le rayon ne frappe pas ce qu'il traverse (arrivée %s)" % str(landing))
+	# La Genèse : seize météores dans l'ordre de la roue, puis la nova.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	context.player_cell = grid.player_spawn
+	_add_enemy(context, path[-1], 50000)
+	_add_enemy(context, path[-2], 50000)
+	var genesis := {"ranks": [], "missed": [], "nova": 0}
+	combat.element_meteor_struck.connect(func(c: Vector2i, rank: int, _r: float) -> void:
+		genesis["ranks"].append(rank)
+		if not context.enemy_cells.has(c):
+			genesis["missed"].append(c))
+	combat.primal_nova.connect(func(_c: Vector2i, _r: float) -> void: genesis["nova"] += 1)
+	combat.use(form.ultimate, context)
+	# La proie bouge après le lancement : chaque météore tombe quand même sur un ennemi, là où il est.
+	context.enemy_cells[0] = path[path.size() / 2]
+	for frame in 700:
+		combat.update(0.02, context)
+	if not (genesis["missed"] as Array).is_empty():
+		_fail("archimage : des météores tombent à côté de la proie qui a bougé (%s)" % str(genesis["missed"]))
+	var ranks: Array = genesis["ranks"]
+	var ordered := ranks.size() == form.ultimate.rain_count
+	for k in ranks.size():
+		ordered = ordered and int(ranks[k]) == k % 4
+	if not ordered or int(genesis["nova"]) != 1:
+		_fail("archimage : la genèse fait tomber %s et %d nova" % [str(ranks), int(genesis["nova"])])
+	print("archimage primordial : roue, convergence, apothéose, couronne, pas des éléments et genèse : OK")
+
+
+func _test_scourge() -> void:
+	var base := CharacterCatalog.peste()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Seigneur du Fléau":
+		_fail("fléau : pas d'éveil pour le Mage de la Peste")
+		return
+	var parts := _context(base)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	var health: Health = parts[3]
+	var awakening := Awakening.new(base, form, combat, context)
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not combat.miasma_active() or combat.venom_cap() != Awakening.MIASMA_CAP:
+		_fail("fléau : pas de miasme à l'éveil")
+	combat.stats = form
+	combat.free_use = true
+	# Le Miasme : une créature collée prend une dose par seconde, jusqu'à 5.
+	var near := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 1))
+	_add_enemy(context, near[-1], 5000)
+	for frame in 70:
+		combat.update(0.1, context)
+	if combat.venom_doses(0) != Awakening.MIASMA_CAP:
+		_fail("fléau : le miasme met %d doses au lieu de %d" % [combat.venom_doses(0), Awakening.MIASMA_CAP])
+	awakening.finish()
+	if combat.miasma_active() or combat.venom_cap() != CombatSystem.VENOM_MAX:
+		_fail("fléau : le miasme survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	grid = parts[0]
+	combat = parts[1]
+	context = parts[2]
+	health = parts[3]
+	combat.free_use = true
+	combat.start_miasma(60.0, 1.0, Awakening.MIASMA_CAP)
+	var path := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 9))
+	# Le Crachat éclate en gerbe : deux créatures côte à côte prennent chacune une dose.
+	_add_enemy(context, path[mini(5, path.size() - 1)], 5000)
+	_add_enemy(context, path[mini(6, path.size() - 1)], 5000)
+	combat.use(form.attack, context)
+	for frame in 80:
+		combat.update(0.02, context)
+	if combat.venom_doses(0) < 1 or combat.venom_doses(1) < 1:
+		_fail("fléau : la gerbe du crachat n'empoisonne pas les deux (%d, %d)"
+			% [combat.venom_doses(0), combat.venom_doses(1)])
+	# L'Épidémie saute de l'une à l'autre et ajoute ses doses.
+	var jumps := {"count": 0}
+	combat.epidemic_jumped.connect(func(_f: Vector2i, _t: Vector2i) -> void: jumps["count"] += 1)
+	var before := context.enemy_health[1].current
+	combat.use(form.abilities[1], context)
+	if int(jumps["count"]) != 2 or context.enemy_health[1].current != before - form.abilities[1].damage:
+		_fail("fléau : l'épidémie fait %d sauts au lieu de 2" % int(jumps["count"]))
+	# La Saignée fait éclater les doses, et le poison s'en va.
+	var doses := combat.venom_doses(0)
+	before = context.enemy_health[0].current
+	health.take(Damage.new(2, Element.Kind.FIRE, "enemy"))
+	var hurt := health.current
+	var burst := {"count": 0}
+	combat.bled.connect(func(c: Array, _d: Array, _h: int) -> void: burst["count"] = c.size())
+	combat.use(form.abilities[2], context)
+	if int(burst["count"]) != 2 or combat.venom_doses(0) != 0 \
+			or before - context.enemy_health[0].current != doses * form.abilities[2].bleed_per_dose:
+		_fail("fléau : la saignée ne fait pas éclater les doses (%d dégâts pour %d doses)"
+			% [before - context.enemy_health[0].current, doses])
+	if health.current <= hurt:
+		_fail("fléau : la saignée ne rend aucun PV")
+	# Le Sillage : ses flaques mettent deux doses.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	combat.use(form.abilities[0], context)
+	var walk := combat.trajectory(context.player_cell, _cell_at(grid, context.player_field, 4))
+	for cell: Vector2i in walk:
+		context.player_cell = cell
+		combat.update(0.3, context)
+	_add_enemy(context, walk[1], 5000)
+	combat.update(0.05, context)
+	if combat.venom_doses(0) != form.abilities[0].trail_doses:
+		_fail("fléau : la flaque du sillage met %d doses" % combat.venom_doses(0))
+	# La Nuée de corbeaux pique ce qu'elle survole.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	context.player_cell = grid.player_spawn
+	context.player_field = Pathfinder.distance_field(grid, [context.player_cell] as Array[Vector2i])
+	var flown := {"to": Vector2i(-1, -1)}
+	combat.flock_flew.connect(func(_f: Vector2i, to: Vector2i) -> void: flown["to"] = to)
+	var facing := Vector2i.ZERO
+	for direction: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]:
+		for step in range(form.escape.range, 1, -1):
+			var far: Vector2i = context.player_cell + direction * step
+			if grid.is_floor_v(far) and not grid.is_occupied(far):
+				facing = direction
+				break
+		if facing != Vector2i.ZERO:
+			break
+	context.player_facing = facing
+	_add_enemy(context, context.player_cell + facing, 5000)
+	if not combat.use(form.escape, context) or flown["to"] == Vector2i(-1, -1) \
+			or context.enemy_health[0].current != 5000 - form.escape.flock_damage:
+		_fail("fléau : la nuée ne pique pas ce qu'elle survole (%d PV)" % context.enemy_health[0].current)
+	# La Grande Peste charge tout le monde au plafond et ralentit.
+	var slowed := {"count": 0}
+	combat.enemy_soaked.connect(func(_i: int, _d: float, f: float) -> void:
+		if f == form.ultimate.plague_slow:
+			slowed["count"] += 1)
+	combat.use(form.ultimate, context)
+	if combat.venom_doses(0) != Awakening.MIASMA_CAP or int(slowed["count"]) != 1:
+		_fail("fléau : la grande peste ne charge pas au maximum (%d doses)" % combat.venom_doses(0))
+	print("seigneur du fléau : miasme, crachat, épidémie, saignée, sillage, nuée et grande peste : OK")
+
+
+## La Reine du Firmament : cinq étoiles, une figure fermée qui brûle ce qu'elle enferme, l'étoile éphémère du trait,
+## le gros météore sur le plus solide, l'anneau de lune de l'Éclipse, l'étoile de la Comète et la galaxie.
+func _test_firmament() -> void:
+	var base := CharacterCatalog.etoiles()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Reine du Firmament":
+		_fail("firmament : pas d'éveil pour l'Ange des Étoiles")
+		return
+	var parts := _context(base)
+	var awakening := Awakening.new(base, form, parts[1], parts[2])
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not (parts[1] as CombatSystem).firmament_active():
+		_fail("firmament : pas de firmament à l'éveil")
+	awakening.finish()
+	if (parts[1] as CombatSystem).firmament_active():
+		_fail("firmament : le firmament survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	combat.start_firmament()
+	# Cinq étoiles en pentagone autour d'un ennemi : la figure se ferme et le brûle, sans qu'un rayon le touche.
+	var centre := context.player_cell
+	var figure := {"points": []}
+	combat.figure_changed.connect(func(points: Array) -> void: figure["points"] = points)
+	for n in 6:
+		var angle := -PI * 0.5 + TAU * float(n) / 5.0
+		combat._plant_star(centre + Vector2i(roundi(cos(angle) * 4.0), roundi(sin(angle) * 4.0)), form.abilities[0])
+	if combat._stars.size() != CombatSystem.FIRMAMENT_STARS:
+		_fail("firmament : %d étoiles posées au lieu de 5" % combat._stars.size())
+	if (figure["points"] as Array).size() < 3:
+		_fail("firmament : la figure ne se ferme pas")
+	_add_enemy(context, centre, 5000)
+	for frame in 50:
+		combat.update(0.02, context)
+	var burnt := 5000 - context.enemy_health[0].current
+	if burnt < 10 or burnt > 30:
+		_fail("firmament : la figure brûle %d en une seconde au lieu de 20" % burnt)
+	combat.stop_firmament()
+	if combat._stars.size() != CombatSystem.STAR_MAX or not (figure["points"] as Array).is_empty():
+		_fail("firmament : %d étoiles après l'éveil" % combat._stars.size())
+	combat.start_firmament()
+	combat._stars.clear()
+	# Le Trait de comète : au troisième coup, une étoile éphémère s'allume sur la cible.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	var near := _cell_at(grid, context.player_field, 2)
+	var far := _cell_at(grid, context.player_field, 3)
+	_add_enemy(context, near, 5000)
+	for n in CombatSystem.ASTRE_MARKS:
+		combat._add_star_mark(0, form.attack, context)
+	if combat._sparks.size() != 1 or combat._sparks[0]["cell"] != near:
+		_fail("firmament : pas d'étoile éphémère au troisième coup")
+	combat._sparks.clear()
+	# La Pluie de météores : le gros météore tombe sur l'ennemi le plus solide.
+	_add_enemy(context, far, 9000)
+	var meteor := {"cell": Vector2i(-1, -1)}
+	combat.big_meteor_struck.connect(func(cell: Vector2i, _r: float) -> void: meteor["cell"] = cell)
+	combat.use(form.abilities[1], context)
+	for frame in 250:
+		combat.update(0.02, context)
+	if meteor["cell"] != far:
+		_fail("firmament : le gros météore tombe en %s et non sur le plus solide" % str(meteor["cell"]))
+	# L'Éclipse : à la fin, l'anneau de lune blesse et ralentit ce qui est proche.
+	var ring := {"done": false, "slowed": false}
+	combat.eclipse_ended.connect(func(_c: Vector2i, _r: float) -> void: ring["done"] = true)
+	combat.enemy_soaked.connect(func(i: int, _s: float, _f: float) -> void: ring["slowed"] = ring["slowed"] or i == 0)
+	var before := context.enemy_health[0].current
+	combat.use(form.abilities[2], context)
+	for frame in 160:
+		combat.update(0.02, context)
+	if not bool(ring["done"]) or not bool(ring["slowed"]) or context.enemy_health[0].current >= before:
+		_fail("firmament : l'anneau de lune ne frappe pas")
+	# La Comète pose une étoile là où elle arrive.
+	combat._stars.clear()
+	combat.use(form.escape, context)
+	if combat._stars.size() != 1:
+		_fail("firmament : la comète pose %d étoiles" % combat._stars.size())
+	# Naissance d'une galaxie : chaque impact devient une étoile, reliée à ses voisines.
+	var galaxy := {"cells": 0, "links": 0}
+	combat.galaxy_changed.connect(func(cells: Array, links: Array) -> void:
+		galaxy["cells"] = maxi(int(galaxy["cells"]), cells.size())
+		galaxy["links"] = maxi(int(galaxy["links"]), links.size()))
+	combat.use(form.ultimate, context)
+	for frame in 200:
+		combat.update(0.02, context)
+	if int(galaxy["cells"]) != 2 or int(galaxy["links"]) != 1:
+		_fail("firmament : galaxie de %d étoiles et %d liens" % [int(galaxy["cells"]), int(galaxy["links"])])
+	print("reine du firmament : cinq étoiles, figure, étoile éphémère, météore, éclipse, comète et galaxie : OK")
+
+
+## Le Forgeron Céleste : cinq plaques, une par kill, des éclats quand une plaque casse, le marteau qui étourdit un coup
+## sur trois, la roue de lames, l'enclume qui tombe, le Bastion qui s'ouvre, la charge en fusion et le Cœur de la forge.
+func _test_forge() -> void:
+	var base := CharacterCatalog.acier()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Forgeron Céleste":
+		_fail("forgeron : pas d'éveil pour l'Archange d'Acier")
+		return
+	var parts := _context(base)
+	var awakening := Awakening.new(base, form, parts[1], parts[2])
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	var combat: CombatSystem = parts[1]
+	if not combat.forge_active() or combat.plates_left() != CombatSystem.FORGE_PLATES:
+		_fail("forgeron : %d plaques à l'éveil" % combat.plates_left())
+	awakening.finish()
+	if combat.forge_active() or combat.plates_left() != CombatSystem.PLATE_MAX:
+		_fail("forgeron : %d plaques après l'éveil" % combat.plates_left())
+	awakening.dispose()
+
+	parts = _context(form)
+	var grid: MazeGrid = parts[0]
+	combat = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	combat.start_forge()
+	# Chaque kill reforge une plaque.
+	combat.health.plates = 2
+	combat._forge_plate()
+	if combat.plates_left() != 3:
+		_fail("forgeron : un kill ne reforge pas de plaque (%d)" % combat.plates_left())
+	# Une plaque qui casse blesse ce qui est au contact.
+	var beside := Vector2i(-1, -1)
+	for step: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if grid.is_floor_v(context.player_cell + step):
+			beside = context.player_cell + step
+	_add_enemy(context, beside, 5000)
+	combat.health.take(Damage.new(1, Element.Kind.FIRE, "test"))
+	combat.update(0.02, context)
+	if context.enemy_health[0].current != 5000 - CombatSystem.FORGE_SHARD_DAMAGE:
+		_fail("forgeron : les éclats font %d" % (5000 - context.enemy_health[0].current))
+	# Le Marteau du ciel étourdit un coup sur trois.
+	var stuns := {"count": 0}
+	combat.hammer_stunned.connect(func(_c: Vector2i, _r: float) -> void: stuns["count"] += 1)
+	for n in 3:
+		combat.use(form.attack, context)
+		for frame in 60:
+			combat.update(0.02, context)
+	if int(stuns["count"]) != 1:
+		_fail("forgeron : le marteau étourdit %d fois en trois coups" % int(stuns["count"]))
+	# La Tempête : huit lames sur tout le tour.
+	var thrown := {"dirs": []}
+	combat.blades_thrown.connect(func(_c: Vector2i, dirs: Array, _r: int) -> void: thrown["dirs"] = dirs)
+	combat.use(form.abilities[0], context)
+	var dirs: Array = thrown["dirs"]
+	if dirs.size() != 8 or (dirs[0] as Vector2).dot(dirs[4]) > -0.9:
+		_fail("forgeron : la tempête n'est pas une roue de huit lames")
+	# L'Enclume céleste tombe sur l'ennemi, puis l'onde part de l'impact.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	var far := _cell_at(grid, context.player_field, 4)
+	_add_enemy(context, far, 5000)
+	var dropped := {"cell": Vector2i(-1, -1)}
+	combat.anvil_dropped.connect(func(c: Vector2i, _r: float) -> void: dropped["cell"] = c)
+	var wave := {"from": Vector2i(-1, -1)}
+	combat.anvil_struck.connect(func(c: Vector2i, _l: Array) -> void: wave["from"] = c)
+	combat.use(form.abilities[1], context)
+	for frame in 60:
+		combat.update(0.02, context)
+	if dropped["cell"] != far or wave["from"] != far \
+			or context.enemy_health[0].current > 5000 - form.abilities[1].anvil_drop_damage:
+		_fail("forgeron : l'enclume tombe en %s (%d PV)" % [str(dropped["cell"]), context.enemy_health[0].current])
+	# Le Bastion s'ouvre en gerbe, et rend une plaque.
+	combat.health.plates = 3
+	var opened := {"done": false}
+	combat.bastion_opened.connect(func(_c: Vector2i, _r: float) -> void: opened["done"] = true)
+	combat.use(form.abilities[2], context)
+	for frame in 220:
+		combat.update(0.02, context)
+	if not bool(opened["done"]) or combat.plates_left() != 4:
+		_fail("forgeron : le bastion ne s'ouvre pas (%d plaques)" % combat.plates_left())
+	# La Charge du bélier laisse du métal en fusion.
+	combat.use(form.escape, context)
+	if combat._fire_cells.is_empty():
+		_fail("forgeron : la charge ne laisse pas de métal en fusion")
+	# Le Cœur de la forge : plaques pleines, et ses pas restent en fusion.
+	combat._fire_cells.clear()
+	combat.health.plates = 1
+	combat.use(form.ultimate, context)
+	combat.update(0.02, context)
+	if combat.plates_left() != CombatSystem.FORGE_PLATES or not combat._fire_cells.has(context.player_cell):
+		_fail("forgeron : le cœur de la forge laisse %d plaques" % combat.plates_left())
+	print("forgeron céleste : forge vivante, éclats, marteau, tempête, enclume, bastion, bélier et cœur : OK")
+
+
+## Le Gardien du Trône : l'œil qui brûle à deux cases, le couloir en feu, les quatre roues, les yeux des ailes,
+## l'éclair à l'arrivée et l'épée qui tournoie sur le bord de l'Éden.
+func _test_throne() -> void:
+	var base := CharacterCatalog.cherubin()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Gardien du Trône":
+		_fail("gardien : pas d'éveil pour le Chérubin")
+		return
+	var parts := _context(base)
+	var awakening := Awakening.new(base, form, parts[1], parts[2])
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not (parts[1] as CombatSystem).throne_active():
+		_fail("gardien : pas de regard du trône à l'éveil")
+	awakening.finish()
+	if (parts[1] as CombatSystem).throne_active():
+		_fail("gardien : le regard survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	combat.start_throne()
+	# Un œil brûle à deux cases, pour 35.
+	var two := _cell_at(grid, context.player_field, 2)
+	_add_enemy(context, two, 5000)
+	combat._add_eye(0, context)
+	combat.update(0.02, context)
+	if context.enemy_health[0].current != 5000 - CombatSystem.THRONE_EYE_DAMAGE:
+		_fail("gardien : l'œil à deux cases fait %d" % (5000 - context.enemy_health[0].current))
+	# L'Épée flamboyante laisse le couloir en feu.
+	combat.use(form.attack, context)
+	for frame in 60:
+		combat.update(0.02, context)
+	if combat._fire_cells.is_empty():
+		_fail("gardien : l'épée ne laisse pas le couloir en feu")
+	combat._fire_cells.clear()
+	# Les roues partent dans chaque direction ouverte.
+	var open := 0
+	for side: Vector2i in MazeGrid.NEIGHBORS:
+		if grid.is_floor_v(context.player_cell + side):
+			open += 1
+	var rolled := {"count": 0}
+	combat.wave_launched.connect(func(_a: Ability, _p: Array, _d: float) -> void: rolled["count"] += 1)
+	combat.use(form.abilities[1], context)
+	if int(rolled["count"]) != open:
+		_fail("gardien : %d roues pour %d couloirs" % [int(rolled["count"]), open])
+	for frame in 100:
+		combat.update(0.02, context)
+	# Les Ailes du Trône : à la fin, un œil sur ce qui est proche.
+	combat._eyes.clear()
+	combat._eye_locks.clear()
+	var eyed := {"done": false}
+	combat.throne_eyes_opened.connect(func(_c: Vector2i, _r: float) -> void: eyed["done"] = true)
+	combat.use(form.abilities[2], context)
+	for frame in 160:
+		combat.update(0.02, context)
+	if not bool(eyed["done"]):
+		_fail("gardien : les ailes ne s'ouvrent pas en yeux")
+	# L'Aspect de l'éclair frappe à l'arrivée.
+	context.enemy_cells.clear()
+	context.enemy_health.clear()
+	combat._eyes.clear()
+	var fired := {"done": false}
+	combat.blink_performed.connect(func(_f: Vector2i, _t: Vector2i) -> void: fired["done"] = true)
+	combat.use(form.escape, context)
+	if not bool(fired["done"]):
+		_fail("gardien : l'éclair ne part pas")
+	# L'Éden : l'épée du bord frappe ce qui est près d'elle.
+	combat._garden = {}
+	var cut := {"count": 0}
+	combat.garden_sword_struck.connect(func(_c: Vector2i) -> void: cut["count"] += 1)
+	var rim := context.player_cell + Vector2i(roundi(form.ultimate.radius), 0)
+	_add_enemy(context, rim, 5000)
+	combat.use(form.ultimate, context)
+	for frame in 200:
+		combat.update(0.02, context)
+	if int(cut["count"]) < 1:
+		_fail("gardien : l'épée du bord ne frappe pas")
+	print("gardien du trône : regard, couloir en feu, quatre roues, yeux des ailes, éclair et épée du bord : OK")
+
+
+## Le Séraphin : la marque du ciel, les deux lances, la pluie de plumes, la colonne qui reste, le carillon qui étourdit
+## par-dessus les haies, les lances de l'Ascension et l'épée géante du Jugement dernier.
+func _test_seraph() -> void:
+	var base := CharacterCatalog.ciel()
+	var form := CharacterCatalog.awakening_of(base.id)
+	if form == null or form.display_name != "Séraphin":
+		_fail("séraphin : pas d'éveil pour l'Archange du Ciel")
+		return
+	var parts := _context(base)
+	var awakening := Awakening.new(base, form, parts[1], parts[2])
+	awakening.begin(true)
+	awakening.update(Awakening.CHARGE_TIME + 0.01)
+	if not (parts[1] as CombatSystem).skies_active():
+		_fail("séraphin : pas de ciel à l'éveil")
+	awakening.finish()
+	if (parts[1] as CombatSystem).skies_active():
+		_fail("séraphin : le ciel survit à l'éveil")
+	awakening.dispose()
+
+	parts = _context(form)
+	var grid: MazeGrid = parts[0]
+	var combat: CombatSystem = parts[1]
+	var context: CombatContext = parts[2]
+	combat.free_use = true
+	combat.start_skies()
+	# Deux lances sur deux ennemis, et le second coup sur une cible marquée prend 20 % de plus.
+	var near := _cell_at(grid, context.player_field, 2)
+	var far := _cell_at(grid, context.player_field, 4)
+	_add_enemy(context, near, 5000)
+	_add_enemy(context, far, 5000)
+	combat.use(form.attack, context)
+	for frame in 30:
+		combat.update(0.02, context)
+	if context.enemy_health[0].current != 5000 - 18 or context.enemy_health[1].current != 5000 - 18:
+		_fail("séraphin : les deux lances font %d et %d" % [5000 - context.enemy_health[0].current,
+			5000 - context.enemy_health[1].current])
+	combat._cooldowns.clear()
+	combat.use(form.attack, context)
+	for frame in 30:
+		combat.update(0.02, context)
+	if context.enemy_health[0].current != 5000 - 18 - 22:
+		_fail("séraphin : la lance sur une cible marquée fait %d" % (5000 - 18 - context.enemy_health[0].current))
+	# La Pluie de plumes : une plume par ennemi à portée.
+	var feathers := {"count": 0}
+	var counter := func(a: Ability, _t: int, _p: Array, _d: float) -> void:
+		if a.projectile_visual == "plume_seraphin":
+			feathers["count"] += 1
+	combat.projectile_launched.connect(counter)
+	combat.use(form.abilities[0], context)
+	if int(feathers["count"]) != 2:
+		_fail("séraphin : %d plumes pour deux ennemis" % int(feathers["count"]))
+	combat.projectile_launched.disconnect(counter)
+	for frame in 40:
+		combat.update(0.02, context)
+	# La Colonne du jugement reste allumée.
+	var lingered := {"done": false}
+	combat.column_lingered.connect(func(_c: Vector2i, _s: float, _r: float) -> void: lingered["done"] = true)
+	combat.use(form.abilities[1], context)
+	for frame in 50:
+		combat.update(0.02, context)
+	if not bool(lingered["done"]) or combat._columns.is_empty():
+		_fail("séraphin : la colonne ne reste pas allumée")
+	# Le Carillon sonne trois fois et étourdit.
+	var stuns := {"count": 0}
+	combat.enemy_staggered.connect(func(_i: int, _s: float) -> void: stuns["count"] += 1)
+	var rings := {"count": 0}
+	combat.toll_rang.connect(func(_c: Vector2i, _r: float) -> void: rings["count"] += 1)
+	combat.use(form.abilities[2], context)
+	for frame in 200:
+		combat.update(0.02, context)
+	if int(rings["count"]) != 3 or int(stuns["count"]) < 3:
+		_fail("séraphin : le carillon sonne %d fois et étourdit %d fois" % [int(rings["count"]), int(stuns["count"])])
+	# L'Ascension fait tomber des lances pendant le vol.
+	var lances := {"count": 0}
+	var lance_counter := func(a: Ability, _t: int, _p: Array, _d: float) -> void:
+		if a.id == form.escape.id + "_lance":
+			lances["count"] += 1
+	combat.projectile_launched.connect(lance_counter)
+	combat.use(form.escape, context)
+	for frame in 260:
+		combat.update(0.02, context)
+	if int(lances["count"]) < 6:
+		_fail("séraphin : %d lances pendant l'Ascension" % int(lances["count"]))
+	# Le Jugement dernier finit par l'épée géante.
+	var struck := {"done": false}
+	combat.great_sword_struck.connect(func(_c: Vector2i, _r: float) -> void: struck["done"] = true)
+	combat.use(form.ultimate, context)
+	for frame in 400:
+		combat.update(0.02, context)
+	if not bool(struck["done"]):
+		_fail("séraphin : l'épée géante ne tombe pas")
+	print("séraphin : yeux du ciel, deux lances, plumes, colonne, carillon, ascension et épée géante : OK")

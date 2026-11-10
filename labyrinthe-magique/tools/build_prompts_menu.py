@@ -272,6 +272,335 @@ COMMUN = """RÈGLES ABSOLUES :
 - aucun autre personnage"""
 
 
+## LES ÉVEILS (2026-11-09, demande du joueur) : l'écran de sélection montre la forme éveillée d'un mage quand on
+## enclenche son bouton ÉVEIL. Le portrait est la TRANSFORMATION du portrait du mage, pas un nouveau personnage :
+## on joint donc le portrait de base (le style, le visage) ET la planche de marche de l'Éveil (ce qu'il devient).
+## `base` est l'id du mage, `planche` le nom de sa planche de marche éveillée dans `assets/peso&cover/mages/`.
+EVEILS = [
+    {
+        "id": "fire_eveil", "base": "fire", "nom": "Phénix", "de": "du Mage du Feu",
+        "planche": "feu_eveil_marche.png",
+        "corps": "sa capuche brûle et s'ouvre en une CRÊTE DE FLAMMES EN PLUMES, comme la tête d'un phénix ; "
+                 "ses yeux sont d'or blanc. Sa robe écarlate se couvre de plumes d'or aux épaules et son ourlet se "
+                 "découpe en pointes de plumes qui flambent. Deux grandes AILES DE FEU s'ouvrent dans son dos, "
+                 "plumes de flamme orange et or à cœur blanc, cernées de rouge sombre. Ses mains nues sont cerclées "
+                 "de flammes",
+        "aura": "or et orange vif, comme un soleil levant derrière lui",
+    },
+    {
+        "id": "water_eveil", "base": "water", "nom": "Seigneur des Marées", "de": "du Mage de l'Eau",
+        "planche": "eau_eveil_marche.png",
+        "corps": "même jeune visage et mêmes vêtements bleu profond, mais le bord de son chapeau s'ouvre en une "
+                 "CRÊTE DE VAGUE turquoise et blanc d'écume. Son écharpe est devenue deux RUBANS D'EAU qui "
+                 "ondulent dans son dos. Le cristal de son bâton s'est allongé en une pointe de TRIDENT lumineux. "
+                 "Des filets turquoise et des motifs de courants parcourent sa robe, et ses yeux brillent "
+                 "turquoise pâle",
+        "aura": "turquoise et bleu profond, comme la lumière sous une vague",
+    },
+    {
+        "id": "earth_eveil", "base": "earth", "nom": "Colosse", "de": "du Mage de la Terre",
+        "planche": "terre_eveil_marche.png",
+        "corps": "même nain à longue barbe grise, même visage sévère et même robe vert sombre, mais la roche le "
+                 "recouvre : de gros BLOCS DE ROCHE font ses épaulières, d'où sortent des CRISTAUX VERTS, et des "
+                 "plaques de roche couvrent ses avant-bras, son torse et ses jambes, séparées par de fines "
+                 "FISSURES DE LAVE orange qui luisent. Ses yeux brillent d'un vert vif, et la pierre de son bâton "
+                 "est devenue un gros cristal vert taillé",
+        "aura": "vert mousse et ambre de lave, comme une caverne de cristal",
+    },
+    {
+        "id": "thunder_eveil", "base": "thunder", "nom": "Avatar de la Tempête", "de": "du Mage de la Foudre",
+        "planche": "foudre_eveil_marche.png",
+        "corps": "même jeune homme aux cheveux blancs en pointes, même tunique jaune et bleu nuit, mais la foudre le "
+                 "traverse : ses cheveux se dressent plus haut et leurs pointes deviennent des ÉCLAIRS blancs et "
+                 "bleus, ses yeux sont blancs et lumineux, sans pupille. Le bas de sa tunique se déchire en "
+                 "ZIGZAGS D'ÉCLAIR, des ARCS ÉLECTRIQUES courent sur ses avant-bras, deux bracelets d'or retiennent "
+                 "la foudre, et son bâton se termine en pointe de foudre jaune et bleue",
+        "aura": "jaune électrique et bleu nuit, comme un ciel d'orage",
+    },
+    {
+        "id": "air_eveil", "base": "air", "nom": "Souverain des Vents", "de": "du Mage de l'Air",
+        "planche": "air_eveil_marche.png",
+        "corps": "même enfant aux yeux bleus sous sa capuche souple, même robe blanche et bleu pâle à liserés d'or, "
+                 "mais le vent l'habite : ses écharpes sont devenues de longs RUBANS DE VENT bleu ciel qui ondulent "
+                 "derrière lui, le bas de sa robe s'effile en volutes de vent, et un ANNEAU DE VENT flotte derrière "
+                 "sa tête comme une couronne. Ses yeux brillent bleu ciel ; l'anneau de son bâton a grandi, une "
+                 "petite spirale de vent tourne au milieu",
+        "aura": "bleu ciel et blanc nacré, comme un ciel balayé de vent",
+    },
+    {
+        "id": "shadow_eveil", "base": "shadow", "nom": "Seigneur du Néant", "de": "du Sorcier des Ténèbres",
+        "planche": "tenebres_eveil_marche.png",
+        "corps": "même capuche profonde et même robe violet sombre et noire, mais sous la capuche il n'y a plus de "
+                 "visage : un VIDE NOIR où brillent seulement deux grands yeux violets. Le bas de sa robe se défait "
+                 "en VRILLES D'OMBRE qui finissent en petites mains griffues. L'orbe de sa main gauche est devenu "
+                 "une ÉCLIPSE, un soleil noir cerclé d'un anneau violet vif. Deux chaînes d'argent pendent à sa "
+                 "ceinture et des runes violettes luisent au bord de sa capuche",
+        "aura": "violet profond et noir, avec un anneau d'éclipse lumineux derrière lui",
+    },
+    {
+        "id": "invocateur_eveil", "base": "invocateur", "nom": "Maître des Légions", "de": "de l'Invocateur",
+        "planche": "invocateur_eveil_marche.png",
+        "corps": "mêmes cheveux noirs en épis, même visage découvert et même robe violette à liserés d'or, mais une "
+                 "COURONNE DE CORNES NOIRES cerclée d'or sort de ses cheveux et ses yeux brillent de violet. Sa robe "
+                 "est devenue un MANTEAU DE SEIGNEUR au col haut, brodé en bas de runes violettes lumineuses ; son "
+                 "collier est une chaîne de petits crânes aux orbites violettes. Son bâton torsadé, dans la main "
+                 "droite, porte une grande orbe où tourne un cercle de runes, et un grimoire enchaîné à l'œil "
+                 "violet pend à sa hanche",
+        "aura": "violet royal et or, comme la lueur d'un portail d'invocation",
+    },
+    {
+        "id": "chrono_eveil", "base": "chrono", "nom": "Seigneur des Heures", "de": "du Chronomancien",
+        "planche": "chrono_eveil_marche.png",
+        "corps": "mêmes cheveux blancs en épis, même long manteau sarcelle à liserés de cuivre, mais une AURÉOLE "
+                 "D'HORLOGE en laiton flotte derrière sa tête, un anneau gravé de chiffres romains avec deux "
+                 "aiguilles. Le sablier qu'il porte au dos brille et son sable sarcelle remonte. Des ENGRENAGES DE "
+                 "CUIVRE lui font des épaulières, son bâton est devenu un SCEPTRE surmonté d'une grande horloge à "
+                 "cadran sarcelle, ses yeux s'allument de sarcelle vif, et des chiffres romains d'or sont brodés au "
+                 "bas de son manteau",
+        "aura": "sarcelle et cuivre doré, comme la lumière d'un cadran",
+    },
+    {
+        "id": "peste_eveil", "base": "peste", "nom": "Seigneur du Fléau", "de": "du Mage de la Peste",
+        "planche": "peste_eveil_marche.png",
+        "corps": "même capuche et même long manteau presque noir à liserés vert acide, mais son masque est devenu un "
+                 "CRÂNE-BEC DE BRONZE dont les deux verres ronds brûlent de vert acide. Le bas de son manteau est en "
+                 "lambeaux, effrangé en pointes, des PLAQUES DE BRONZE gravées de runes couvrent ses épaules, et son "
+                 "bâton tordu porte un ENCENSOIR de bronze ajouré plein d'un liquide vert qui luit. Les fioles de "
+                 "sa ceinture sont plus nombreuses et bouillonnent",
+        "aura": "vert acide et bronze sombre, comme une brume empoisonnée",
+    },
+    {
+        "id": "supreme_eveil", "base": "supreme", "nom": "Archimage Primordial", "de": "du Sorcier Suprême",
+        "planche": "supreme_eveil_marche.png",
+        "corps": "même capuche profonde sur un visage d'ombre aux deux yeux violets, mais une AURÉOLE D'OR gravée de "
+                 "quatre runes se dresse derrière sa capuche. Sa robe est devenue un MANTEAU DE NUIT ÉTOILÉE, noir "
+                 "bleuté semé de petites étoiles d'or, avec un haut col d'or et de grandes épaulières d'or. Une "
+                 "ÉTOLE D'OR descend sur sa poitrine, sertie de QUATRE GEMMES : rouge feu, bleu eau, ambre terre et "
+                 "blanc nacré. Ses mains nues sont cerclées de bracelets d'or. Quatre orbes tournent autour de lui : "
+                 "une de feu, une d'eau, une de terre et une d'air",
+        "aura": "or lumineux sur un ciel de nuit étoilé, avec les quatre couleurs des éléments qui s'y mêlent",
+    },
+    {
+        "id": "demon_eveil", "base": "demon", "nom": "Archidémon du Pacte", "de": "du Démon du Pacte",
+        "planche": "demon_eveil_marche.png",
+        "corps": "même visage de noble, même long manteau noir brodé d'or à doublure bordeaux et même gilet "
+                 "cramoisi, mais le démon du pacte sort de lui : deux GRANDES CORNES noires luisantes jaillissent de "
+                 "ses tempes, cerclées d'anneaux d'or, à pointe rouge sang incandescente. Ses cheveux ont poussé, "
+                 "rejetés en arrière, aux pointes cramoisies ; ses yeux sont rouge sang à pupilles fendues d'or, et "
+                 "un sceau d'or brûle sur son front. Le rubis de son jabot est devenu un CŒUR DE PACTE, un gros "
+                 "cristal rouge serré dans des griffes d'or, d'où partent des fissures rouges sous la peau de son cou",
+        "aura": "rouge sang et or, comme la lueur d'un pacte qui brûle",
+    },
+    {
+        "id": "discorde_eveil", "base": "discorde", "nom": "Reine de la Discorde", "de": "de la Démone de la Discorde",
+        "planche": "discorde_eveil_marche.png",
+        "corps": "même visage, mêmes yeux verts, même long manteau vert sapin brodé d'argent, mais son chignon s'est "
+                 "défait : ses longs cheveux noirs flottent derrière elle et leurs pointes se changent en FILS "
+                 "D'ARGENT. Une COURONNE D'ARGENT à fines pointes d'aiguille ceint sa tête, sertie d'un œil "
+                 "d'émeraude, et un TROISIÈME ŒIL vertical d'un vert émeraude lumineux s'est ouvert sur son front. "
+                 "Deux fines cornes noires à pointe d'argent remontent vers l'arrière, et dans son dos se dresse "
+                 "une CROIX DE MARIONNETTISTE d'argent d'où pendent des fils jusqu'à ses mains",
+        # Jamais de rose ni de violet sur elle : c'est la couleur que le détourage efface sur ses planches.
+        "aura": "vert émeraude profond et argent, comme un clair de lune sur une forêt",
+    },
+    {
+        "id": "braise_eveil", "base": "braise", "nom": "Empereur des Cendres", "de": "du Roi de Braise",
+        "planche": "braise_eveil_marche.png",
+        "corps": "même visage d'homme au regard sévère et à la cicatrice, même armure d'or noirci, mais sa COURONNE "
+                 "BRISÉE s'est reforgée, ses morceaux soudés par des coulées de lave et hérissés de hautes pointes "
+                 "d'or, et un anneau de pointes de braise flotte au-dessus. Ses cheveux s'embrasent en FLAMMES "
+                 "orange et ambre, ses yeux brûlent d'un ambre presque blanc et sa cicatrice laisse couler un filet "
+                 "de lave. Les fissures de lave de son armure brillent, et une PLAQUE DE MAGMA bat au milieu de "
+                 "son torse comme un cœur de forge",
+        "aura": "ambre et orange de forge, sur un fond de cendres sombres",
+    },
+    {
+        "id": "ecarlate_eveil", "base": "ecarlate", "nom": "Seigneur Écarlate", "de": "du Chevalier Écarlate",
+        "planche": "ecarlate_eveil_marche.png",
+        "corps": "mêmes longs cheveux blancs en queue basse, même armure samouraï de laque rouge sang bordée de noir, "
+                 "mais le démon de sa lame se montre : un MASQUE DE DÉMON rouge et noir à crocs blancs lui couvre le "
+                 "bas du visage, ses yeux sont rouge écarlate à pupille blanche fendue, et un CIMIER EN CROISSANT "
+                 "noir bordé de rouge se dresse sur son front. Les pointes de ses cheveux rougissent comme trempées "
+                 "dans le sang, et une LAME FANTÔME blanche cernée de rouge flotte en travers de son dos",
+        # Un rouge franc, sans aucun bleu : avec un peu de bleu, le détourage lui retire son rouge.
+        "aura": "rouge sang franc et noir, comme une nuit sous une lune rouge",
+    },
+    {
+        "id": "geolier_eveil", "base": "geolier", "nom": "Gardien de l'Abîme", "de": "du Geôlier",
+        "planche": "geolier_eveil_marche.png",
+        "corps": "même armure d'obsidienne noire VIDE habitée par une flamme froide cyan, même heaume sans visage aux "
+                 "yeux en fente cyan, mais le geôlier de l'abîme se révèle : son heaume est couronné de POINTES DE "
+                 "GLACE noire d'où jaillit une plume de flamme blanche et cyan, une SERRURE lumineuse s'ouvre au "
+                 "milieu de son plastron, de lourdes CHAÎNES à crochets s'enroulent autour de ses énormes gantelets "
+                 "hérissés de givre, et un trousseau de grandes CLÉS spectrales cyan pend à son dos",
+        # Grand et massif, pas chibi, comme sa forme de base ; aucun rose ni violet dans ses flammes.
+        "aura": "cyan glacé et noir d'abîme, comme le fond d'une prison de glace",
+    },
+    {
+        "id": "dragon_eveil", "base": "dragon", "nom": "Dragon Primordial", "de": "du Dragon des Abysses",
+        "planche": "dragon_eveil_marche.png",
+        "corps": "même dragon-démon bipède et massif aux écailles noir charbon et aux plaques rouge sang, mais le "
+                 "premier feu du monde se réveille en lui : QUATRE CORNES d'obsidienne où coulent des filets de lave, "
+                 "des yeux d'un blanc de magma, une gorge qui rougeoie entre ses crocs, et au milieu du torse un CŒUR "
+                 "DE MAGMA jaune et blanc qui bat entre des côtes d'obsidienne. Des pointes d'obsidienne hérissent ses "
+                 "épaules, la lave coule le long de ses bras, et ses ailes rouge sombre sont bordées de flammes",
+        # Jamais doré : ce serait le Dragon d'or d'Aël. PAS chibi, comme sa forme de base.
+        "aura": "magma orange et rouge sang, sur un fond d'obsidienne et de fumée",
+    },
+    {
+        "id": "croupier_eveil", "base": "croupier", "nom": "Maître du Casino", "de": "du Croupier des Enfers",
+        "planche": "croupier_eveil_marche.png",
+        "corps": "même visage pâle au sourire en coin, mêmes yeux rouges, mêmes cheveux noirs plaqués et mêmes gants "
+                 "blancs, mais le banquier des Enfers se révèle : un HAUT-DE-FORME noir à bande d'or, un as glissé "
+                 "dans la bande, d'où sortent deux CORNES DORÉES ; un MONOCLE d'or dont le verre est une petite "
+                 "roulette ; une QUEUE-DE-PIE bordeaux doublée d'or, les quatre enseignes brodées sur les revers ; une "
+                 "chaîne de montre en or, et une canne noire au pommeau en forme de dé",
+        # Un bordeaux sans bleu : le détourage retire le prune et le rose.
+        "aura": "or de jetons et rouge de roulette, sur un fond de tapis vert sombre",
+    },
+    {
+        "id": "avide_eveil", "base": "avide", "nom": "Faim Sans Fond", "de": "de l'Avide",
+        "planche": "avide_eveil_marche.png",
+        "corps": "même démon pur sang, massif et voûté, à la peau noir d'encre et sans yeux, mais sa faim l'a ouvert : "
+                 "la GUEULE de son ventre s'ouvre jusqu'au cou, bordée de deux rangées de crocs ivoire, sa gorge "
+                 "éclairée de vert bile ; une petite BOUCHE à crocs s'ouvre sur chaque avant-bras ; ses cornes de "
+                 "bélier se sont FENDUES EN QUATRE autour d'une couronne de crocs, et une crête de vertèbres pointues "
+                 "hérisse son dos ; des filets de bile coulent de ses bouches",
+        # PAS chibi, toujours sans yeux ; ses gorges sont rouge très sombre, jamais roses.
+        "aura": "vert bile et ivoire de crocs, sur un fond d'encre",
+    },
+    {
+        "id": "lumiere_eveil", "base": "lumiere", "nom": "Étoile du Matin", "de": "du Porte-Lumière",
+        "planche": "lumiere_eveil_marche.png",
+        "corps": "même visage serein d'enfant, mêmes courts cheveux blonds et même lance dorée dans la main droite, "
+                 "mais il est devenu un petit soleil : un grand DISQUE SOLAIRE d'or gravé de rayons se dresse "
+                 "derrière sa tête, ses deux ailes sont devenues des AILES DE RAYONS, longues lames de lumière "
+                 "blanche à cœur d'or, et son armure est d'or blanc, avec une ÉTOILE À HUIT BRANCHES d'or au milieu "
+                 "du plastron. Ses yeux brillent d'or clair, la pointe de sa lance est une étoile de cristal blanc "
+                 "cerclée d'or, et une courte cape blanche doublée d'or tombe de ses épaules. Deux ailes seulement",
+        # Jamais de rose ni de violet : le blanc garde des ombres beiges.
+        "aura": "or solaire et blanc chaud, comme un lever de soleil",
+    },
+    {
+        "id": "mort_eveil", "base": "mort", "nom": "Faucheur des Âmes", "de": "de l'Ange de la Mort",
+        "planche": "mort_eveil_marche.png",
+        "corps": "même visage pâle couleur d'os aux yeux rouge braise, mêmes cheveux noirs et mêmes deux petites "
+                 "cornes, même armure gris anthracite à liserés d'os sur une longue robe noire déchirée, mais il est "
+                 "devenu la Mort elle-même : son AURÉOLE BRISÉE s'est ressoudée en un anneau complet de braise rouge "
+                 "gravé de runes, une CAPUCHE NOIRE déchirée percée par ses cornes lui tombe sur la tête, ses deux ailes "
+                 "de plumes noires finissent en flammes de braise, et il tient une FAUX DOUBLE, deux lames noires "
+                 "bordées de rouge de part et d'autre du manche d'os. Une chaîne d'os et un petit sablier noir pendent "
+                 "à sa taille. Un ange d'abord : le visage reste visible, jamais un crâne",
+        # Un rouge braise qui tire sur l'orange : pas de rose ni de violet.
+        "aura": "noir profond et rouge braise, avec une lune rouge pâle derrière lui",
+    },
+    {
+        "id": "cherubin_eveil", "base": "cherubin", "nom": "Gardien du Trône", "de": "du Chérubin",
+        "planche": "cherubin_eveil_marche.png",
+        "corps": "même jeune ange au visage grave et calme, mêmes yeux bleu saphir, mêmes cheveux d'or foncé courts "
+                 "et bouclés, même tunique de lin blanc, même cuirasse de bronze poli et même ceinture saphir, mais il "
+                 "est devenu le chérubin du Trône : ses QUATRE AILES sont couvertes d'yeux d'or calmes et finissent en "
+                 "langues de flamme saphir, une ROUE DANS UNE ROUE d'or à yeux, à jante de flamme saphir, touche "
+                 "l'arrière de sa tête, il tient une GRANDE ÉPÉE FLAMBOYANTE à lame de flamme saphir ondulée, et sa "
+                 "cuirasse porte quatre petites faces gravées en or. Un seul visage, le sien : un ange, jamais un "
+                 "monstre. Le saphir reste un bleu franc, jamais violet",
+        # Jamais de violet : le saphir tomberait au détourage.
+        "aura": "bleu saphir profond et or, avec un grand cercle de flamme saphir derrière lui",
+    },
+    {
+        "id": "ciel_eveil", "base": "ciel", "nom": "Séraphin", "de": "de l'Archange du Ciel",
+        "planche": "ciel_eveil_marche.png",
+        "corps": "même jeune archange guerrier au visage calme et décidé, mêmes yeux émeraude, mêmes cheveux blancs "
+                 "courts, même diadème d'or, même armure légère blanche à bords dorés et même tabard court émeraude, "
+                 "mais il est devenu un séraphin : il porte SIX AILES blanches à pointes d'or, en trois paires empilées "
+                 "dans son dos, une AURÉOLE D'OR cerclée de petites flammes émeraude au-dessus de la tête, et sa LANCE "
+                 "D'OR a une pointe de flamme émeraude. Une cloche d'or gravée pend à sa hanche. Les ombres de son "
+                 "blanc sont gris-vert, jamais roses",
+        # Jamais de rose ni de violet : le blanc garde des ombres gris-vert.
+        "aura": "ciel blanc lumineux, or et émeraude, comme une percée de lumière dans les nuages",
+    },
+    {
+        "id": "acier_eveil", "base": "acier", "nom": "Forgeron Céleste", "de": "de l'Archange d'Acier",
+        "planche": "acier_eveil_marche.png",
+        "corps": "même ange guerrier massif et très large d'épaules, même armure de plates intégrale gris-bleu, même "
+                 "heaume fermé sans visage et mêmes deux ailes de lames d'acier, mais il est devenu la forge du ciel : "
+                 "les fentes entre ses plaques FLAMBOIENT d'un orange vif de métal en fusion, une COURONNE D'ENCLUME "
+                 "d'or est posée sur son heaume, le tranchant de chaque lame de ses ailes rougeoie d'orange, et il "
+                 "tient un énorme MARTEAU-FORGE cerclé d'or au cœur incandescent. La lueur de son heaume est plus "
+                 "vive. L'acier gris-bleu reste sa couleur, l'or et l'orange sont en touches",
+        # Un orange franc de forge : jamais de rose ni de violet, même dans le fond.
+        "aura": "gris acier sombre et orange de forge, avec une lueur de métal en fusion derrière lui",
+    },
+    {
+        "id": "etoiles_eveil", "base": "etoiles", "nom": "Reine du Firmament", "de": "de l'Ange des Étoiles",
+        "planche": "etoiles_eveil_marche.png", "elle": True,
+        "corps": "même femme adulte au visage calme, même longue tresse argentée, même longue robe bleu nuit à "
+                 "liserés d'argent et mêmes ailes bleu nuit semées d'étoiles, mais elle est devenue la reine de la "
+                 "nuit : sa couronne en croissant d'argent porte CINQ PETITES ÉTOILES D'OR PÂLE dressées comme des "
+                 "pointes, une longue CAPE DE NUIT bleu nuit doublée d'argent, semée d'étoiles et de constellations "
+                 "dessinées, tombe de ses épaules, et son sceptre d'argent porte une GRANDE ÉTOILE blanche à quatre "
+                 "branches, à cœur d'or pâle, cerclée d'un anneau d'argent. Ses yeux brillent d'un bleu stellaire "
+                 "clair. Le bleu nuit et l'argent restent ses couleurs, l'or n'est qu'en touches",
+        # Sa nuit est bleue : jamais de violet ni de rose, même dans le fond.
+        "aura": "bleu nuit profond semé de petites étoiles blanches, avec une lueur bleu clair derrière elle",
+    },
+]
+
+
+def eveil_page(eveil: dict) -> str:
+    return f"""# portrait_{eveil['id']} — {eveil['nom']}
+
+{ENTETE}
+L'Éveil {eveil['de']}, pour son bouton ÉVEIL de l'écran de sélection. Joins **deux images** à ChatGPT :
+
+1. `assets/peso&cover/interface/portraits/portrait_{eveil['base']}.png` — son portrait actuel : le STYLE, le
+   cadrage et le visage à garder ;
+2. `assets/peso&cover/mages/{eveil['planche']}` — sa planche de marche éveillée : CE QU'{'ELLE' if eveil.get('elle') else 'IL'} DEVIENT.
+
+Résultat attendu : `portrait_{eveil['id']}.png` dans `assets/peso&cover/interface/portraits/`.
+
+```
+Illustration de personnage pour un écran de sélection de jeu de rôle mobile,
+style cartoon coloré à contours nets, personnage aux proportions héroïques
+légèrement stylisées, EXACTEMENT la même facture et le même cadrage que la
+PREMIÈRE image jointe.
+
+La première image est le portrait du personnage. Dessine LE MÊME personnage,
+transformé dans sa forme éveillée : la seconde image jointe montre cette forme
+en petit, vue de dessus. Reprends ses couleurs et ses attributs, mais dessine-le
+comme la première image : de face, en grand, avec son visage.
+
+FORMAT : une seule image de {PORTRAIT_SIZE}.
+
+SUJET — {eveil['nom']} : {eveil['corps']}. {'Elle' if eveil.get('elle') else 'Il'} doit paraître plus puissant{'e' if eveil.get('elle') else ''} et
+plus lumineux que dans la première image, sans devenir un autre personnage.
+
+FOND : une simple nappe de couleur {eveil['aura']}, plus lumineuse derrière le
+personnage et plus sombre vers les bords, comme un halo. Rien d'autre : ni
+paysage, ni objet, ni motif.
+
+{COMMUN}
+- aucune pose ni grille de la seconde image : une seule figure, en grand
+- le fond n'est JAMAIS le magenta uni de la seconde image : c'est la nappe de
+  couleur décrite plus haut
+```
+
+---
+
+## Si ça revient mal
+
+| Défaut | Correction |
+|---|---|
+| Il ne ressemble plus au mage | rappeler « LE MÊME personnage que la première image, transformé » |
+| Il est dessiné petit, vu de dessus | rappeler « de face, en grand, comme la première image » |
+| Un cadre ou une bordure apparaît | rappeler « aucun cadre, le jeu ajoute le sien » |
+| Le fond devient un décor | rappeler « une nappe de couleur, pas une scène » |
+| Le fond est resté magenta | rappeler « la nappe décrite, jamais le magenta de la planche » ; sinon `NAPPES` dans `build_menu.py` le repeint |
+
+Voir [../../PROMPT_MENU.md](../../PROMPT_MENU.md).
+"""
+
+
 def portrait_page(mage: dict) -> str:
     return f"""# portrait_{mage['id']} — {mage['nom']}
 
@@ -428,6 +757,9 @@ def index_page() -> str:
         f"| {m['nom']} | {m['element']} | `{m['couleur']}` | "
         f"[portrait_{m['id']}](prompts/menu/portrait_{m['id']}.md) |"
         for m in MAGES)
+    eveils = "\n".join(
+        f"| {e['nom']} | {e['base']} | [portrait_{e['id']}](prompts/menu/portrait_{e['id']}.md) |"
+        for e in EVEILS)
     return f"""# L'écran « Choisis ton mage » — index des prompts
 
 ⚠️ Les fichiers de `docs/prompts/menu/` sont **GÉNÉRÉS** par
@@ -451,6 +783,15 @@ et c'est elle qu'on rejoue.
 | Mage | Élément | Couleur | Prompt |
 |---|---|---|---|
 {lignes}
+
+## Les portraits des Éveils
+
+Le bouton ÉVEIL de la fiche montre la forme éveillée du mage. Chaque prompt joint le portrait du mage ET sa
+planche de marche éveillée. Tant qu'un portrait manque, la carte montre le sprite de l'Éveil.
+
+| Éveil | Mage | Prompt |
+|---|---|---|
+{eveils}
 
 Plus deux prompts communs :
 
@@ -504,10 +845,13 @@ def main() -> None:
     for mage in MAGES:
         (OUT / f"portrait_{mage['id']}.md").write_text(
             portrait_page(mage), encoding="utf-8")
+    for eveil in EVEILS:
+        (OUT / f"portrait_{eveil['id']}.md").write_text(
+            eveil_page(eveil), encoding="utf-8")
     (OUT / "cadre_carte.md").write_text(cadre_page(), encoding="utf-8")
     (OUT / "fond_selection.md").write_text(fond_page(), encoding="utf-8")
     Path("docs/PROMPT_MENU.md").write_text(index_page(), encoding="utf-8")
-    print(f"{len(MAGES)} portraits + cadre + fond -> {OUT}/")
+    print(f"{len(MAGES)} portraits + {len(EVEILS)} éveils + cadre + fond -> {OUT}/")
     print("index -> docs/PROMPT_MENU.md")
 
 

@@ -247,6 +247,129 @@ SHEETS = {
         "air_eveil_croissant", "air_eveil_vortex", "air_eveil_titan",
         "air_eveil_cocon", "air_eveil_zephyr", "air_eveil_ouragan",
     ], {"undust": 12}),
+    # L'ÉVEIL du Sorcier des Ténèbres, le Seigneur du Néant, sur FOND VERT : le détourage par teinte
+    # cherche le magenta, d'où `key: flat`, qui fait couler le fond depuis le bord. Relevé case par case :
+    # éclipse et tourbillon · trois mains sur un cercle de runes · mage qui passe un mur et son leurre //
+    # trou noir et débris · flaque, yeux et vrilles · soleil noir sur deux failles. L'ordre demandé.
+    "mage_tenebres_eveil_skills.png": ("shadow_eveil", [
+        "shadow_eveil_orbe", "shadow_eveil_sceau", "shadow_eveil_marche",
+        "shadow_eveil_trou", "shadow_eveil_fusion", "shadow_eveil_eclipse",
+    ], {"key": "flat", "flood": 110, "inset": 0.025, "degreen": True}),
+    # Le Maître des Légions, sur fond VERT. Lu sur la planche : aiguille et sceau sur une bête noire ·
+    # quatre diablotins d'un portail · gargouille sur un sceau // gouffre aux griffes · mage et diablotin
+    # qui s'échangent · tête de dragon en feu. L'ordre demandé.
+    "mage_invocateur_eveil_skills.png": ("invocateur_eveil", [
+        "invocateur_eveil_marque", "invocateur_eveil_nuee", "invocateur_eveil_gargouille",
+        "invocateur_eveil_porte", "invocateur_eveil_echange", "invocateur_eveil_dragon",
+    ], {"key": "flat", "flood": 110, "inset": 0.025, "degreen": True}),
+    # Le Seigneur des Heures, sur fond magenta. Lu sur la planche : cadran à trois aiguilles qui filent ·
+    # bête figée sous une cloche de verre · le mage et son double sur un cadran fléché // cœur dans une flèche
+    # qui revient · réveil et flèche de retour · grande horloge à midi sur ses engrenages. L'ordre demandé.
+    "mage_chrono_eveil_skills.png": ("chrono_eveil", [
+        "chrono_eveil_aiguilles", "chrono_eveil_dome", "chrono_eveil_paradoxe",
+        "chrono_eveil_rembobinage", "chrono_eveil_saut", "chrono_eveil_jugement",
+    ], {"undust": 12}),
+    # Le Seigneur du Fléau, sur fond magenta. Lu sur la planche : goutte qui jaillit d'un encensoir · empreintes
+    # dans des flaques qui bouillonnent · cinq crânes en chaîne // masque à bec, goutte rouge et crâne qui éclate ·
+    # trois corbeaux sur un nuage vert · grand masque sous une pluie verte. L'ordre demandé.
+    "mage_peste_eveil_skills.png": ("peste_eveil", [
+        "peste_eveil_crachat", "peste_eveil_sillage", "peste_eveil_epidemie",
+        "peste_eveil_saignee", "peste_eveil_corbeaux", "peste_eveil_peste",
+    ], {"undust": 12}),
+    # L'Archimage Primordial, sur fond MAGENTA (ses planches de personnage sont sur vert). Lu sur la planche :
+    # trait tressé de quatre couleurs · soleil qui éclate en quatre éléments · quatre sceaux en croix // mage
+    # bras ouverts devant l'auréole · mage dissous en quatre volutes · quatre météores autour d'une lumière
+    # blanche. L'ordre demandé, chacune dans l'anneau d'or aux quatre runes.
+    # L'Étoile du Matin, sur fond magenta. Lu sur la planche : rayon qui transperce trois silhouettes · lance
+    # dont le rayon tourne à angle droit · cercle bordé de colonnes // ailes refermées en bouclier · ange changé
+    # en traînée entre deux étoiles · soleil d'où tombent des rayons. L'ordre demandé.
+    # Le Faucheur des Âmes, sur fond magenta. Lu sur la planche : croissant et flèche qui revient · faux double dans
+    # un cercle de lame et trois âmes · cloche et trois ondes // nuée d'âmes autour d'une faux · plumes et ligne de
+    # braise à travers une haie · lune rouge traversée par la faux. L'ordre demandé.
+    "mage_mort_eveil_skills.png": ("mort_eveil", [
+        "mort_eveil_croissant", "mort_eveil_moisson", "mort_eveil_glas",
+        "mort_eveil_legion", "mort_eveil_pas", "mort_eveil_minuit",
+    ], {"undust": 12}),
+    "mage_ciel_eveil_skills.png": ("ciel_eveil", [
+        "ciel_eveil_lance", "ciel_eveil_plumes", "ciel_eveil_colonne",
+        "ciel_eveil_carillon", "ciel_eveil_ascension", "ciel_eveil_jugement",
+    ], {"undust": 12}),
+    "mage_cherubin_eveil_skills.png": ("cherubin_eveil", [
+        "cherubin_eveil_epee", "cherubin_eveil_tournoie", "cherubin_eveil_roues",
+        "cherubin_eveil_ailes", "cherubin_eveil_eclair", "cherubin_eveil_eden",
+    ], {"undust": 12}),
+    "mage_acier_eveil_skills.png": ("acier_eveil", [
+        "acier_eveil_marteau", "acier_eveil_tempete", "acier_eveil_enclume",
+        "acier_eveil_bastion", "acier_eveil_belier", "acier_eveil_coeur",
+    ], {}),
+    "mage_etoiles_eveil_skills.png": ("etoiles_eveil", [
+        "etoiles_eveil_comete", "etoiles_eveil_constellation", "etoiles_eveil_meteores",
+        "etoiles_eveil_eclipse", "etoiles_eveil_filante", "etoiles_eveil_galaxie",
+    ], {}),
+    "mage_lumiere_eveil_skills.png": ("lumiere_eveil", [
+        "lumiere_eveil_trait", "lumiere_eveil_lance", "lumiere_eveil_cathedrale",
+        "lumiere_eveil_egide", "lumiere_eveil_etoile", "lumiere_eveil_soleil",
+    ], {"undust": 12}),
+    "mage_supreme_eveil_skills.png": ("supreme_eveil", [
+        "supreme_eveil_trait", "supreme_eveil_convergence", "supreme_eveil_couronne",
+        "supreme_eveil_apotheose", "supreme_eveil_pas", "supreme_eveil_genese",
+    ], {"undust": 12}),
+    # L'Archidémon du Pacte, sur fond magenta. Lu sur la planche : main de démon et trois griffures · paume
+    # et goutte sur une vague de sang · croix de flammes sur un sceau // gueule de crocs et goutte · ailes sur une
+    # étoile · tête cornue et serres. L'ordre demandé.
+    "mage_demon_eveil_skills.png": ("demon_eveil", [
+        "demon_eveil_serres", "demon_eveil_pacte", "demon_eveil_fleuves",
+        "demon_eveil_gueule", "demon_eveil_ailes", "demon_eveil_apocalypse",
+    ], {"undust": 12}),
+    # La Reine de la Discorde, sur fond magenta. Lu sur la planche : fil d'argent et deux cibles · œil aux fils sur
+    # trois pantins · arène de fils et flèches vers l'œil // toile à cinq nœuds · pantin qui tourne sous la croix ·
+    # croix couronnée et ronde de danseurs. L'ordre demandé.
+    "mage_discorde_eveil_skills.png": ("discorde_eveil", [
+        "discorde_eveil_fil", "discorde_eveil_oeil", "discorde_eveil_arene",
+        "discorde_eveil_toile", "discorde_eveil_ballet", "discorde_eveil_bal",
+    ], {"undust": 12}),
+    # L'Empereur des Cendres, sur fond magenta. Lu sur la planche : poing de lave en flammes · deux gantelets qui
+    # volent · plastron-forge qui aspire // trois pièces qui convergent sur des murs de flammes · statue de cendre qui
+    # s'effondre · couronne géante sur des cages. L'ordre demandé.
+    "mage_braise_eveil_skills.png": ("braise_eveil", [
+        "braise_eveil_poing", "braise_eveil_gantelets", "braise_eveil_forge",
+        "braise_eveil_retour", "braise_eveil_statue", "braise_eveil_empire",
+    ], {"undust": 12}),
+    # Le Seigneur Écarlate, sur fond magenta. Lu sur la planche : croissant à travers trois silhouettes · sabre et
+    # double trait · sabre devant un cercle de lames // sabre qui rentre au fourreau · tourbillon de pétales et saut ·
+    # lune rouge barrée de coupes. L'ordre demandé.
+    "mage_ecarlate_eveil_skills.png": ("ecarlate_eveil", [
+        "ecarlate_eveil_croissant", "ecarlate_eveil_pas", "ecarlate_eveil_garde",
+        "ecarlate_eveil_rengaine", "ecarlate_eveil_danse", "ecarlate_eveil_nuit",
+    ], {"undust": 12}),
+    # Le Gardien de l'Abîme, sur fond magenta. Lu sur la planche : gantelet enchaîné qui frappe · trois chaînes et une
+    # clé · cadenas et cinq blocs de glace // flocon à serrure dans une nova · silhouette de flamme qui file · gouffre
+    # à serrure et chaînes. L'ordre demandé.
+    "mage_geolier_eveil_skills.png": ("geolier_eveil", [
+        "geolier_eveil_poing", "geolier_eveil_crochets", "geolier_eveil_chaines",
+        "geolier_eveil_hiver", "geolier_eveil_pas", "geolier_eveil_abime",
+    ], {"undust": 12}),
+    # Le Dragon Primordial, sur fond magenta. Lu sur la planche : boule de lave qui éclate · tête qui crache ·
+    # gueule de face // bouclier d'écailles qui éclate · ailes et flèche sur un anneau de feu · dragon sous les
+    # météores. L'ordre demandé.
+    "mage_dragon_eveil_skills.png": ("dragon_eveil", [
+        "dragon_eveil_bombe", "dragon_eveil_souffle", "dragon_eveil_devoreur",
+        "dragon_eveil_carapace", "dragon_eveil_envol", "dragon_eveil_ciel",
+    ], {"undust": 12}),
+    # Le Maître du Casino, sur fond magenta. Lu sur la planche : trois cartes et un chapeau · trois dés en flammes ·
+    # croix de cartes et Joker // pièce sur la tranche · cartes qui sortent du chapeau · roulette et jetons. L'ordre
+    # demandé.
+    "mage_croupier_eveil_skills.png": ("croupier_eveil", [
+        "croupier_eveil_main", "croupier_eveil_des", "croupier_eveil_table",
+        "croupier_eveil_piece", "croupier_eveil_tour", "croupier_eveil_jeu",
+    ], {"undust": 12}),
+    # Faim Sans Fond, sur fond magenta. Lu sur la planche : trois langues d'une gueule · gueule ronde et tourbillon ·
+    # deux gueules sur deux silhouettes // gueule qui recrache sur une flaque · démon qui bondit sur une gueule ·
+    # gueule géante qui avale. L'ordre demandé.
+    "mage_avide_eveil_skills.png": ("avide_eveil", [
+        "avide_eveil_langues", "avide_eveil_abime", "avide_eveil_devorer",
+        "avide_eveil_bile", "avide_eveil_bond", "avide_eveil_festin",
+    ], {"undust": 12}),
     "mage_invocateur_skills.png": ("invocateur", [
         "invoc_bolt", "invoc_imps", "invoc_gargoyle",
         "invoc_circle", "invoc_step", "invoc_dragon",
@@ -498,6 +621,12 @@ def main() -> None:
                 data[..., 1] = np.where(spill, data[..., 0] * 0.945, data[..., 1]).astype(np.uint8)
                 data[..., 2] = np.where(spill, data[..., 0] * 0.72, data[..., 2]).astype(np.uint8)
                 icon = Image.fromarray(data, "RGBA")
+            # Sur FOND VERT : le bord garde un liseré vert, qu'on retire comme le fait `degreen` des planches.
+            if options.get("degreen"):
+                data = np.array(icon).astype(np.float32)
+                excess = np.clip(data[..., 1] - np.maximum(data[..., 0], data[..., 2]), 0.0, None)
+                data[..., 1] -= excess
+                icon = Image.fromarray(data.astype(np.uint8), "RGBA")
             if options.get("lift"):
                 icon = lifted(icon)
             icon.save(out_dir / f"{name}.png")

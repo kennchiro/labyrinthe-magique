@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "lumiere_eveil_trait",
+    "lumiere_eveil_lance",
+    "lumiere_eveil_cathedrale",
+    "lumiere_eveil_egide",
+    "lumiere_eveil_etoile",
+    "lumiere_eveil_soleil"
+  ],
+  "size": 256
+}

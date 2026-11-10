@@ -81,6 +81,10 @@ func _draw() -> void:
 		_draw_water(centre, s, gem, ready or in_prism, beat)
 		_draw_label(centre, radius, ready, in_prism, tired)
 		return
+	if info.get("symbol", "") == "shadow":
+		_draw_shadow(centre, s, gem, ready or in_prism, beat)
+		_draw_label(centre, radius, ready, in_prism, tired)
+		return
 	if info.get("symbol", "") == "air":
 		_draw_air(centre, s, gem, ready or in_prism, beat)
 		_draw_label(centre, radius, ready, in_prism, tired)
@@ -147,6 +151,16 @@ func _draw_earth(centre: Vector2, s: float, tint: Color, lit: bool, beat: float)
 		centre + Vector2(0.0, -s * 0.25), centre + Vector2(-s * 0.32, -s * 0.55),
 	])
 	draw_colored_polygon(gem, Color("#6fe03a") if lit else Color(tint, 0.8))
+
+
+## Une éclipse, disque noir cerclé de violet, et sa couronne : l'Éveil des Ténèbres.
+func _draw_shadow(centre: Vector2, s: float, tint: Color, lit: bool, beat: float) -> void:
+	var violet := Color("#c77dff") if lit else tint
+	for i in 12:
+		var dir := Vector2.from_angle(TAU * float(i) / 12.0 + _time * 0.6 * float(lit))
+		draw_line(centre + dir * s * 1.05, centre + dir * s * (1.4 + 0.15 * beat * float(lit)), violet, 2.0, true)
+	draw_circle(centre, s * 1.02, violet)
+	draw_circle(centre, s * 0.86, Color("#120a1c"))
 
 
 ## Une spirale de vent : l'Éveil de l'Air.

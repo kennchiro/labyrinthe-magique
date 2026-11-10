@@ -506,7 +506,7 @@ func use_slot(slot: int) -> void:
 			level.show_awakening_charge()
 			var awakening_tint: Color = {CharacterCatalog.WATER: Color("#55ddeb"),
 				CharacterCatalog.EARTH: Color("#9dff5c"), CharacterCatalog.THUNDER: Color("#7fd0ff"),
-				CharacterCatalog.AIR: Color("#bfe9ff")}.get(
+				CharacterCatalog.AIR: Color("#bfe9ff"), CharacterCatalog.SHADOW: Color("#c77dff")}.get(
 				character_id, Color("#ffb347"))
 			ui.flash("ÉVEIL : %s !" % awakening.awakened.display_name.to_upper(), awakening_tint)
 		return
@@ -714,7 +714,8 @@ func _awakening_info() -> Dictionary:
 		"state": shown, "seconds": awakening.left, "max_seconds": Awakening.DURATION,
 		"label_on": awakening.awakened.display_name.to_upper(), "label_ready": "ÉVEIL",
 		"symbol": {CharacterCatalog.WATER: "water", CharacterCatalog.EARTH: "earth",
-			CharacterCatalog.THUNDER: "thunder", CharacterCatalog.AIR: "air"}.get(awakening.base.id, "flame")}
+			CharacterCatalog.THUNDER: "thunder", CharacterCatalog.AIR: "air",
+			CharacterCatalog.SHADOW: "shadow"}.get(awakening.base.id, "flame")}
 
 
 func _on_awakening_form(next: CharacterStats) -> void:

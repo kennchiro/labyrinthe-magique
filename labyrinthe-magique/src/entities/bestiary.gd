@@ -33,6 +33,8 @@ extends RefCounted
 ## cadence en secondes : une ondulation ne doit rien à la distance.
 const SPECIES := {
 	"hunter": {
+		# Il lévite lentement, et c'est l'ennemi du stage où l'on apprend : il ne sprinte pas.
+		"no_sprint": true,
 		"name": "Spectre", "toughness": 1.00, "swiftness": 1.00, "height": 52.0, "body": 41.0,
 		"walk_fps": 3.2, "strike": 0.60, "repos": 0.55, "windup": 0.32, "hover": true,
 		"trait": "lévite lentement, charge son coup à bout de bras",
@@ -60,6 +62,7 @@ const SPECIES := {
 	# LA TUER PEUT EMPIRER LES CHOSES. Sa mort ne compte pas comme un kill : seules ses
 	# deux petites comptent, sinon une gelée vaudrait trois kills pour l'ultime.
 	"gelee": {
+		"no_sprint": true,
 		"name": "Gelée des Marées", "toughness": 1.00, "swiftness": 0.85, "height": 46.0, "body": 34.0,
 		"walk_fps": 5.0, "strike": 0.40, "repos": 0.45, "windup": 0.26,
 		"splits_into": "gelee_petite", "splits_count": 2,
@@ -67,6 +70,7 @@ const SPECIES := {
 	},
 	# Hors de `NEWCOMERS` : elle n'entre en jeu que par la mort d'une grande.
 	"gelee_petite": {
+		"no_sprint": true,
 		"name": "Petite Gelée", "toughness": 0.25, "swiftness": 1.20, "height": 30.0, "body": 21.0,
 		"walk_fps": 7.0, "strike": 0.40, "repos": 0.45, "windup": 0.26, "sheet": "gelee",
 		"droplet": true,
@@ -99,6 +103,7 @@ const SPECIES := {
 		"trait": "vole, donc ne ralentit jamais dans les virages",
 	},
 	"golem": {
+		"no_sprint": true,
 		"name": "Golem de Lave", "toughness": 1.90, "swiftness": 0.80, "height": 58.0, "body": 48.7,
 		"stride": 2.8, "walk_fps": 4.5, "strike": 0.50, "repos": 0.55, "windup": 0.30,
 		# LE SEUL DU BESTIAIRE QUI FRAPPE DE LOIN.
@@ -127,6 +132,7 @@ const SPECIES := {
 		"trait": "tire à quatre cases en ligne droite, puis recharge",
 	},
 	"cristal": {
+		"no_sprint": true,
 		"name": "Démon de Cristal", "toughness": 1.70, "swiftness": 0.86, "height": 56.0, "body": 50.7,
 		"stride": 2.6, "walk_fps": 4.5, "strike": 0.45, "repos": 0.50, "windup": 0.28,
 		"trait": "blindé de cristal, lourd à déplacer",
@@ -142,6 +148,7 @@ const SPECIES := {
 		"trait": "bouclier et lame, sans faiblesse marquée",
 	},
 	"givre": {
+		"no_sprint": true,
 		"name": "Golem de Givre", "toughness": 2.00, "swiftness": 0.78, "height": 58.0, "body": 50.6,
 		"stride": 2.8, "walk_fps": 4.2, "strike": 0.52, "repos": 0.58, "windup": 0.32, "impact_pose": 6,
 		# LA RAFALE DE CRISTAUX : quatre cases devant lui, pas six.
@@ -270,6 +277,15 @@ static func sheet(id: String) -> String:
 
 static func is_droplet(id: String) -> bool:
 	return bool(of(id).get("droplet", false))
+
+
+## Sprinte-t-il quand il voit le mage dans son couloir ? Pas les masses, ni ce qui ne poursuit
+## pas au contact.
+static func sprints(id: String) -> bool:
+	var tuning := of(id)
+	return not (bool(tuning.get("no_sprint", false)) or bool(tuning.get("thief", false))
+		or bool(tuning.get("phases", false)) or bool(tuning.get("harmless", false))
+		or bool(tuning.get("ranged_only", false)) or bool(tuning.get("boss", false)))
 
 
 static func display_name(id: String) -> String:

@@ -41,5 +41,20 @@ func _init(p_grid: MazeGrid) -> void:
 	grid = p_grid
 
 
+## L'ARÈNE seulement : `func(index, ability, lane) -> bool` dit si la cible a esquivé un tir arrivé au
+## bout de sa course (`lane`, les cases suivies jusqu'à elle au lancer). Vide en campagne : l'attaque y
+## vise et ne rate jamais, c'est une règle de design (voir CLAUDE.md, « Attaque »).
+var dodge_rule := Callable()
+
+
+## L'ARÈNE seulement : la cible CHOISIE (le plus blessé, celui que vise l'équipe). `find_target` la
+## préfère au plus proche dès qu'elle est à portée. -1 en campagne : on vise le plus proche.
+var focus := -1
+
+
+func dodges(index: int, ability: Ability, lane: Array) -> bool:
+	return dodge_rule.is_valid() and bool(dodge_rule.call(index, ability, lane))
+
+
 func enemy_alive(index: int) -> bool:
 	return index >= 0 and index < enemy_health.size() and enemy_health[index].is_alive()

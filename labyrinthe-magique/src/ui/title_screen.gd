@@ -26,6 +26,7 @@ signal start_requested
 signal journey_requested
 signal select_requested
 signal settings_requested
+signal arena_requested
 
 const COVER := preload("res://assets/peso&cover/interface/couverture_paysage.png")
 
@@ -34,6 +35,7 @@ const ENTRIES := [
 	["StartButton", "JOUER", "#ffd479", 1.0],
 	["JourneyButton", "AVENTURE", "#9fe8b4", 0.88],
 	["SelectButton", "CHOISIR SON MAGE", "#b9c8ff", 0.88],
+	["ArenaButton", "ARÈNE", "#ff9a8a", 0.88],
 ]
 ## Les boutons sont en RANGÉE, tout en bas, et non en colonne au centre.
 ##
@@ -66,6 +68,7 @@ func _ready() -> void:
 	$Buttons/StartButton.pressed.connect(func() -> void: start_requested.emit())
 	$Buttons/JourneyButton.pressed.connect(func() -> void: journey_requested.emit())
 	$Buttons/SelectButton.pressed.connect(func() -> void: select_requested.emit())
+	$Buttons/ArenaButton.pressed.connect(func() -> void: arena_requested.emit())
 	# À part de la rangée : ce n'est pas une entrée du jeu, et les réglages ne parlent
 	# que des commandes tactiles — au clavier, il n'y aurait rien dedans.
 	$SettingsButton.visible = Platform.touch_ui()
@@ -106,7 +109,8 @@ func _layout() -> void:
 	# joli et faux : c'est « CHOISIR SON MAGE », le plus long libellé, qui se
 	# retrouvait dans le plus étroit. Une rangée régulière se lit mieux, et rien
 	# ne risque de déborder quand un libellé change.
-	var span := drawn.x * 0.235
+	# Quatre depuis l'Arène (2026-11-09) : la largeur se partage, l'écart ne bouge pas.
+	var span := drawn.x * minf(0.235, (0.94 - 0.018 * float(ENTRIES.size() - 1)) / float(ENTRIES.size()))
 	var widths: Array[float] = []
 	for entry in ENTRIES:
 		widths.append(span)

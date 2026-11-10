@@ -23,9 +23,13 @@ func _run() -> void:
 	_test_clouds()
 	_test_phasing()
 	_test_strike_styles()
+	_test_summons_fought()
+	_test_pack()
+	_test_sprint()
 	await _test_stolen_gem()
 	await _test_split()
 	await _test_spit()
+	await _test_rally_in_level()
 
 	print("")
 	if _failures.is_empty():
@@ -154,6 +158,126 @@ func _test_strike_styles() -> void:
 	print("coups : chaque créature qui frappe a le sien : OK")
 
 
+## Les ennemis abattent les créatures invoquées, au bon nombre de coups.
+func _test_summons_fought() -> void:
+	var grid := MazeGrid.new(9, 3)
+	for c in range(1, 8):
+		grid.set_cell(c, 1, MazeGrid.Cell.FLOOR)
+	var cases := [["imp", false, false, 3], ["imp", true, false, 6],
+		["gargouille", false, true, 2], ["ombre", false, false, 3]]
+	for entry: Array in cases:
+		var combat := CombatSystem.new(grid, CharacterCatalog.invocateur(), Health.new(3), 5)
+		if bool(entry[1]):
+			combat.start_legion(60.0, 1.5, 8)
+		var summon := combat._spawn_summon(str(entry[0]), Vector2i(3, 1), 60.0, null)
+		var slain := {"done": false}
+		combat.summon_slain.connect(func(id: int) -> void:
+			slain["done"] = id == int(summon["id"]))
+		var foe := {"position": Vector2(2, 1), "free": true, "windup": 0.2, "cycle": 0.6,
+			"boss": bool(entry[2])}
+		var landed := 0
+		for _frame in 60 * 20:
+			for event in combat.defend_against_summons(FRAME, [foe], 1.05):
+				if str(event["event"]) == "landed":
+					landed += 1
+					if event["toward"] != Vector2i.RIGHT:
+						_fail("l'ennemi frappe la créature du mauvais côté")
+			if slain["done"]:
+				break
+		if not slain["done"] or landed != int(entry[3]):
+			_fail("%s%s%s : %d coups pour l'abattre, attendu %d" % [entry[0],
+				" de la Légion" if entry[1] else "", " par un boss" if entry[2] else "",
+				landed, entry[3]])
+		if combat.summon_count() != 0:
+			_fail("%s abattue mais toujours en chasse" % entry[0])
+	var combat := CombatSystem.new(grid, CharacterCatalog.invocateur(), Health.new(3), 5)
+	combat._spawn_summon("dragon", Vector2i(3, 1), 60.0, null)
+	combat._spawn_summon("imp", Vector2i(5, 1), 60.0, null)
+	if not combat.summon_in_reach(Vector2(2, 1), 1.05).is_empty():
+		_fail("le dragon, qui vole, ne doit pas être à portée de coup")
+	var busy := {"position": Vector2(4, 1), "free": false, "windup": 0.2, "cycle": 0.6}
+	for _frame in 120:
+		if not combat.defend_against_summons(FRAME, [busy], 1.05).is_empty():
+			_fail("un ennemi occupé à frapper le mage frappe aussi une créature")
+			break
+	print("invocations : les ennemis les abattent, la Légion tient deux fois plus : OK")
+
+
+## La meute : sur un anneau, le second poursuivant d'un même côté fait le tour par l'autre.
+func _test_pack() -> void:
+	var grid := MazeGrid.new(9, 9)
+	for i in range(1, 8):
+		for cell: Vector2i in [Vector2i(i, 1), Vector2i(i, 7), Vector2i(1, i), Vector2i(7, i)]:
+			grid.set_cell(cell.x, cell.y, MazeGrid.Cell.FLOOR)
+	var mage := Vector2i(4, 1)
+	var field := Pathfinder.distance_field(grid, [mage] as Array[Vector2i])
+	var lead := {"index": 0, "cell": Vector2i(1, 3)}
+	var follower := {"index": 1, "cell": Vector2i(1, 5)}
+	var flanks := PackTactics.assign(grid, mage, field, [lead, follower] as Array[Dictionary])
+	if flanks.has(0) or not flanks.has(1):
+		_fail("le premier doit poursuivre et le second contourner : %s" % [flanks.keys()])
+	else:
+		var ai := EnemyAI.new(20, 1)
+		ai.flank_field = flanks[1]
+		if ai.decide(grid, follower["cell"], Vector2i.UP, field, FRAME) != Vector2i.DOWN:
+			_fail("le contourneur devrait partir par le bas de l'anneau")
+		# Passé de l'autre côté, il arrive sur le mage par la droite de l'anneau.
+		if ai.decide(grid, Vector2i(7, 4), Vector2i.UP, field, FRAME) != Vector2i.UP:
+			_fail("de l'autre côté, le contourneur doit remonter vers le mage")
+	if not PackTactics.assign(grid, mage, field, [lead] as Array[Dictionary]).is_empty():
+		_fail("un poursuivant seul ne contourne pas")
+	var both_sides := [lead, {"index": 1, "cell": Vector2i(7, 3)}] as Array[Dictionary]
+	if not PackTactics.assign(grid, mage, field, both_sides).is_empty():
+		_fail("deux poursuivants venus de deux côtés n'ont rien à contourner")
+	# L'appel : un patrouilleur proche répond, un lointain non.
+	var long := MazeGrid.new(40, 3)
+	for c in range(1, 39):
+		long.set_cell(c, 1, MazeGrid.Cell.FLOOR)
+	var called := PackTactics.rally(long, [Vector2i(5, 1)] as Array[Vector2i],
+		[{"index": 3, "cell": Vector2i(14, 1)}, {"index": 4, "cell": Vector2i(30, 1)}] as Array[Dictionary])
+	if called.size() != 1 or called[0] != 3:
+		_fail("l'appel devrait toucher le patrouilleur proche seul : %s" % [called])
+	var rallied := EnemyAI.new(4, 1)
+	var line := Pathfinder.distance_field(long, [Vector2i(5, 1)] as Array[Vector2i])
+	if not rallied.rally(line, 6.0) or rallied.decide(long, Vector2i(14, 1), Vector2i.RIGHT, line,
+			FRAME) != Vector2i.LEFT:
+		_fail("appelé, il doit courir vers le mage même hors de vue")
+	print("meute : le suivant arrive par l'autre bout, et l'appel lève les proches : OK")
+
+
+## Le sprint : il se ramasse, fonce plus vite que le mage, puis souffle. Pas les masses.
+func _test_sprint() -> void:
+	var grid := MazeGrid.new(20, 3)
+	for c in range(1, 19):
+		grid.set_cell(c, 1, MazeGrid.Cell.FLOOR)
+	var ai := EnemyAI.new(8, 1)
+	ai.state = EnemyAI.State.CHASE
+	var from := Vector2i(4, 1)
+	var mage := Vector2i(9, 1)
+	if ai.update_sprint(FRAME, grid, from, mage, true) != EnemyAI.Sprint.WINDUP:
+		_fail("le mage dans son couloir, il devrait se ramasser pour sprinter")
+	var seen := {}
+	var elapsed := 0.0
+	while elapsed < EnemyAI.SPRINT_WINDUP + EnemyAI.SPRINT_TIME + 0.2:
+		seen[ai.update_sprint(FRAME, grid, from, mage, true)] = true
+		elapsed += FRAME
+	if not seen.has(EnemyAI.Sprint.RUNNING):
+		_fail("après l'arrêt, il devrait foncer")
+	if ai.update_sprint(FRAME, grid, from, mage, true) != EnemyAI.Sprint.NONE:
+		_fail("après sa course, il doit souffler avant de recommencer")
+	var fresh := EnemyAI.new(8, 1)
+	fresh.state = EnemyAI.State.CHASE
+	if fresh.update_sprint(FRAME, grid, from, Vector2i(14, 1), true) != EnemyAI.Sprint.NONE:
+		_fail("trop loin pour le voir, il ne sprinte pas")
+	if fresh.update_sprint(FRAME, grid, from, mage, false) != EnemyAI.Sprint.NONE:
+		_fail("une espèce qui ne sprinte pas ne sprinte pas")
+	if EnemyAI.sprint_speed(EnemyAI.Sprint.RUNNING, 3.8) <= 5.3:
+		_fail("en course, il doit dépasser le mage le plus rapide")
+	if Bestiary.sprints("golem") or Bestiary.sprints("rat") or not Bestiary.sprints("goblin"):
+		_fail("les masses et le Rat ne sprintent pas, le Gobelin oui")
+	print("sprint : il se ramasse, fonce, puis souffle : OK")
+
+
 ## LA GEMME NE SORT JAMAIS DU JEU : c'est ce qui rend le vol juste, et ce qui bloquerait la
 ## partie pour de bon si c'était faux.
 func _test_stolen_gem() -> void:
@@ -261,3 +385,36 @@ func _test_spit() -> void:
 	level.queue_free()
 	await process_frame
 	print("vesse : elle crache, le mage ralentit puis repart : OK")
+
+
+## L'appel, sur le vrai niveau : le poursuivant lève le patrouilleur proche, qui montre son « ! ».
+func _test_rally_in_level() -> void:
+	var level := _level_with(2, "goblin")
+	var mage := level.player.mover.nearest_cell()
+	level._refresh_ai()
+	var hunter: Enemy = null
+	var patrol: Enemy = null
+	for enemy in level.enemies:
+		if enemy.flanks() and hunter == null:
+			hunter = enemy
+		elif enemy.flanks() and patrol == null:
+			patrol = enemy
+	var field := level._player_field
+	var near := mage
+	var mid := mage
+	for i in field.size():
+		var cell := Vector2i(i % level.grid.cols, i / level.grid.cols)
+		if field[i] == 2:
+			near = cell
+		elif field[i] == 10:
+			mid = cell
+	hunter.revive_at(near)
+	patrol.revive_at(mid)
+	hunter.ai.state = EnemyAI.State.CHASE
+	patrol.ai.state = EnemyAI.State.PATROL
+	level._refresh_ai()
+	if patrol.ai.state != EnemyAI.State.SEARCH or patrol._rallied_left <= 0.0:
+		_fail("le patrouilleur à dix cases d'un poursuivant devrait répondre à l'appel")
+	level.queue_free()
+	await process_frame
+	print("meute : l'appel lève le patrouilleur proche en jeu : OK")

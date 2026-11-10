@@ -35,6 +35,9 @@ var flow_speed := Vector2.ZERO
 
 ## Ce qui bouge sur chaque stage : un seul mouvement dominant, pour que chacun se reconnaisse.
 const MOTION := {
+	# Le Colisée de l'arène (`ArenaRules.COLISEUM`) : de grandes ombres de nuages sur le sable, et la
+	# pierre qui accroche la lumière.
+	0: {"cloud": 0.22, "sparkle": 0.25},
 	1: {"cloud": 0.24, "wind": 1.0},
 	2: {"cloud": 0.34, "flash": 0.22},
 	3: {"cloud": 0.12, "flow": 0.16, "flow_tint": Color(1.0, 0.72, 0.38),
@@ -77,6 +80,9 @@ static func of(stage: int) -> StageMood:
 
 static func _lit(stage: int) -> StageMood:
 	match stage:
+		0:   # Le Colisée de l'arène : plein soleil d'après-midi, pierre chaude
+			return StageMood.new(Color(0.12, 0.09, 0.06), Color(0.80, 0.72, 0.60), Color(1.00, 0.90, 0.72),
+				Color(1.04, 1.00, 0.94), 0.50, 0.74)
 		2:   # Canyon de la Foudre : ciel d'orage
 			return StageMood.new(Color(0.03, 0.03, 0.07), Color(0.55, 0.60, 0.80), Color(0.80, 0.85, 1.00),
 				Color(0.97, 0.98, 1.08), 0.20, 0.42)

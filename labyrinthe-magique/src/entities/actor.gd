@@ -125,11 +125,18 @@ func _setup_part(part: Sprite2D, region: Rect2, offset: Vector2) -> void:
 	part.position = offset * _scale_factor
 
 
+## PILOTÉ DE L'EXTÉRIEUR : l'Arène fait avancer le `GridMover` dans `ArenaMatch`, qui décide pour
+## tous les héros à la fois. Le nœud ne fait alors que suivre et dessiner — avancer le même
+## mover une seconde fois le ferait courir deux fois plus vite, et lire le clavier le piloterait.
+var puppet := false
+
+
 func _process(delta: float) -> void:
 	if mover == null:
 		return
-	_update_desired(delta)
-	mover.update(delta)
+	if not puppet:
+		_update_desired(delta)
+		mover.update(delta)
 	position = _world_position()
 	_animate(delta)
 

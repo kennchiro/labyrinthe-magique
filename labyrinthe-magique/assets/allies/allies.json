@@ -116,5 +116,36 @@
         291
       ]
     }
+  },
+  "dragon_eveil": {
+    "anchor": "centre",
+    "cell": [
+      244,
+      189
+    ],
+    "mirror_left": false,
+    "grounded": false,
+    "directions": {
+      "up": {
+        "file": "dragon_eveil_up.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "down": {
+        "file": "dragon_eveil_down.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "left": {
+        "file": "dragon_eveil_left.png",
+        "idle": 4,
+        "strike": 4
+      },
+      "right": {
+        "file": "dragon_eveil_right.png",
+        "idle": 4,
+        "strike": 4
+      }
+    }
   }
 }

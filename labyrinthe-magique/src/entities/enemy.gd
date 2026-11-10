@@ -43,6 +43,9 @@ const HIT_FLASH_DURATION := 0.14
 const TINT_SOAK := Color(0.55, 0.75, 1.45)
 const TINT_STAGGER := Color(1.5, 1.4, 1.0)
 const TINT_FROZEN := Color(0.6, 1.3, 1.25)
+
+## Fantôme d'un héros de l'arène (`ArenaView._add_host`) : il porte les marques, pas la barre de vie.
+var hide_health_bar := false
 const TINT_VENOM := Color(0.72, 1.42, 0.32)
 const VENOM_DROP := Color("#b4f02a")
 const VENOM_RIM := Color("#1e3a0c")
@@ -130,6 +133,16 @@ var _cut_marks := 0
 ## La démarche d'un boss, posée par le Level à chaque image (`BossGait`).
 var gait_factor := 1.0
 var gait_hold := false
+## Au corps à corps avec une créature invoquée : il reste et se bat.
+var engaged := false
+## Où en est son sprint : l'arrêt qui l'annonce, puis la course.
+var _sprint := EnemyAI.Sprint.NONE
+const TINT_SPRINT := Color(1.9, 1.25, 0.55)
+## Le « ! » de l'appel de la meute, en secondes.
+var _rallied_left := 0.0
+const RALLY_MARK_TIME := 0.9
+const RALLY_MARK := Color("#ffd15a")
+const RALLY_RIM := Color("#3a1408")
 var gait_charge := Vector2i.ZERO
 ## Le geste d'un boss qui attaque de loin : il remplace le dessin et l'immobilise.
 var _cast_strip: BossStrip = null
@@ -233,6 +246,12 @@ func harmless() -> bool:
 	return bool(_tuning.get("harmless", false))
 
 
+## Peut-il faire le tour pour couper la fuite du mage ? Ce qui ne poursuit pas au contact,
+## non : le Rat vole, la Raie passe les murs, les tireurs veulent leur ligne, le boss a sa marche.
+func flanks() -> bool:
+	return not (is_thief() or phases() or harmless() or ranged_only() or is_boss())
+
+
 func phases() -> bool:
 	return bool(_tuning.get("phases", false))
 
@@ -292,11 +311,12 @@ func can_strike() -> bool:
 
 ## Frappe le joueur. Ne retire AUCUN point de vie : c'est le Level qui constate
 ## le contact et le GameManager qui décide ce que ça coûte. Ici, on le montre.
-func strike() -> void:
+## `toward` : la créature invoquée qu'il frappe. Sans elle, c'est le mage.
+func strike(toward := Vector2i.ZERO) -> void:
 	if _strike <= 0.0 and _strike_rest <= 0.0:
 		_strike = float(_tuning["strike"])
 		_strike_rest = _strike + float(_tuning["repos"])
-		_strike_facing = _toward_player()
+		_strike_facing = toward if toward != Vector2i.ZERO else _toward_player()
 	queue_redraw()
 
 
@@ -411,6 +431,9 @@ func _update_desired(delta: float) -> void:
 	_strike = maxf(0.0, _strike - delta)
 	_strike_rest = maxf(0.0, _strike_rest - delta)
 	_spit_cooldown = maxf(0.0, _spit_cooldown - delta)
+	if _rallied_left > 0.0:
+		_rallied_left = maxf(0.0, _rallied_left - delta)
+		queue_redraw()
 	if _astre_marks > 0:
 		queue_redraw()
 	if _marked_left > 0.0:
@@ -428,6 +451,9 @@ func _update_desired(delta: float) -> void:
 	_poison_left = maxf(0.0, _poison_left - delta)
 	_flash = maxf(0.0, _flash - delta)
 	mover.speed = _base_speed * gait_factor * (_soak_factor if _soak_left > 0.0 else 1.0)
+	_sprint = ai.update_sprint(delta, mover.grid, mover.decision_cell(), player_cell,
+		Bestiary.sprints(species) and _stagger_left <= 0.0 and not engaged and _strike <= 0.0)
+	mover.speed = EnemyAI.sprint_speed(_sprint, mover.speed)
 	if _soak_left <= 0.0:
 		_soak_factor = SOAK_FACTOR
 	if _stagger_left > 0.0:
@@ -442,7 +468,7 @@ func _update_desired(delta: float) -> void:
 	if _cast_strip != null:
 		mover.desired_direction = Vector2i.ZERO
 		return
-	if gait_charge != Vector2i.ZERO or gait_hold:
+	if gait_charge != Vector2i.ZERO or gait_hold or engaged:
 		mover.desired_direction = gait_charge
 		return
 	var step := _next_step(delta)
@@ -475,6 +501,11 @@ func _update_desired(delta: float) -> void:
 	if _strike > 0.0:
 		_show_state(TINT_STRIKE)
 		return
+	# Il se ramasse avant de foncer : c'est l'avertissement, il doit se voir de loin.
+	if _sprint == EnemyAI.Sprint.WINDUP:
+		set_tint(Color.WHITE.lerp(TINT_SPRINT, 0.8))
+		queue_redraw()
+		return
 	# Brûlure et trempe passent AVANT les teintes d'état : un statut est une
 	# information de combat, l'état de l'IA n'est qu'une ambiance.
 	if ai.possess_left > 0.0:
@@ -488,7 +519,8 @@ func _update_desired(delta: float) -> void:
 	# c'est toute la lecture du Mage de la Peste.
 	if _venom_doses > 0:
 		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.005)
-		_show_state(TINT_CHASE.lerp(TINT_VENOM, (float(_venom_doses) - pulse * 0.4) / 3.0))
+		# Plafonnée à trois doses : le Miasme du Seigneur du Fléau en met cinq, et au-delà la teinte débordait.
+		_show_state(TINT_CHASE.lerp(TINT_VENOM, clampf((float(_venom_doses) - pulse * 0.4) / 3.0, 0.0, 1.0)))
 		return
 	if _burn_left > 0.0:
 		var flicker := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.02)
@@ -786,6 +818,8 @@ func _draw() -> void:
 		return
 	_draw_venom()
 	_draw_blind()
+	_draw_rally()
+	_draw_sprint()
 	_draw_mark()
 	_draw_star_marks()
 	_draw_cuts()
@@ -793,8 +827,9 @@ func _draw() -> void:
 	# n'apprend rien et met un bandeau rouge au-dessus de chaque ennemi de la
 	# carte, ce qui noie l'information au moment où elle compte.
 	var ratio := health.ratio()
-	# Le boss a sa grande barre, en haut de l'écran.
-	if ratio >= 1.0 or is_boss():
+	# Le boss a sa grande barre, en haut de l'écran. Le fantôme d'un héros de l'arène n'en a pas :
+	# le héros porte déjà la sienne, aux couleurs de son équipe (`ArenaTag`).
+	if ratio >= 1.0 or is_boss() or hide_health_bar:
 		return
 
 	var width := tile_size * BAR_WIDTH
@@ -811,6 +846,43 @@ func _draw() -> void:
 
 
 ## Une à trois gouttes au-dessus de la barre de vie, et des bulles qui montent du corps.
+## La course : des traits de vitesse derrière lui. L'arrêt qui l'annonce : un cercle à ses pieds.
+func _draw_sprint() -> void:
+	if _sprint == EnemyAI.Sprint.WINDUP:
+		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.04)
+		draw_arc(Vector2.ZERO, tile_size * (0.32 + 0.12 * pulse), 0.0, TAU, 24,
+			Color(1.0, 0.7, 0.3, 0.85), 2.5)
+		return
+	if _sprint != EnemyAI.Sprint.RUNNING or mover == null or mover.direction == Vector2i.ZERO:
+		return
+	var back := -Vector2(mover.direction) * tile_size
+	var side := Vector2(-back.y, back.x).normalized() * tile_size
+	for i in 3:
+		var offset := side * (float(i) - 1.0) * 0.22 + Vector2(0.0, -tile_size * 0.35)
+		var length := 0.45 + 0.15 * float(i % 2)
+		draw_line(offset + back * 0.3, offset + back * (0.3 + length), Color(1.0, 0.92, 0.7, 0.75), 2.0)
+	queue_redraw()
+
+
+## Il répond à l'appel de la meute : un « ! » au-dessus de lui, qui dit qu'il arrive.
+func show_rally() -> void:
+	_rallied_left = RALLY_MARK_TIME
+	queue_redraw()
+
+
+func _draw_rally() -> void:
+	if _rallied_left <= 0.0:
+		return
+	var pop := clampf((RALLY_MARK_TIME - _rallied_left) / 0.12, 0.0, 1.0)
+	var size := tile_size * 0.72 * (0.6 + 0.4 * pop)
+	var at := Vector2(0.0, -tile_size * (BAR_HEIGHT_ABOVE + 0.55))
+	var font := ThemeDB.fallback_font
+	draw_string_outline(font, at + Vector2(-size * 0.18, 0.0), "!", HORIZONTAL_ALIGNMENT_LEFT,
+		-1, int(size), 5, RALLY_RIM)
+	draw_string(font, at + Vector2(-size * 0.18, 0.0), "!", HORIZONTAL_ALIGNMENT_LEFT,
+		-1, int(size), RALLY_MARK)
+
+
 func _draw_venom() -> void:
 	if _venom_doses <= 0:
 		return

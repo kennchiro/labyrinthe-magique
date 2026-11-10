@@ -85,6 +85,38 @@ func _init() -> void:
 	if (screen.get_node("Buttons/PlayButton") as Button).disabled:
 		failures.append("JOUER reste grisé pour les autres")
 
+	# LE BOUTON ÉVEIL bascule la fiche sur la forme éveillée, reste enclenché d'un mage à l'autre, disparaît sur qui
+	# n'en a pas, et JOUER part toujours avec le mage.
+	var awaken: Button = screen._awaken_button
+	if not awaken.visible:
+		failures.append("le Mage du Feu n'a pas de bouton Éveil")
+	# Le bouton déborde de la fenêtre du test, plus petite que l'écran : on l'enclenche comme le ferait un clic.
+	awaken.button_pressed = true
+	if screen.name_label.text != "Phénix" or not screen._selected_preview.stats.awakened:
+		failures.append("le bouton Éveil montre « %s »" % screen.name_label.text)
+	if screen._ability_cards[0]._icon.texture == null:
+		failures.append("les sorts de l'Éveil n'ont pas leurs icônes")
+	screen.select(CharacterCatalog.SUPREME)
+	if screen.name_label.text != "Archimage Primordial":
+		failures.append("l'Éveil ne reste pas enclenché d'un mage à l'autre : %s" % screen.name_label.text)
+	if screen.character_id != CharacterCatalog.SUPREME:
+		failures.append("JOUER ne part plus avec le mage : %s" % screen.character_id)
+	# Un personnage sans Éveil, cherché dans le roster : la liste des Éveils grandit d'un jour à l'autre.
+	var plain := ""
+	for entry in CharacterCatalog.roster():
+		if CharacterCatalog.awakening_of(entry.id) == null and not entry.id in CharacterCatalog.AEL_FORMS \
+				and entry.id != CharacterCatalog.AEL:
+			plain = entry.id
+			break
+	if plain != "":
+		screen.select(plain)
+		if awaken.visible or screen.name_label.text != CharacterCatalog.by_id(plain).display_name:
+			failures.append("%s, sans Éveil, montre « %s »" % [plain, screen.name_label.text])
+	screen.select(CharacterCatalog.FIRE)
+	awaken.button_pressed = false
+	if screen.name_label.text != CharacterCatalog.by_id(CharacterCatalog.FIRE).display_name:
+		failures.append("second appui : la fiche ne revient pas au mage")
+
 	# Le titre ne passe pas sous les onglets, sur les tailles d'un téléphone.
 	for width in [960.0, 690.0, 480.0]:
 		screen.size = Vector2(width, 330.0)

@@ -363,7 +363,14 @@ def check_written_strips() -> list:
 ## repos) ; il frappe bien devant à l'image 4 (+30 px). Mesuré le 2026-11-03, vu à l'œil.
 ## `earth_eveil` : le bâton levé à la 3e image déborde de 42 px derrière lui, autant que les éclats de
 ## l'impact devant lui à la 4e (mesuré le 2026-11-07).
-ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier", "cherubin", "earth_eveil"}
+## `shadow_eveil` : les mains griffues de ses vrilles débordent de 38 px derrière lui à l'image du coup,
+## l'éclipse de 36 px devant ; il frappe bien devant (mesuré et vu le 2026-11-07).
+## `peste_eveil` : il arme son encensoir comme une fronde, loin derrière lui aux images 2 et 3, puis le balance
+## devant à l'image 4, où l'éclaboussure sort bien devant lui (vu sur la planche le 2026-11-08).
+## `supreme_eveil` : il pousse ses deux paumes devant lui, mais son manteau évasé et son auréole débordent
+## derrière autant que ses mains devant (vu sur la bande agrandie le 2026-11-08).
+ATTACK_SIDE_EXEMPT = {"invocateur", "earth", "mort", "acier", "cherubin", "earth_eveil", "shadow_eveil",
+	"peste_eveil", "supreme_eveil"}
 
 
 ## Écarts tolérés sur un mage animé, entre la marche et la dernière image d'attaque.

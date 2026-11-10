@@ -25,6 +25,26 @@ var search_duration: float = 3.0
 
 ## Aveuglé : il erre sans chercher le mage, et ne peut pas frapper.
 var blind_left := 0.0
+## Le tour à faire pour couper la fuite du mage (`PackTactics`). Vide : il poursuit tout droit.
+var flank_field := PackedInt32Array()
+
+## LE SPRINT. Tous les ennemis sont plus lents que le mage : en ligne droite, il les semait
+## toujours, et aucun ne gagnait jamais une course. Celui qui voit le mage dans son couloir se
+## ramasse un instant, puis fonce un peu plus vite que lui.
+##
+## Il reste juste : l'arrêt avant la course est l'avertissement, la course est courte, et il
+## suffit de tourner à un carrefour pour qu'elle ne mène à rien.
+const SPRINT_SIGHT := 6
+const SPRINT_WINDUP := 0.35
+const SPRINT_TIME := 1.2
+const SPRINT_COOLDOWN := 5.0
+## En cases par seconde, et non en multiple de sa vitesse : un sprint proportionnel ferait du
+## Minotaure une flèche et laisserait le Gobelin plus lent que le mage. Les mages vont de 4,5 à 5,3.
+const SPRINT_SPEED := 5.75
+enum Sprint { NONE, WINDUP, RUNNING }
+var _sprint_windup := 0.0
+var _sprint_left := 0.0
+var _sprint_cooldown := 0.0
 ## Possédé : il reste aveugle au mage et ne peut pas le frapper, mais il marche sur sa proie.
 var possess_left := 0.0
 var possess_field := PackedInt32Array()
@@ -62,6 +82,54 @@ func _possessed_step(grid: MazeGrid, from: Vector2i, current_direction: Vector2i
 	return Pathfinder.step_toward(grid, possess_field, from)
 
 
+## Où en est son sprint, à appeler à chaque image. `allowed` : l'espèce sprinte, et il est libre
+## d'agir. Il ne part qu'en poursuite, le mage dans son couloir.
+func update_sprint(delta: float, grid: MazeGrid, from: Vector2i, player_cell: Vector2i,
+		allowed: bool) -> Sprint:
+	_sprint_cooldown = maxf(0.0, _sprint_cooldown - delta)
+	if not allowed or blind_left > 0.0:
+		_sprint_windup = 0.0
+		_sprint_left = 0.0
+		return Sprint.NONE
+	if _sprint_windup > 0.0:
+		_sprint_windup -= delta
+		if _sprint_windup <= 0.0:
+			_sprint_left = SPRINT_TIME
+		return Sprint.WINDUP
+	if _sprint_left > 0.0:
+		_sprint_left -= delta
+		if _sprint_left <= 0.0:
+			_sprint_cooldown = SPRINT_COOLDOWN
+		return Sprint.RUNNING
+	if state == State.CHASE and _sprint_cooldown <= 0.0 and player_cell.x >= 0 \
+			and from.distance_to(player_cell) > 1.5 \
+			and ThrowSystem.in_line(grid, from, player_cell, SPRINT_SIGHT):
+		_sprint_windup = SPRINT_WINDUP
+		return Sprint.WINDUP
+	return Sprint.NONE
+
+
+## La vitesse que donne le sprint à qui marche à `base` cases par seconde.
+static func sprint_speed(phase: Sprint, base: float) -> float:
+	match phase:
+		Sprint.WINDUP:
+			return 0.0
+		Sprint.RUNNING:
+			return maxf(base, SPRINT_SPEED)
+	return base
+
+
+## Appelé par la meute : il court vers l'endroit où le mage a été vu, comme s'il venait de le
+## perdre de vue. Rend vrai s'il patrouillait, donc s'il répond à l'appel.
+func rally(player_field: PackedInt32Array, seconds: float) -> bool:
+	if state != State.PATROL or blind_left > 0.0:
+		return false
+	state = State.SEARCH
+	_search_field = player_field
+	_search_timer = seconds
+	return true
+
+
 func decide(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 		player_field: PackedInt32Array, delta: float) -> Vector2i:
 	if blind_left > 0.0:
@@ -96,6 +164,11 @@ func decide(grid: MazeGrid, from: Vector2i, current_direction: Vector2i,
 
 	match state:
 		State.CHASE:
+			# Il contourne tant qu'il n'est pas arrivé à la coupure ; arrivé, il poursuit.
+			if not flank_field.is_empty():
+				var around := Pathfinder.step_toward(grid, flank_field, from)
+				if around != Vector2i.ZERO:
+					return around
 			var chase_step := Pathfinder.step_toward(grid, player_field, from)
 			if chase_step != Vector2i.ZERO:
 				return chase_step

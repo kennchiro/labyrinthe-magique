@@ -138,12 +138,19 @@ func _run_profile(config: LevelConfig, character: CharacterStats, explorer: bool
 	var frames_total := 0
 	var gems_total := 0
 	var kills_total := 0
+	var hits_total := 0
+	var health_max := 0
+	var close_calls := 0
 	var portals_total := 0
 
 	for i in _runs:
 		var outcome := _simulate(config, character, 4000 + i, explorer)
 		gems_total += int(outcome["gems"])
 		kills_total += int(outcome["kills"])
+		hits_total += int(outcome["hits"])
+		health_max = int(outcome["health"])
+		if int(outcome["lowest"]) <= 1:
+			close_calls += 1
 		portals_total += int(outcome["portals"])
 		match outcome["result"]:
 			"win":
@@ -162,6 +169,8 @@ func _run_profile(config: LevelConfig, character: CharacterStats, explorer: bool
 		mean_time, float(gems_total) / float(_runs),
 		float(kills_total) / float(_runs), float(portals_total) / float(_runs),
 		"" if winnable else "   [repaires à abattre — chiffres non comparables]"])
+	print("      touché %.1f fois pour %d PV · %d/%d parties à 1 PV ou moins" % [
+		float(hits_total) / float(_runs), health_max, close_calls, _runs])
 
 	# LE CRITÈRE PORTE SUR LA MORT, PAS SUR LA VICTOIRE.
 	#
@@ -205,6 +214,9 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	var grid := MazeGenerator.generate(config, rng_seed)
 	var player := GridMover.new(grid, grid.player_spawn, character.move_speed)
 	var player_health := Health.new(character.base_health + config.player_health_bonus)
+	_hits_taken = 0
+	_health_at_start = player_health.maximum
+	_lowest = player_health.maximum
 	var combat := CombatSystem.new(grid, character, player_health, rng_seed * 31 + 7)
 	var context := CombatContext.new(grid)
 	var kills := KillSystem.new(character.ultimate_required_kills)
@@ -244,6 +256,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 	# Les gemmes des rats, les nuages de la Vesse : les mêmes règles qu'en jeu.
 	var carried := {}
 	var acting := {}
+	# Au corps à corps avec une créature invoquée : il reste et se bat, comme en jeu.
+	var engaged := {}
 	var spit_cooldowns := {}
 	var spores := SporeClouds.new()
 	var thief_field := PackedInt32Array()
@@ -394,6 +408,33 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 		if ai_timer <= 0.0:
 			ai_timer = AI_REFRESH
 			player_field = Pathfinder.distance_field(grid, [player.cell] as Array[Vector2i])
+			# La meute, comme en jeu. `--sans-meute` rejoue l'ancienne poursuite pour comparer.
+			var chasers: Array[Dictionary] = []
+			for i in movers.size():
+				brains[i].flank_field = PackedInt32Array()
+				var tuning := Bestiary.of(slots[i])
+				if context.enemy_health[i].is_alive() and brains[i].state == EnemyAI.State.CHASE \
+						and not (bool(tuning.get("thief", false)) or bool(tuning.get("phases", false))
+						or bool(tuning.get("harmless", false)) or bool(tuning.get("ranged_only", false))
+						or bool(tuning.get("boss", false))):
+					chasers.append({"index": i, "cell": movers[i].decision_cell()})
+			if not "--sans-meute" in OS.get_cmdline_user_args():
+				var flanks := PackTactics.assign(grid, player.cell, player_field, chasers)
+				for index in flanks:
+					brains[index].flank_field = flanks[index]
+				var hunting: Array[Vector2i] = []
+				for chaser in chasers:
+					hunting.append(chaser["cell"])
+				var patrols: Array[Dictionary] = []
+				for i in movers.size():
+					var tuning := Bestiary.of(slots[i])
+					if context.enemy_health[i].is_alive() and brains[i].state == EnemyAI.State.PATROL \
+							and not (bool(tuning.get("thief", false)) or bool(tuning.get("phases", false))
+							or bool(tuning.get("harmless", false)) or bool(tuning.get("ranged_only", false))
+							or bool(tuning.get("boss", false))):
+						patrols.append({"index": i, "cell": movers[i].decision_cell()})
+				for index in PackTactics.rally(grid, hunting, patrols):
+					brains[index].rally(player_field, brains[index].search_duration * 2.0)
 			# Un ennemi mort ne menace plus : il ne compte pas dans le champ de
 			# danger que consultent les profils simulés.
 			var threats: Array[Vector2i] = []
@@ -553,10 +594,18 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					spit_cooldowns[i] = float(species_tuning["spit_reload"])
 					spores.spit(CreatureRules.spit_cells(grid, mover.nearest_cell(), player_field),
 						Bestiary.windup(slots[i]))
+			if bool(engaged.get(i, false)):
+				mover.desired_direction = Vector2i.ZERO
 			var ranged_only := bool(species_tuning.get("ranged_only", false))
 			if ranged_only and ThrowSystem.in_line(grid, mover.decision_cell(),
 					player.nearest_cell(), int(species_tuning["throw_range"])):
 				mover.desired_direction = Vector2i.ZERO
+			# Le sprint, comme en jeu. `--sans-sprint` rejoue l'ancienne poursuite pour comparer.
+			if not "--sans-sprint" in OS.get_cmdline_user_args():
+				var phase := brains[i].update_sprint(DT, grid, mover.decision_cell(), player.nearest_cell(),
+					Bestiary.sprints(slots[i]) and not bool(engaged.get(i, false)) \
+					and not swings[i].is_winding_up())
+				mover.speed = EnemyAI.sprint_speed(phase, mover.speed)
 			mover.update(DT)
 			# Le larcin, au passage sur la gemme.
 			if is_thief and not carried.has(i) and brains[i].blind_left <= 0.0:
@@ -578,6 +627,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			if swing_event != MeleeSwing.Event.LANDED or sheltered:
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+			_hits_taken += 1
+			_lowest = mini(_lowest, player_health.current)
 			if not player_health.is_alive():
 				if hero != null:
 					hero.dispose()
@@ -585,6 +636,22 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 					kills.kills, portal_uses)
 			teleports.grant_invulnerability(player, HIT_INVULNERABILITY)
 			sheltered = true
+		# LES ENNEMIS SE DÉFENDENT contre les créatures invoquées : la règle du jeu, par le même
+		# `CombatSystem`. Sans elle, l'Invocateur et la Faille joueraient une armée intouchable.
+		var foes: Array = []
+		for i in movers.size():
+			var tuning := Bestiary.of(slots[i])
+			var at := movers[i].grid_position()
+			var free := context.enemy_health[i].is_alive() and not staggered.has(i) \
+				and not bool(tuning.get("ranged_only", false)) and not bool(tuning.get("harmless", false)) \
+				and brains[i].blind_left <= 0.0 and at.distance_to(position) >= CATCH_DISTANCE \
+				and not swings[i].is_winding_up()
+			engaged[i] = free and not combat.summon_in_reach(at, CATCH_DISTANCE).is_empty()
+			foes.append({"position": at, "free": free, "windup": Bestiary.windup(slots[i]),
+				"cycle": ThrowSystem.reload_of(tuning), "boss": bool(tuning.get("boss", false))})
+		# `--sans-defense` rejoue l'ancien jeu, pour mesurer ce que la règle change.
+		if not "--sans-defense" in OS.get_cmdline_user_args():
+			combat.defend_against_summons(DT, foes, CATCH_DISTANCE)
 		# LES JETS, une fois les ennemis déplacés : ils visent où le mage EST à
 		# la fin du tour, comme en jeu.
 		var shooters: Array = []
@@ -603,6 +670,8 @@ func _simulate(config: LevelConfig, character: CharacterStats, rng_seed: int, ex
 			if sheltered or not ThrowSystem.touches(cell, player.grid_position()):
 				continue
 			player_health.take(Damage.new(1, Element.Kind.SHADOW, "enemy"))
+			_hits_taken += 1
+			_lowest = mini(_lowest, player_health.current)
 			if not player_health.is_alive():
 				if hero != null:
 					hero.dispose()
@@ -662,8 +731,17 @@ func _use_best_ability(combat: CombatSystem, character: CharacterStats,
 			return
 
 
+## Les coups encaissés pendant la partie en cours, et ce qu'il fallait pour mourir. Le taux de mort
+## ne dit pas si le mage a eu chaud : un mage qui finit à un PV n'est pas mort, et le rapport le
+## rangeait avec celui qui n'a jamais été touché.
+var _hits_taken := 0
+var _health_at_start := 0
+var _lowest := 0
+
+
 func _outcome(result: String, frames: int, gems: int, kills: int, portals: int) -> Dictionary:
-	return {"result": result, "frames": frames, "gems": gems, "kills": kills, "portals": portals}
+	return {"result": result, "frames": frames, "gems": gems, "kills": kills, "portals": portals,
+		"hits": _hits_taken, "health": _health_at_start, "lowest": _lowest}
 
 
 func _living_cells(movers: Array[GridMover], context: CombatContext) -> Array[Vector2i]:

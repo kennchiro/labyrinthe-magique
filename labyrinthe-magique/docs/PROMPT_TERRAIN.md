@@ -20,6 +20,11 @@ référence en pièce jointe. Dépose les résultats dans
 | 9 | Le Sanctuaire Déchu | BLOCS DE PIERRE VERT-DE-GRIS fissurée | [sol](prompts/terrain_9_sol.md) · [mur](prompts/terrain_9_mur.md) · [decor](prompts/terrain_9_decor.md) |
 | 10 | Le Château du Ciel | MARBRE BLANC à bordure dorée | [sol](prompts/terrain_10_sol.md) · [mur](prompts/terrain_10_mur.md) · [decor](prompts/terrain_10_decor.md) |
 
+## Arène
+
+Le [mur de l’arène](prompts/arene_mur.md) reprend les mêmes seize raccords,
+en pierre de colisée. Résultat : `assets/peso&cover/terrain/arene_mur.png`.
+
 ## Pourquoi les prompts n'imposent PAS lequel est le plus clair
 
 Le jeu impose 52 de luminance d'écart entre sol et mur (`MIN_CONTRAST`) : c'est

@@ -46,6 +46,8 @@ var _liquid := false
 var _shimmer: ShaderMaterial = null
 
 var _fall := 0.7
+## La proie d'une pluie qui vise : la météore et son cercle la suivent pendant la chute.
+var follow: Node2D = null
 var _life := 0.0
 ## Bande d'images de la météore, quand elle en a une.
 var _frames := 1
@@ -109,6 +111,8 @@ func paint(visual: String, size_tiles: float) -> void:
 	_painted = true
 	rock.texture = MagicOrb.painted_quad()
 	rock.hframes = 1
+	# Le dessin est un seul quad : plus de bande d'images à faire défiler.
+	_frames = 1
 	rock.offset = Vector2(-float(look["lead"]), 0.0)
 	rock.material = MagicOrb.painted_material(visual,
 		float(Time.get_ticks_usec() % 1000) * 0.001)
@@ -125,6 +129,11 @@ func paint(visual: String, size_tiles: float) -> void:
 
 func _process(delta: float) -> void:
 	_life += delta
+	if follow != null:
+		if is_instance_valid(follow) and follow.get_parent() == get_parent():
+			position = follow.position
+		else:
+			follow = null
 	if _frames > 1 and _fps > 0.0:
 		rock.frame = int(_life * _fps) % _frames
 	var progress := clampf(_life / _fall, 0.0, 1.0)

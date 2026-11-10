@@ -350,7 +350,7 @@ static func _stage_3() -> LevelConfig:
 	c.enemy_count = 6
 	c.enemy_speed_ratio = 0.80
 	c.enemy_detection_radius = 8
-	c.player_health_bonus = 2  # six gemmes à ramasser sous six poursuivants
+	c.player_health_bonus = 1  # six gemmes à ramasser sous six poursuivants
 	c.hunter_health = 165
 	c.goblin_health = 225
 	c.enemy_respawn_delay = 6.0
@@ -397,7 +397,10 @@ static func _stage_curve(index: int) -> LevelConfig:
 	# rapide : 0,84 x 1,16 = 0,97. Au-delà, la fuite cesse d'être une option.
 	c.enemy_speed_ratio = lerpf(0.78, 0.82, t)
 	c.enemy_detection_radius = int(round(lerpf(8.0, 9.0, t)))
-	c.player_health_bonus = 3 + int(round(t * 4.0))   # la marge suit la menace
+	# LA MARGE SUIT LA MENACE, mais de loin. Elle allait de +3 à +7 : mesuré le 2026-11-10,
+	# le mage encaissait 3 à 4 coups au Sanctuaire pour 9 PV, et ne finissait jamais une partie
+	# sous 2 PV. Le bonus date d'avant les trois sorts dès le départ, l'extra et l'Éveil.
+	c.player_health_bonus = 1 + int(round(t * 2.0))
 	c.hunter_health = int(round(lerpf(175.0, 230.0, t)))
 	c.enemy_respawn_delay = lerpf(6.5, 5.5, t)
 	return c

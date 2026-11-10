@@ -22,13 +22,13 @@ extends Node
 ##   --use-slot N      lance le sort du slot N dès qu'il part (test des invocations)
 ##   --goblin / --hunter  colle cet ennemi au joueur (test de sa pose de coup)
 ##   --crowd          regroupe les ennemis autour du joueur (test des sorts de foule)
-##   --stars          plante trois étoiles autour de l'Ange des Étoiles
+##   --stars          plante trois étoiles autour de l'Ange des Étoiles (cinq avec --awaken)
 ##   --skill-delay F    attend F secondes avant --skill (le temps que les
 ##                      ennemis arrivent : un sort qui agit SUR EUX ne se
 ##                      capture pas à la frame zéro, le labyrinthe est vide)
 ##   --skill-then N F   lance aussi le slot N, F secondes après le début (Rappel du Roi de Braise)
 ##   --cast             attaque dès qu'une cible est à portée
-##   --awaken           lance l'ÉVEIL du mage au bout d'une demi-seconde (en démo, sans kills)
+##   --awaken           lance l'ÉVEIL du mage au bout d'une demi-seconde (sa charge de kills remplie)
 ##   --win / --lose     déclenche la victoire / la défaite (capture des écrans)
 ##   --pause            ouvre l'écran de pause (capture du bouton d'options)
 ##   --settings         ouvre aussi les réglages (avec --pause et --touch)
@@ -173,6 +173,9 @@ func apply_command_line() -> void:
 	var species_arg := args.find("--enemi")
 	if species_arg >= 0 and species_arg + 1 < args.size():
 		_cling_enemy(args[species_arg + 1])
+	# L'appel de la meute : un poursuivant près du mage, un patrouilleur à huit cases, qui se lève.
+	if "--meute" in args:
+		_stage_pack_call()
 	# Fige la Raie dans une haie : en jouant, elle n'y reste qu'une demi-seconde.
 	if "--raie-mur" in args:
 		_hold_ray_in_wall()
@@ -209,10 +212,14 @@ func apply_command_line() -> void:
 		# refusé tant que personne n'est sorti de son repaire, et la capture
 		# repartait sans l'avoir jamais lancé.
 		_skill_tries = 240
-	# Plante trois étoiles autour du mage : les rayons d'une Constellation demandent de marcher.
+	# Plante trois étoiles autour du mage : les rayons d'une Constellation demandent de marcher. Avec `--awaken`,
+	# cinq en pentagone : la Reine du Firmament ferme sa figure dès qu'elle s'éveille.
 	if "--stars" in args and game.level.character.id == CharacterCatalog.ETOILES:
 		var around: Vector2i = game.level.player.mover.nearest_cell()
-		for gap: Vector2i in [Vector2i(-3, -1), Vector2i(3, -2), Vector2i(1, 3)]:
+		var gaps: Array = [Vector2i(-3, -1), Vector2i(3, -2), Vector2i(1, 3)]
+		if "--awaken" in args:
+			gaps = [Vector2i(0, -4), Vector2i(4, -1), Vector2i(2, 3), Vector2i(-2, 3), Vector2i(-4, -1)]
+		for gap: Vector2i in gaps:
 			game.level.combat._stars.append({"cell": around + gap, "time_left": 30.0,
 				"ability": game.level.character.abilities[0]})
 		game.level.combat._report_stars()
@@ -301,6 +308,32 @@ func _run_bench(seconds: float) -> void:
 const CLING_DISTANCE := 3
 
 
+func _stage_pack_call() -> void:
+	var level := game.level
+	# Loin de la maison, qui cacherait la scène : sur la première gemme.
+	level.player.cancel_path()
+	level.player.mover.teleport_to(level.grid.gems[0])
+	level.player.snap_to_mover()
+	level._refresh_ai()
+	var field := level._player_field
+	# À vol d'oiseau le plus près possible du mage : sinon il est hors du cadre.
+	var mage := Vector2(level.player.mover.nearest_cell())
+	var spots := {2: Vector2i(-1, -1), 8: Vector2i(-1, -1)}
+	for i in field.size():
+		var cell := Vector2i(i % level.grid.cols, i / level.grid.cols)
+		if spots.has(field[i]) and (spots[field[i]].x < 0
+				or mage.distance_to(Vector2(cell)) < mage.distance_to(Vector2(spots[field[i]]))):
+			spots[field[i]] = cell
+	var placed := 0
+	for enemy in level.enemies:
+		if not enemy.flanks() or placed >= 2:
+			continue
+		enemy.revive_at(spots[2] if placed == 0 else spots[8])
+		enemy.ai.state = EnemyAI.State.CHASE if placed == 0 else EnemyAI.State.PATROL
+		placed += 1
+	level._refresh_ai()
+
+
 func _hold_ray_in_wall() -> void:
 	var from := game.level.player.mover.nearest_cell()
 	for enemy in game.level.enemies:
@@ -383,6 +416,10 @@ func _process(delta: float) -> void:
 	if _awaken_left >= 0.0:
 		_awaken_left -= delta
 		if _awaken_left < 0.0 and game.level.player != null:
+			# Hors démo, la charge de kills est remplie : un sort qui demande de marcher (le Paradoxe,
+			# le Saut temporel) se capture sur une vraie carte, que la démo gagne en six secondes.
+			if game.awakening != null:
+				game.awakening.charge = Awakening.KILLS
 			game.use_slot(GameManager.SLOT_TRANSFORM)
 	if _skill_delay > 0.0:
 		_skill_delay -= delta

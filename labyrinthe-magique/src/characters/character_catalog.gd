@@ -132,6 +132,36 @@ static func by_id(id: String) -> CharacterStats:
 ## Le héros principal : c'est avec lui que s'ouvrent le titre et la sélection.
 ## L'ÉVEIL (2026-11-07) : la forme transformée d'un mage, ou null s'il n'en a pas encore.
 ## Elle garde l'identifiant du mage : ses effets de base, ses sons et ses tables restent les siens.
+## LE TRAIT DE CHAQUE ÉVEIL, en deux temps comme `Element.trait_name` et `trait_hint` : l'écran de sélection
+## l'affiche sur la fiche de l'Éveil. Un Éveil absent d'ici laisse la ligne vide.
+const AWAKENING_TRAITS := {
+	FIRE: ["Renaissance", "à 1 PV, il renaît une fois, intouchable, et ses cendres explosent"],
+	WATER: ["Marée haute", "une coque d'eau encaisse un coup entier, puis se reforme"],
+	EARTH: ["Piétinement", "ce qui l'approche est repoussé et blessé"],
+	THUNDER: ["Surtension", "chaque cinquième coup fait tomber la foudre sur sa cible"],
+	AIR: ["Rempart de vent", "ce qui l'approche est repoussé et ralenti"],
+	SHADOW: ["Le Double", "son ombre répète chaque coup à moitié de sa force"],
+	INVOCATEUR: ["La Légion", "ses créatures naissent plus grandes et plus fortes"],
+	CHRONO: ["Temps accéléré", "ses recharges courent plus vite"],
+	PESTE: ["Le Miasme", "une dose par seconde à ce qui le touche, jusqu'à cinq"],
+	SUPREME: ["La Roue des éléments", "chaque coup porte aussi le feu, l'eau, la terre ou l'air, à tour de rôle"],
+	DEMON: ["Le Prix du Sang", "son sang coule, chaque kill le rend, et sa Rage frappe plus fort"],
+	DISCORDE: ["La Discorde contagieuse", "chaque coup trouble, et un pantin mort passe sa possession au plus proche"],
+	BRAISE: ["Le Sillage de cendres", "ses pièces qui volent enflamment les cases qu'elles franchissent"],
+	ECARLATE: ["La Lame affûtée", "une entaille de plus par coup, et à huit elles s'ouvrent seules"],
+	GEOLIER: ["Le Poids des chaînes", "entravé au deuxième coup, et ce qui ne peut plus fuir prend plus cher"],
+	DRAGON: ["Le Feu primordial", "son feu dure deux fois plus, et ce qui y meurt explose en le répandant"],
+	CROUPIER: ["La Maison gagne toujours", "son Coup de chance tombe deux fois plus souvent et paie des jetons d'or"],
+	AVIDE: ["La Faim sans fond", "huit bouchées qui ne fondent plus, et deux par proie"],
+	MORT: ["La Récolte", "il achève sous 25 %, et ses âmes, jusqu'à six, frappent ce qui l'approche"],
+	LUMIERE: ["L'Éblouissement", "ce qu'il aveugle prend 30 % de plus, et ce qui reste collé à lui finit aveuglé"],
+	ETOILES: ["Le Firmament", "cinq étoiles au lieu de trois, et ses rayons brûlent 50 % plus fort"],
+	ACIER: ["La Forge vivante", "cinq plaques, chaque kill en reforge une, et une plaque qui casse explose en éclats"],
+	CHERUBIN: ["Le Regard du Trône", "l'œil brûle à deux cases et non au contact, plus fort et plus souvent"],
+	CIEL: ["Les Yeux du ciel", "chaque lance en appelle une seconde, et ce que le ciel frappe prend 20 % de plus"],
+}
+
+
 static func awakening_of(id: String) -> CharacterStats:
 	match id:
 		FIRE:
@@ -144,7 +174,429 @@ static func awakening_of(id: String) -> CharacterStats:
 			return thunder_awakened()
 		AIR:
 			return air_awakened()
+		SHADOW:
+			return shadow_awakened()
+		INVOCATEUR:
+			return invocateur_awakened()
+		CHRONO:
+			return chrono_awakened()
+		PESTE:
+			return peste_awakened()
+		SUPREME:
+			return supreme_awakened()
+		DEMON:
+			return demon_awakened()
+		DISCORDE:
+			return discorde_awakened()
+		BRAISE:
+			return braise_awakened()
+		ECARLATE:
+			return ecarlate_awakened()
+		GEOLIER:
+			return geolier_awakened()
+		DRAGON:
+			return dragon_awakened()
+		CROUPIER:
+			return croupier_awakened()
+		AVIDE:
+			return avide_awakened()
+		LUMIERE:
+			return lumiere_awakened()
+		MORT:
+			return mort_awakened()
+		ETOILES:
+			return etoiles_awakened()
+		ACIER:
+			return acier_awakened()
+		CHERUBIN:
+			return cherubin_awakened()
+		CIEL:
+			return ciel_awakened()
 	return null
+
+
+# --- L'Étoile du Matin : l'Éveil du Porte-Lumière. -------------------------------------
+
+## Le premier Éveil des anges (fiche `docs/prompts/mages/eveil_lumiere.md`). Son trait, l'Éblouissement, vit dans
+## `CombatSystem.start_dazzle` : +30 % sur une créature aveuglée, et ce qui reste collé à lui finit aveuglé. Il doit
+## rester sous l'Archimage Primordial. Les chiffres sont des points de départ, jamais mesurés.
+static func lumiere_awakened() -> CharacterStats:
+	var base := lumiere()
+	var c := CharacterStats.new()
+	c.id = LUMIERE
+	c.awakened = true
+	c.display_name = "Étoile du Matin"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Porte-Lumière éveillé, un petit soleil qui marche : ce qu'il aveugle, il le frappe plus fort."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "lumiere_eveil_trait", "display_name": "Trait solaire",
+		"description": "Un rayon qui traverse tous les ennemis de la ligne. Un coup sur trois aveugle.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.LIGHT,
+		"projectile_visual": "trait_solaire", "pierce_line": true,
+		"damage": 18, "range": 9, "cooldown": 0.45, "projectile_speed": 1.6,
+		"blind_every": 3, "blind_seconds": 1.5,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "lumiere_eveil_lance", "display_name": "Lance de l'Aurore",
+			"description": "La Lance suit les couloirs et vire vers les ennemis, puis reste allumée : ce qui la traverse brûle et ne voit plus.",
+			"kind": Ability.Kind.BEAM, "element": Element.Kind.LIGHT,
+			"damage": 60, "range": 14, "cooldown": 7.0,
+			"beam_linger": 3.0, "linger_damage": 12, "blind_seconds": 2.0,
+		}),
+		Ability.make({
+			"id": "lumiere_eveil_cathedrale", "display_name": "Cathédrale de lumière",
+			"description": "Un grand cercle bordé de colonnes de lumière : les ennemis y sont aveuglés et brûlés, et il s'y soigne.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.LIGHT,
+			"damage": 16, "radius": 3.0, "duration": 10.0, "cooldown": 18.0,
+			"blind_seconds": 2.5, "zone_heal_every": 4.0, "zone_style": "cathedrale_peinte",
+		}),
+		Ability.make({
+			"id": "lumiere_eveil_egide", "display_name": "Égide solaire",
+			"description": "Ses ailes de rayons se referment sur lui : elles encaissent trois coups, et chacun repart en rayon vers celui qui a frappé.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.LIGHT,
+			"damage": 3, "duration": 10.0, "cooldown": 20.0,
+			"aegis_ray_damage": 30, "blind_seconds": 2.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "lumiere_eveil_etoile", "display_name": "Trait de l'étoile",
+		"description": "Il devient un rayon et file droit dans le couloir, en blessant et aveuglant tout ce qu'il traverse.",
+		"kind": Ability.Kind.DASH, "element": Element.Kind.LIGHT,
+		"damage": 25, "range": 8, "cooldown": 8.0, "blind_seconds": 2.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "lumiere_eveil_soleil", "display_name": "Le Soleil de midi",
+		"description": "Un soleil se lève au-dessus de lui pour 8 s : chaque seconde, un rayon sur chaque ennemi à l'écran, tous aveuglés. Puis il tombe en une vague de lumière.",
+		"kind": Ability.Kind.DAWN, "element": Element.Kind.LIGHT,
+		"damage": 0, "cooldown": 1.0, "is_ultimate": true,
+		"sun_seconds": 8.0, "sun_damage": 35, "sun_end_damage": 80, "sun_end_radius": 6.0,
+	})
+	return c
+
+
+# --- Le Faucheur des Âmes : l'Éveil de l'Ange de la Mort. ------------------------------
+
+## Le deuxième Éveil des anges (fiche `docs/prompts/mages/eveil_mort.md`). Son trait, la Récolte, vit dans
+## `CombatSystem.start_harvest` : la Sentence achève sous 25 %, et jusqu'à six âmes tournent autour de lui et frappent
+## ce qui arrive à son contact. Fragile : sa force est l'achèvement. Chiffres non mesurés.
+static func mort_awakened() -> CharacterStats:
+	var base := mort()
+	var c := CharacterStats.new()
+	c.id = MORT
+	c.awakened = true
+	c.display_name = "Faucheur des Âmes"
+	c.element = base.element
+	c.category = base.category
+	c.description = "L'Ange de la Mort éveillé, la Mort elle-même : il moissonne plus large, et ses âmes le gardent."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "mort_eveil_croissant", "display_name": "Croissant de l'au-delà",
+		"description": "Le croissant part, puis revient vers lui : il frappe à l'aller comme au retour.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.DEATH,
+		"projectile_visual": "croissant_faucheur", "returns": true,
+		"damage": 15, "range": 7, "cooldown": 0.5, "projectile_speed": 1.3,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "mort_eveil_moisson", "display_name": "Grande Moisson",
+			"description": "Un coup de faux sur tout le tour de lui, qui achève ce qui est sous 45 % ; chaque achèvement donne une âme.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.DEATH,
+			"damage": 50, "radius": 3.0, "cooldown": 6.0, "execute_below": 0.45,
+		}),
+		Ability.make({
+			"id": "mort_eveil_glas", "display_name": "Glas funèbre",
+			"description": "Une cloche sonne trois fois au-dessus de lui : à chaque coup, ce qui est proche est marqué et ralenti.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.DEATH,
+			"damage": 10, "radius": 4.0, "cooldown": 15.0,
+			"toll_count": 3, "toll_gap": 1.5, "mark_seconds": 4.0, "toll_slow": 0.6, "slow_duration": 2.0,
+		}),
+		Ability.make({
+			"id": "mort_eveil_legion", "display_name": "Légion des âmes",
+			"description": "Il lâche toutes ses âmes, plus trois : elles chassent dans les couloirs, et celle qui tue revient autour de lui.",
+			"kind": Ability.Kind.SOULS, "element": Element.Kind.DEATH,
+			"damage": 32, "range": 14, "cooldown": 10.0, "souls_base": 3,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "mort_eveil_pas", "display_name": "Pas de l'ombre",
+		"description": "Il se défait en plumes noires et traverse les haies ; ce qui est sur la ligne du passage est marqué.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.DEATH,
+		"range": 6, "cooldown": 8.0, "pierces_walls": true, "blink_mark_seconds": 4.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "mort_eveil_minuit", "display_name": "Minuit",
+		"description": "La nuit tombe, et la faux géante passe deux fois sur l'écran : chaque passage prend la moitié des PV, et achève sous 20 %.",
+		"kind": Ability.Kind.LAST_HOUR, "element": Element.Kind.DEATH,
+		# 20 % et non 25 : deux moitiés laissent un ennemi indemne à 25 % pile, et l'achèvement à 25 % tuait toute la
+		# carte d'un coup. À 20 %, seul ce qui était déjà blessé y passe.
+		"damage": 1, "cooldown": 1.0, "is_ultimate": true, "execute_below": 0.2, "hour_passes": 2,
+	})
+	return c
+
+
+# --- La Reine du Firmament : l'Éveil de l'Ange des Étoiles. --------------------------
+
+## Le troisième Éveil des anges (fiche `docs/prompts/mages/eveil_etoiles.md`). Son trait, le Firmament, vit dans
+## `CombatSystem.start_firmament` : cinq étoiles au lieu de trois, et des rayons 50 % plus forts. Sa force reste le
+## placement. Chiffres non mesurés.
+static func etoiles_awakened() -> CharacterStats:
+	var base := etoiles()
+	var c := CharacterStats.new()
+	c.id = ETOILES
+	c.awakened = true
+	c.display_name = "Reine du Firmament"
+	c.element = base.element
+	c.category = base.category
+	c.description = "L'Ange des Étoiles éveillée, la reine de la nuit : ses constellations se ferment et brûlent ce qu'elles enferment."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "etoiles_eveil_comete", "display_name": "Trait de comète",
+		"description": "Une petite comète. Au troisième coup, les étoiles de la cible explosent et une étoile s'allume sur sa case.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.STARS,
+		"projectile_visual": "trait_comete",
+		"damage": 14, "range": 8, "cooldown": 0.45, "projectile_speed": 1.6, "spark_seconds": 4.0,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "etoiles_eveil_constellation", "display_name": "Grande Constellation",
+			"description": "Pose une étoile à ses pieds, cinq au plus. Quand les cinq sont posées, la figure se ferme et brûle tout ce qu'elle enferme.",
+			"kind": Ability.Kind.CONSTELLATION, "element": Element.Kind.STARS,
+			"damage": 28, "duration": 16.0, "cooldown": 2.5, "figure_damage": 20,
+		}),
+		Ability.make({
+			"id": "etoiles_eveil_meteores", "display_name": "Pluie de météores",
+			"description": "Quatorze étoiles tombent, puis un gros météore sur le plus solide.",
+			"kind": Ability.Kind.STARFALL, "element": Element.Kind.STARS,
+			"damage": 26, "radius": 4.5, "star_falls": 14, "cooldown": 11.0,
+			"big_meteor_damage": 90, "big_meteor_radius": 2.0,
+		}),
+		Ability.make({
+			"id": "etoiles_eveil_eclipse", "display_name": "Éclipse",
+			"description": "Les coups la traversent. À la fin, un anneau de lune s'élargit, blesse et ralentit ce qu'il touche.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.STARS,
+			"immune": true, "duration": 3.0, "cooldown": 14.0,
+			"moon_ring_radius": 4.0, "moon_ring_damage": 20, "moon_ring_slow": 0.5, "moon_ring_slow_seconds": 3.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "etoiles_eveil_filante", "display_name": "Comète",
+		"description": "Un long saut en comète ; une étoile se pose à l'arrivée.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.STARS,
+		"range": 7, "cooldown": 7.0, "trail_damage": 40, "blink_star": true,
+	})
+	c.ultimate = Ability.make({
+		"id": "etoiles_eveil_galaxie", "display_name": "Naissance d'une galaxie",
+		"description": "La nuit tombe, une comète frappe chaque ennemi de la carte, et chaque impact devient une étoile reliée à ses voisines.",
+		"kind": Ability.Kind.DAWN, "element": Element.Kind.STARS,
+		"damage": 150, "cooldown": 1.0, "is_ultimate": true, "galaxy_seconds": 6.0, "galaxy_damage": 30,
+	})
+	return c
+
+
+# --- Le Forgeron Céleste : l'Éveil de l'Archange d'Acier. -----------------------------
+
+## Le quatrième Éveil des anges (fiche `docs/prompts/mages/eveil_acier.md`). Son trait, la Forge vivante, vit dans
+## `CombatSystem.start_forge` : cinq plaques, une par kill, et une plaque qui casse explose en éclats. Il reste
+## l'ange qui encaisse. Chiffres non mesurés.
+static func acier_awakened() -> CharacterStats:
+	var base := acier()
+	var c := CharacterStats.new()
+	c.id = ACIER
+	c.awakened = true
+	c.display_name = "Forgeron Céleste"
+	c.element = base.element
+	c.category = base.category
+	c.description = "L'Archange d'Acier éveillé, la forge du ciel : il encaisse plus, et ce qu'il encaisse revient à qui le frappe."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "acier_eveil_marteau", "display_name": "Marteau du ciel",
+		"description": "Une onde plus large ; un coup sur trois étourdit.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.STEEL,
+		"projectile_visual": "onde_marteau",
+		"damage": 26, "radius": 2.0, "range": 6, "cooldown": 0.65, "projectile_speed": 1.1,
+		"stun_every": 3, "stun_seconds": 0.8,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "acier_eveil_tempete", "display_name": "Tempête de lames",
+			"description": "Huit lames partent sur tout le tour de lui, par-dessus les haies, puis reviennent.",
+			"kind": Ability.Kind.BLADES, "element": Element.Kind.STEEL,
+			"damage": 32, "range": 5, "blade_count": 8, "cooldown": 7.0, "blades_circle": true,
+		}),
+		Ability.make({
+			"id": "acier_eveil_enclume", "display_name": "Enclume céleste",
+			"description": "Une enclume tombe sur l'ennemi le plus proche, puis l'onde part.",
+			"kind": Ability.Kind.ANVIL, "element": Element.Kind.STEEL,
+			"damage": 34, "range": 7, "stun_seconds": 1.5, "cooldown": 10.0,
+			"anvil_drop_damage": 80, "anvil_drop_radius": 2.5, "anvil_drop_stun": 2.0,
+		}),
+		Ability.make({
+			"id": "acier_eveil_bastion", "display_name": "Bastion de la forge",
+			"description": "À la fin, une gerbe de lames et une plaque reforgée.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.STEEL,
+			"immune": true, "duration": 4.0, "cooldown": 18.0, "reflect_damage": 40,
+			"bastion_burst_damage": 45, "bastion_burst_radius": 3.0, "bastion_plates": 1,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "acier_eveil_belier", "display_name": "Charge du bélier",
+		"description": "Ce qu'il renverse est étourdi.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.STEEL,
+		"range": 6, "cooldown": 8.0, "trail_damage": 40, "blow_cells": 2,
+		"trail_stun": 1.0, "molten_trail_seconds": 3.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "acier_eveil_coeur", "display_name": "Cœur de la forge",
+		"description": "La forge explose autour de lui ; il redevient géant en fusion, plaques pleines, et ses pas restent en fusion.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.STEEL,
+		"damage": 120, "radius": 5.0, "molten_seconds": 12.0, "cooldown": 1.0, "is_ultimate": true,
+		"molten_steps_seconds": 2.0,
+	})
+	return c
+
+
+# --- Le Gardien du Trône : l'Éveil du Chérubin. ----------------------------------------
+
+## Le sixième et dernier Éveil des anges (fiche `docs/prompts/mages/eveil_cherubin.md`). Son trait, le Regard du
+## Trône, vit dans `CombatSystem.start_throne` : l'œil brûle à `THRONE_REACH`, pour `THRONE_EYE_DAMAGE`, et se
+## rallume en `THRONE_EYE_LOCK`. Il reste le gardien d'un lieu. Chiffres non mesurés.
+static func cherubin_awakened() -> CharacterStats:
+	var base := cherubin()
+	var c := CharacterStats.new()
+	c.id = CHERUBIN
+	c.awakened = true
+	c.display_name = "Gardien du Trône"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Chérubin éveillé, celui qui porte le Trône : son regard porte plus loin, et ce qu'il garde est plus grand."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "cherubin_eveil_epee", "display_name": "Épée flamboyante",
+		"description": "Le couloir reste en feu.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SACRED,
+		"projectile_visual": "flamme_glaive", "pierce_line": true,
+		"damage": 18, "range": 7, "cooldown": 0.5, "projectile_speed": 1.4, "line_fire": 1.5,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "cherubin_eveil_tournoie", "display_name": "L'Épée qui tournoie",
+			"description": "Deux épées de flamme tournent autour de lui, plus large et plus longtemps.",
+			"kind": Ability.Kind.WHIRL, "element": Element.Kind.SACRED,
+			"damage": 16, "radius": 2.0, "duration": 6.0, "whirl_interval": 0.4, "cooldown": 9.0,
+		}),
+		Ability.make({
+			"id": "cherubin_eveil_roues", "display_name": "Roues dans les roues",
+			"description": "Quatre roues de feu à yeux partent dans les quatre directions.",
+			"kind": Ability.Kind.WHEELS, "element": Element.Kind.SACRED,
+			"damage": 32, "range": 8, "wave_speed": 9.0, "cooldown": 8.0, "wheel_count": 4,
+		}),
+		Ability.make({
+			"id": "cherubin_eveil_ailes", "display_name": "Ailes du Trône",
+			"description": "Quand ses ailes s'ouvrent, leurs yeux marquent tout autour.",
+			"kind": Ability.Kind.SHIELD, "element": Element.Kind.SACRED,
+			"immune": true, "duration": 3.0, "repel_cells": 3, "cooldown": 14.0, "veil_eyes_radius": 3.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "cherubin_eveil_eclair", "display_name": "Aspect de l'éclair",
+		"description": "Un éclair tombe là où il arrive.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.SACRED,
+		"range": 7, "cooldown": 9.0, "trail_damage": 30,
+		"end_blast_damage": 40, "end_blast_radius": 1.5, "end_blast_arrival_only": true,
+	})
+	c.ultimate = Ability.make({
+		"id": "cherubin_eveil_eden", "display_name": "L'Éden gardé",
+		"description": "Un cercle plus grand, une épée de flamme qui tourne sur son bord, et 2 PV rendus. Les boss entrent, et brûlent.",
+		"kind": Ability.Kind.GARDEN, "element": Element.Kind.SACRED,
+		"damage": 15, "radius": 4.5, "duration": 10.0, "heal_self": 2, "cooldown": 1.0, "is_ultimate": true,
+		"garden_sword_damage": 25,
+	})
+	return c
+
+
+# --- Le Séraphin : l'Éveil de l'Archange du Ciel. -------------------------------------
+
+## Le cinquième Éveil des anges (fiche `docs/prompts/mages/eveil_ciel.md`). Son trait, les Yeux du ciel, vit dans
+## `CombatSystem.start_skies` : ce que ses coups touchent prend `SKY_MARK_BONUS` pendant `SKY_MARK_SECONDS`. Il reste
+## fragile (3 PV). Chiffres non mesurés.
+static func ciel_awakened() -> CharacterStats:
+	var base := ciel()
+	var c := CharacterStats.new()
+	c.id = CIEL
+	c.awakened = true
+	c.display_name = "Séraphin"
+	c.element = base.element
+	c.category = base.category
+	c.description = "L'Archange du Ciel éveillé, l'ange aux six ailes : le ciel entier frappe pour lui."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "ciel_eveil_lance", "display_name": "Lance du Séraphin",
+		"description": "Deux lances, deux ennemis.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SKY,
+		"projectile_visual": "lance_celeste", "from_sky": true, "sky_fall": 0.35, "sky_twin": true,
+		"damage": 18, "range": 7, "cooldown": 0.55,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "ciel_eveil_plumes", "display_name": "Pluie de plumes",
+			"description": "Une plume tranchante tombe du ciel sur chaque ennemi à portée.",
+			"kind": Ability.Kind.BLADES, "element": Element.Kind.SKY,
+			"damage": 26, "range": 6, "blade_count": 6, "cooldown": 5.0, "feather_rain": 6,
+		}),
+		Ability.make({
+			"id": "ciel_eveil_colonne", "display_name": "Colonne du jugement",
+			"description": "Puis le pilier reste allumé 3 s et brûle.",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SKY,
+			"projectile_visual": "colonne_ciel", "from_sky": true, "sky_fall": 0.55,
+			"damage": 50, "radius": 2.0, "stun_seconds": 2.5, "range": 7, "cooldown": 9.0,
+			"column_linger": 3.0, "column_burn": 15,
+		}),
+		Ability.make({
+			"id": "ciel_eveil_carillon", "display_name": "Carillon céleste",
+			"description": "Chaque coup étourdit.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.SKY,
+			"damage": 12, "radius": 4.5, "stun_seconds": 1.0, "cooldown": 12.0, "pierces_walls": true,
+			"toll_count": 3, "toll_gap": 1.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "ciel_eveil_ascension", "display_name": "Ascension",
+		"description": "Des lances tombent sous lui.",
+		"kind": Ability.Kind.FLIGHT, "element": Element.Kind.SKY,
+		"duration": 5.0, "flight_speed": 1.4, "damage": 35, "radius": 2.5, "cooldown": 12.0,
+		"flight_lance_gap": 0.6, "flight_lance_damage": 18,
+	})
+	c.ultimate = Ability.make({
+		"id": "ciel_eveil_jugement", "display_name": "Jugement dernier",
+		"description": "Vingt-quatre épées tombent sur les ennemis de la carte, puis une épée géante s'abat sur lui.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.SKY,
+		"damage": 0, "radius": 0.0, "cooldown": 1.0, "is_ultimate": true, "pierces_walls": true,
+		"rain_count": 24, "rain_hunts": true, "rain_damage": 45, "rain_radius": 0.6,
+		"rain_duration": 4.0, "rain_fall": 0.45, "rain_delay": 0.5,
+		"great_sword_damage": 120, "great_sword_radius": 4.0,
+	})
+	return c
 
 
 static func default_id() -> String:
@@ -485,6 +937,142 @@ static func air_awakened() -> CharacterStats:
 		"summon_id": cyclone.summon_id, "summon_count": cyclone.summon_count * 2,
 		"duration": cyclone.duration, "cooldown": 1.0, "is_ultimate": true,
 		"eye_seconds": 10.0, "eye_damage": 12, "eye_radius": 3.0, "eye_pull": 6.0,
+	})
+	return c
+
+
+# --- Le Seigneur du Néant : l'Éveil du Sorcier des Ténèbres. ------------------------
+
+## Une minute de Seigneur (`Awakening`). Son trait, le Double, vit dans `Awakening` : son ombre répète
+## chaque coup visé à moitié de sa force. Fiche : `docs/prompts/mages/eveil_tenebres.md`. Chiffres non
+## mesurés.
+static func shadow_awakened() -> CharacterStats:
+	var base := shadow()
+	var c := CharacterStats.new()
+	c.id = SHADOW
+	c.awakened = true
+	c.display_name = "Seigneur du Néant"
+	c.element = Element.Kind.SHADOW
+	c.category = base.category
+	c.description = "Le Sorcier des Ténèbres éveillé. Son ombre répète chacun de ses coups."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed * 1.1
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "shadow_eveil_orbe", "display_name": "Orbe du néant",
+		"description": "L'orbe remonte les couloirs, et s'ouvre en gouffre là où il frappe.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SHADOW,
+		"damage": 18, "range": 10, "cooldown": 0.45, "impact_pull": 2.0,
+		"projectile_visual": "orbe_neant", "projectile_scale": 1.1,
+	})
+	var implosion: Ability = base.abilities[2]
+	c.abilities = [
+		Ability.make({
+			"id": "shadow_eveil_sceau", "display_name": "Sceau du gouffre",
+			"description": "Des mains d'ombre sortent de la rune et clouent sur place ce qui entre, puis le rongent.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.SHADOW,
+			"damage": 14, "radius": 2.0, "duration": 8.0, "cooldown": 8.0,
+			"snare": 1.5, "zone_style": "sceau_gouffre",
+		}),
+		Ability.make({
+			"id": "shadow_eveil_marche", "display_name": "Marche des ombres",
+			"description": "Il traverse la haie, et son leurre d'ombre reste derrière : les ennemis le poursuivent.",
+			"kind": Ability.Kind.BLINK, "element": Element.Kind.SHADOW,
+			"range": 4, "cooldown": 6.0, "pierces_walls": true, "decoy_seconds": 5.0,
+		}),
+		Ability.make({
+			"id": "shadow_eveil_trou", "display_name": "Trou noir",
+			"description": "Un trou noir s'ouvre sur la cible, aspire tout deux secondes, puis s'effondre et empoisonne le sol.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.SHADOW,
+			"damage": 50, "radius": implosion.radius, "range": 8, "cooldown": 9.0,
+			"hole_seconds": 2.0, "hole_pull": 4.0,
+			"residue_duration": implosion.residue_duration,
+			"poison_duration": implosion.poison_duration, "poison_damage": implosion.poison_damage,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "shadow_eveil_fusion", "display_name": "Fusion",
+		"description": "Il fond dans le sol, intouchable, passe sous les haies, puis surgit dans une gerbe de vrilles.",
+		"kind": Ability.Kind.FLIGHT, "element": Element.Kind.SHADOW,
+		"duration": 2.0, "flight_speed": 1.3, "damage": 30, "radius": 1.5, "cooldown": 8.0,
+	})
+	var rift := base.ultimate
+	c.ultimate = Ability.make({
+		"id": "shadow_eveil_eclipse", "display_name": "Éclipse",
+		"description": "Le soleil s'éteint : la nuit tombe dix secondes, les ennemis ralentissent, et deux fois plus de failles s'ouvrent.",
+		"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
+		"summon_id": rift.summon_id, "summon_portals": rift.summon_portals * 2,
+		"summon_count": rift.summon_count, "summon_cap": rift.summon_cap * 2,
+		"duration": rift.duration, "cooldown": 1.0, "is_ultimate": true,
+		"eclipse_seconds": 10.0, "eclipse_slow": 0.6,
+	})
+	return c
+
+
+## L'ÉVEIL DE L'INVOCATEUR : le Maître des Légions. Son trait, la Légion, vit dans `Awakening` et
+## `CombatSystem.start_legion` : ses créatures naissent éveillées, plus fortes, et plus nombreuses.
+## Fiche : `docs/prompts/mages/eveil_invocateur.md`.
+static func invocateur_awakened() -> CharacterStats:
+	var base := invocateur()
+	var c := CharacterStats.new()
+	c.id = INVOCATEUR
+	c.awakened = true
+	c.display_name = "Maître des Légions"
+	c.element = base.element
+	c.category = base.category
+	c.description = "L'Invocateur éveillé. Ses créatures naissent éveillées, et il marque la proie de toute la meute."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "invocateur_eveil_marque", "display_name": "Marque du grimoire",
+		"description": "Une aiguille de runes : l'ennemi touché porte un sceau, et toutes ses créatures se jettent sur lui.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SHADOW,
+		"damage": 14, "range": 9, "cooldown": 0.5, "prey_mark_seconds": 4.0,
+		"projectile_visual": "aiguille_occulte", "projectile_scale": 1.2,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "invocateur_eveil_nuee", "display_name": "Nuée infernale",
+			"description": "Un portail crache quatre diablotins, qui explosent en flammes violettes quand ils s'en vont.",
+			"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
+			"summon_id": "imp", "summon_count": 4, "duration": 15.0,
+			"cooldown": 18.0, "mana_cost": 3,
+			"summon_burst_damage": 12, "summon_burst_radius": 1.0,
+		}),
+		Ability.make({
+			"id": "invocateur_eveil_gargouille", "display_name": "Gargouille colossale",
+			"description": "La gargouille tombe du ciel près de la proie : le choc étourdit, puis elle chasse, deux fois plus grande.",
+			"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
+			"summon_id": "gargouille", "summon_count": 1, "duration": 40.0,
+			"cooldown": 22.0, "mana_cost": 3, "summon_scale": 1.6,
+			"summon_drop_damage": 25, "summon_drop_radius": 1.5, "summon_drop_stun": 1.0,
+		}),
+		Ability.make({
+			"id": "invocateur_eveil_porte", "display_name": "Porte des abysses",
+			"description": "Le cercle s'ouvre sur l'abîme : il ronge ce qui le traverse, et un diablotin en sort toutes les deux secondes.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.SHADOW,
+			"zone_style": "porte_abysses",
+			"damage": 10, "radius": 2.0, "duration": 6.0, "cooldown": 12.0, "mana_cost": 3,
+			"summon_id": "imp", "zone_spawn_every": 2.0, "zone_spawn_life": 10.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "invocateur_eveil_echange", "display_name": "Échange",
+		"description": "Il prend la place de sa créature la plus éloignée, et elle la sienne. Sans créature, il s'efface quelques cases plus loin.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.SHADOW,
+		"range": 4, "cooldown": 8.0, "swap_with_summon": true,
+	})
+	c.ultimate = Ability.make({
+		"id": "invocateur_eveil_dragon", "display_name": "Roi-Dragon",
+		"description": "Le dragon embrasé passe sur l'écran en crachant une ligne de feu, puis se pose et chasse, deux fois plus grand.",
+		"kind": Ability.Kind.SUMMON, "element": Element.Kind.SHADOW,
+		"summon_id": "dragon", "summon_count": 1, "duration": 120.0,
+		"cooldown": 1.0, "is_ultimate": true,
+		"summon_scale": 1.15, "summon_look": "dragon_eveil",
+		"flyover_damage": 40, "flyover_reach": 12.0, "flyover_width": 1.5,
 	})
 	return c
 
@@ -1240,6 +1828,68 @@ static func chrono() -> CharacterStats:
 	return c
 
 
+## L'ÉVEIL DU CHRONOMANCIEN : le Seigneur des Heures. Son trait, Temps accéléré, vit dans `Awakening` et
+## `CombatSystem.start_haste` : ses recharges filent plus vite. Fiche : `docs/prompts/mages/eveil_chrono.md`.
+## Chiffres non mesurés.
+static func chrono_awakened() -> CharacterStats:
+	var base := chrono()
+	var c := CharacterStats.new()
+	c.id = CHRONO
+	c.awakened = true
+	c.display_name = "Seigneur des Heures"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Chronomancien éveillé. Son temps file plus vite que celui du monde."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed * 1.15
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "chrono_eveil_aiguilles", "display_name": "Trois Aiguilles",
+		"description": "L'aiguille des heures, celle des minutes et la trotteuse partent sur trois cibles, et chacune ralentit.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.TIME,
+		"projectile_visual": "aiguille_heures",
+		"damage": 14, "range": 8, "cooldown": 0.5, "projectile_speed": 1.4, "volley": 3,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "chrono_eveil_dome", "display_name": "Dôme de stase",
+			"description": "Ce qui entre dans le dôme est d'abord figé net, puis s'y traîne au ralenti.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.TIME,
+			"damage": 12, "radius": 3.0, "duration": 8.0, "cooldown": 12.0,
+			"slow_duration": 0.3, "slow_factor": 0.35, "slow_sustained": true,
+			"time_factor": 0.35, "entry_freeze": 1.5, "zone_style": "dome_stase",
+		}),
+		Ability.make({
+			"id": "chrono_eveil_paradoxe", "display_name": "Paradoxe",
+			"description": "Deux doubles rejouent ses 5 et ses 10 dernières secondes de marche, et explosent au bout.",
+			"kind": Ability.Kind.ECHO, "element": Element.Kind.TIME,
+			"damage": 60, "echo_seconds": 5.0, "echo_second_seconds": 10.0, "cooldown": 9.0,
+			"echo_end_damage": 30, "echo_end_radius": 1.5,
+		}),
+		Ability.make({
+			"id": "chrono_eveil_rembobinage", "display_name": "Rembobinage",
+			"description": "Il récupère d'un coup les points de vie perdus dans les 5 dernières secondes.",
+			"kind": Ability.Kind.HOURGLASS, "element": Element.Kind.TIME,
+			"rewind_heal_seconds": 5.0, "cooldown": 20.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "chrono_eveil_saut", "display_name": "Saut temporel",
+		"description": "Il revient où il était il y a 4 s, et laisse derrière lui une bombe-horloge qui fige tout autour.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.TIME,
+		"rewind_seconds": 4.0, "cooldown": 7.0,
+		"clock_bomb_delay": 1.5, "clock_bomb_damage": 25, "clock_bomb_radius": 1.8, "clock_bomb_stun": 1.5,
+	})
+	c.ultimate = Ability.make({
+		"id": "chrono_eveil_jugement", "display_name": "Jugement des Heures",
+		"description": "Le temps s'arrête 5 s ; ses coups s'accumulent sur les ennemis, puis tombent tous à midi, à 150 %.",
+		"kind": Ability.Kind.TIME_STOP, "element": Element.Kind.TIME,
+		"duration": 5.0, "cooldown": 1.0, "is_ultimate": true, "judgement_ratio": 1.5,
+	})
+	return c
+
+
 # --- Mage de la Peste : plus on le poursuit, plus on s'empoisonne. --------------------
 static func peste() -> CharacterStats:
 	var c := CharacterStats.new()
@@ -1291,6 +1941,139 @@ static func peste() -> CharacterStats:
 		"kind": Ability.Kind.PANDEMIC, "element": Element.Kind.POISON,
 		"duration": 8.0, "cooldown": 1.0, "is_ultimate": true,
 		"cloud_duration": 4.0, "cloud_radius": 1.5,
+	})
+	return c
+
+
+## L'ÉVEIL DU MAGE DE LA PESTE : le Seigneur du Fléau. Son trait, le Miasme, vit dans `Awakening` et
+## `CombatSystem.start_miasma` : il empoisonne ce qui le touche, et le poison monte à `Awakening.MIASMA_CAP`
+## doses. Fiche : `docs/prompts/mages/eveil_peste.md`. Chiffres non mesurés.
+static func peste_awakened() -> CharacterStats:
+	var base := peste()
+	var c := CharacterStats.new()
+	c.id = PESTE
+	c.awakened = true
+	c.display_name = "Seigneur du Fléau"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Mage de la Peste éveillé. Le poursuivre, c'est s'empoisonner."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	# La gerbe passe par `_apply_area` : chaque créature touchée prend le trait du poison, une dose.
+	c.attack = Ability.make({
+		"id": "peste_eveil_crachat", "display_name": "Crachat du fléau",
+		"description": "Le venin éclate à l'impact en une gerbe : une dose à tout ce qui est autour.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.POISON,
+		"projectile_visual": "crachat_fleau",
+		"damage": 10, "radius": 1.2, "range": 8, "cooldown": 0.45, "projectile_speed": 1.1,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "peste_eveil_sillage", "display_name": "Sillage pestilent",
+			"description": "Pendant 8 s, ses pas laissent des flaques qui bouillonnent, collent et mettent deux doses.",
+			"kind": Ability.Kind.TRAIL, "element": Element.Kind.POISON,
+			"duration": 8.0, "trail_life": 6.0, "cooldown": 13.0, "trail_doses": 2, "trail_slow": 0.6,
+		}),
+		Ability.make({
+			"id": "peste_eveil_epidemie", "display_name": "Épidémie",
+			"description": "Le poison saute d'ennemi en ennemi, six fois ; chaque saut blesse et ajoute deux doses.",
+			"kind": Ability.Kind.CONTAGION, "element": Element.Kind.POISON,
+			"damage": 15, "range": 8, "chain_range": 4, "cooldown": 8.0,
+			"epidemic_jumps": 6, "epidemic_doses": 2,
+		}),
+		Ability.make({
+			"id": "peste_eveil_saignee", "display_name": "Saignée",
+			"description": "Toutes les doses autour de lui éclatent d'un coup ; il reprend 1 PV pour 3 doses éclatées.",
+			"kind": Ability.Kind.TRANSFUSION, "element": Element.Kind.POISON,
+			"radius": 10.0, "bleed_per_dose": 10, "transfuse_per": 3, "cooldown": 18.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "peste_eveil_corbeaux", "display_name": "Nuée de corbeaux",
+		"description": "Il éclate en corbeaux qui passent les haies et piquent ce qu'ils survolent, puis se reforme dans un nuage.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.POISON,
+		"range": 6, "cooldown": 7.0, "pierces_walls": true,
+		"flock_damage": 10, "flock_doses": 2,
+		"cloud_duration": 4.0, "cloud_radius": 1.4, "cloud_at_arrival": true, "zone_style": "gaz_peint",
+	})
+	c.ultimate = Ability.make({
+		"id": "peste_eveil_peste", "display_name": "La Grande Peste",
+		"description": "Une pluie pestilente tombe sur toute la carte 10 s : chaque ennemi est chargé au maximum et ralenti, et ceux qui meurent éclatent en nuages.",
+		"kind": Ability.Kind.PANDEMIC, "element": Element.Kind.POISON,
+		"duration": 10.0, "cooldown": 1.0, "is_ultimate": true, "plague_slow": 0.7,
+		"cloud_duration": 4.0, "cloud_radius": 1.5, "cloud_venom_doses": 2,
+	})
+	return c
+
+
+## L'ÉVEIL DU SORCIER SUPRÊME : l'Archimage Primordial. Son trait, la Roue des éléments, vit dans `Awakening`
+## et `CombatSystem.start_wheel` : chaque coup prend l'élément de l'orbe en tête (feu, eau, terre, air) et porte son
+## trait, en plus de l'Écho, et l'attaque fait tourner la roue. Fiche : `docs/prompts/mages/eveil_supreme.md`.
+## Chiffres non mesurés.
+static func supreme_awakened() -> CharacterStats:
+	var base := supreme()
+	var c := CharacterStats.new()
+	c.id = SUPREME
+	c.awakened = true
+	c.display_name = "Archimage Primordial"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Sorcier Suprême éveillé. Les quatre éléments tournent autour de lui, et chaque coup prend le suivant."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "supreme_eveil_trait", "display_name": "Trait primordial",
+		"description": "Le trait prend l'élément de l'orbe en tête, sa couleur et son trait, puis la roue tourne.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SUPREME,
+		"projectile_visual": "trait_primordial",
+		"damage": 22, "range": 8, "cooldown": 0.45,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "supreme_eveil_convergence", "display_name": "Grande Convergence",
+			"description": "Le noyau des quatre explose, puis se brise en quatre éclats d'élément qui filent sur les créatures proches.",
+			"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.SUPREME,
+			"damage": 60, "radius": 3.0, "range": 8, "cooldown": 10.0,
+			"projectile_scale": 2.8, "projectile_speed": 0.22,
+			"projectile_visual": "noyau_primordial", "shockwave": true,
+			"element_shards": 4, "element_shard_damage": 20,
+		}),
+		Ability.make({
+			"id": "supreme_eveil_couronne", "display_name": "Couronne des sceaux",
+			"description": "Les quatre sceaux s'accrochent à lui et le suivent 15 s : le feu brûle, l'eau ralentit, la terre arrête, l'air balaie.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.SUPREME,
+			"damage": 14, "radius": 1.15, "duration": 15.0, "cooldown": 18.0,
+			"seal_ring": 2, "seals_follow": true, "zone_style": "sceau",
+		}),
+		Ability.make({
+			"id": "supreme_eveil_apotheose", "display_name": "Apothéose",
+			"description": "Il s'élève : +12 à chaque coup et 3 coups absorbés pendant 20 s, ses blessures se referment, et son Écho frappe deux fois.",
+			"kind": Ability.Kind.HEAL, "element": Element.Kind.SUPREME,
+			"damage": 3, "cooldown": 30.0,
+			"empower_bonus": 12, "empower_duration": 20.0, "empower_shield": 3, "double_echo": true,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "supreme_eveil_pas", "display_name": "Pas des éléments",
+		"description": "Il se dissout et se reforme plus loin ; à l'arrivée, un rayon de chaque élément part dans chaque couloir.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.SUPREME,
+		"range": 7, "cooldown": 7.0, "element_ray_damage": 18, "element_ray_range": 5,
+	})
+	c.ultimate = Ability.make({
+		"id": "supreme_eveil_genese", "display_name": "La Genèse",
+		"description": "Le ciel s'ouvre en roue : seize météores, chacune d'un élément, tombent sur les ennemis ; puis la lumière de l'origine balaie l'écran.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.SUPREME,
+		"damage": 60, "radius": 4.0, "cooldown": 1.0, "is_ultimate": true,
+		"shockwave": true, "pierces_walls": true, "flames": 1.2,
+		"rain_hunts": true, "rain_elements": true,
+		"rain_count": 16, "rain_damage": 75, "rain_radius": 1.6,
+		"rain_delay": 1.45, "rain_duration": 5.0, "rain_fall": 1.1,
+		"quake_duration": 1.0, "quake_tremor": 6, "quake_interval": 0.5, "quake_radius": 7.0,
+		"nova_damage": 120, "nova_radius": 7.0,
 	})
 	return c
 
@@ -1697,6 +2480,70 @@ static func demon() -> CharacterStats:
 	return c
 
 
+## L'ÉVEIL DU DÉMON DU PACTE : l'Archidémon du Pacte, le premier Éveil des démons. Son trait, le Prix du Sang,
+## vit dans `Awakening` et `CombatSystem.start_blood_price` : sa vie coule, chaque kill la lui rend, et sa Rage
+## double. Fiche : `docs/prompts/mages/eveil_demon.md`. Chiffres non mesurés.
+static func demon_awakened() -> CharacterStats:
+	var base := demon()
+	var c := CharacterStats.new()
+	c.id = DEMON
+	c.awakened = true
+	c.display_name = "Archidémon du Pacte"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Démon du Pacte éveillé. Le pacte se paie : sa vie coule, et seuls ses kills la lui rendent."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "demon_eveil_serres", "display_name": "Serres de l'Archidémon",
+		"description": "Son bras de démon lacère l'air : trois griffures de sang, chacune sur sa propre cible, qui ne ratent jamais.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.BLOOD,
+		"projectile_visual": "griffe_sang", "volley": 3,
+		"damage": 18, "range": 7, "cooldown": 0.5, "projectile_speed": 1.4,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "demon_eveil_pacte", "display_name": "Pacte écarlate",
+			"description": "Il s'ouvre la paume : 1 PV sacrifié, jamais le dernier, une onde de sang part de lui, et ses coups sont renforcés.",
+			"kind": Ability.Kind.PACT, "element": Element.Kind.BLOOD,
+			"self_cost": 1, "damage": 30, "radius": 2.0,
+			"empower_bonus": 12, "empower_duration": 8.0, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "demon_eveil_fleuves", "display_name": "Fleuves de soufre",
+			"description": "Les flammes de sang partent dans tous les couloirs à la fois, et y restent.",
+			"kind": Ability.Kind.LINE, "element": Element.Kind.BLOOD, "line_cross": true,
+			"damage": 46, "range": 8, "cooldown": 9.0,
+			"line_speed": 14.0, "radius": 0.6, "duration": 4.0, "line_bite": 6,
+			"plant_style": "sillon_peint",
+		}),
+		Ability.make({
+			"id": "demon_eveil_gueule", "display_name": "Gueule de l'Abîme",
+			"description": "Une gueule de sang géante surgit du sol et se referme autour de lui : 1 PV par ennemi happé, 2 au plus.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.BLOOD,
+			"damage": 34, "radius": 2.5, "cooldown": 14.0,
+			"heal_self": 2, "heal_needs_hit": true, "heal_per_hit": true,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "demon_eveil_ailes", "display_name": "Ailes du Pacte",
+		"description": "Il ouvre ses ailes et s'envole par-dessus les haies, intouchable, puis s'écrase dans une gerbe de sang.",
+		"kind": Ability.Kind.FLIGHT, "element": Element.Kind.BLOOD,
+		"duration": 2.0, "flight_speed": 1.4, "damage": 30, "radius": 1.5, "cooldown": 8.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "demon_eveil_apocalypse", "display_name": "Apocalypse de Sang",
+		"description": "Un sceau géant explose sous lui : il tombe à 1 PV, intouchable 8 s, une serre géante s'abat chaque seconde, et il récupère tout ce qu'il a donné.",
+		"kind": Ability.Kind.BLAST, "element": Element.Kind.BLOOD,
+		"damage": 90, "radius": 5.0, "cooldown": 1.0, "is_ultimate": true,
+		"last_pact_seconds": 8.0, "last_pact_return": 1.0,
+		"pact_claw_damage": 40, "pact_claw_gap": 1.0,
+	})
+	return c
+
+
 # --- La Démone de la Discorde : elle retourne les ennemis les uns contre les autres. --
 
 static func discorde() -> CharacterStats:
@@ -1751,6 +2598,68 @@ static func discorde() -> CharacterStats:
 		"description": "Tous les ennemis à l'écran se battent entre eux, et leurs morts comptent pour elle. Seuls les boss résistent.",
 		"kind": Ability.Kind.POSSESS, "element": Element.Kind.CHARM,
 		"cooldown": 1.0, "is_ultimate": true, "possess_seconds": 6.0, "possess_strike": 22,
+	})
+	return c
+
+
+## LA REINE DE LA DISCORDE, l'Éveil de la Démone de la Discorde (fiche `docs/prompts/mages/eveil_discorde.md`).
+## Son trait, la Discorde contagieuse, vit dans `CombatSystem.start_contagion` : chaque coup trouble, et la
+## possession d'un pantin mort saute sur son voisin. Les chiffres sont des points de départ, jamais mesurés.
+static func discorde_awakened() -> CharacterStats:
+	var base := discorde()
+	var c := CharacterStats.new()
+	c.id = DISCORDE
+	c.awakened = true
+	c.display_name = "Reine de la Discorde"
+	c.element = base.element
+	c.category = base.category
+	c.description = "La Démone de la Discorde éveillée. Ses fils tiennent toute la salle, et passent d'un pantin mort à son voisin."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "discorde_eveil_fil", "display_name": "Fil d'argent",
+		"description": "Un fil d'argent file, frappe, puis repart en angle vers un deuxième ennemi. Chaque coup trouble.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.CHARM,
+		"projectile_visual": "fil_murmure", "bounces": 1, "bounce_range": 4, "bounce_falloff": 1.0,
+		"damage": 16, "range": 7, "cooldown": 0.5, "projectile_speed": 1.4,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "discorde_eveil_oeil", "display_name": "Œil de la Reine",
+			"description": "Son troisième œil s'ouvre au-dessus de l'ennemi visé : lui et ses deux plus proches voisins se retournent.",
+			"kind": Ability.Kind.POSSESS, "element": Element.Kind.CHARM,
+			"range": 8, "cooldown": 11.0, "possess_seconds": 6.0, "possess_strike": 22,
+			"possess_neighbors": 2, "radius": 4.0,
+		}),
+		Ability.make({
+			"id": "discorde_eveil_arene", "display_name": "Arène de Discorde",
+			"description": "Une arène de fils tendus attire les ennemis vers son centre : plus ils y sont nombreux, plus chacun souffre.",
+			"kind": Ability.Kind.ZONE, "element": Element.Kind.CHARM,
+			"damage": 18, "radius": 3.0, "range": 7, "duration": 7.0, "cooldown": 13.0,
+			"discord_bonus": 0.75, "zone_on_prey": true, "zone_pull": 1.0, "zone_style": "arene_peinte",
+		}),
+		Ability.make({
+			"id": "discorde_eveil_toile", "display_name": "Toile de Souffrance",
+			"description": "Une toile d'argent relie cinq ennemis : 60 % des coups portés à l'un passent aux autres.",
+			"kind": Ability.Kind.BOND, "element": Element.Kind.CHARM,
+			"range": 8, "radius": 5.0, "duration": 10.0, "cooldown": 14.0,
+			"bond_count": 5, "bond_share": 0.6,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "discorde_eveil_ballet", "display_name": "Ballet des pantins",
+		"description": "Elle prend la place de l'ennemi le plus proche et laisse une marionnette d'elle-même, que les ennemis attaquent, puis qui éclate en fils.",
+		"kind": Ability.Kind.SWAP, "element": Element.Kind.CHARM,
+		"range": 6, "cooldown": 9.0, "decoy_seconds": 3.0, "damage": 24, "decoy_radius": 1.5,
+	})
+	c.ultimate = Ability.make({
+		"id": "discorde_eveil_bal", "display_name": "Le Grand Bal",
+		"description": "Une croix géante paraît dans le ciel : tous les ennemis dansent et se battent entre eux, et chaque mort fait éclater des fils sur ses voisins.",
+		"kind": Ability.Kind.POSSESS, "element": Element.Kind.CHARM,
+		"cooldown": 1.0, "is_ultimate": true, "possess_seconds": 8.0, "possess_strike": 26,
+		"ball_burst_damage": 30, "ball_burst_radius": 1.5,
 	})
 	return c
 
@@ -1810,6 +2719,67 @@ static func braise() -> CharacterStats:
 	return c
 
 
+## L'EMPEREUR DES CENDRES, l'Éveil du Roi de Braise (fiche `docs/prompts/mages/eveil_braise.md`). Son trait, le
+## Sillage de cendres, vit dans `CombatSystem.start_ashes` : ses pièces qui volent mettent le feu aux cases qu'elles
+## franchissent. Les chiffres sont des points de départ, jamais mesurés : le Roi est déjà peut-être un peu fort.
+static func braise_awakened() -> CharacterStats:
+	var base := braise()
+	var c := CharacterStats.new()
+	c.id = BRAISE
+	c.awakened = true
+	c.display_name = "Empereur des Cendres"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Roi de Braise éveillé. Sa couronne se reforge dans la lave, et son armure brûle tout ce qu'elle traverse."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "braise_eveil_poing", "display_name": "Poing impérial",
+		"description": "Un poing de lave file et explose sur sa cible, et y laisse des cendres ardentes.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.EMBER,
+		"projectile_visual": "poing_braise",
+		"damage": 36, "radius": 1.0, "range": 6, "cooldown": 0.75, "projectile_speed": 1.2,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "braise_eveil_gantelets", "display_name": "Gantelets de l'Empereur",
+			"description": "Ses deux gantelets chassent seuls, et chaque coup crache une gerbe de lave autour de la proie.",
+			"kind": Ability.Kind.HUNTERS, "element": Element.Kind.EMBER,
+			"damage": 22, "radius": 1.0, "range": 8, "duration": 8.0, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "braise_eveil_forge", "display_name": "Forge impériale",
+			"description": "Le plastron s'ouvre comme une forge : il aspire les ennemis proches, retient le premier, puis explose.",
+			"kind": Ability.Kind.CHEST, "element": Element.Kind.EMBER,
+			"damage": 24, "hold_seconds": 3.0, "cooldown": 12.0,
+			"forge_pull": 3.0, "forge_blast_damage": 40, "forge_blast_radius": 2.0,
+		}),
+		Ability.make({
+			"id": "braise_eveil_retour", "display_name": "Retour de l'Empire",
+			"description": "Ses pièces reviennent à travers les haies en laissant un mur de flammes. Les trois ensemble : une onde de cendres.",
+			"kind": Ability.Kind.RECALL, "element": Element.Kind.EMBER,
+			"damage": 34, "cooldown": 8.0,
+			"recall_fire_seconds": 2.0, "recall_wave_damage": 40, "recall_wave_radius": 2.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "braise_eveil_statue", "display_name": "Statue de cendres",
+		"description": "Il saute et laisse une statue de cendre à son image, qui attire les ennemis puis s'effondre en colonne de lave.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.EMBER,
+		"range": 5, "cooldown": 10.0, "damage": 50, "decoy_seconds": 3.0, "decoy_radius": 2.5,
+	})
+	c.ultimate = Ability.make({
+		"id": "braise_eveil_empire", "display_name": "L'Empire des Cendres",
+		"description": "Une couronne géante de lave s'abat : une cage d'or en fusion se ferme sur chaque ennemi, puis chacune éclate en colonne de lave.",
+		"kind": Ability.Kind.CAGES, "element": Element.Kind.EMBER,
+		"damage": 70, "duration": 4.0, "cooldown": 1.0, "is_ultimate": true,
+		"cage_burst_damage": 30, "cage_burst_radius": 1.5,
+	})
+	return c
+
+
 static func ecarlate() -> CharacterStats:
 	var c := CharacterStats.new()
 	c.id = ECARLATE
@@ -1859,6 +2829,67 @@ static func ecarlate() -> CharacterStats:
 		"description": "Le monde perd ses couleurs. Chaque ennemi reçoit cinq entailles, il rengaine, et tout s'ouvre.",
 		"kind": Ability.Kind.SHEATHE, "element": Element.Kind.BLADE,
 		"cuts": 5, "cut_damage": 18, "duration": 1.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+## LE SEIGNEUR ÉCARLATE, l'Éveil du Chevalier Écarlate (fiche `docs/prompts/mages/eveil_ecarlate.md`). Son trait,
+## la Lame affûtée, vit dans `CombatSystem.start_keen` : une entaille de plus par coup, huit au plus, et à huit elles
+## s'ouvrent seules. Les chiffres sont des points de départ, jamais mesurés.
+static func ecarlate_awakened() -> CharacterStats:
+	var base := ecarlate()
+	var c := CharacterStats.new()
+	c.id = ECARLATE
+	c.awakened = true
+	c.display_name = "Seigneur Écarlate"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Chevalier Écarlate éveillé. Le démon de sa lame se montre, et ses entailles n'attendent plus pour s'ouvrir."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "ecarlate_eveil_croissant", "display_name": "Croissant écarlate",
+		"description": "Un croissant blanc bordé de rouge traverse tout le couloir, et entaille chaque ennemi qu'il croise.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.BLADE,
+		"projectile_visual": "coupe_ecarlate", "pierce_line": true,
+		"damage": 17, "range": 6, "cooldown": 0.5, "projectile_speed": 1.6, "cuts": 1,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "ecarlate_eveil_pas", "display_name": "Pas des Mille Lames",
+			"description": "Il file dans le couloir en coupant tout, et sa lame fantôme repasse derrière lui.",
+			"kind": Ability.Kind.DASH, "element": Element.Kind.BLADE,
+			"damage": 22, "range": 6, "cooldown": 8.0, "cuts": 2,
+			"dash_echo_damage": 12, "dash_echo_delay": 0.5, "dash_echo_cuts": 1,
+		}),
+		Ability.make({
+			"id": "ecarlate_eveil_garde", "display_name": "Garde du Seigneur",
+			"description": "Pendant 2 s, il pare tous les coups, et chaque parade riposte autour de lui.",
+			"kind": Ability.Kind.GUARD, "element": Element.Kind.BLADE,
+			"damage": 30, "radius": 2.0, "duration": 2.0, "cooldown": 11.0, "cuts": 2, "guard_all": true,
+		}),
+		Ability.make({
+			"id": "ecarlate_eveil_rengaine", "display_name": "Rengaine écarlate",
+			"description": "Il rengaine : toutes les entailles de l'écran éclatent, et leurs pétales-lames entaillent les voisins.",
+			"kind": Ability.Kind.SHEATHE, "element": Element.Kind.BLADE,
+			"damage": 22, "cut_damage": 22, "range": 12, "cooldown": 9.0,
+			"petal_cuts": 1, "petal_radius": 1.5,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "ecarlate_eveil_danse", "display_name": "Danse des pétales",
+		"description": "Il saute en arrière, et un tourbillon de pétales-lames reste à sa place, attire les ennemis, puis les entaille.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.BLADE,
+		"range": 5, "cooldown": 9.0, "backward": true,
+		"decoy_seconds": 0.8, "damage": 24, "decoy_radius": 1.5, "cuts": 2,
+	})
+	c.ultimate = Ability.make({
+		"id": "ecarlate_eveil_nuit", "display_name": "Nuit Écarlate",
+		"description": "Le monde passe en noir et rouge sous une lune de sang. Chaque ennemi reçoit huit entailles, il rengaine, et tout s'ouvre.",
+		"kind": Ability.Kind.SHEATHE, "element": Element.Kind.BLADE,
+		"cuts": 8, "cut_damage": 22, "duration": 1.2, "cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 
@@ -1914,6 +2945,68 @@ static func geolier() -> CharacterStats:
 		"description": "Un cercle de flamme froide s'abat autour de lui : des chaînes clouent au sol chaque ennemi à l'intérieur. Les boss brûlent sans être cloués.",
 		"kind": Ability.Kind.GAOL, "element": Element.Kind.COLDFIRE,
 		"damage": 15, "radius": 6.0, "duration": 5.0, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+## LE GARDIEN DE L'ABÎME, l'Éveil du Geôlier (fiche `docs/prompts/mages/eveil_geolier.md`). Son trait, le Poids des
+## chaînes, vit dans `CombatSystem.start_abyss` : entravé au deuxième coup, et ce qui est sonné prend plus cher. Il
+## reste grand et massif, PAS chibi. Les chiffres sont des points de départ, jamais mesurés.
+static func geolier_awakened() -> CharacterStats:
+	var base := geolier()
+	var c := CharacterStats.new()
+	c.id = GEOLIER
+	c.awakened = true
+	c.display_name = "Gardien de l'Abîme"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Geôlier éveillé, gardien de la prison la plus profonde. Tout ce qu'il frappe finit enchaîné, et ce qui ne peut plus fuir prend plus cher."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "geolier_eveil_poing", "display_name": "Poing de l'Abîme",
+		"description": "Un gantelet de flamme froide file et éclate en étoile de givre autour de sa cible. Au deuxième coup, l'ennemi est entravé.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.COLDFIRE,
+		"projectile_visual": "poing_spectral",
+		"damage": 18, "radius": 1.0, "range": 6, "cooldown": 0.6, "projectile_speed": 1.2,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "geolier_eveil_crochets", "display_name": "Crochets de l'Abîme",
+			"description": "Trois chaînes partent à la fois, attrapent les trois ennemis les plus éloignés et les traînent devant lui, sonnés.",
+			"kind": Ability.Kind.HOOK, "element": Element.Kind.COLDFIRE,
+			"damage": 22, "range": 8, "stun_seconds": 1.2, "cooldown": 10.0, "hook_count": 3,
+		}),
+		Ability.make({
+			"id": "geolier_eveil_chaines", "display_name": "Chaînes de l'Abîme",
+			"description": "Des chaînes le relient à cinq ennemis, ralentis et rongés de froid. Quand elles cèdent, elles se resserrent et les prennent dans la glace.",
+			"kind": Ability.Kind.SOUL_CHAINS, "element": Element.Kind.COLDFIRE,
+			"damage": 12, "range": 7, "duration": 7.0, "cooldown": 14.0,
+			"bond_count": 5, "slow_factor": 0.5, "snap_damage": 30, "snap_stun": 1.5,
+		}),
+		Ability.make({
+			"id": "geolier_eveil_hiver", "display_name": "Hiver de l'Abîme",
+			"description": "Une nova de flamme froide fige tout autour de lui, et laisse au sol une plaque de givre qui ralentit.",
+			"kind": Ability.Kind.BLAST, "element": Element.Kind.COLDFIRE,
+			"damage": 34, "radius": 3.0, "stun_seconds": 2.5, "cooldown": 12.0,
+			"frost_seconds": 4.0, "slow_factor": 0.5,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "geolier_eveil_pas", "display_name": "Pas de l'Abîme",
+		"description": "Il devient flamme et traverse jusqu'à deux haies, puis une onde de givre fige ce qui l'attendait.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.COLDFIRE,
+		"range": 5, "cooldown": 12.0, "pierces_walls": true,
+		"end_blast_damage": 20, "end_blast_radius": 1.5, "end_blast_arrival_only": true, "end_blast_stun": 1.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "geolier_eveil_abime", "display_name": "L'Abîme",
+		"description": "Un gouffre noir s'ouvre : des chaînes y clouent chaque ennemi, le tirent vers lui, puis le gouffre se referme comme une mâchoire de glace. Les boss brûlent sans être cloués.",
+		"kind": Ability.Kind.GAOL, "element": Element.Kind.COLDFIRE,
+		"damage": 15, "radius": 6.0, "duration": 6.0, "cooldown": 1.0, "is_ultimate": true,
+		"gaol_pull_gap": 1.0, "gaol_end_damage": 80,
 	})
 	return c
 
@@ -1975,6 +3068,67 @@ static func dragon() -> CharacterStats:
 	return c
 
 
+## LE DRAGON PRIMORDIAL, l'Éveil du Dragon des Abysses (fiche `docs/prompts/mages/eveil_dragon.md`). Son trait, le Feu
+## primordial, vit dans `CombatSystem.start_primal` : ses cases en feu durent deux fois plus (les `ground_fire`
+## ci-dessous sont doublés par le trait) et rongent plus fort, et ce qui meurt dans le feu explose. PAS chibi,
+## `body_scale` 1,3. Les chiffres sont des points de départ, jamais mesurés.
+static func dragon_awakened() -> CharacterStats:
+	var base := dragon()
+	var c := CharacterStats.new()
+	c.id = DRAGON
+	c.awakened = true
+	c.display_name = "Dragon Primordial"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Dragon des Abysses éveillé, le premier feu du monde. Son feu ne s'éteint plus, et ce qui y meurt le répand."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "dragon_eveil_bombe", "display_name": "Bombe de magma",
+		"description": "Une grosse boule de lave qui explose à l'impact et met le feu à toutes les cases autour.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.INFERNO,
+		"projectile_visual": "crachat_magma",
+		"damage": 30, "radius": 1.5, "range": 5, "cooldown": 0.75, "projectile_speed": 1.0, "ground_fire": 2.0,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "dragon_eveil_souffle", "display_name": "Souffle primordial",
+			"description": "Un torrent de flammes blanches court loin dans le couloir, et embrase aussi les cases qui le bordent.",
+			"kind": Ability.Kind.BREATH, "element": Element.Kind.INFERNO,
+			"damage": 46, "range": 8, "ground_fire": 4.0, "cooldown": 10.0, "breath_spill": true,
+		}),
+		Ability.make({
+			"id": "dragon_eveil_devoreur", "display_name": "Dévoreur",
+			"description": "Il bondit sur l'ennemi le plus proche. Si la proie brûlait et qu'elle est blessée, il l'avale entière et se soigne.",
+			"kind": Ability.Kind.BITE, "element": Element.Kind.INFERNO,
+			"damage": 60, "range": 4, "bite_heal": 2, "execute_below": 0.4, "cooldown": 12.0,
+		}),
+		Ability.make({
+			"id": "dragon_eveil_carapace", "display_name": "Carapace primordiale",
+			"description": "Ses écailles encaissent deux coups, brûlent qui le touche, puis éclatent en douze éclats de lave.",
+			"kind": Ability.Kind.MAGMA_SCALES, "element": Element.Kind.INFERNO,
+			"damage": 2, "duration": 5.0, "radius": 3.0, "shard_count": 12, "shard_damage": 22,
+			"burn_dps": 12, "cooldown": 15.0,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "dragon_eveil_envol", "display_name": "Envol du dragon",
+		"description": "Il s'envole par-dessus les haies, intouchable, et retombe en écrasant le sol dans un anneau de feu.",
+		"kind": Ability.Kind.FLIGHT, "element": Element.Kind.INFERNO,
+		"duration": 2.0, "flight_speed": 1.3, "damage": 35, "radius": 2.5, "ground_fire": 2.0, "cooldown": 11.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "dragon_eveil_ciel", "display_name": "Le Ciel en feu",
+		"description": "Le ciel s'embrase, l'ombre d'un dragon gigantesque passe, et un météore de lave tombe sur chaque ennemi.",
+		"kind": Ability.Kind.DRAGON_SHADOW, "element": Element.Kind.INFERNO,
+		"damage": 60, "radius": 10.0, "burn_dps": 12, "duration": 4.0, "ground_fire": 4.0,
+		"meteor_radius": 1.5, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
 static func croupier() -> CharacterStats:
 	var c := CharacterStats.new()
 	c.id = CROUPIER
@@ -2030,6 +3184,65 @@ static func croupier() -> CharacterStats:
 	return c
 
 
+## LE MAÎTRE DU CASINO, l'Éveil du Croupier des Enfers (fiche `docs/prompts/mages/eveil_croupier.md`). Son trait, la
+## Maison gagne toujours, vit dans `CombatSystem.start_house`. Les chiffres sont des points de départ, jamais mesurés.
+static func croupier_awakened() -> CharacterStats:
+	var base := croupier()
+	var c := CharacterStats.new()
+	c.id = CROUPIER
+	c.awakened = true
+	c.display_name = "Maître du Casino"
+	c.element = base.element
+	c.category = base.category
+	c.description = "Le Croupier des Enfers éveillé, banquier du casino des Enfers. Ici, la maison gagne toujours."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "croupier_eveil_main", "display_name": "Main gagnante",
+		"description": "Trois cartes partent en éventail, chacune vers sa propre cible.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.LUCK,
+		"projectile_visual": "carte_tranchante", "volley": 3,
+		"damage": 18, "range": 7, "cooldown": 0.6, "projectile_speed": 1.3,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "croupier_eveil_des", "display_name": "Dés du Diable",
+			"description": "Trois dés roulent dans le couloir : un double sonne ce qu'ils touchent, un brelan le fige et le brûle.",
+			"kind": Ability.Kind.DICE, "element": Element.Kind.LUCK,
+			"damage": 6, "range": 7, "stun_seconds": 1.5, "cooldown": 9.0, "dice_count": 3,
+		}),
+		Ability.make({
+			"id": "croupier_eveil_table", "display_name": "Table piégée",
+			"description": "Quatre cartes tombent en croix autour de lui. Un Joker fait le feu, la glace et la foudre à la fois.",
+			"kind": Ability.Kind.TRAP_CARD, "element": Element.Kind.LUCK,
+			"damage": 40, "duration": 12.0, "trap_count": 4, "burn_dps": 10, "stun_seconds": 2.0,
+			"cooldown": 9.0, "trap_cross": true, "joker_chance": 0.25,
+		}),
+		Ability.make({
+			"id": "croupier_eveil_piece", "display_name": "Pièce truquée",
+			"description": "La pièce retombe sur la tranche : il est intouchable et soigné, ET ses prochaines cartes frappent double.",
+			"kind": Ability.Kind.COIN, "element": Element.Kind.LUCK,
+			"duration": 2.0, "coin_heal": 1, "doubled_hits": 3, "cooldown": 15.0, "coin_both": true,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "croupier_eveil_tour", "display_name": "Grand tour de magie",
+		"description": "Il disparaît dans son haut-de-forme et reparaît plus loin ; sa carte attire les ennemis, puis explose en jetons.",
+		"kind": Ability.Kind.BLINK, "element": Element.Kind.LUCK,
+		"range": 5, "decoy_seconds": 2.5, "damage": 30, "decoy_radius": 1.5, "cooldown": 11.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "croupier_eveil_jeu", "display_name": "Le Grand Jeu",
+		"description": "La roulette géante tourne trois fois de suite, et chaque tour applique son résultat.",
+		"kind": Ability.Kind.ROULETTE, "element": Element.Kind.LUCK,
+		"damage": 120, "radius": 10.0, "burn_dps": 15, "duration": 4.0, "stun_seconds": 3.0,
+		"black_damage": 30, "cooldown": 1.0, "is_ultimate": true, "roulette_spins": 3,
+	})
+	return c
+
+
 static func avide() -> CharacterStats:
 	var c := CharacterStats.new()
 	c.id = AVIDE
@@ -2079,6 +3292,64 @@ static func avide() -> CharacterStats:
 		"description": "Il devient gigantesque, et la gueule de son ventre avale les ennemis proches, un à un.",
 		"kind": Ability.Kind.FEAST, "element": Element.Kind.HUNGER,
 		"damage": 80, "radius": 6.0, "duration": 6.0, "bite_heal": 1, "cooldown": 1.0, "is_ultimate": true,
+	})
+	return c
+
+
+## FAIM SANS FOND, l'Éveil de l'Avide (fiche `docs/prompts/mages/eveil_avide.md`). Son trait, la Faim sans fond, vit
+## dans `CombatSystem.start_endless`. PAS chibi, `body_scale` 1,3. Les chiffres sont des points de départ, jamais mesurés.
+static func avide_awakened() -> CharacterStats:
+	var base := avide()
+	var c := CharacterStats.new()
+	c.id = AVIDE
+	c.awakened = true
+	c.display_name = "Faim Sans Fond"
+	c.element = base.element
+	c.category = base.category
+	c.description = "L'Avide éveillé. Sa gueule s'ouvre jusqu'au cou, et sa faim ne retombe plus."
+	c.power_level = base.power_level
+	c.base_health = base.base_health
+	c.move_speed = base.move_speed
+	c.ultimate_required_kills = base.ultimate_required_kills
+	c.attack = Ability.make({
+		"id": "avide_eveil_langues", "display_name": "Langues voraces",
+		"description": "Trois langues noires claquent à la fois, chacune vers sa propre cible, et transpercent ce qu'elles traversent.",
+		"kind": Ability.Kind.PROJECTILE, "element": Element.Kind.HUNGER,
+		"projectile_visual": "langue_fouet", "pierce_line": true, "volley": 3,
+		"damage": 22, "range": 6, "cooldown": 0.7, "projectile_speed": 1.6,
+	})
+	c.abilities = [
+		Ability.make({
+			"id": "avide_eveil_abime", "display_name": "Abîme affamé",
+			"description": "Une gueule immense s'ouvre dans le sol, aspire plus loin et plus longtemps, puis se referme en mordant.",
+			"kind": Ability.Kind.GULF, "element": Element.Kind.HUNGER,
+			"damage": 55, "range": 6, "radius": 4.0, "duration": 3.0, "cooldown": 11.0,
+		}),
+		Ability.make({
+			"id": "avide_eveil_devorer", "display_name": "Tout dévorer",
+			"description": "Il saisit les deux ennemis les plus proches et les avale : un ennemi blessé meurt d'un coup, et le nourrit.",
+			"kind": Ability.Kind.DEVOUR, "element": Element.Kind.HUNGER,
+			"damage": 70, "range": 2, "execute_below": 0.45, "bite_heal": 1, "cooldown": 12.0, "devour_count": 2,
+		}),
+		Ability.make({
+			"id": "avide_eveil_bile", "display_name": "Déluge de bile",
+			"description": "Il recrache toutes ses bouchées en boules de bile qui explosent, et chacune laisse une flaque d'acide.",
+			"kind": Ability.Kind.REGURGITATE, "element": Element.Kind.HUNGER,
+			"damage": 34, "radius": 1.5, "range": 6, "cooldown": 8.0, "bile_seconds": 3.0, "bile_damage": 12,
+		}),
+	]
+	c.escape = Ability.make({
+		"id": "avide_eveil_bond", "display_name": "Bond du prédateur",
+		"description": "Un saut plus long ; à l'atterrissage, la gueule de son ventre mord tout ce qui l'entoure et le sonne.",
+		"kind": Ability.Kind.LEAP, "element": Element.Kind.HUNGER,
+		"range": 4, "radius": 1.5, "damage": 30, "stun_seconds": 1.0, "cooldown": 11.0,
+	})
+	c.ultimate = Ability.make({
+		"id": "avide_eveil_festin", "display_name": "Le Grand Festin",
+		"description": "Il devient colossal, et la gueule de son ventre avale les ennemis plus vite et plus loin ; chaque proie lui rend un PV.",
+		"kind": Ability.Kind.FEAST, "element": Element.Kind.HUNGER,
+		"damage": 80, "radius": 7.0, "duration": 7.0, "bite_heal": 1, "feast_gap": 0.5, "feast_heal_cap": 6,
+		"cooldown": 1.0, "is_ultimate": true,
 	})
 	return c
 

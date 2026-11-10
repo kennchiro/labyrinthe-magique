@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "chrono_eveil_aiguilles",
+    "chrono_eveil_dome",
+    "chrono_eveil_paradoxe",
+    "chrono_eveil_rembobinage",
+    "chrono_eveil_saut",
+    "chrono_eveil_jugement"
+  ],
+  "size": 256
+}

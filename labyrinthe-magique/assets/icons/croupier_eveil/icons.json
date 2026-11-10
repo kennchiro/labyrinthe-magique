@@ -1,0 +1,11 @@
+{
+  "icons": [
+    "croupier_eveil_main",
+    "croupier_eveil_des",
+    "croupier_eveil_table",
+    "croupier_eveil_piece",
+    "croupier_eveil_tour",
+    "croupier_eveil_jeu"
+  ],
+  "size": 256
+}

@@ -52,6 +52,9 @@ SHEET = Path("assets/peso&cover/mages/mage_invocateur.png")
 DRAGON_SHEET = Path("assets/peso&cover/mage_invocateur_dragon_complete.png")
 DRAGON_NO_FIRE_SHEET = Path("assets/peso&cover/mage_invocateur_dragon_no_fire.png")
 KNIGHT_SHEET = Path("assets/peso&cover/mage_invocateur_chevalier_spectral.png")
+## Le dragon EMBRASÉ du Maître des Légions (l'Éveil de l'Invocateur) : même grille que le dragon
+## d'origine, mais sur fond VERT, sans canal alpha. Il ne remplace l'autre que pendant l'Éveil.
+DRAGON_EVEIL_SHEET = Path("assets/peso&cover/creatures/invocateur_dragon_eveil.png")
 ## Le serviteur du premier sort, quand ses deux planches sont là. Tant qu'elles
 ## manquent, le chevalier reste en place : le sort ne se retrouve jamais sans corps.
 DIABLOTIN_WALK = Path("assets/peso&cover/creatures/diablotin_marche.png")
@@ -522,7 +525,47 @@ def build_fx(image: Image.Image) -> None:
           + " · ".join(sorted(SPELL_FX)))
 
 
+def green_keyed(image: Image.Image) -> Image.Image:
+    """Une planche sur fond vert uni, rendue transparente là où elle est verte.
+
+    Le vert « en trop » d'un pixel (son vert au-delà de son rouge et de son bleu) dit combien il
+    doit au fond : le fond pur en a 255, une flamme orange ou jaune n'en a pas. Le bord, mêlé des
+    deux, reçoit un alpha partiel, puis `degreen` lui retire le vert qui lui reste."""
+    from build_enemies import degreen
+    data = np.array(image.convert("RGBA")).astype(float)
+    excess = data[..., 1] - np.maximum(data[..., 0], data[..., 2])
+    data[..., 3] = 255.0 * np.clip((120.0 - excess) / 90.0, 0.0, 1.0)
+    return degreen(Image.fromarray(data.astype(np.uint8), "RGBA"))
+
+
+def build_dragon_eveil() -> None:
+    """Le dragon embrasé, entrée `dragon_eveil` d'allies.json : seule cette clé est touchée."""
+    if not DRAGON_EVEIL_SHEET.exists():
+        print("dragon_eveil : planche absente, rien à faire")
+        return
+    sheet = green_keyed(Image.open(DRAGON_EVEIL_SHEET))
+    cut = dragon_grid_poses(sheet)
+    every = [f for d in cut.values() for k in d.values() for f in k]
+    cell = (max(f.width for f in every) + 4, max(f.height for f in every) + 4)
+    directions = {}
+    for direction, poses in cut.items():
+        file = f"dragon_eveil_{direction}.png"
+        _place(poses["idle"] + poses["strike"], cell, "centre").save(OUT_ALLIES / file)
+        directions[direction] = {"file": file, "idle": len(poses["idle"]),
+                                 "strike": len(poses["strike"])}
+    manifest = OUT_ALLIES / "allies.json"
+    catalogue = json.loads(manifest.read_text(encoding="utf-8"))
+    catalogue["dragon_eveil"] = {"anchor": "centre", "cell": list(cell), "mirror_left": False,
+                                 "grounded": False, "directions": directions}
+    manifest.write_text(json.dumps(catalogue, indent=2), encoding="utf-8")
+    print(f"dragon_eveil case {cell[0]}x{cell[1]}")
+
+
 def main() -> None:
+    # `--dragon-eveil` ne refait que le dragon embrasé, sans toucher aux autres bandes.
+    if "--dragon-eveil" in sys.argv:
+        build_dragon_eveil()
+        return
     image = load_sheet()
     # `build_mage` n'est PLUS appelé : le mage vient de la planche de refonte,
     # par la table commune de `build_characters.py`. L'appeler ici écraserait
@@ -532,6 +575,7 @@ def main() -> None:
     dragon_image = Image.open(dragon_source).convert("RGBA")
     knight_image = Image.open(KNIGHT_SHEET).convert("RGBA")
     build_allies(image, dragon_image, knight_image)
+    build_dragon_eveil()
     build_fx(image)
 
 

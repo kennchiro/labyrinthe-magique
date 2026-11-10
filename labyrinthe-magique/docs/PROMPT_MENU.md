@@ -37,6 +37,38 @@ et c'est elle qu'on rejoue.
 | Archange du Ciel | Ciel | `#34e07a` | [portrait_ciel](prompts/menu/portrait_ciel.md) |
 | Chérubin | Feu sacré | `#3d6bff` | [portrait_cherubin](prompts/menu/portrait_cherubin.md) |
 
+## Les portraits des Éveils
+
+Le bouton ÉVEIL de la fiche montre la forme éveillée du mage. Chaque prompt joint le portrait du mage ET sa
+planche de marche éveillée. Tant qu'un portrait manque, la carte montre le sprite de l'Éveil.
+
+| Éveil | Mage | Prompt |
+|---|---|---|
+| Phénix | fire | [portrait_fire_eveil](prompts/menu/portrait_fire_eveil.md) |
+| Seigneur des Marées | water | [portrait_water_eveil](prompts/menu/portrait_water_eveil.md) |
+| Colosse | earth | [portrait_earth_eveil](prompts/menu/portrait_earth_eveil.md) |
+| Avatar de la Tempête | thunder | [portrait_thunder_eveil](prompts/menu/portrait_thunder_eveil.md) |
+| Souverain des Vents | air | [portrait_air_eveil](prompts/menu/portrait_air_eveil.md) |
+| Seigneur du Néant | shadow | [portrait_shadow_eveil](prompts/menu/portrait_shadow_eveil.md) |
+| Maître des Légions | invocateur | [portrait_invocateur_eveil](prompts/menu/portrait_invocateur_eveil.md) |
+| Seigneur des Heures | chrono | [portrait_chrono_eveil](prompts/menu/portrait_chrono_eveil.md) |
+| Seigneur du Fléau | peste | [portrait_peste_eveil](prompts/menu/portrait_peste_eveil.md) |
+| Archimage Primordial | supreme | [portrait_supreme_eveil](prompts/menu/portrait_supreme_eveil.md) |
+| Archidémon du Pacte | demon | [portrait_demon_eveil](prompts/menu/portrait_demon_eveil.md) |
+| Reine de la Discorde | discorde | [portrait_discorde_eveil](prompts/menu/portrait_discorde_eveil.md) |
+| Empereur des Cendres | braise | [portrait_braise_eveil](prompts/menu/portrait_braise_eveil.md) |
+| Seigneur Écarlate | ecarlate | [portrait_ecarlate_eveil](prompts/menu/portrait_ecarlate_eveil.md) |
+| Gardien de l'Abîme | geolier | [portrait_geolier_eveil](prompts/menu/portrait_geolier_eveil.md) |
+| Dragon Primordial | dragon | [portrait_dragon_eveil](prompts/menu/portrait_dragon_eveil.md) |
+| Maître du Casino | croupier | [portrait_croupier_eveil](prompts/menu/portrait_croupier_eveil.md) |
+| Faim Sans Fond | avide | [portrait_avide_eveil](prompts/menu/portrait_avide_eveil.md) |
+| Étoile du Matin | lumiere | [portrait_lumiere_eveil](prompts/menu/portrait_lumiere_eveil.md) |
+| Faucheur des Âmes | mort | [portrait_mort_eveil](prompts/menu/portrait_mort_eveil.md) |
+| Gardien du Trône | cherubin | [portrait_cherubin_eveil](prompts/menu/portrait_cherubin_eveil.md) |
+| Séraphin | ciel | [portrait_ciel_eveil](prompts/menu/portrait_ciel_eveil.md) |
+| Forgeron Céleste | acier | [portrait_acier_eveil](prompts/menu/portrait_acier_eveil.md) |
+| Reine du Firmament | etoiles | [portrait_etoiles_eveil](prompts/menu/portrait_etoiles_eveil.md) |
+
 Plus deux prompts communs :
 
 | | Prompt | Pourquoi |
